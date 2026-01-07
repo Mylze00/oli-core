@@ -1,13 +1,7 @@
-const path = require('path');
-const fs = require('fs');
-const { Pool } = require('pg');
-
-// Hardcoded for migration reliability
-const CONNECTION_STRING = "postgresql://postgres:PIXELcongo243@localhost:5432/oli_db";
-
+// Revert to environment variable for production
 const pool = new Pool({
-    connectionString: CONNECTION_STRING,
-    ssl: false,
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes("render.com") ? { rejectUnauthorized: false } : false,
 });
 
 async function migrate() {

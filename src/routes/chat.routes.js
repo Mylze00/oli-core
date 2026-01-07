@@ -181,4 +181,24 @@ router.get('/messages/:otherUserId', async (req, res) => {
     }
 });
 
+// 6. Rechercher des utilisateurs (pour démarrer une conversation)
+router.get('/users', async (req, res) => {
+    const { q } = req.query;
+    const myId = req.user.id;
+
+    if (!q || q.length < 2) return res.json([]); // Minimum 2 caractères
+
+    try {
+        // Recherche par nom ou téléphone (sauf soi-même)
+        const result = await pool.query(
+            "SELECT id, name, avatar_url, phone FROM users WHERE (name ILIKE $1 OR phone ILIKE $1) AND id != $2 LIMIT 20",
+            [`%${q}%`, myId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erreur recherche" });
+    }
+});
+
 module.exports = router;
