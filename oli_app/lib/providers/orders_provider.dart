@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../models/order_model.dart';
 import '../secure_storage_service.dart';
 
-const String _baseUrl = 'http://127.0.0.1:3000';
+// Base URL handled by ApiConfig
+
 
 /// Provider pour récupérer les commandes de l'utilisateur
 final ordersProvider = FutureProvider<List<Order>>((ref) async {
@@ -16,7 +18,7 @@ final ordersProvider = FutureProvider<List<Order>>((ref) async {
   }
   
   final response = await http.get(
-    Uri.parse('$_baseUrl/orders'),
+    Uri.parse('${ApiConfig.baseUrl}/orders'),
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
@@ -45,7 +47,7 @@ class OrderService {
     if (token == null) return null;
     
     final response = await http.post(
-      Uri.parse('$_baseUrl/orders'),
+      Uri.parse('${ApiConfig.baseUrl}/orders'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -71,7 +73,7 @@ class OrderService {
     if (token == null) return false;
     
     final response = await http.post(
-      Uri.parse('$_baseUrl/orders/$orderId/cancel'),
+      Uri.parse('${ApiConfig.baseUrl}/orders/$orderId/cancel'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -86,7 +88,7 @@ class OrderService {
     if (token == null) return false;
     
     final response = await http.post(
-      Uri.parse('$_baseUrl/orders/$orderId/pay'),
+      Uri.parse('${ApiConfig.baseUrl}/orders/$orderId/pay'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../config/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'secure_storage_service.dart';
 
@@ -38,7 +39,7 @@ class AuthState {
 
 class AuthController extends StateNotifier<AuthState> {
   final _storage = SecureStorageService();
-  final String baseUrl = 'http://127.0.0.1:3000/auth';
+  final String baseUrl = ApiConfig.auth;
 
   AuthController() : super(const AuthState()) {
     checkSession();

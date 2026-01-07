@@ -1,9 +1,10 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/api_config.dart';
 
 class AuthService {
   // Sur WSL2/Linux, 127.0.0.1 est le plus stable
-  static const String baseUrl = "http://127.0.0.1:3000";
+  static const String baseUrl = ApiConfig.baseUrl;
 
   Future<bool> sendOtp(String phone) async {
     try {

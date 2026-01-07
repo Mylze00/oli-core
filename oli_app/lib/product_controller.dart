@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'config/api_config.dart';
 
 // Le fameux Provider qui manquait
 final productControllerProvider = StateNotifierProvider<ProductController, AsyncValue<void>>((ref) {
@@ -12,7 +13,7 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
   ProductController() : super(const AsyncValue.data(null));
 
   // Comme vous êtes sur Linux, 127.0.0.1 est votre machine locale
-  final String apiUrl = 'http://127.0.0.1:3000/products/upload';
+  final String apiUrl = '${ApiConfig.baseUrl}/products/upload';
 
   Future<bool> uploadProduct({
     required String name,
@@ -31,7 +32,7 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
 
       // Ajout du fichier image
       request.files.add(await http.MultipartFile.fromPath(
-        'image', // C'est le nom que le serveur Node.js cherchera
+        'images', // Nom du champ attendu par le backend (upload.array('images'))
         imageFile.path,
       ));
 

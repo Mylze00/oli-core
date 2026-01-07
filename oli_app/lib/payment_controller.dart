@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'config/api_config.dart';
 
 // On définit l'état du paiement
 class PaymentState {
@@ -29,7 +30,7 @@ class PaymentController extends StateNotifier<PaymentState> {
   PaymentController() : super(const PaymentState());
 
   // URL de votre backend (ajustez selon votre config)
-  final String paymentUrl = 'http://127.0.0.1:3000/payment/initiate';
+  final String paymentUrl = '${ApiConfig.baseUrl}/payment/initiate';
 
   Future<bool> processPayment({
     required String amount,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'config/api_config.dart';
 import 'dart:convert';
 import 'home_page.dart';
 import 'pages/publish_article_page.dart';
@@ -10,7 +11,7 @@ import 'app/theme/theme_provider.dart';
 
 // Provider qui récupère les données réelles du serveur
 final userProfileProvider = FutureProvider((ref) async {
-  final response = await http.get(Uri.parse('http://127.0.0.1:3000/auth/me'));
+  final response = await http.get(Uri.parse('${ApiConfig.baseUrl}/auth/me'));
   if (response.statusCode == 200) {
     return jsonDecode(response.body);
   }
@@ -33,7 +34,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     
     if (image != null) {
-      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:3000/auth/upload-avatar'));
+      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/auth/upload-avatar'));
       request.files.add(await http.MultipartFile.fromPath('avatar', image.path));
       final response = await request.send();
       if (response.statusCode == 200) {
@@ -61,7 +62,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           ElevatedButton(
             onPressed: () async {
               await http.post(
-                Uri.parse('http://127.0.0.1:3000/wallet/deposit'),
+                Uri.parse('${ApiConfig.baseUrl}/wallet/deposit'),
                 headers: {'Content-Type': 'application/json'},
                 body: jsonEncode({'amount': controller.text}),
               );

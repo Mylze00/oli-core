@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import '../../config/api_config.dart';
 import 'dart:convert';
 import '../../app/theme/theme_provider.dart';
 import '../../pages/publish_article_page.dart';
@@ -32,7 +33,7 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
     
     if (image != null) {
       final token = await _storage.getToken();
-      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:3000/auth/upload-avatar'));
+      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/auth/upload-avatar'));
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
       }
@@ -65,7 +66,7 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
           ElevatedButton(
             onPressed: () async {
               await http.post(
-                Uri.parse('http://127.0.0.1:3000/wallet/deposit'),
+                Uri.parse('${ApiConfig.baseUrl}/wallet/deposit'),
                 headers: {
                   'Content-Type': 'application/json',
                   if (token != null) 'Authorization': 'Bearer $token',

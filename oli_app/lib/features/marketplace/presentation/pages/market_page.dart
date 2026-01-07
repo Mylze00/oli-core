@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import '../../../../../../config/api_config.dart';
 
 final marketProductsProvider = FutureProvider<List<dynamic>>((ref) async {
-  const String apiUrl = 'http://127.0.0.1:3000/products';
+  const String apiUrl = '${ApiConfig.baseUrl}/products';
   try {
     final response = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 5));
     if (response.statusCode == 200) {

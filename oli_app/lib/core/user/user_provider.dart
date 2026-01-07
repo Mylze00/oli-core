@@ -1,12 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import '../../config/api_config.dart';
 import 'dart:convert';
 
 import 'user_model.dart';
 
 final userProvider = FutureProvider<User>((ref) async {
   final response = await http.get(
-    Uri.parse('http://127.0.0.1:3000/auth/me'),
+    Uri.parse('${ApiConfig.baseUrl}/auth/me'),
     headers: {
       'Content-Type': 'application/json',
       // plus tard : Authorization: Bearer token

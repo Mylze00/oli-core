@@ -1,14 +1,17 @@
-require('dotenv').config();
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 const { Pool } = require('pg');
 
+// Hardcoded for migration reliability
+const CONNECTION_STRING = "postgresql://postgres:PIXELcongo243@localhost:5432/oli_db";
+
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: CONNECTION_STRING,
     ssl: false,
 });
 
 async function migrate() {
+    console.log('🔌 Connecting to database...');
     const client = await pool.connect();
     try {
         console.log('🔌 Connecting to database...');
@@ -33,6 +36,17 @@ async function migrate() {
             await client.query(ordersSql);
         } else {
             console.log('⚠️ create_orders_tables.sql not found!');
+        }
+
+        // 3. Create Social Tables (Phase 2)
+        console.log('📖 Reading Social SQL script...');
+        const socialSqlPath = path.join(__dirname, 'create_social_tables.sql');
+        if (fs.existsSync(socialSqlPath)) {
+            const socialSql = fs.readFileSync(socialSqlPath, 'utf8');
+            console.log('🚀 Creating Social tables (Products, Chat, Friends)...');
+            await client.query(socialSql);
+        } else {
+            console.log('⚠️ create_social_tables.sql not found!');
         }
 
         console.log('✅ All migrations successful!');

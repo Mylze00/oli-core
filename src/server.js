@@ -1,5 +1,7 @@
 require("dotenv").config();
 const express = require("express");
+const http = require('http');
+const { Server } = require("socket.io");
 const cors = require("cors");
 const helmet = require("helmet");
 const multer = require("multer");
@@ -7,15 +9,42 @@ const path = require("path");
 const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const pool = require("./config/db");
+
+// Routes Imports
 const authRoutes = require("./routes/auth.routes");
 const ordersRoutes = require("./routes/orders.routes");
+const productsRoutes = require("./routes/products.routes");
+const chatRoutes = require("./routes/chat.routes");
 
+// --- INITIALISATION ---
 const app = express();
+const server = http.createServer(app);
 const JWT_SECRET = process.env.JWT_SECRET || "ton_secret_jwt_ici";
 
-// --- MIDDLEWARES GÉNÉRAUX ---
+// --- SOCKET.IO CONFIG ---
+const io = new Server(server, {
+    cors: {
+        origin: "*", // A sécuriser en production
+        methods: ["GET", "POST"]
+    }
+});
 
-// 1. Correction CORS : Autoriser votre domaine Firebase
+app.set('io', io); // Partager l'instance IO
+
+io.on('connection', (socket) => {
+    console.log('⚡ Client Socket connecté:', socket.id);
+
+    socket.on('join', (userId) => {
+        socket.join(`user_${userId}`);
+        console.log(`👤 User ${userId} joined room user_${userId}`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Client déconnecté');
+    });
+});
+
+// --- MIDDLEWARES GÉNÉRAUX ---
 app.use(cors({
     origin: ["https://oli-core.web.app", "https://oli-core.firebaseapp.com"],
     methods: ["GET", "POST", "PUT", "DELETE"],
@@ -26,7 +55,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
-// --- MIDDLEWARE DE SÉCURITÉ ---
+// --- MIDDLEWARE DE SÉCURITÉ (JWT) ---
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
@@ -42,7 +71,7 @@ const verifyToken = (req, res, next) => {
     }
 };
 
-// --- CONFIGURATION UPLOADS ---
+// --- CONFIGURATION UPLOADS (MULTER) ---
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -55,10 +84,29 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
-// --- ROUTES ---
+// --- ROUTES API ---
 
+// 1. Auth & Commandes
 app.use("/auth", authRoutes);
 app.use("/orders", verifyToken, ordersRoutes);
+
+// 2. Chat (Nouveau Phase 2)
+app.use("/chat", verifyToken, chatRoutes);
+
+// 3. Produits (Hybride Public/Privé)
+app.use("/products", (req, res, next) => {
+    // Middleware optionnel pour peupler req.user si token présent
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+    if (token) {
+        try {
+            req.user = jwt.verify(token, JWT_SECRET);
+        } catch (err) { /* Ignorer erreur token visiteur */ }
+    }
+    next();
+}, productsRoutes);
+
+// --- ROUTES INLINE (Legacy - Profil/Wallet) ---
 
 // Profil Utilisateur
 app.get("/auth/me", verifyToken, async (req, res) => {
@@ -81,11 +129,10 @@ app.get("/auth/me", verifyToken, async (req, res) => {
     }
 });
 
-// Upload d'avatar corrigé pour Render (Utilisation du protocole HTTPS)
+// Upload Avatar
 app.post("/auth/upload-avatar", verifyToken, upload.single('avatar'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Pas de fichier" });
 
-    // Sur Render, forcez l'utilisation de https
     const protocol = req.headers['x-forwarded-proto'] || 'http';
     const avatarUrl = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
 
@@ -97,7 +144,7 @@ app.post("/auth/upload-avatar", verifyToken, upload.single('avatar'), async (req
     }
 });
 
-// Système de Wallet
+// Wallet Deposit
 app.post("/wallet/deposit", verifyToken, async (req, res) => {
     const { amount } = req.body;
     if (!amount || isNaN(amount)) return res.status(400).json({ error: "Montant invalide" });
@@ -113,24 +160,8 @@ app.post("/wallet/deposit", verifyToken, async (req, res) => {
     }
 });
 
-// Route Produits
-app.get("/products", (req, res) => {
-    fs.readdir(uploadDir, (err, files) => {
-        if (err) return res.json([]);
-        const protocol = req.headers['x-forwarded-proto'] || 'http';
-        const products = files
-            .filter(file => !file.startsWith('.') && fs.lstatSync(path.join(uploadDir, file)).isFile())
-            .map(filename => ({
-                id: filename,
-                name: filename.split('-').slice(1).join('-').replace(/\.[^/.]+$/, "").replace(/_/g, ' '),
-                price: "15.00",
-                imageUrl: `${protocol}://${req.get('host')}/uploads/${filename}`
-            }));
-        res.json(products);
-    });
-});
-
+// --- DÉMARRAGE DU SERVEUR ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 SERVEUR OLI ACTIF SUR LE PORT ${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 SERVEUR OLI ACTIF SUR LE PORT ${PORT} (HTTP + WebSocket)`);
 });

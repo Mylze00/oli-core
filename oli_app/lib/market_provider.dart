@@ -1,10 +1,11 @@
 import 'dart:convert'; // Indispensable pour jsonDecode
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Indispensable pour FutureProvider
-import 'package:http/http.dart' as http; // Indispensable pour http.get
+import 'package:http/http.dart' as http;
+import 'config/api_config.dart'; // Indispensable pour http.get
 
 final marketProductsProvider = FutureProvider<List<dynamic>>((ref) async {
   // 127.0.0.1 pour Linux Desktop / 10.0.2.2 pour Émulateur Android
-  const String apiUrl = 'http://127.0.0.1:3000/products';
+  const String apiUrl = '${ApiConfig.baseUrl}/products';
   
   try {
     print("📡 Tentative de connexion à : $apiUrl");
