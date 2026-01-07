@@ -13,6 +13,19 @@ const ordersRoutes = require("./routes/orders.routes");
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET || "ton_secret_jwt_ici";
 
+// --- MIDDLEWARES GÉNÉRAUX ---
+
+// 1. Correction CORS : Autoriser votre domaine Firebase
+app.use(cors({
+    origin: ["https://oli-core.web.app", "https://oli-core.firebaseapp.com"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(express.json());
+app.use('/uploads', express.static('uploads'));
+
 // --- MIDDLEWARE DE SÉCURITÉ ---
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
@@ -22,7 +35,7 @@ const verifyToken = (req, res, next) => {
 
     try {
         const verified = jwt.verify(token, JWT_SECRET);
-        req.user = verified; // Contient le phone de l'utilisateur
+        req.user = verified;
         next();
     } catch (err) {
         res.status(403).json({ error: "Token invalide" });
@@ -42,15 +55,12 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
-// --- MIDDLEWARES GÉNÉRAUX ---
-app.use(cors());
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json());
-app.use('/uploads', express.static('uploads'));
+// --- ROUTES ---
 
-// --- ROUTES PROFIL & PAIEMENT (SQL RÉEL) ---
+app.use("/auth", authRoutes);
+app.use("/orders", verifyToken, ordersRoutes);
 
-// 1. Récupérer les infos du profil depuis PostgreSQL
+// Profil Utilisateur
 app.get("/auth/me", verifyToken, async (req, res) => {
     try {
         const result = await pool.query(
@@ -71,11 +81,13 @@ app.get("/auth/me", verifyToken, async (req, res) => {
     }
 });
 
-// 2. Upload d'avatar
+// Upload d'avatar corrigé pour Render (Utilisation du protocole HTTPS)
 app.post("/auth/upload-avatar", verifyToken, upload.single('avatar'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Pas de fichier" });
 
-    const avatarUrl = `http://${req.get('host')}/uploads/${req.file.filename}`;
+    // Sur Render, forcez l'utilisation de https
+    const protocol = req.headers['x-forwarded-proto'] || 'http';
+    const avatarUrl = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
 
     try {
         await pool.query("UPDATE users SET avatar_url = $1 WHERE phone = $2", [avatarUrl, req.user.phone]);
@@ -85,7 +97,7 @@ app.post("/auth/upload-avatar", verifyToken, upload.single('avatar'), async (req
     }
 });
 
-// 3. Système de Wallet (Dépôt réel)
+// Système de Wallet
 app.post("/wallet/deposit", verifyToken, async (req, res) => {
     const { amount } = req.body;
     if (!amount || isNaN(amount)) return res.status(400).json({ error: "Montant invalide" });
@@ -101,21 +113,18 @@ app.post("/wallet/deposit", verifyToken, async (req, res) => {
     }
 });
 
-// --- AUTRES ROUTES ---
-app.use("/auth", authRoutes);
-app.use("/orders", verifyToken, ordersRoutes);
-
-// Route Produits (inchangée mais propre)
+// Route Produits
 app.get("/products", (req, res) => {
     fs.readdir(uploadDir, (err, files) => {
         if (err) return res.json([]);
+        const protocol = req.headers['x-forwarded-proto'] || 'http';
         const products = files
             .filter(file => !file.startsWith('.') && fs.lstatSync(path.join(uploadDir, file)).isFile())
             .map(filename => ({
                 id: filename,
                 name: filename.split('-').slice(1).join('-').replace(/\.[^/.]+$/, "").replace(/_/g, ' '),
                 price: "15.00",
-                imageUrl: `${req.protocol}://${req.get('host')}/uploads/${filename}`
+                imageUrl: `${protocol}://${req.get('host')}/uploads/${filename}`
             }));
         res.json(products);
     });
