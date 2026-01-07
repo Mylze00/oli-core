@@ -1,0 +1,8 @@
+Recommandations pour la suite :
+Gestion du Token : Dans votre AuthController (Flutter), vous devriez maintenant stocker cet accessToken (par exemple avec flutter_secure_storage) pour ne pas demander l'OTP à chaque ouverture de l'application.
+
+Nettoyage de l'UI : Vous pouvez maintenant supprimer les debugPrint qui affichent le code OTP dans la console Flutter pour plus de sécurité avant de passer en production.
+
+Sécurité Backend : Pensez à remplacer le DEV_FAKE_TOKEN par un véritable JWT (JSON Web Token) dans votre service Node.js pour identifier l'utilisateur de manière sécurisée lors des prochains appels.
+
+Souhaitez-vous que je vous aide à mettre en place le stockage sécurisé du token dans votre code Flutter ?

@@ -1,0 +1,66 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+// IMPORT TRÈS IMPORTANT :
+import '../../models/product_model.dart'; 
+
+class MarketView extends ConsumerStatefulWidget {
+  const MarketView({super.key});
+  @override
+  ConsumerState<MarketView> createState() => _MarketViewState();
+}
+
+class _MarketViewState extends ConsumerState<MarketView> {
+  @override
+  Widget build(BuildContext context) {
+    // Maintenant marketProductsProvider est reconnu !
+    final products = ref.watch(marketProductsProvider);
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Marché Public', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.black,
+      ),
+      body: GridView.builder(
+        padding: const EdgeInsets.all(12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2, 
+          childAspectRatio: 0.75, 
+          crossAxisSpacing: 10, 
+          mainAxisSpacing: 10,
+        ),
+        itemCount: products.length,
+        itemBuilder: (context, index) => _ProductCard(product: products[index]),
+      ),
+    );
+  }
+}
+
+class _ProductCard extends StatelessWidget {
+  final Product product; // Reconnu grâce à l'import
+  const _ProductCard({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          const Expanded(child: Icon(Icons.phone_iphone, size: 50, color: Colors.blueAccent)),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              children: [
+                Text(product.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                Text("${product.price} \$", style: const TextStyle(color: Colors.blueAccent)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
