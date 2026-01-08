@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,7 +9,7 @@ class SecureStorageService {
   static const _phoneKey = 'user_phone';
 
   // Mode dégradé si on est sur Linux ET en mode Debug
-  bool get _useFallback => kDebugMode && Platform.isLinux;
+  bool get _useFallback => kDebugMode && !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
   /// 🔹 SAUVEGARDER
   Future<void> saveSession(String token, String phone) async {
