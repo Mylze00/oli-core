@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -72,12 +71,12 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                               Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(10),
-                                  image: DecorationImage(
-                                    image: kIsWeb 
-                                      ? NetworkImage(_images[i].path) as ImageProvider
-                                      : FileImage(io.File(_images[i].path)),
-                                    fit: BoxFit.cover
-                                  )
+                                    image: DecorationImage(
+                                      image: kIsWeb 
+                                        ? NetworkImage(_images[i].path)
+                                        : _getMobileImage(_images[i].path),
+                                      fit: BoxFit.cover
+                                    )
                                 )
                               ),
                               Positioned(

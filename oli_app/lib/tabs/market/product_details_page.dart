@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import '../../models/product_model.dart';
 import 'package:image_picker/image_picker.dart';
@@ -33,7 +32,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       itemCount: p.images.length,
                       itemBuilder: (c, i) => kIsWeb 
                         ? Image.network(p.images[i].path, fit: BoxFit.cover)
-                        : Image.file(io.File(p.images[i].path), fit: BoxFit.cover),
+                        : Image.network(p.images[i].path, fit: BoxFit.cover), // Fallback temporaire
                     ),
             ),
             Positioned(
