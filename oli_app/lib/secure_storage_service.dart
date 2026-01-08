@@ -8,8 +8,8 @@ class SecureStorageService {
   static const _tokenKey = 'auth_token';
   static const _phoneKey = 'user_phone';
 
-  // Mode dégradé si on est sur Linux ET en mode Debug
-  bool get _useFallback => kDebugMode && !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+  // Mode dégradé si on est sur Linux (Debug) OU sur le Web (pour éviter les soucis de SecureStorage)
+  bool get _useFallback => kIsWeb || (kDebugMode && defaultTargetPlatform == TargetPlatform.linux);
 
   /// 🔹 SAUVEGARDER
   Future<void> saveSession(String token, String phone) async {
