@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'config/api_config.dart';
@@ -24,7 +24,7 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
     required String condition,
     required int quantity,
     required String color,
-    required File imageFile,
+    required XFile imageFile,
   }) async {
     state = const AsyncValue.loading();
 
@@ -42,10 +42,12 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
       request.fields['quantity'] = quantity.toString();
       request.fields['color'] = color;
 
-      // Ajout du fichier image
-      request.files.add(await http.MultipartFile.fromPath(
-        'images', // Nom du champ attendu par le backend (upload.array('images'))
-        imageFile.path,
+      // Ajout du fichier image (compatible Web via readAsBytes)
+      final bytes = await imageFile.readAsBytes();
+      request.files.add(http.MultipartFile.fromBytes(
+        'images',
+        bytes,
+        filename: imageFile.name,
       ));
 
       // Envoi au serveur

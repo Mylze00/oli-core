@@ -1,11 +1,11 @@
-import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class Product {
   final String id, name, price, seller, condition, description, color, deliveryTime;
   final double deliveryPrice, rating;
   final int quantity, reviews, totalBuyerRatings;
-  final List<File> images;
+  final List<XFile> images;
 
   Product({
     required this.id, required this.name, required this.price,

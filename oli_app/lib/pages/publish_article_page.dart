@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -27,7 +28,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     final imgs = await ImagePicker().pickMultiImage();
     if (imgs.isNotEmpty && _images.length < 8) {
       setState(() {
-        _images.addAll(imgs.take(8 - _images.length).map((img) => File(img.path)));
+        _images.addAll(imgs.take(8 - _images.length));
       });
     }
   }
@@ -68,7 +69,17 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                           }
                           return Stack(
                             children: [
-                              Container(decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), image: DecorationImage(image: FileImage(_images[i]), fit: BoxFit.cover))),
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  image: DecorationImage(
+                                    image: kIsWeb 
+                                      ? NetworkImage(_images[i].path) as ImageProvider
+                                      : FileImage(io.File(_images[i].path)),
+                                    fit: BoxFit.cover
+                                  )
+                                )
+                              ),
                               Positioned(
                                 top: 0, right: 0,
                                 child: GestureDetector(
