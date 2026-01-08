@@ -64,10 +64,23 @@ io.on('connection', (socket) => {
 
 // --- MIDDLEWARES GÉNÉRAUX ---
 app.use(cors({
-    origin: ALLOWED_ORIGINS,
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    origin: true, // Autorise dynamiquement l'origine qui fait la requête
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "authorization", "X-Requested-With", "Accept"],
+    exposedHeaders: ["Content-Type", "Authorization"]
 }));
+
+// Handler explicite pour OPTIONS (Preflight)
+app.options('*', cors());
+
+// Middleware de debug pour logger TOUS les headers sur les requêtes sensibles
+app.use((req, res, next) => {
+    if (req.method !== 'GET') {
+        console.log(`[DEBUG LOG] Headers for ${req.method} ${req.url}:`, JSON.stringify(req.headers));
+    }
+    next();
+});
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
