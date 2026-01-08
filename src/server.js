@@ -19,7 +19,7 @@ const chatRoutes = require("./routes/chat.routes");
 // --- INITIALISATION ---
 const app = express();
 const server = http.createServer(app);
-const JWT_SECRET = process.env.JWT_SECRET || "secret_de_secours_temporaire_a_changer";
+const JWT_SECRET = process.env.JWT_SECRET || "oli_default_secret_2024_secure_change_me";
 if (!process.env.JWT_SECRET) {
     console.warn("⚠️ ATTENTION: JWT_SECRET non défini. Utilisation du secret de secours.");
 }

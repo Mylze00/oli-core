@@ -1,11 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 import 'config/api_config.dart';
 import 'secure_storage_service.dart';
 
-// Le fameux Provider qui manquait
 final productControllerProvider = StateNotifierProvider<ProductController, AsyncValue<void>>((ref) {
   return ProductController();
 });
@@ -13,7 +12,7 @@ final productControllerProvider = StateNotifierProvider<ProductController, Async
 class ProductController extends StateNotifier<AsyncValue<void>> {
   ProductController() : super(const AsyncValue.data(null));
 
-  // Comme vous êtes sur Linux, 127.0.0.1 est votre machine locale
+  final Dio _dio = Dio();
   final String apiUrl = '${ApiConfig.baseUrl}/products/upload';
 
   Future<bool> uploadProduct({
@@ -31,60 +30,62 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
 
     try {
       final token = await SecureStorageService().getToken();
-      debugPrint("🚀 Tentative d'upload produit. Token présent: ${token != null}");
-      if (token != null) {
-        debugPrint("🔑 Token (début): ${token.substring(0, token.length > 10 ? 10 : token.length)}...");
-      }
+      debugPrint("🚀 [DIAG] Début upload. Token trouvé: ${token != null}");
       
       if (token == null || token.isEmpty) {
-        debugPrint("❌ Erreur: Token absent ou vide. Déconnexion requise.");
-        state = AsyncValue.error('Session expirée - Veuillez vous reconnecter', StackTrace.current);
+        debugPrint("❌ [DIAG] Erreur: Token absent. Annulation.");
+        state = AsyncValue.error('Session expirée. Veuillez vous reconnecter.', StackTrace.current);
         return false;
       }
 
-      // Préparation de la requête "Multipart"
-      var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
-      
-      // Ajout du header d'authentification
-      request.headers['Authorization'] = 'Bearer $token';
-      request.headers['Accept'] = 'application/json'; // Utile pour certains serveurs
-      
-      debugPrint("📡 Envoi à $apiUrl avec Headers: ${request.headers.keys.toList()}");
-
-      // Ajout des champs texte
-      request.fields['name'] = name;
-      request.fields['price'] = price;
-      request.fields['description'] = description;
-      request.fields['delivery_price'] = deliveryPrice.toString();
-      request.fields['delivery_time'] = deliveryTime;
-      request.fields['condition'] = condition;
-      request.fields['quantity'] = quantity.toString();
-      request.fields['color'] = color;
-
-      // Ajout des fichiers images
-      for (var imageFile in images) {
-        final bytes = await imageFile.readAsBytes();
-        request.files.add(http.MultipartFile.fromBytes(
-          'images',
-          bytes,
-          filename: imageFile.name,
-        ));
+      // Préparation des fichiers
+      List<MultipartFile> multipartFiles = [];
+      for (var file in images) {
+        final bytes = await file.readAsBytes();
+        multipartFiles.add(MultipartFile.fromBytes(bytes, filename: file.name));
       }
 
-      // Envoi au serveur
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
+      // Création du FormData (plus robuste pour le Web)
+      FormData formData = FormData.fromMap({
+        'name': name,
+        'price': price,
+        'description': description,
+        'delivery_price': deliveryPrice,
+        'delivery_time': deliveryTime,
+        'condition': condition,
+        'quantity': quantity,
+        'color': color,
+        'images': multipartFiles,
+      });
+
+      debugPrint("📡 [DIAG] Envoi via Dio à $apiUrl");
+      debugPrint("🔑 [DIAG] Header Auth: Bearer ${token.substring(0, 5)}...");
+
+      final response = await _dio.post(
+        apiUrl,
+        data: formData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+          validateStatus: (status) => true, // On gère nous-mêmes les erreurs
+        ),
+      );
+
+      debugPrint("📥 [DIAG] Réponse serveur (${response.statusCode}): ${response.data}");
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        debugPrint("✅ Produit uploadé avec succès !");
+        debugPrint("✅ [DIAG] Succès !");
         state = const AsyncValue.data(null);
         return true;
       } else {
-        debugPrint("❌ Erreur Serveur (${response.statusCode}): ${response.body}");
+        debugPrint("❌ [DIAG] Échec Serveur: ${response.data}");
         state = AsyncValue.error('Erreur: ${response.statusCode}', StackTrace.current);
         return false;
       }
     } catch (e) {
+      debugPrint("❌ [DIAG] Erreur Exception: $e");
       state = AsyncValue.error('Erreur réseau: $e', StackTrace.current);
       return false;
     }

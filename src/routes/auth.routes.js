@@ -1,7 +1,7 @@
 const express = require("express");
 const otpService = require("../services/otp.service");
 const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET || "ton_secret_jwt_ici";
+const JWT_SECRET = process.env.JWT_SECRET || "oli_default_secret_2024_secure_change_me";
 
 const router = express.Router();
 
