@@ -1,5 +1,7 @@
 const express = require("express");
 const otpService = require("../services/otp.service");
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = process.env.JWT_SECRET || "ton_secret_jwt_ici";
 
 const router = express.Router();
 
@@ -44,10 +46,16 @@ router.post("/verify-otp", async (req, res) => {
       return res.status(401).json({ error: "Invalid or expired OTP" });
     }
 
+    const token = jwt.sign(
+      { id: result.user.id, phone: result.user.phone },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
     return res.json({
       message: "OTP verified",
       user: result.user,
-      accessToken: "DEV_FAKE_TOKEN"
+      token
     });
 
   } catch (e) {
