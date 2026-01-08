@@ -42,6 +42,9 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           _conversations = jsonDecode(response.body);
           _isLoading = false;
         });
+      } else {
+        setState(() => _isLoading = false);
+        print("Erreur API Conversations: ${response.statusCode} - ${response.body}");
       }
     } catch (e) {
       print("Erreur loading convers: $e");

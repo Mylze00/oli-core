@@ -137,18 +137,25 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
     final authState = ref.watch(authControllerProvider);
     final isDarkMode = ref.watch(themeProvider);
     final user = authState.userData ?? {};
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    
+    // Couleurs dynamiques
+    final cardColor = isLight ? Colors.white : const Color(0xFF1A1A1A);
+    final textColor = isLight ? Colors.black87 : Colors.white;
+    final subtitleColor = isLight ? Colors.black54 : Colors.grey.shade500;
 
     // Si pas authentifié, afficher message
     if (!authState.isAuthenticated) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.account_circle_outlined, color: Colors.grey, size: 64),
+              Icon(Icons.account_circle_outlined, color: Colors.grey, size: 64),
               const SizedBox(height: 16),
-              const Text("Vous n'êtes pas connecté", style: TextStyle(color: Colors.white, fontSize: 18)),
+              Text("Vous n'êtes pas connecté", style: TextStyle(color: textColor, fontSize: 18)),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
@@ -161,13 +168,14 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        iconTheme: IconThemeData(color: textColor),
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+            icon: Icon(Icons.qr_code_scanner, color: textColor),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Scanner QR - Fonctionnalité à venir')),
@@ -175,7 +183,7 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+            icon: Icon(Icons.settings_outlined, color: textColor),
             onPressed: () => _navigateTo(const SettingsPage()),
           ),
         ],
@@ -212,14 +220,14 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(user["name"] ?? "Utilisateur", style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                        Text('Tél: ${user["phone"] ?? "N/A"}', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                        Text(user["name"] ?? "Utilisateur", style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
+                        Text('Tél: ${user["phone"] ?? "N/A"}', style: TextStyle(color: subtitleColor, fontSize: 13)),
                         const SizedBox(height: 8),
-                        _buildStatusBadge(),
+                        _buildStatusBadge(textColor),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+                  Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
                 ],
               ),
             ),
@@ -227,7 +235,7 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
             const SizedBox(height: 15),
 
             // --- ADRESSE DE LIVRAISON ---
-            _buildMenuSection([
+            _buildMenuSection(cardColor, [
               ListTile(
                 onTap: () => _showDeliveryAddressDialog(context),
                 leading: const Icon(Icons.location_on, color: Colors.blueAccent),
@@ -236,9 +244,9 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Adresse de livraison', style: TextStyle(color: Colors.white70, fontSize: 10)),
+                          Text('Adresse de livraison', style: TextStyle(color: subtitleColor, fontSize: 10)),
                           const SizedBox(height: 4),
-                          Text(_deliveryAddress, style: const TextStyle(color: Colors.white, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+                          Text(_deliveryAddress, style: TextStyle(color: textColor, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
                         ],
                       ),
                 trailing: const Icon(Icons.edit, color: Colors.blueAccent, size: 18),
@@ -248,11 +256,12 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
             const SizedBox(height: 10),
 
             // --- SECTION PAIEMENTS ---
-            _buildMenuSection([
+            _buildMenuSection(cardColor, [
               _buildMenuItem(
                 Icons.account_balance_wallet_outlined, 
                 'Paiements et Services', 
                 Colors.green, 
+                textColor: textColor,
                 trailing: 'Wallet: ${user["wallet"] ?? 0} \$',
                 onTap: () => _showDepositDialog(context)
               ),
@@ -260,69 +269,76 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
                 Icons.credit_card, 
                 'Ajouter Carte VISA', 
                 Colors.blue, 
+                textColor: textColor,
                 onTap: () => _navigateTo(const PaymentMethodsPage())
               ),
               _buildMenuItem(
                 Icons.account_balance, 
                 'Ajouter Compte Bancaire', 
                 Colors.orange, 
+                textColor: textColor,
                 onTap: () => _navigateTo(const PaymentMethodsPage())
               ),
             ]),
 
             // --- ACTIVITÉS ---
             const _SectionTitle(title: 'Mes Activités'),
-            _buildMenuSection([
+            _buildMenuSection(cardColor, [
               _buildMenuItem(
                 Icons.add_box_outlined, 
                 'Mettre en vente un objet', 
                 Colors.blue,
+                textColor: textColor,
                 onTap: () => _navigateTo(const PublishArticlePage())
               ),
               _buildMenuItem(
                 Icons.shopping_bag_outlined, 
                 'Mes achats', 
                 Colors.orange, 
+                textColor: textColor,
                 onTap: () => _navigateTo(const PurchasesPage())
               ),
               _buildMenuItem(
                 Icons.favorite_border, 
                 'Favoris et Suivis', 
                 Colors.pink, 
+                textColor: textColor,
                 onTap: () => _navigateTo(const FavoritesPage())
               ),
             ]),
 
             // --- PARAMÈTRES ---
             const _SectionTitle(title: 'Paramètres'),
-            _buildMenuSection([
+            _buildMenuSection(cardColor, [
               ListTile(
                 onTap: () => ref.read(themeProvider.notifier).toggleTheme(),
                 leading: Icon(isDarkMode ? Icons.dark_mode : Icons.light_mode, color: Colors.amber),
-                title: Text(isDarkMode ? 'Mode Sombre' : 'Mode Clair', style: const TextStyle(color: Colors.white, fontSize: 15)),
+                title: Text(isDarkMode ? 'Mode Sombre' : 'Mode Clair', style: TextStyle(color: textColor, fontSize: 15)),
                 trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14),
               ),
             ]),
 
             // --- SUPPORT ---
-            _buildMenuSection([
+            _buildMenuSection(cardColor, [
               _buildMenuItem(
                 Icons.help_outline, 
                 'Aide et support', 
                 Colors.grey, 
+                textColor: textColor,
                 onTap: () => _navigateTo(const HelpPage())
               ),
               _buildMenuItem(
                 Icons.info_outline, 
                 'À propos d\'Oli', 
                 Colors.grey, 
+                textColor: textColor,
                 onTap: () => _navigateTo(const AboutPage())
               ),
             ]),
 
             // --- DÉCONNEXION ---
-            _buildMenuSection([
-              _buildMenuItem(Icons.logout, 'Déconnexion', Colors.redAccent, onTap: () => _logout(context)),
+            _buildMenuSection(cardColor, [
+              _buildMenuItem(Icons.logout, 'Déconnexion', Colors.redAccent, textColor: Colors.redAccent, onTap: () => _logout(context)),
             ]),
 
             const SizedBox(height: 30),
@@ -348,31 +364,31 @@ class _ProfileAndWalletPageState extends ConsumerState<ProfileAndWalletPage> {
     return '?';
   }
 
-  Widget _buildStatusBadge() {
+  Widget _buildStatusBadge(Color textColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(border: Border.all(color: Colors.white.withOpacity(0.2)), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(border: Border.all(color: textColor.withOpacity(0.2)), borderRadius: BorderRadius.circular(20)),
       child: const Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.verified_user, size: 14, color: Colors.blueAccent),
         SizedBox(width: 4),
-        Text('Utilisateur Certifié', style: TextStyle(color: Colors.white, fontSize: 11)),
+        Text('Utilisateur Certifié', style: TextStyle(color: Colors.blueAccent, fontSize: 11)),
       ]),
     );
   }
 
-  Widget _buildMenuSection(List<Widget> items) {
+  Widget _buildMenuSection(Color bgColor, List<Widget> items) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]),
       child: Column(children: items),
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String title, Color color, {String? trailing, required VoidCallback onTap}) {
+  Widget _buildMenuItem(IconData icon, String title, Color color, {String? trailing, Color? textColor, required VoidCallback onTap}) {
     return ListTile(
       onTap: onTap,
       leading: Icon(icon, color: color),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 15)),
+      title: Text(title, style: TextStyle(color: textColor ?? Colors.white, fontSize: 15)),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

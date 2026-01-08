@@ -572,178 +572,97 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       appBar: AppBar(backgroundColor: Colors.black, elevation: 0, title: const Text('Détails du produit'), leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context))),
       body: SingleChildScrollView(
         child: Column(children: [
-          // IMAGE CAROUSEL
-          Container(
-            color: Colors.white10,
-            height: 300,
-            child: p.images.isEmpty
-                ? const Center(child: Icon(Icons.image, size: 60, color: Colors.grey))
-                : Stack(children: [
-                    PageView.builder(
+          Stack(children: [
+            Container(
+              color: Colors.white,
+              height: 400,
+              width: double.infinity,
+              child: p.images.isEmpty
+                  ? const Center(child: Icon(Icons.image, size: 60, color: Colors.grey))
+                  : PageView.builder(
                       onPageChanged: (i) => setState(() => _currentImageIndex = i),
                       itemCount: p.images.length,
                       itemBuilder: (c, i) => Image.file(p.images[i], fit: BoxFit.cover),
                     ),
-                    Positioned(
-                      bottom: 10,
-                      left: 0,
-                      right: 0,
-                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(p.images.length, (i) => Container(width: 8, height: 8, margin: const EdgeInsets.symmetric(horizontal: 4), decoration: BoxDecoration(shape: BoxShape.circle, color: i == _currentImageIndex ? Colors.blueAccent : Colors.grey)))),
-                    ),
-                    if (p.images.length > 1)
-                      Positioned(
-                        bottom: 12,
-                        right: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(6)),
-                          child: Text('${_currentImageIndex + 1}/${p.images.length}', style: const TextStyle(color: Colors.white, fontSize: 12)),
-                        ),
-                      ),
-                  ]),
+            ),
+            Positioned(
+              top: 40, left: 16,
+              child: CircleAvatar(backgroundColor: Colors.white.withOpacity(0.9), child: IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 18), onPressed: () => Navigator.pop(context))),
+            ),
+            Positioned(
+              top: 40, right: 16,
+              child: Row(children: [
+                CircleAvatar(backgroundColor: Colors.white.withOpacity(0.9), child: const Icon(Icons.ios_share, color: Colors.black, size: 18)),
+                const SizedBox(width: 10),
+                CircleAvatar(backgroundColor: Colors.white.withOpacity(0.9), child: const Icon(Icons.shopping_cart_outlined, color: Colors.black, size: 18)),
+              ]),
+            ),
+            if (p.images.length > 1)
+              Positioned(
+                bottom: 20, left: 0, right: 0,
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(p.images.length, (i) => Container(width: 8, height: 8, margin: const EdgeInsets.symmetric(horizontal: 4), decoration: BoxDecoration(shape: BoxShape.circle, color: i == _currentImageIndex ? Colors.blueAccent : Colors.grey.withOpacity(0.5))))),
+              ),
+          ]),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(p.name.toUpperCase(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+          ),
+          // BLOC VENDEUR
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+            child: Row(children: [
+              Stack(
+                children: [
+                   CircleAvatar(radius: 25, backgroundColor: Colors.blueAccent, child: Text(p.seller[0], style: const TextStyle(color: Colors.white, fontSize: 20))),
+                   Positioned(bottom: 0, right: 0, child: Container(padding: const EdgeInsets.all(2), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.check_circle, color: Colors.blue, size: 16))),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p.seller.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16)),
+                  Text('${p.totalBuyerRatings}% d\'évaluation positive', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                ]),
+              ),
+              const Icon(Icons.chat_bubble_outline, color: Colors.black, size: 30),
+            ]),
+          ),
+          // BANNIÈRE PRIX
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            color: const Color(0xFF1E7DBA),
+            child: Center(child: Text("${p.price}\$", style: const TextStyle(color: Colors.white, fontSize: 45, fontWeight: FontWeight.bold))),
           ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // TITRE & PRIX
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(p.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Row(children: [const Icon(Icons.star, color: Colors.amber, size: 18), Text(' ${p.rating} (${p.reviews} avis)', style: const TextStyle(color: Colors.white70))]),
-                  ]),
-                ),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blueAccent)), child: Text(p.condition, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold))),
-              ]),
+              Text("${p.deliveryPrice}\$ de livraison", style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              Text("Livraison estimée : ${p.deliveryTime}", style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              const Divider(color: Colors.white24, height: 24),
+              Text("Etat : ${p.condition}", style: const TextStyle(color: Colors.white, fontSize: 14)),
               const SizedBox(height: 16),
-              // PRIX & LIVRAISON
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)),
-                child: Column(children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Prix du produit', style: TextStyle(color: Colors.white70)),
-                    Text('\$${p.price}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Prix de livraison', style: TextStyle(color: Colors.white70)),
-                    Text('\$${p.deliveryPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, color: Colors.orange)),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Temps de livraison', style: TextStyle(color: Colors.white70)),
-                    Text(p.deliveryTime, style: const TextStyle(fontSize: 14, color: Colors.white)),
-                  ]),
-                  const Divider(color: Colors.white24, height: 16),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Total estimé', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    Text('\$${(double.parse(p.price) + p.deliveryPrice).toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                  ]),
-                ]),
+              // BOUTONS D'ACTION
+              SizedBox(
+                width: double.infinity, height: 50,
+                child: ElevatedButton(onPressed: () {}, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E7DBA), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), child: const Text("Achat immédiat", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))),
               ),
-              const SizedBox(height: 16),
-              // CARACTÉRISTIQUES
-              _SectionHeader(title: 'Caractéristiques'),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)),
-                child: Column(children: [
-                  _DetailRow(label: 'Couleur', value: p.color),
-                  const Divider(color: Colors.white24),
-                  _DetailRow(label: 'Quantité disponible', value: '${p.quantity} article(s)'),
-                  const Divider(color: Colors.white24),
-                  _DetailRow(label: 'État', value: p.condition),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              // DESCRIPTION
-              _SectionHeader(title: 'Description'),
-              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)), child: Text(p.description, style: const TextStyle(color: Colors.white70, height: 1.5))),
-              const SizedBox(height: 16),
-              // VENDEUR
-              _SectionHeader(title: 'Vendeur'),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)),
-                child: Row(children: [
-                  CircleAvatar(backgroundColor: Colors.blueAccent, child: Text(p.seller[0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(p.seller, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Row(children: [
-                        const Icon(Icons.star, color: Colors.amber, size: 14),
-                        Text(' ${p.rating} (${p.totalBuyerRatings} acheteurs)', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                      ]),
-                    ]),
-                  ),
-                  ElevatedButton(onPressed: () {}, style: ElevatedButton.styleFrom(backgroundColor: Colors.white10), child: const Text('Contacter')),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              // AVIS & COMMENTAIRES
-              _SectionHeader(title: 'Avis des acheteurs (${p.reviews})'),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)),
-                child: Column(children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('${p.rating}/5', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      Row(children: List.generate(5, (i) => Icon(Icons.star, color: i < p.rating.toInt() ? Colors.amber : Colors.grey, size: 14))),
-                    ]),
-                    Column(children: [
-                      const Text('Produit de qualité', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text('${p.totalBuyerRatings} acheteurs satisfaits', style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                    ]),
-                  ]),
-                ]),
-              ),
-              const SizedBox(height: 20),
-              // QUANTITÉ
-              Row(children: [
-                const Expanded(child: Text('Quantité à acheter', style: TextStyle(fontWeight: FontWeight.bold))),
-                Container(
-                  decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(8)),
-                  child: Row(children: [
-                    IconButton(icon: const Icon(Icons.remove), onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null),
-                    Text('$_quantity', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    IconButton(icon: const Icon(Icons.add), onPressed: _quantity < p.quantity ? () => setState(() => _quantity++) : null),
-                  ]),
-                ),
-              ]),
-              const SizedBox(height: 20),
-              // ACTION BUTTONS
-              Row(children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Article ajouté au panier'))),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.white10),
-                    child: const Text('Ajouter au panier'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Redirection vers paiement'))),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                    child: const Text('Acheter maintenant'),
-                  ),
-                ),
-              ]),
               const SizedBox(height: 12),
               SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ouvre les commentaires et avis'))),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white10),
-                  child: const Text('Commentaires et avis'),
-                ),
+                width: double.infinity, height: 50,
+                child: OutlinedButton(onPressed: () {}, style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white70), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), child: const Text("Ajouter au panier", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity, height: 50,
+                child: OutlinedButton(onPressed: () {}, style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white70), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), child: const Text("Suivre cet objet", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))),
               ),
               const SizedBox(height: 20),
+              GestureDetector(onTap: () {}, child: const Text("Afficher la description complète", style: TextStyle(color: Colors.white, decoration: TextDecoration.underline))),
+              const SizedBox(height: 8),
+              Text("Quantité Disponible : ${p.quantity}", style: const TextStyle(color: Colors.white70)),
             ]),
           ),
         ]),
@@ -1089,6 +1008,12 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                         final ok = await ref.read(productControllerProvider.notifier).uploadProduct(
                           name: _name.text.trim(),
                           price: _price.text.trim(),
+                          description: _description.text.trim(),
+                          deliveryPrice: double.tryParse(_deliveryPrice.text.trim()) ?? 0,
+                          deliveryTime: _deliveryTime.text.trim(),
+                          condition: _condition,
+                          quantity: int.tryParse(_quantity.text.trim()) ?? 1,
+                          color: _color.text.trim(),
                           imageFile: _images[0],
                         );
                         if (ok) {

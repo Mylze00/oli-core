@@ -18,6 +18,12 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
   Future<bool> uploadProduct({
     required String name,
     required String price,
+    required String description,
+    required double deliveryPrice,
+    required String deliveryTime,
+    required String condition,
+    required int quantity,
+    required String color,
     required File imageFile,
   }) async {
     state = const AsyncValue.loading();
@@ -29,6 +35,12 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
       // Ajout des champs texte
       request.fields['name'] = name;
       request.fields['price'] = price;
+      request.fields['description'] = description;
+      request.fields['delivery_price'] = deliveryPrice.toString();
+      request.fields['delivery_time'] = deliveryTime;
+      request.fields['condition'] = condition;
+      request.fields['quantity'] = quantity.toString();
+      request.fields['color'] = color;
 
       // Ajout du fichier image
       request.files.add(await http.MultipartFile.fromPath(

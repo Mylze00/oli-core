@@ -69,7 +69,7 @@ router.post('/upload', upload.array('images', 5), async (req, res) => {
     // Note: Le middleware verifyToken doit être appliqué dans server.js
     if (!req.user) return res.status(401).json({ error: "Non authentifié" });
 
-    const { name, description, price, category } = req.body;
+    const { name, description, price, category, delivery_price, delivery_time, condition, quantity, color } = req.body;
 
     if (!name || !price) return res.status(400).json({ error: "Nom et prix requis" });
 
@@ -80,8 +80,20 @@ router.post('/upload', upload.array('images', 5), async (req, res) => {
 
     try {
         const result = await pool.query(
-            "INSERT INTO products (seller_id, name, description, price, category, images) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-            [req.user.id, name, description || '', parseFloat(price), category || 'General', images]
+            "INSERT INTO products (seller_id, name, description, price, category, images, delivery_price, delivery_time, condition, quantity, color) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
+            [
+                req.user.id,
+                name,
+                description || '',
+                parseFloat(price),
+                category || 'General',
+                images,
+                parseFloat(delivery_price || 0),
+                delivery_time || '',
+                condition || 'Neuf',
+                parseInt(quantity || 1),
+                color || ''
+            ]
         );
 
         res.json({ success: true, productId: result.rows[0].id });
