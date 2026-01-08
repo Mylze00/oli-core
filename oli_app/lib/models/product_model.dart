@@ -6,17 +6,17 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
 class Product {
-  final String id, name, price, seller, condition, description, color, deliveryTime;
+  final String id, name, price, seller, sellerId, condition, description, color, deliveryTime;
   final double deliveryPrice, rating;
   final int quantity, reviews, totalBuyerRatings;
   final List<String> images; 
 
   Product({
     required this.id, required this.name, required this.price,
-    required this.seller, required this.condition, required this.description,
-    required this.color, required this.deliveryPrice, required this.deliveryTime,
-    required this.quantity, required this.rating, required this.reviews,
-    required this.totalBuyerRatings, this.images = const [],
+    required this.seller, required this.sellerId, required this.condition, 
+    required this.description, required this.color, required this.deliveryPrice, 
+    required this.deliveryTime, required this.quantity, required this.rating, 
+    required this.reviews, required this.totalBuyerRatings, this.images = const [],
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -32,6 +32,7 @@ class Product {
       name: json['name'] ?? 'Produit sans nom',
       price: json['price']?.toString() ?? '0',
       seller: json['sellerName'] ?? 'Anonyme',
+      sellerId: json['sellerId']?.toString() ?? '',
       condition: json['condition'] ?? 'Inconnu',
       description: json['description'] ?? '',
       color: json['color'] ?? '',

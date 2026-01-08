@@ -1,15 +1,65 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/product_model.dart';
+import '../../chat/chat_page.dart';
+import '../../core/user/user_provider.dart';
 
-class ProductDetailsPage extends StatefulWidget {
+class ProductDetailsPage extends ConsumerStatefulWidget {
   final Product product;
   const ProductDetailsPage({super.key, required this.product});
   @override
-  State<ProductDetailsPage> createState() => _ProductDetailsPageState();
+  ConsumerState<ProductDetailsPage> createState() => _ProductDetailsPageState();
 }
 
-class _ProductDetailsPageState extends State<ProductDetailsPage> {
+class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   int _currentImageIndex = 0;
+  bool _isFollowing = false;
+
+  void _shareProduct() {
+    final p = widget.product;
+    final String text = "Regarde ce produit sur Oli : ${p.name}\n${p.price}\$\nhttps://oli-app.web.app/product/${p.id}";
+    Share.share(text);
+  }
+
+  void _openChat() {
+    final p = widget.product;
+    final userState = ref.read(userProvider);
+    
+    userState.when(
+      data: (user) {
+        if (user.id.toString() == p.sellerId) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Vous ne pouvez pas discuter avec vous-même !"))
+          );
+          return;
+        }
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatPage(
+              myId: user.id.toString(),
+              otherId: p.sellerId,
+              otherName: p.seller,
+            ),
+          ),
+        );
+      },
+      loading: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Chargement de votre profil..."))),
+      error: (_, __) => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erreur lors de l'accès au chat"))),
+    );
+  }
+
+  void _toggleFollow() {
+    setState(() => _isFollowing = !_isFollowing);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_isFollowing ? "Vous suivez maintenant cet objet" : "Suivi annulé"),
+        duration: const Duration(seconds: 1),
+      )
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +92,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             Positioned(
               top: 40, right: 16,
               child: Row(children: [
-                CircleAvatar(backgroundColor: Colors.white.withOpacity(0.9), child: const Icon(Icons.ios_share, color: Colors.black, size: 18)),
+                CircleAvatar(
+                  backgroundColor: Colors.white.withOpacity(0.9), 
+                  child: IconButton(
+                    icon: const Icon(Icons.ios_share, color: Colors.black, size: 18),
+                    onPressed: _shareProduct,
+                  )
+                ),
                 const SizedBox(width: 10),
                 CircleAvatar(backgroundColor: Colors.white.withOpacity(0.9), child: const Icon(Icons.shopping_cart_outlined, color: Colors.black, size: 18)),
               ]),
@@ -65,7 +121,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             child: Row(children: [
               Stack(
                 children: [
-                   CircleAvatar(radius: 25, backgroundColor: Colors.blueAccent, child: Text(p.seller[0], style: const TextStyle(color: Colors.white, fontSize: 20))),
+                   CircleAvatar(radius: 25, backgroundColor: Colors.blueAccent, child: Text(p.seller.isNotEmpty ? p.seller[0] : '?', style: const TextStyle(color: Colors.white, fontSize: 20))),
                    Positioned(bottom: 0, right: 0, child: Container(padding: const EdgeInsets.all(2), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.check_circle, color: Colors.blue, size: 16))),
                 ],
               ),
@@ -76,7 +132,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   Text('${p.totalBuyerRatings}% d\'évaluation positive', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 ]),
               ),
-              const Icon(Icons.chat_bubble_outline, color: Colors.black, size: 30),
+              IconButton(
+                icon: const Icon(Icons.chat_bubble_outline, color: Colors.black, size: 30),
+                onPressed: _openChat,
+              ),
             ]),
           ),
           // BANNIÈRE PRIX
@@ -97,7 +156,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               // BOUTONS D'ACTION
               SizedBox(
                 width: double.infinity, height: 50,
-                child: ElevatedButton(onPressed: () {}, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E7DBA), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), child: const Text("Achat immédiat", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))),
+                child: ElevatedButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Achat immédiat bientôt disponible")));
+                  }, 
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E7DBA), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), 
+                  child: const Text("Achat immédiat", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))
+                ),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -107,7 +172,17 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity, height: 50,
-                child: OutlinedButton(onPressed: () {}, style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white70), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), child: const Text("Suivre cet objet", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))),
+                child: OutlinedButton(
+                  onPressed: _toggleFollow, 
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: _isFollowing ? Colors.blueAccent : Colors.white70), 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))
+                  ), 
+                  child: Text(
+                    _isFollowing ? "OBJET SUIVI" : "Suivre cet objet", 
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _isFollowing ? Colors.blueAccent : Colors.white)
+                  )
+                ),
               ),
               const SizedBox(height: 20),
               GestureDetector(onTap: () {}, child: const Text("Afficher la description complète", style: TextStyle(color: Colors.white, decoration: TextDecoration.underline))),

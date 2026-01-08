@@ -50,6 +50,7 @@ router.get('/', async (req, res) => {
                 description: p.description,
                 price: parseFloat(p.price).toFixed(2),
                 category: p.category,
+                sellerId: p.seller_id,
                 sellerName: p.seller_name,
                 sellerAvatar: p.seller_avatar,
                 imageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
