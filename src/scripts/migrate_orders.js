@@ -1,3 +1,7 @@
+const path = require('path');
+const fs = require('fs');
+const { Pool } = require('pg');
+
 // Revert to environment variable for production
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
