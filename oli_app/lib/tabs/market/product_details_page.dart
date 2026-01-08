@@ -61,6 +61,16 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     );
   }
 
+  void _toggleFollow() {
+    setState(() => _isFollowing = !_isFollowing);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_isFollowing ? "Vous suivez maintenant cet objet" : "Suivi annulé"),
+        duration: const Duration(seconds: 1),
+      )
+    );
+  }
+
   void _showDebugInfo() {
     final p = widget.product;
     final userState = ref.read(userProvider);

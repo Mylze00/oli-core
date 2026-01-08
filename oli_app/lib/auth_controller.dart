@@ -48,14 +48,18 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> checkSession() async {
     try {
       final token = await _storage.getToken();
-      // On récupère aussi le téléphone stocké localement
       final phone = await _storage.getPhone(); 
       
       if (token != null) {
+        // ✅ CORRECTION FLICKER : On met immédiatement le vrai numéro si dispo
         state = state.copyWith(
           isAuthenticated: true,
-          userData: {'phone': phone ?? 'Numéro inconnu', 'name': 'Utilisateur Oli'}
+          userData: {
+            'phone': phone ?? 'Numéro inconnu', 
+            'name': phone != null ? 'Utilisateur (${phone.substring(phone.length - 4)})' : 'Chargement...'
+          }
         );
+        // On lance le fetch en arrière-plan pour compléter (avatar, nom complet...)
         fetchUserProfile(); 
       }
     } catch (e) {
@@ -135,8 +139,8 @@ class AuthController extends StateNotifier<AuthState> {
           isLoading: false, 
           isAuthenticated: true,
           userData: {
-            'phone': phone, // Le numéro saisi au login
-            'name': 'Chargement...', 
+            'phone': phone, 
+            'name': 'Utilisateur (${phone.substring(phone.length - 4)})', 
           },
         );
         

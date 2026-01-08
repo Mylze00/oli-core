@@ -201,6 +201,8 @@ app.post("/wallet/deposit", verifyToken, async (req, res) => {
 });
 
 // --- DEBUG ROUTE (A supprimer plus tard) ---
+// --- DEBUG ROUTE (DÉSACTIVÉE POUR SÉCURITÉ) ---
+/*
 app.get("/debug/migrate-schema", async (req, res) => {
     try {
         await pool.query(`
@@ -222,6 +224,7 @@ app.get("/debug/migrate-schema", async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+*/
 
 // --- DÉMARRAGE DU SERVEUR ---
 const PORT = process.env.PORT || 3000;

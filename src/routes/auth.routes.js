@@ -21,8 +21,7 @@ router.post("/send-otp", async (req, res) => {
     const { otpCode } = await otpService.sendOtp(phone);
 
     return res.json({
-      message: "OTP sent",
-      otpCode // ⚠️ DEV ONLY
+      message: "OTP sent"
     });
 
   } catch (e) {
