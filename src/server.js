@@ -19,12 +19,22 @@ const chatRoutes = require("./routes/chat.routes");
 // --- INITIALISATION ---
 const app = express();
 const server = http.createServer(app);
-const JWT_SECRET = process.env.JWT_SECRET || "ton_secret_jwt_ici";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error("❌ JWT_SECRET non défini — interrompre le démarrage pour éviter clé par défaut vulnérable");
+    process.exit(1);
+}
+
+// Origines autorisées (séparer par des virgules via la variable d'environnement ALLOWED_ORIGINS)
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "https://oli-core.web.app,https://oli-core.firebaseapp.com").split(',').map(s => s.trim());
+if (ALLOWED_ORIGINS.length === 1 && ALLOWED_ORIGINS[0] === '*') {
+    console.warn("⚠️ ALLOWED_ORIGINS est '*' — configuration non sécurisée pour la production");
+}
 
 // --- SOCKET.IO CONFIG ---
 const io = new Server(server, {
     cors: {
-        origin: "*", // A sécuriser en production
+        origin: ALLOWED_ORIGINS,
         methods: ["GET", "POST"]
     }
 });
@@ -46,7 +56,7 @@ io.on('connection', (socket) => {
 
 // --- MIDDLEWARES GÉNÉRAUX ---
 app.use(cors({
-    origin: ["https://oli-core.web.app", "https://oli-core.firebaseapp.com"],
+    origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"]
 }));
