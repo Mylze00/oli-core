@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../product_controller.dart';
 import '../models/product_model.dart';
+import '../config/api_config.dart';
 
 class PublishArticlePage extends ConsumerStatefulWidget {
   const PublishArticlePage({super.key});
@@ -39,7 +40,16 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     final state = ref.watch(productControllerProvider);
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text("Vendre un article"), backgroundColor: Colors.black),
+      appBar: AppBar(
+        title: const Text("Vendre un article (DIO-V2)"), 
+        backgroundColor: Colors.black,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report, size: 12),
+            onPressed: () => debugPrint("🚀 Mode: Dio V2 | Base: ${ApiConfig.baseUrl}"),
+          )
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(
@@ -145,22 +155,8 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                           images: _images,
                         );
                         if (ok) {
-                          ref.read(marketProductsProvider.notifier).addProduct(Product(
-                            id: DateTime.now().millisecondsSinceEpoch.toString(),
-                            name: _name.text.trim(),
-                            price: _price.text.trim(),
-                            seller: 'Moi',
-                            condition: _condition,
-                            description: _description.text.trim(),
-                            color: _color.text.trim(),
-                            deliveryPrice: double.tryParse(_deliveryPrice.text.trim()) ?? 0,
-                            deliveryTime: _deliveryTime.text.trim(),
-                            quantity: int.tryParse(_quantity.text.trim()) ?? 1,
-                            rating: 5.0,
-                            reviews: 0,
-                            totalBuyerRatings: 100,
-                            images: _images,
-                          ));
+                          // On demande au provider de rafraîchir la liste depuis le serveur
+                          ref.read(marketProductsProvider.notifier).fetchProducts();
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Article publié avec succès')));
                             Navigator.pop(context);

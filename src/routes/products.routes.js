@@ -34,14 +34,15 @@ router.get('/', async (req, res) => {
             let imgs = [];
             if (Array.isArray(p.images)) imgs = p.images;
             else if (typeof p.images === 'string') {
-                // Si c'est stocké comme "{url1,url2}" (format PG array string)
                 imgs = p.images.replace(/[{}"]/g, '').split(',');
             }
 
-            // Convertir les noms de fichiers en URLs complètes si ce ne sont pas déjà des URLs
-            const imageUrls = imgs.map(img =>
-                img.startsWith('http') ? img : `${protocol}://${host}/uploads/${img}`
-            );
+            // Correction de l'URL : On utilise une URL absolue si possible
+            const imageUrls = imgs.map(img => {
+                if (!img) return null;
+                if (img.startsWith('http')) return img;
+                return `https://oli-core.onrender.com/uploads/${img}`; // Forcer l'URL de prod pour être sûr
+            }).filter(url => url !== null);
 
             return {
                 id: p.id,
@@ -51,12 +52,13 @@ router.get('/', async (req, res) => {
                 category: p.category,
                 sellerName: p.seller_name,
                 sellerAvatar: p.seller_avatar,
-                imageUrl: imageUrls.length > 0 ? imageUrls[0] : null, // Pour rétrocompatibilité frontend
+                imageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
                 images: imageUrls,
                 status: p.status
             };
         });
 
+        console.log(`📡 [API] Renvoi de ${products.length} produits à ${req.ip}`);
         res.json(products);
     } catch (err) {
         console.error(err);
@@ -80,7 +82,7 @@ router.post('/upload', upload.array('images', 5), async (req, res) => {
 
     try {
         const result = await pool.query(
-            "INSERT INTO products (seller_id, name, description, price, category, images, delivery_price, delivery_time, condition, quantity, color) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
+            "INSERT INTO products (seller_id, name, description, price, category, images, delivery_price, delivery_time, condition, quantity, color, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active') RETURNING id",
             [
                 req.user.id,
                 name,

@@ -213,7 +213,11 @@ app.get("/debug/migrate-schema", async (req, res) => {
             ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0,
             ADD COLUMN IF NOT EXISTS like_count INTEGER DEFAULT 0;
         `);
-        res.json({ success: true, message: "Schéma (phase 3) mis à jour avec succès !" });
+        // Phase 4 : Mise à jour des status et nettoyage
+        await pool.query("UPDATE products SET status = 'active' WHERE status IS NULL");
+        console.log("✅ Phase 4 : Status des produits existants mis à jour.");
+
+        res.json({ success: true, message: "Schéma et données (Phase 4) mis à jour avec succès !" });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

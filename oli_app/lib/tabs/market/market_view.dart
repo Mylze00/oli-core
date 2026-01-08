@@ -52,7 +52,19 @@ class _ProductCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            const Expanded(child: Icon(Icons.phone_iphone, size: 50, color: Colors.blueAccent)),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                child: product.images.isEmpty
+                  ? const Icon(Icons.phone_iphone, size: 50, color: Colors.blueAccent)
+                  : Image.network(
+                      product.images[0],
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                    ),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Column(

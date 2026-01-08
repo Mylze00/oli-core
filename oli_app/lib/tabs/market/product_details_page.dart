@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../models/product_model.dart';
-import 'package:image_picker/image_picker.dart';
 
 class ProductDetailsPage extends StatefulWidget {
   final Product product;
@@ -22,7 +20,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
         child: Column(children: [
           Stack(children: [
             Container(
-              color: Colors.white,
+              color: const Color(0xFF1A1A1A),
               height: 400,
               width: double.infinity,
               child: p.images.isEmpty
@@ -30,9 +28,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   : PageView.builder(
                       onPageChanged: (i) => setState(() => _currentImageIndex = i),
                       itemCount: p.images.length,
-                      itemBuilder: (c, i) => kIsWeb 
-                        ? Image.network(p.images[i].path, fit: BoxFit.cover)
-                        : Image.network(p.images[i].path, fit: BoxFit.cover), // Fallback temporaire
+                      itemBuilder: (c, i) => Image.network(
+                        p.images[i], 
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                      ),
                     ),
             ),
             Positioned(
