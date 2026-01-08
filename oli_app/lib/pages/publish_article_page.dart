@@ -142,7 +142,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                           condition: _condition,
                           quantity: int.tryParse(_quantity.text.trim()) ?? 1,
                           color: _color.text.trim(),
-                          imageFile: _images[0],
+                          images: _images,
                         );
                         if (ok) {
                           ref.read(marketProductsProvider.notifier).addProduct(Product(

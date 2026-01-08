@@ -120,9 +120,11 @@ app.get("/auth/me", verifyToken, async (req, res) => {
 
         const user = result.rows[0];
         res.json({
-            ...user,
-            wallet: parseFloat(user.wallet || 0).toFixed(2),
-            initial: user.name ? user.name[0].toUpperCase() : "?"
+            user: {
+                ...user,
+                wallet: parseFloat(user.wallet || 0).toFixed(2),
+                initial: user.name ? user.name[0].toUpperCase() : "?"
+            }
         });
     } catch (err) {
         res.status(500).json({ error: "Erreur base de données" });

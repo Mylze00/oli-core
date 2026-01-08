@@ -79,11 +79,19 @@ class AuthController extends StateNotifier<AuthState> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final Map<String, dynamic>? userData = (data is Map && data.containsKey('user')) 
+            ? data['user'] 
+            : (data is Map ? data as Map<String, dynamic> : null);
+        
         // On fusionne les nouvelles données (nom, email) avec le téléphone déjà présent
         final currentData = state.userData ?? {};
         state = state.copyWith(
-          userData: {...currentData, ...data['user']}
+          userData: {...currentData, ...?userData}
         ); 
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        // Token invalide ou expiré -> Déconnexion
+        debugPrint("🔴 Session expirée ou invalide. Déconnexion automatique.");
+        logout();
       }
     } catch (e) {
       debugPrint("Erreur fetchUserProfile : $e");
@@ -117,7 +125,7 @@ class AuthController extends StateNotifier<AuthState> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final token = data['token'];
+        final token = data['token'] ?? data['accessToken']; // Robustesse
         if (token != null) {
           await _storage.saveSession(token, phone);
         }

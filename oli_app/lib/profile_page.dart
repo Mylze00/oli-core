@@ -4,15 +4,23 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'config/api_config.dart';
 import 'dart:convert';
+import 'secure_storage_service.dart';
 import 'home_page.dart';
 import 'pages/publish_article_page.dart';
 import 'app/theme/theme_provider.dart';
 
 // Provider qui récupère les données réelles du serveur
 final userProfileProvider = FutureProvider((ref) async {
-  final response = await http.get(Uri.parse('${ApiConfig.baseUrl}/auth/me'));
+  final token = await SecureStorageService().getToken();
+  final response = await http.get(
+    Uri.parse('${ApiConfig.baseUrl}/auth/me'),
+    headers: {
+      if (token != null) 'Authorization': 'Bearer $token',
+    },
+  );
   if (response.statusCode == 200) {
-    return jsonDecode(response.body);
+    final data = jsonDecode(response.body);
+    return data['user'] ?? data; // Supporte direct et enveloppé
   }
   throw Exception('Erreur de chargement');
 });
@@ -33,7 +41,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     
     if (image != null) {
+      final token = await SecureStorageService().getToken();
       var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/auth/upload-avatar'));
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
       request.files.add(await http.MultipartFile.fromPath('avatar', image.path));
       final response = await request.send();
       if (response.statusCode == 200) {
@@ -60,9 +72,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
           ElevatedButton(
             onPressed: () async {
+              final token = await SecureStorageService().getToken();
               await http.post(
                 Uri.parse('${ApiConfig.baseUrl}/wallet/deposit'),
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                  'Content-Type': 'application/json',
+                  if (token != null) 'Authorization': 'Bearer $token',
+                },
                 body: jsonEncode({'amount': controller.text}),
               );
               ref.invalidate(userProfileProvider);

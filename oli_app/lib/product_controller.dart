@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'config/api_config.dart';
+import 'secure_storage_service.dart';
 
 // Le fameux Provider qui manquait
 final productControllerProvider = StateNotifierProvider<ProductController, AsyncValue<void>>((ref) {
@@ -24,13 +25,20 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
     required String condition,
     required int quantity,
     required String color,
-    required XFile imageFile,
+    required List<XFile> images,
   }) async {
     state = const AsyncValue.loading();
 
     try {
-      // Préparation de la requête "Multipart" (pour envoyer un fichier)
+      final token = await SecureStorageService().getToken();
+      
+      // Préparation de la requête "Multipart"
       var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
+      
+      // Ajout du header d'authentification
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
 
       // Ajout des champs texte
       request.fields['name'] = name;
@@ -42,13 +50,15 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
       request.fields['quantity'] = quantity.toString();
       request.fields['color'] = color;
 
-      // Ajout du fichier image (compatible Web via readAsBytes)
-      final bytes = await imageFile.readAsBytes();
-      request.files.add(http.MultipartFile.fromBytes(
-        'images',
-        bytes,
-        filename: imageFile.name,
-      ));
+      // Ajout des fichiers images
+      for (var imageFile in images) {
+        final bytes = await imageFile.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes(
+          'images',
+          bytes,
+          filename: imageFile.name,
+        ));
+      }
 
       // Envoi au serveur
       var streamedResponse = await request.send();
