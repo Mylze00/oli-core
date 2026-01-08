@@ -172,6 +172,25 @@ app.post("/wallet/deposit", verifyToken, async (req, res) => {
     }
 });
 
+// --- DEBUG ROUTE (A supprimer plus tard) ---
+app.get("/debug/migrate-schema", async (req, res) => {
+    try {
+        await pool.query(`
+            ALTER TABLE products 
+            ADD COLUMN IF NOT EXISTS condition VARCHAR(50) DEFAULT 'Neuf',
+            ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1,
+            ADD COLUMN IF NOT EXISTS delivery_price DECIMAL(10, 2) DEFAULT 0.00,
+            ADD COLUMN IF NOT EXISTS delivery_time VARCHAR(100) DEFAULT '',
+            ADD COLUMN IF NOT EXISTS color VARCHAR(50) DEFAULT '',
+            ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS like_count INTEGER DEFAULT 0;
+        `);
+        res.json({ success: true, message: "Schéma (phase 3) mis à jour avec succès !" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- DÉMARRAGE DU SERVEUR ---
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, "0.0.0.0", () => {
