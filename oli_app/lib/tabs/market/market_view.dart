@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // IMPORT TRÈS IMPORTANT :
 import '../../models/product_model.dart'; 
+import 'product_details_page.dart';
 
 class MarketView extends ConsumerStatefulWidget {
   const MarketView({super.key});
@@ -42,24 +43,27 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          const Expanded(child: Icon(Icons.phone_iphone, size: 50, color: Colors.blueAccent)),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              children: [
-                Text(product.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                Text("${product.price} \$", style: const TextStyle(color: Colors.blueAccent)),
-              ],
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product))),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            const Expanded(child: Icon(Icons.phone_iphone, size: 50, color: Colors.blueAccent)),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                children: [
+                  Text(product.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text("${product.price} \$", style: const TextStyle(color: Colors.blueAccent)),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
