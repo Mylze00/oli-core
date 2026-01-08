@@ -32,10 +32,13 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
     try {
       final token = await SecureStorageService().getToken();
       debugPrint("🚀 Tentative d'upload produit. Token présent: ${token != null}");
+      if (token != null) {
+        debugPrint("🔑 Token (début): ${token.substring(0, token.length > 10 ? 10 : token.length)}...");
+      }
       
-      if (token == null) {
-        debugPrint("❌ Erreur: Aucun token trouvé dans le stockage. Déconnexion requise.");
-        state = AsyncValue.error('Veuillez vous reconnecter (session expirée)', StackTrace.current);
+      if (token == null || token.isEmpty) {
+        debugPrint("❌ Erreur: Token absent ou vide. Déconnexion requise.");
+        state = AsyncValue.error('Session expirée - Veuillez vous reconnecter', StackTrace.current);
         return false;
       }
 
@@ -44,7 +47,9 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
       
       // Ajout du header d'authentification
       request.headers['Authorization'] = 'Bearer $token';
-      debugPrint("📡 Envoi de la requête multipart à $apiUrl");
+      request.headers['Accept'] = 'application/json'; // Utile pour certains serveurs
+      
+      debugPrint("📡 Envoi à $apiUrl avec Headers: ${request.headers.keys.toList()}");
 
       // Ajout des champs texte
       request.fields['name'] = name;
