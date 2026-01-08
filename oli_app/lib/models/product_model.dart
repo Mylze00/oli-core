@@ -52,7 +52,6 @@ class MarketNotifier extends StateNotifier<List<Product>> {
 
   MarketNotifier() : super([]) {
     fetchProducts();
-    // Rafraîchir toutes les 30 secondes pour voir les nouveaux produits des autres
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => fetchProducts());
   }
 
@@ -69,15 +68,15 @@ class MarketNotifier extends StateNotifier<List<Product>> {
         final List<dynamic> data = jsonDecode(response.body);
         final newProducts = data.map((item) => Product.fromJson(item)).toList();
         
-        // Diagnostic URL images
-        if (newProducts.isNotEmpty && newProducts.first.images.isNotEmpty) {
-          debugPrint("� [DIAG] URL Image: ${newProducts.first.images.first}");
+        if (newProducts.isNotEmpty) {
+          final p = newProducts.first;
+          debugPrint("[DIAG] ${newProducts.length} produits charges. Premier ID: ${p.id} | SellerID: ${p.sellerId}");
         }
 
         state = newProducts;
       }
     } catch (e) {
-      debugPrint("❌ Erreur fetchProducts: $e");
+      debugPrint("Erreur fetchProducts: $e");
     }
   }
 

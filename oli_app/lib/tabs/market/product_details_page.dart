@@ -17,17 +17,24 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   bool _isFollowing = false;
 
   void _shareProduct() {
+    debugPrint("📤 [DEBUG] Bouton Partage cliqué");
     final p = widget.product;
     final String text = "Regarde ce produit sur Oli : ${p.name}\n${p.price}\$\nhttps://oli-app.web.app/product/${p.id}";
-    Share.share(text);
+    Share.share(text).then((result) {
+      debugPrint("📤 [DEBUG] Partage terminé: ${result.status}");
+    }).catchError((e) {
+      debugPrint("❌ [DEBUG] Erreur Partage: $e");
+    });
   }
 
   void _openChat() {
+    debugPrint("💬 [DEBUG] Bouton Chat cliqué");
     final p = widget.product;
     final userState = ref.read(userProvider);
     
     userState.when(
       data: (user) {
+        debugPrint("💬 [DEBUG] User actuel: ${user.id} | Seller: ${p.sellerId}");
         if (user.id.toString() == p.sellerId) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Vous ne pouvez pas discuter avec vous-même !"))
@@ -47,17 +54,31 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
         );
       },
       loading: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Chargement de votre profil..."))),
-      error: (_, __) => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erreur lors de l'accès au chat"))),
+      error: (e, __) {
+        debugPrint("❌ [DEBUG] Erreur userProvider: $e");
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur profil: $e")));
+      },
     );
   }
 
-  void _toggleFollow() {
-    setState(() => _isFollowing = !_isFollowing);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isFollowing ? "Vous suivez maintenant cet objet" : "Suivi annulé"),
-        duration: const Duration(seconds: 1),
-      )
+  void _showDebugInfo() {
+    final p = widget.product;
+    final userState = ref.read(userProvider);
+    final myId = userState.value?.id.toString() ?? "Inconnu";
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Debug Info (V1.1)"),
+        content: Text(
+          "Produit ID: ${p.id}\n"
+          "Vendeur ID: ${p.sellerId}\n"
+          "Vendeur Nom: ${p.seller}\n"
+          "Mon ID: $myId\n"
+          "Images: ${p.images.length}"
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
+      ),
     );
   }
 
@@ -66,6 +87,17 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     final p = widget.product;
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text("Détails (INT-V1.1) - ${p.name.substring(0, p.name.length > 10 ? 10 : p.name.length)}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report, size: 18),
+            onPressed: _showDebugInfo,
+          )
+        ],
+      ),
       body: SingleChildScrollView(
         child: Column(children: [
           Stack(children: [
@@ -86,11 +118,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                     ),
             ),
             Positioned(
-              top: 40, left: 16,
-              child: CircleAvatar(backgroundColor: Colors.white.withOpacity(0.9), child: IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 18), onPressed: () => Navigator.pop(context))),
-            ),
-            Positioned(
-              top: 40, right: 16,
+              top: 10, right: 16,
               child: Row(children: [
                 CircleAvatar(
                   backgroundColor: Colors.white.withOpacity(0.9), 
