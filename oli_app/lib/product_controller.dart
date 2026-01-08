@@ -31,14 +31,20 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
 
     try {
       final token = await SecureStorageService().getToken();
+      debugPrint("🚀 Tentative d'upload produit. Token présent: ${token != null}");
       
+      if (token == null) {
+        debugPrint("❌ Erreur: Aucun token trouvé dans le stockage. Déconnexion requise.");
+        state = AsyncValue.error('Veuillez vous reconnecter (session expirée)', StackTrace.current);
+        return false;
+      }
+
       // Préparation de la requête "Multipart"
       var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
       
       // Ajout du header d'authentification
-      if (token != null) {
-        request.headers['Authorization'] = 'Bearer $token';
-      }
+      request.headers['Authorization'] = 'Bearer $token';
+      debugPrint("📡 Envoi de la requête multipart à $apiUrl");
 
       // Ajout des champs texte
       request.fields['name'] = name;

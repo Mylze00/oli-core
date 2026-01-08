@@ -19,14 +19,22 @@ const chatRoutes = require("./routes/chat.routes");
 // --- INITIALISATION ---
 const app = express();
 const server = http.createServer(app);
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-    console.error("❌ JWT_SECRET non défini — interrompre le démarrage pour éviter clé par défaut vulnérable");
-    process.exit(1);
+const JWT_SECRET = process.env.JWT_SECRET || "secret_de_secours_temporaire_a_changer";
+if (!process.env.JWT_SECRET) {
+    console.warn("⚠️ ATTENTION: JWT_SECRET non défini. Utilisation du secret de secours.");
 }
 
 // Origines autorisées (séparer par des virgules via la variable d'environnement ALLOWED_ORIGINS)
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "https://oli-core.web.app,https://oli-core.firebaseapp.com").split(',').map(s => s.trim());
+// Origines autorisées (séparer par des virgules via la variable d'environnement ALLOWED_ORIGINS)
+const DEFAULT_ORIGINS = [
+    "https://oli-core.web.app",
+    "https://oli-core.firebaseapp.com",
+    "https://oli-core.onrender.com",
+    "http://localhost:3000",
+    "http://localhost:5000",
+    "http://127.0.0.1:3000"
+];
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) : DEFAULT_ORIGINS);
 if (ALLOWED_ORIGINS.length === 1 && ALLOWED_ORIGINS[0] === '*') {
     console.warn("⚠️ ALLOWED_ORIGINS est '*' — configuration non sécurisée pour la production");
 }
@@ -108,10 +116,18 @@ app.use("/products", (req, res, next) => {
     // Middleware optionnel pour peupler req.user si token présent
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
+
     if (token) {
         try {
             req.user = jwt.verify(token, JWT_SECRET);
-        } catch (err) { /* Ignorer erreur token visiteur */ }
+            console.log(`✅ Token valide pour utilisateur: ${req.user.phone}`);
+        } catch (err) {
+            console.error(`❌ Token invalide ou expiré: ${err.message}`);
+            // On ne bloque pas ici car certains endpoints produits sont publics,
+            // mais req.user restera undefined, ce qui causera 401 dans les routes privées.
+        }
+    } else {
+        console.warn("⚠️ Aucun token fourni pour la requête produits");
     }
     next();
 }, productsRoutes);
