@@ -49,16 +49,53 @@ const io = new Server(server, {
 
 app.set('io', io); // Partager l'instance IO
 
-io.on('connection', (socket) => {
-    console.log('⚡ Client Socket connecté:', socket.id);
+// --- SOCKET.IO AUTH MIDDLEWARE ---
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
+    if (!token) {
+        // En Next.js / Flutter, parfois le client se connecte sans auth au début
+        // On peut laisser passer et limiter les actions, ou rejeter.
+        // Ici on rejette pour forcer l'auth
+        // console.log("Socket connection attempt without token");
+        // return next(new Error("Authentication error"));
+        return next(); // On laisse passer pour l'instant (mode permissif) mais user sera null
+    }
 
-    socket.on('join', (userId) => {
+    const cleanToken = token.replace("Bearer ", "");
+    try {
+        const decoded = jwt.verify(cleanToken, JWT_SECRET);
+        socket.user = decoded;
+        next();
+    } catch (err) {
+        next(new Error("Authentication error"));
+    }
+});
+
+io.on('connection', (socket) => {
+    console.log('⚡ Client Socket connecté:', socket.id, socket.user ? `(User ${socket.user.id})` : '(Anonyme)');
+
+    // Join automatique basé sur le token si présent
+    if (socket.user) {
+        const userId = socket.user.id;
         socket.join(`user_${userId}`);
-        console.log(`👤 User ${userId} joined room user_${userId}`);
+        console.log(`✅ Auto-Join: User ${userId} joined room user_${userId}`);
+    }
+
+    // Callback manuel (fallback)
+    socket.on('join', (userId) => {
+        // Sécurité : on ne devrait rejoindre que SA propre room
+        if (socket.user && socket.user.id.toString() !== userId.toString()) {
+            console.warn(`⚠️ Tentative de join room user_${userId} par user ${socket.user.id}`);
+            return;
+        }
+
+        // Si pas authentifié, on accepte temporairement (pour debug) ou on rejette
+        socket.join(`user_${userId}`);
+        console.log(`👤 Manual Join: User ${userId} joined room user_${userId}`);
     });
 
     socket.on('disconnect', () => {
-        console.log('Client déconnecté');
+        console.log('Client déconnecté', socket.user ? `(User ${socket.user.id})` : '');
     });
 });
 

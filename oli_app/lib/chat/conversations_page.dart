@@ -80,7 +80,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
     }
   }
 
-  void _openChat(String otherId, String otherName) {
+  void _openChat(String otherId, String otherName, {String? productId, String? productName, double? productPrice, String? productImage}) {
     // userState est un AsyncValue<User?>, donc on doit accéder à .value ou .asData?.value
     final userState = ref.read(userProvider);
     final myId = userState.value?.id.toString();
@@ -97,6 +97,10 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           myId: myId,
           otherId: otherId,
           otherName: otherName,
+          productId: productId,
+          productName: productName,
+          productPrice: productPrice,
+          productImage: productImage,
         ),
       ),
     ).then((_) => _fetchConversations()); // Refresh au retour
@@ -198,28 +202,69 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
       itemBuilder: (context, index) {
         final conv = _conversations[index];
         // conv: conversation_id, other_name, other_avatar, other_id, last_message, last_time
+        // + product_id, product_name, product_price, product_image (si lié à un produit)
+        
+        final hasProduct = conv['product_id'] != null;
         
         return ListTile(
-          leading: CircleAvatar(
-            radius: 28,
-            backgroundImage: conv['other_avatar'] != null ? NetworkImage(conv['other_avatar']) : null,
-            child: conv['other_avatar'] == null ? Text(conv['other_name'][0].toUpperCase()) : null,
+          leading: Stack(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundImage: conv['other_avatar'] != null ? NetworkImage(conv['other_avatar']) : null,
+                child: conv['other_avatar'] == null ? Text(conv['other_name'][0].toUpperCase()) : null,
+              ),
+              // Badge produit si lié
+              if (hasProduct)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.shopping_bag, size: 12, color: Colors.white),
+                  ),
+                ),
+            ],
           ),
           title: Text(
             conv['other_name'], 
             style: const TextStyle(fontWeight: FontWeight.bold)
           ),
-          subtitle: Text(
-            conv['last_message'] ?? 'Démarrer la discussion',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: conv['last_message'] != null ? Colors.black87 : Colors.blue),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Afficher le nom du produit si lié
+              if (hasProduct)
+                Text(
+                  "📦 ${conv['product_name']}",
+                  style: TextStyle(color: Colors.blue[700], fontSize: 12, fontWeight: FontWeight.w500),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              Text(
+                conv['last_message'] ?? 'Démarrer la discussion',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: conv['last_message'] != null ? Colors.black87 : Colors.blue),
+              ),
+            ],
           ),
           trailing: Text(
              _formatTime(conv['last_time']),
              style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
-          onTap: () => _openChat(conv['other_id'].toString(), conv['other_name']),
+          onTap: () => _openChat(
+            conv['other_id'].toString(), 
+            conv['other_name'],
+            productId: conv['product_id']?.toString(),
+            productName: conv['product_name'],
+            productPrice: conv['product_price'] != null ? double.tryParse(conv['product_price'].toString()) : null,
+            productImage: conv['product_image'],
+          ),
         );
       },
     );

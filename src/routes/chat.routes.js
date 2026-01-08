@@ -29,31 +29,50 @@ async function canSendMessage(senderId, recipientId) {
 // 1. Envoyer une demande / un premier message
 router.post('/request', async (req, res) => {
     // req.user est défini grâce au middleware dans server.js
-    const { recipientId, content, type } = req.body; // type: text, image, voice...
+    const { recipientId, content, type, productId } = req.body; // type: text, image, voice... productId: optionnel
     const senderId = req.user.id;
 
+    console.log(`📩 [DEBUG] /chat/request reçu: Sender=${senderId}, Recipient=${recipientId}, Product=${productId}`);
+
     try {
-        // A. Vérifier existence relation
+        // A. Vérifier si une conversation existe déjà pour ce produit entre ces 2 users
+        if (productId) {
+            const existingConv = await pool.query(`
+                SELECT c.id FROM conversations c
+                JOIN conversation_participants cp1 ON c.id = cp1.conversation_id AND cp1.user_id = $1
+                JOIN conversation_participants cp2 ON c.id = cp2.conversation_id AND cp2.user_id = $2
+                WHERE c.product_id = $3
+            `, [senderId, recipientId, productId]);
+
+            if (existingConv.rows.length > 0) {
+                // Conversation existe déjà pour ce produit, utiliser la route standard
+                return res.status(400).json({
+                    error: "Une conversation existe déjà pour ce produit.",
+                    conversationId: existingConv.rows[0].id
+                });
+            }
+        }
+
+        // B. Vérifier existence relation
         const relCheck = await pool.query(
             "SELECT * FROM friendships WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)",
             [senderId, recipientId]
         );
 
-        if (relCheck.rows.length > 0) {
-            return res.status(400).json({ error: "Une relation existe déjà avec cet utilisateur. Utilisez la route standard." });
+        // Si pas de relation, créer une relation 'pending'
+        if (relCheck.rows.length === 0) {
+            await pool.query(
+                "INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 'pending')",
+                [senderId, recipientId]
+            );
         }
 
-        // B. Créer la relation 'pending'
-        await pool.query(
-            "INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 'pending')",
-            [senderId, recipientId]
-        );
-
-        // C. Créer ou trouver une conversation (privée)
-        // Vérifier si conversation existe déjà (au cas où vieux data)
+        // C. Créer une conversation (privée) avec product_id optionnel
         let convId;
-        // ... (Logique création conv complexe, on simplifie : on crée une conv pour ces 2 users)
-        const convRes = await pool.query("INSERT INTO conversations (type) VALUES ('private') RETURNING id");
+        const convRes = await pool.query(
+            "INSERT INTO conversations (type, product_id) VALUES ('private', $1) RETURNING id",
+            [productId || null]
+        );
         convId = convRes.rows[0].id;
 
         // Ajouter participants
@@ -126,18 +145,23 @@ router.post('/messages', async (req, res) => {
 // 4. Récupérer mes conversations
 router.get('/conversations', async (req, res) => {
     const myId = req.user.id;
-    // Query complexe pour récupérer dernier message + info user
+    // Query complexe pour récupérer dernier message + info user + info produit
     const query = `
-        SELECT c.id as conversation_id, u.name as other_name, u.avatar_url as other_avatar, u.id as other_id,
-        m.content as last_message, m.created_at as last_time
+        SELECT c.id as conversation_id, 
+               u.name as other_name, u.avatar_url as other_avatar, u.id as other_id,
+               m.content as last_message, m.created_at as last_time,
+               p.id as product_id, p.name as product_name, p.price as product_price,
+               (SELECT image_url FROM product_images WHERE product_id = p.id LIMIT 1) as product_image
         FROM conversation_participants cp
         JOIN conversations c ON cp.conversation_id = c.id
         JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id != $1
         JOIN users u ON cp2.user_id = u.id
+        LEFT JOIN products p ON c.product_id = p.id
         LEFT JOIN LATERAL (
             SELECT content, created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
         ) m ON true
         WHERE cp.user_id = $1
+        ORDER BY m.created_at DESC NULLS LAST
     `;
 
     try {
@@ -149,31 +173,44 @@ router.get('/conversations', async (req, res) => {
     }
 });
 
-// 5. Récupérer l'historique de messages avec un user
+// 5. Récupérer l'historique de messages avec un user (filtré par produit si spécifié)
 router.get('/messages/:otherUserId', async (req, res) => {
     const myId = req.user.id;
     const { otherUserId } = req.params;
+    const { productId } = req.query; // Nouveau paramètre optionnel
 
     try {
-        // Obtenir l'ID de conversation
-        // On pourrait le passer en param, mais c'est plus sûr de le déduire ou de vérifier
-        // Simple query pour choper les messages entre ces 2 users
-        // On suppose conversation_participants lie les 2.
+        let conversationFilter = "";
+        const params = [myId, otherUserId];
+
+        if (productId) {
+            // Si un produit est spécifié, on cherche UNIQUEMENT la conversation liée à ce produit
+            conversationFilter = `AND c.product_id = $3`;
+            params.push(productId);
+        } else {
+            // Sinon, on cherche les conversations privées SANS produit (chat général) ou on inclut tout ?
+            // Pour l'instant, si pas de produit, on prend tout (comportement par défaut)
+            // Ou mieux : on prend les conversations SANS produit id spécifique (null)
+            // conversationFilter = "AND c.product_id IS NULL"; 
+        }
 
         const query = `
-            SELECT m.*, u.name as sender_name 
+            SELECT m.*, u.name as sender_name, c.product_id, c.id as conversation_id
             FROM messages m
             JOIN users u ON m.sender_id = u.id
+            JOIN conversations c ON m.conversation_id = c.id
             WHERE m.conversation_id IN (
                 SELECT cp1.conversation_id 
                 FROM conversation_participants cp1
                 JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+                JOIN conversations c ON cp1.conversation_id = c.id
                 WHERE cp1.user_id = $1 AND cp2.user_id = $2
+                ${conversationFilter}
             )
             ORDER BY m.created_at ASC
         `;
 
-        const result = await pool.query(query, [myId, otherUserId]);
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
         console.error(err);

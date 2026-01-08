@@ -49,6 +49,10 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
               myId: user.id.toString(),
               otherId: p.sellerId,
               otherName: p.seller,
+              productId: p.id,
+              productName: p.name,
+              productPrice: double.tryParse(p.price),
+              productImage: p.images.isNotEmpty ? p.images.first : null,
             ),
           ),
         );
