@@ -13,7 +13,7 @@ class PublishArticlePage extends ConsumerStatefulWidget {
 }
 
 class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
-  List<File> _images = [];
+  List<XFile> _images = [];
   final TextEditingController _name = TextEditingController();
   final TextEditingController _price = TextEditingController();
   final TextEditingController _deliveryPrice = TextEditingController();
