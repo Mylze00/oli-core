@@ -1,4 +1,5 @@
 class User {
+  final int id; // Backend ID (Primary Key)
   final String idOli;
   final String name;
   final String initial;
@@ -6,6 +7,7 @@ class User {
   final double wallet;
 
   User({
+    required this.id,
     required this.idOli,
     required this.name,
     required this.initial,
@@ -15,9 +17,10 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
+      id: json['id'],
       idOli: json['id_oli'],
       name: json['name'],
-      initial: json['initial'] ?? json['name'][0].toUpperCase(),
+      initial: json['initial'] ?? (json['name'] != null ? json['name'][0].toUpperCase() : '?'),
       avatarUrl: json['avatar_url'],
       wallet: (json['wallet'] ?? 0).toDouble(),
     );

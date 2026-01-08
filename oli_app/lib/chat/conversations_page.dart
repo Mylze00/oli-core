@@ -78,9 +78,9 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
   }
 
   void _openChat(String otherId, String otherName) {
-    // Récupérer mon ID depuis le UserProvider (qui doit être chargé)
+    // userState est un AsyncValue<User?>, donc on doit accéder à .value ou .asData?.value
     final userState = ref.read(userProvider);
-    final myId = userState.user?.id.toString();
+    final myId = userState.value?.id.toString();
 
     if (myId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erreur: Profil non chargé")));
