@@ -120,14 +120,13 @@ app.use("/products", (req, res, next) => {
     if (token) {
         try {
             req.user = jwt.verify(token, JWT_SECRET);
-            console.log(`✅ Token valide pour utilisateur: ${req.user.phone}`);
+            console.log(`✅ Token valide (${req.method} ${req.path}) pour: ${req.user.phone}`);
         } catch (err) {
-            console.error(`❌ Token invalide ou expiré: ${err.message}`);
-            // On ne bloque pas ici car certains endpoints produits sont publics,
-            // mais req.user restera undefined, ce qui causera 401 dans les routes privées.
+            console.error(`❌ Token invalide/expiré (${req.method} ${req.path}): ${err.message}`);
         }
-    } else {
-        console.warn("⚠️ Aucun token fourni pour la requête produits");
+    } else if (req.method !== 'GET') {
+        // On ne prévient que pour les méthodes qui REQUIRE l'auth (POST/PUT/DELETE)
+        console.warn(`⚠️ Aucun token fourni pour la requête sensible: ${req.method} ${req.path}`);
     }
     next();
 }, productsRoutes);

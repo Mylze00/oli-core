@@ -76,9 +76,11 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
       var response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 201 || response.statusCode == 200) {
+        debugPrint("✅ Produit uploadé avec succès !");
         state = const AsyncValue.data(null);
         return true;
       } else {
+        debugPrint("❌ Erreur Serveur (${response.statusCode}): ${response.body}");
         state = AsyncValue.error('Erreur: ${response.statusCode}', StackTrace.current);
         return false;
       }
