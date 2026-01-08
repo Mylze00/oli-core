@@ -27,6 +27,10 @@ class MarketNotifier extends StateNotifier<List<Product>> {
     ),
     // Ajoutez vos autres produits du backup ici
   ]);
+
+  void addProduct(Product product) {
+    state = [...state, product];
+  }
 }
 
 final marketProductsProvider = StateNotifierProvider<MarketNotifier, List<Product>>((ref) => MarketNotifier());

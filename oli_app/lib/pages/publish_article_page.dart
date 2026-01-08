@@ -178,7 +178,6 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
       ),
     );
   }
-}  }
 
   ImageProvider _getMobileImage(String path) {
     return NetworkImage(path); 
