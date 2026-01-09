@@ -1,32 +1,18 @@
-/**
- * Script pour exécuter les migrations SQL
- * Usage: node run_migration.js
- */
-require('dotenv').config();
-const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
-
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
-});
+const pool = require('./config/db');
 
 async function runMigration() {
-    const migrationFile = path.join(__dirname, 'migrations', 'add_product_id_to_conversations.sql');
+    const migrationPath = path.join(__dirname, 'migrations', 'add_reply_to_messages.sql');
 
     try {
-        console.log('📦 Lecture du fichier de migration...');
-        const sql = fs.readFileSync(migrationFile, 'utf8');
-
-        console.log('🔄 Exécution de la migration...');
-        console.log('SQL:', sql);
+        const sql = fs.readFileSync(migrationPath, 'utf8');
+        console.log("Running migration:", migrationPath);
 
         await pool.query(sql);
-
-        console.log('✅ Migration exécutée avec succès !');
-    } catch (error) {
-        console.error('❌ Erreur lors de la migration:', error.message);
+        console.log("✅ Migration successful!");
+    } catch (err) {
+        console.error("❌ Migration failed:", err.message);
     } finally {
         await pool.end();
     }

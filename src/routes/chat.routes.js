@@ -1,41 +1,56 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// --- CONFIGURATION UPLOAD (IMAGES) ---
+const uploadDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => { cb(null, uploadDir); },
+    filename: (req, file, cb) => {
+        const cleanName = file.originalname.replace(/[^\w.]+/g, '_');
+        cb(null, 'chat-' + Date.now() + '-' + cleanName);
+    }
+});
+const upload = multer({ storage: storage, limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB max
+
+// --- ROUTES ---
+
+// 0. Upload d'image de chat
+router.post('/upload', upload.single('image'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "Pas de fichier" });
+    
+    const protocol = req.headers['x-forwarded-proto'] || 'http';
+    const imageUrl = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    
+    res.json({ url: imageUrl });
+});
 
 // --- MIDDLEWARE : Vérifier si on peut parler (Friendship/Request logic) ---
 async function canSendMessage(senderId, recipientId) {
-    // 1. Chercher si une relation existe
     const res = await pool.query(
         "SELECT * FROM friendships WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)",
         [senderId, recipientId]
     );
 
-    // 2. Si aucune relation => C'est une NOUVELLE DEMANDE (autorisé si pas bloqué)
     if (res.rows.length === 0) return { allowed: true, isNewRequest: true };
 
     const friendship = res.rows[0];
-
-    // 3. Si accepté => OK
     if (friendship.status === 'accepted') return { allowed: true, isNewRequest: false };
 
-    // 4. Si 'pending', seul celui qui a REÇU la demande peut répondre (accepter) ou le demandeur ne peut pas en renvoyer plein.
-    // Pour simplifier : tant que c'est pending, on considère que la conversation est en mode "Attente".
-    // L'utilisateur veut "limiter à 1 message avec acceptation".
-    // Donc si 'pending' existe, on bloque l'envoi de NOUVEAUX messages S'IL Y EN A DÉJÀ UN.
-    // On vérifiera s'il y a déjà des messages.
     return { allowed: false, error: "En attente d'acceptation" };
 }
 
 // 1. Envoyer une demande / un premier message
 router.post('/request', async (req, res) => {
-    // req.user est défini grâce au middleware dans server.js
-    const { recipientId, content, type, productId } = req.body; // type: text, image, voice... productId: optionnel
+    const { recipientId, content, type, productId } = req.body;
     const senderId = req.user.id;
 
-    console.log(`📩 [DEBUG] /chat/request reçu: Sender=${senderId}, Recipient=${recipientId}, Product=${productId}`);
-
     try {
-        // A. Vérifier si une conversation existe déjà pour ce produit entre ces 2 users
         if (productId) {
             const existingConv = await pool.query(`
                 SELECT c.id FROM conversations c
@@ -45,7 +60,6 @@ router.post('/request', async (req, res) => {
             `, [senderId, recipientId, productId]);
 
             if (existingConv.rows.length > 0) {
-                // Conversation existe déjà pour ce produit, utiliser la route standard
                 return res.status(400).json({
                     error: "Une conversation existe déjà pour ce produit.",
                     conversationId: existingConv.rows[0].id
@@ -53,13 +67,12 @@ router.post('/request', async (req, res) => {
             }
         }
 
-        // B. Vérifier existence relation
+        // Check relation
         const relCheck = await pool.query(
             "SELECT * FROM friendships WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)",
             [senderId, recipientId]
         );
 
-        // Si pas de relation, créer une relation 'pending'
         if (relCheck.rows.length === 0) {
             await pool.query(
                 "INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 'pending')",
@@ -67,24 +80,21 @@ router.post('/request', async (req, res) => {
             );
         }
 
-        // C. Créer une conversation (privée) avec product_id optionnel
-        let convId;
+        // Create Conv
         const convRes = await pool.query(
             "INSERT INTO conversations (type, product_id) VALUES ('private', $1) RETURNING id",
             [productId || null]
         );
-        convId = convRes.rows[0].id;
+        const convId = convRes.rows[0].id;
 
-        // Ajouter participants
         await pool.query("INSERT INTO conversation_participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)", [convId, senderId, recipientId]);
 
-        // D. Insérer le message
+        // Insert Message
         const msgRes = await pool.query(
             "INSERT INTO messages (conversation_id, sender_id, type, content) VALUES ($1, $2, $3, $4) RETURNING *",
             [convId, senderId, type || 'text', content]
         );
 
-        // E. Emit Socket (Si dispo)
         const io = req.app.get('io');
         if (io) {
             io.to(`user_${recipientId}`).emit('new_request', {
@@ -120,24 +130,33 @@ router.post('/accept', async (req, res) => {
 
 // 3. Envoyer un message (Flow normal)
 router.post('/messages', async (req, res) => {
-    const { conversationId, recipientId, content, type, amount } = req.body;
+    const { conversationId, recipientId, content, type, amount, replyToId } = req.body;
     const senderId = req.user.id;
 
-    // TODO: Vérifier permissions (friendships accepted)
-
     try {
+        // Insertion avec reply_to_id
         const msgRes = await pool.query(
-            "INSERT INTO messages (conversation_id, sender_id, type, content, amount) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-            [conversationId, senderId, type || 'text', content, amount]
+            "INSERT INTO messages (conversation_id, sender_id, type, content, amount, reply_to_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+            [conversationId, senderId, type || 'text', content, amount, replyToId || null]
         );
+        
+        // Récupérer le contenu du parent si replyToId existe
+        let fullMessage = msgRes.rows[0];
+        if (replyToId) {
+             const parentRes = await pool.query("SELECT content FROM messages WHERE id = $1", [replyToId]);
+             if (parentRes.rows.length > 0) {
+                 fullMessage.reply_to_content = parentRes.rows[0].content;
+             }
+        }
 
         const io = req.app.get('io');
         if (io && recipientId) {
-            io.to(`user_${recipientId}`).emit('new_message', msgRes.rows[0]);
+            io.to(`user_${recipientId}`).emit('new_message', fullMessage);
         }
 
-        res.json(msgRes.rows[0]);
+        res.json(fullMessage);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "Erreur envoi" });
     }
 });
@@ -145,7 +164,6 @@ router.post('/messages', async (req, res) => {
 // 4. Récupérer mes conversations
 router.get('/conversations', async (req, res) => {
     const myId = req.user.id;
-    // Query complexe pour récupérer dernier message + info user + info produit
     const query = `
         SELECT c.id as conversation_id, 
                u.name as other_name, u.avatar_url as other_avatar, u.id as other_id,
@@ -173,32 +191,29 @@ router.get('/conversations', async (req, res) => {
     }
 });
 
-// 5. Récupérer l'historique de messages avec un user (filtré par produit si spécifié)
+// 5. Récupérer l'historique de messages avec un user
 router.get('/messages/:otherUserId', async (req, res) => {
     const myId = req.user.id;
     const { otherUserId } = req.params;
-    const { productId } = req.query; // Nouveau paramètre optionnel
+    const { productId } = req.query; 
 
     try {
         let conversationFilter = "";
         const params = [myId, otherUserId];
 
         if (productId) {
-            // Si un produit est spécifié, on cherche UNIQUEMENT la conversation liée à ce produit
             conversationFilter = `AND c.product_id = $3`;
             params.push(productId);
-        } else {
-            // Sinon, on cherche les conversations privées SANS produit (chat général) ou on inclut tout ?
-            // Pour l'instant, si pas de produit, on prend tout (comportement par défaut)
-            // Ou mieux : on prend les conversations SANS produit id spécifique (null)
-            // conversationFilter = "AND c.product_id IS NULL"; 
         }
 
+        // On JOIN messages avec lui-même pour récupérer le contenu du parent (reply)
         const query = `
-            SELECT m.*, u.name as sender_name, c.product_id, c.id as conversation_id
+            SELECT m.*, u.name as sender_name, c.product_id, c.id as conversation_id,
+                   parent.content as reply_to_content, parent.sender_id as reply_to_sender
             FROM messages m
             JOIN users u ON m.sender_id = u.id
             JOIN conversations c ON m.conversation_id = c.id
+            LEFT JOIN messages parent ON m.reply_to_id = parent.id
             WHERE m.conversation_id IN (
                 SELECT cp1.conversation_id 
                 FROM conversation_participants cp1
@@ -218,15 +233,14 @@ router.get('/messages/:otherUserId', async (req, res) => {
     }
 });
 
-// 6. Rechercher des utilisateurs (pour démarrer une conversation)
+// 6. Rechercher des utilisateurs
 router.get('/users', async (req, res) => {
     const { q } = req.query;
     const myId = req.user.id;
 
-    if (!q || q.length < 2) return res.json([]); // Minimum 2 caractères
+    if (!q || q.length < 2) return res.json([]); 
 
     try {
-        // Recherche par nom ou téléphone (sauf soi-même)
         const result = await pool.query(
             "SELECT id, name, avatar_url, phone FROM users WHERE (name ILIKE $1 OR phone ILIKE $1) AND id != $2 LIMIT 20",
             [`%${q}%`, myId]
