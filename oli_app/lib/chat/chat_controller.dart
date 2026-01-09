@@ -249,11 +249,11 @@ class ChatController extends StateNotifier<ChatState> {
         
         addMessage(msgData);
 
-        if (state.conversationId == null && msgData['conversation_id'] != null) {
+        if (msgData['conversation_id'] != null) {
           state = state.copyWith(
             conversationId: msgData['conversation_id'].toString(),
-            friendshipStatus: 'pending',
-            requesterId: msgData['sender_id'].toString(),
+            friendshipStatus: state.friendshipStatus ?? 'pending',
+            requesterId: state.requesterId ?? msgData['sender_id']?.toString(),
           );
         }
         

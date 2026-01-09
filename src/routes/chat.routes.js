@@ -98,6 +98,8 @@ router.post('/request', async (req, res) => {
     console.log(`💬 /chat/request de ${senderId} vers ${recipientId} (Product: ${productId})`);
 
     try {
+        let convId;
+
         // Vérifier si une conversation existe déjà pour ce produit
         if (productId) {
             const existingConv = await pool.query(`
@@ -108,41 +110,40 @@ router.post('/request', async (req, res) => {
             `, [senderId, recipientId, productId]);
 
             if (existingConv.rows.length > 0) {
-                console.log(`⚠️ Conversation déjà existante (ID: ${existingConv.rows[0].id}) pour le produit ${productId}`);
-                return res.status(400).json({
-                    error: "Une conversation existe déjà pour ce produit.",
-                    conversationId: existingConv.rows[0].id
-                });
+                convId = existingConv.rows[0].id;
+                console.log(`♻️ Réutilisation de la conversation existante (ID: ${convId})`);
             }
         }
 
-        // Créer ou mettre à jour la relation d'amitié
-        const relCheck = await pool.query(
-            `SELECT * FROM friendships 
-             WHERE (requester_id = $1 AND addressee_id = $2) 
-                OR (requester_id = $2 AND addressee_id = $1)`,
-            [senderId, recipientId]
-        );
-
-        if (relCheck.rows.length === 0) {
-            await pool.query(
-                "INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 'pending')",
+        if (!convId) {
+            // Créer ou mettre à jour la relation d'amitié
+            const relCheck = await pool.query(
+                `SELECT * FROM friendships 
+                 WHERE (requester_id = $1 AND addressee_id = $2) 
+                    OR (requester_id = $2 AND addressee_id = $1)`,
                 [senderId, recipientId]
             );
+
+            if (relCheck.rows.length === 0) {
+                await pool.query(
+                    "INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 'pending')",
+                    [senderId, recipientId]
+                );
+            }
+
+            // Créer la conversation
+            const convRes = await pool.query(
+                "INSERT INTO conversations (type, product_id) VALUES ('private', $1) RETURNING id",
+                [productId || null]
+            );
+            convId = convRes.rows[0].id;
+
+            // Ajouter les participants
+            await pool.query(
+                "INSERT INTO conversation_participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)",
+                [convId, senderId, recipientId]
+            );
         }
-
-        // Créer la conversation
-        const convRes = await pool.query(
-            "INSERT INTO conversations (type, product_id) VALUES ('private', $1) RETURNING id",
-            [productId || null]
-        );
-        const convId = convRes.rows[0].id;
-
-        // Ajouter les participants
-        await pool.query(
-            "INSERT INTO conversation_participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)",
-            [convId, senderId, recipientId]
-        );
 
         // Insérer le message
         const msgRes = await pool.query(`
