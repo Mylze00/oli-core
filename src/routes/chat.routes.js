@@ -92,8 +92,10 @@ router.post('/request', async (req, res) => {
     const senderId = req.user.id;
 
     if (!recipientId || !content) {
+        console.log("❌ /chat/request: Manque recipientId ou content", { recipientId, content });
         return res.status(400).json({ error: "Destinataire et contenu requis" });
     }
+    console.log(`💬 /chat/request de ${senderId} vers ${recipientId} (Product: ${productId})`);
 
     try {
         // Vérifier si une conversation existe déjà pour ce produit
@@ -106,6 +108,7 @@ router.post('/request', async (req, res) => {
             `, [senderId, recipientId, productId]);
 
             if (existingConv.rows.length > 0) {
+                console.log(`⚠️ Conversation déjà existante (ID: ${existingConv.rows[0].id}) pour le produit ${productId}`);
                 return res.status(400).json({
                     error: "Une conversation existe déjà pour ce produit.",
                     conversationId: existingConv.rows[0].id
@@ -207,8 +210,10 @@ router.post('/messages', async (req, res) => {
     const senderId = req.user.id;
 
     if (!conversationId || !content) {
+        console.log("❌ /chat/messages: Manque conversationId ou content", { conversationId, content });
         return res.status(400).json({ error: "conversationId et content requis" });
     }
+    console.log(`✉️ /chat/messages dans ${conversationId} de ${senderId}`);
 
     try {
         // Vérifier permissions
