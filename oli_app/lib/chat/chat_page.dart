@@ -8,6 +8,7 @@ class ChatPage extends ConsumerStatefulWidget {
   final String otherId;
   final String otherName;
   final String? otherPhone; // Nouveau champ
+  final String? productId; // Restoré
   final String? conversationId; // Nouveau
   final String? productName;
   final double? productPrice;

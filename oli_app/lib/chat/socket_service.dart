@@ -72,11 +72,13 @@ class SocketService {
     required String from,
     required String to,
     required String message,
+    String? productId, // Ajouté pour filtrer par produit
   }) {
     _socket?.emit('send_message', {
       'from': from,
       'to': to,
       'message': message,
+      'product_id': productId, // Ajouté pour filtrer
     });
   }
 
