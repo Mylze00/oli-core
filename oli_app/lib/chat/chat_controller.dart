@@ -196,6 +196,7 @@ class ChatController extends StateNotifier<ChatState> {
     double? amount,
     String? productId,
     int? replyToId,
+    Map<String, dynamic>? metadata,
   }) async {
     final token = await _storage.getToken();
     if (token == null) return;
@@ -229,6 +230,7 @@ class ChatController extends StateNotifier<ChatState> {
       if (replyToId != null) 'replyToId': replyToId,
       if (state.conversationId != null) 'conversationId': state.conversationId,
       if (productId != null) 'productId': productId,
+      if (metadata != null) 'metadata': metadata,
     };
 
     try {

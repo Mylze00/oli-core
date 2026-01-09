@@ -277,6 +277,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (msg['reply_to_content'] != null) _buildReplyBadge(msg['reply_to_content'], theme, isMe),
+              if (msg['metadata'] != null && msg['metadata']['type'] == 'product_link')
+                _buildProductMessageCard(msg['metadata'], theme, isMe),
               if (msg['type'] == 'image') 
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -380,9 +382,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 icon: const Icon(Icons.send, color: Colors.white, size: 20),
                 onPressed: () {
                   if (_messageController.text.trim().isNotEmpty) {
+                    final isFirstMessage = chatState.messages.isEmpty && chatState.conversationId == null;
+                    
                     chatCtrl.sendMessage(
                       content: _messageController.text,
                       replyToId: _replyMessage?['id'],
+                      productId: widget.productId, // Toujours passer le productId si présent
+                      metadata: isFirstMessage && widget.productId != null ? {
+                        'product_name': widget.productName,
+                        'product_price': widget.productPrice,
+                        'product_image': widget.productImage,
+                        'type': 'product_link'
+                      } : null,
                     );
                     _messageController.clear();
                     setState(() => _replyMessage = null);
@@ -423,6 +434,52 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (iso == null) return '';
     final dt = DateTime.parse(iso).toLocal();
     return "${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
+  }
+
+  Widget _buildProductMessageCard(Map<String, dynamic> data, ThemeData theme, bool isMe) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isMe ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (data['product_image'] != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.network(data['product_image'], width: 40, height: 40, fit: BoxFit.cover),
+            ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data['product_name'] ?? 'Produit',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isMe ? Colors.white : Colors.black87,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  "${data['product_price']} \$",
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isMe ? Colors.white70 : theme.colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildMoneyContent(Map<String, dynamic> msg, bool isMe) {

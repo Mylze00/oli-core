@@ -88,7 +88,7 @@ router.post('/upload', chatUpload.single('file'), (req, res) => {
  * Démarrer une nouvelle conversation (premier message)
  */
 router.post('/request', async (req, res) => {
-    const { recipientId, content, type, productId } = req.body;
+    const { recipientId, content, type, productId, amount, metadata } = req.body;
     const senderId = req.user.id;
 
     if (!recipientId || !content) {
@@ -143,9 +143,9 @@ router.post('/request', async (req, res) => {
 
         // Insérer le message
         const msgRes = await pool.query(`
-            INSERT INTO messages (conversation_id, sender_id, type, content) 
-            VALUES ($1, $2, $3, $4) RETURNING *`,
-            [convId, senderId, type || 'text', content]
+            INSERT INTO messages (conversation_id, sender_id, type, content, amount, metadata) 
+            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [convId, senderId, type || 'text', content, amount || null, metadata || null]
         );
 
         const message = msgRes.rows[0];
@@ -203,7 +203,7 @@ router.post('/accept', async (req, res) => {
  * Envoyer un message dans une conversation existante
  */
 router.post('/messages', async (req, res) => {
-    const { conversationId, recipientId, content, type, amount, replyToId } = req.body;
+    const { conversationId, recipientId, content, type, amount, replyToId, metadata } = req.body;
     const senderId = req.user.id;
 
     if (!conversationId || !content) {
@@ -238,9 +238,9 @@ router.post('/messages', async (req, res) => {
 
         // Insérer le message
         const msgRes = await pool.query(`
-            INSERT INTO messages (conversation_id, sender_id, type, content, amount, reply_to_id) 
-            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [conversationId, senderId, type || 'text', content, amount || null, replyToId || null]
+            INSERT INTO messages (conversation_id, sender_id, type, content, amount, reply_to_id, metadata) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [conversationId, senderId, type || 'text', content, amount || null, replyToId || null, metadata || null]
         );
 
         let fullMessage = msgRes.rows[0];
