@@ -1,9 +1,11 @@
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+// console.log("Checking Env:", process.env.DATABASE_URL ? "Loaded" : "Missing");
 const pool = require('./config/db');
 
 async function runMigration() {
-    const migrationPath = path.join(__dirname, 'migrations', 'add_reply_to_messages.sql');
+    const migrationPath = path.join(__dirname, 'migrations', 'add_id_oli_to_users.sql');
 
     try {
         const sql = fs.readFileSync(migrationPath, 'utf8');

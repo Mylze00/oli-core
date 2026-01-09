@@ -22,7 +22,7 @@ const upload = multer({ storage: storage });
 router.get('/', async (req, res) => {
     try {
         const result = await pool.query(
-            "SELECT p.*, u.name as seller_name, u.avatar_url as seller_avatar FROM products p JOIN users u ON p.seller_id = u.id WHERE p.status = 'active' ORDER BY p.created_at DESC"
+            "SELECT p.*, u.name as seller_name, u.avatar_url as seller_avatar, u.id_oli as seller_oli_id FROM products p JOIN users u ON p.seller_id = u.id WHERE p.status = 'active' ORDER BY p.created_at DESC"
         );
 
         // Formater les URLs d'images et price
@@ -53,9 +53,15 @@ router.get('/', async (req, res) => {
                 sellerId: p.seller_id,
                 sellerName: p.seller_name,
                 sellerAvatar: p.seller_avatar,
+                sellerOliId: p.seller_oli_id,
                 imageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
                 images: imageUrls,
-                status: p.status
+                status: p.status,
+                deliveryPrice: p.delivery_price,
+                deliveryTime: p.delivery_time,
+                condition: p.condition,
+                quantity: p.quantity,
+                color: p.color
             };
         });
 

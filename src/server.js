@@ -51,14 +51,12 @@ app.set('io', io); // Partager l'instance IO
 
 // --- SOCKET.IO AUTH MIDDLEWARE ---
 io.use((socket, next) => {
-    const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
+    // Priorité à handshake.auth.token (recommandé) puis aux headers
+    const token = (socket.handshake.auth && socket.handshake.auth.token) || socket.handshake.headers.authorization;
+
     if (!token) {
-        // En Next.js / Flutter, parfois le client se connecte sans auth au début
-        // On peut laisser passer et limiter les actions, ou rejeter.
-        // Ici on rejette pour forcer l'auth
-        // console.log("Socket connection attempt without token");
-        // return next(new Error("Authentication error"));
-        return next(); // On laisse passer pour l'instant (mode permissif) mais user sera null
+        console.log("Socket connection attempt without token (Anonyme)");
+        return next();
     }
 
     const cleanToken = token.replace("Bearer ", "");

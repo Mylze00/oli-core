@@ -1,3 +1,4 @@
+import 'dart:ui'; // For VoidCallback
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,16 +6,20 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../secure_storage_service.dart';
 import 'socket_service.dart';
+import '../core/user/user_provider.dart';
+
+// ... (providers and state definitions remain the same) ...
+// Wait, I can only replace one block.
+// I will split this into two edits if needed, or use multi_replace.
+// Let's use multi_replace.
 
 // --- PROVIDERS ---
 
-final socketServiceProvider = Provider<SocketService>((ref) {
-  return SocketService();
-});
 
 final chatControllerProvider = StateNotifierProvider.family<ChatController, ChatState, String>((ref, otherUserId) {
   final socketService = ref.watch(socketServiceProvider);
-  return ChatController(otherUserId, socketService);
+  final user = ref.watch(userProvider).value;
+  return ChatController(otherUserId, user?.id.toString(), socketService);
 });
 
 // --- STATE ---
@@ -59,10 +64,12 @@ class ChatState {
 
 class ChatController extends StateNotifier<ChatState> {
   final String otherUserId;
+  final String? myId; // Ajout
   final SocketService socketService;
   final _storage = SecureStorageService();
+  VoidCallback? _socketCleanup;
 
-  ChatController(this.otherUserId, this.socketService) : super(ChatState()) {
+  ChatController(this.otherUserId, this.myId, this.socketService) : super(ChatState()) {
     _init();
   }
 
@@ -72,21 +79,37 @@ class ChatController extends StateNotifier<ChatState> {
   }
 
   Future<void> _connectSocket() async {
-    await socketService.connect();
+    if (myId != null) {
+      await socketService.connect(myId!);
+    }
     
-    // Écoute des messages
-    socketService.onMessage((data) {
-       // Si le message vient de l'autre utilisateur ou concerne la conversation active
-       // Note: data['sender_id'] peut être int ou string
-       if (data['sender_id'].toString() == otherUserId || 
-           (state.conversationId != null && data['conversation_id'].toString() == state.conversationId)) {
+    // Écoute des messages avec filtrage robuste
+    _socketCleanup = socketService.onMessage((data) {
+       print("Données reçues par socket: $data");
+
+       // Cas : Request Accepted
+       if (data['type'] == 'request_accepted' && data['by'].toString() == otherUserId) {
+         state = state.copyWith(friendshipStatus: 'accepted');
+         return;
+       }
+       
+       final senderId = (data['sender_id'] ?? data['senderId']).toString();
+       final convId = (data['conversation_id'] ?? data['conversationId']).toString();
+
+       // Si le message vient de l'autre ou concerne cette conv
+       if (senderId == otherUserId || 
+           (state.conversationId != null && convId == state.conversationId)) {
          addMessage(data);
        }
     });
   }
 
-  Future<void> loadMessages({String? productId}) async {
+  Future<void> loadMessages({String? productId, String? conversationId}) async {
     state = state.copyWith(isLoading: true, error: null);
+
+    if (conversationId != null) {
+      state = state.copyWith(conversationId: conversationId);
+    }
     final token = await _storage.getToken();
 
     String urlStr = '${ApiConfig.baseUrl}/chat/messages/$otherUserId';
@@ -187,7 +210,7 @@ class ChatController extends StateNotifier<ChatState> {
         'type': type,
         if (amount != null) 'amount': amount,
         if (replyToId != null) 'replyToId': replyToId,  // Ajout
-        if (state.conversationId != null) 'conversation_id': state.conversationId,
+        if (state.conversationId != null) 'conversationId': state.conversationId,
         if (productId != null) 'productId': productId,
     };
 
@@ -208,11 +231,15 @@ class ChatController extends StateNotifier<ChatState> {
         addMessage(msgData);
 
         if (state.conversationId == null && msgData['conversation_id'] != null) {
-          state = state.copyWith(conversationId: msgData['conversation_id'].toString());
+          state = state.copyWith(
+            conversationId: msgData['conversation_id'].toString(),
+            friendshipStatus: 'pending',
+            requesterId: msgData['sender_id'].toString(), // C'est moi qui ai envoyé
+          );
         }
         
         // Si c'était un pending et que j'ai pu envoyer (parce que je suis l'addressee), ça devient accepted
-        if (state.friendshipStatus == 'pending') {
+        if (state.friendshipStatus == 'pending' && state.requesterId != otherUserId) {
            state = state.copyWith(friendshipStatus: 'accepted');
         }
       } else if (response.statusCode == 403) {
@@ -249,9 +276,10 @@ class ChatController extends StateNotifier<ChatState> {
     );
   }
 
+
   @override
   void dispose() {
-    socketService.disconnect();
+    _socketCleanup?.call(); // Unsubscribe only
     super.dispose();
   }
 }

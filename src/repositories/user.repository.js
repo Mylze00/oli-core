@@ -15,16 +15,41 @@ async function findByPhone(phone) {
 }
 
 /**
+ * Generate a unique ID OLI
+ */
+function generateIdOli(phone) {
+  const last4 = phone ? phone.slice(-4) : '0000';
+  const random = Math.floor(1000 + Math.random() * 9000);
+  return `OLI-${last4}-${random}`;
+}
+
+/**
  * Créer un nouvel utilisateur
  */
 async function createUser(phone) {
-  const query = `
-    INSERT INTO users (phone, is_verified, created_at, updated_at)
-    VALUES ($1, false, NOW(), NOW())
-    RETURNING *
-  `;
-  const { rows } = await pool.query(query, [phone]);
-  return rows[0];
+  let idOli = generateIdOli(phone);
+
+  // Petite boucle de sécurité pour l'unicité (simple retry)
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      const query = `
+        INSERT INTO users (phone, id_oli, is_verified, created_at, updated_at)
+        VALUES ($1, $2, false, NOW(), NOW())
+        RETURNING *
+      `;
+      const { rows } = await pool.query(query, [phone, idOli]);
+      return rows[0];
+    } catch (err) {
+      if (err.code === '23505' && err.constraint === 'users_id_oli_key') { // Unique violation
+        idOli = generateIdOli(phone);
+        retries--;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Impossible de générer un ID unique après plusieurs essais.");
 }
 
 /**

@@ -47,15 +47,14 @@ async function canSendMessage(senderId, recipientId) {
         // S'il est l'addressee (celui qui a reçu l'invit), il peut répondre (ce qui va accepter l'invit)
         if (friendship.addressee_id === senderId) return { allowed: true, isNewRequest: false };
 
-        // S'il est le requester, on vérifie s'il a déjà envoyé un message
-        // On autorise un seul message. S'il y en a déjà 1 ou plus, on bloque.
+        // S'il est le requester, on autorise quelques messages pour donner des détails (ex: 3)
         const msgCheck = await pool.query(
-            "SELECT COUNT(*) FROM messages m JOIN conversations c ON m.conversation_id = c.id JOIN conversation_participants cp ON c.id = cp.conversation_id WHERE cp.user_id = $1 AND m.sender_id = $1 AND cp.conversation_id IN (SELECT conversation_id FROM conversation_participants WHERE user_id = $2)",
+            "SELECT COUNT(*) FROM messages m JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id WHERE cp.user_id = $1 AND m.sender_id = $1 AND cp.conversation_id IN (SELECT conversation_id FROM conversation_participants WHERE user_id = $2)",
             [senderId, recipientId]
         );
 
-        if (parseInt(msgCheck.rows[0].count) > 0) {
-            return { allowed: false, error: "Vous devez attendre que l'autre personne accepte votre invitation." };
+        if (parseInt(msgCheck.rows[0].count) >= 3) {
+            return { allowed: false, error: "Limite de messages atteinte. Attendez que le destinataire réponde pour continuer." };
         }
 
         return { allowed: true, isNewRequest: false };
@@ -134,22 +133,6 @@ router.post('/request', async (req, res) => {
 // 2. Accepter une demande
 router.post('/accept', async (req, res) => {
     const { requesterId } = req.body;
-    const myId = req.user.id;
-
-    try {
-        await pool.query(
-            "UPDATE friendships SET status = 'accepted' WHERE requester_id = $1 AND addressee_id = $2",
-            [requesterId, myId]
-        );
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: "Erreur" });
-    }
-});
-
-// 2. Accepter une demande
-router.post('/accept', async (req, res) => {
-    const { requesterId } = req.body;
     const addresseeId = req.user.id;
 
     try {
@@ -157,6 +140,13 @@ router.post('/accept', async (req, res) => {
             "UPDATE friendships SET status = 'accepted' WHERE requester_id = $1 AND addressee_id = $2",
             [requesterId, addresseeId]
         );
+
+        // Optionnel: Envoyer un signal socket aux deux pour décoincer l'UI
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user_${requesterId}`).emit('request_accepted', { by: addresseeId });
+        }
+
         res.json({ success: true });
     } catch (err) {
         console.error(err);
@@ -222,7 +212,7 @@ router.get('/conversations', async (req, res) => {
     const myId = req.user.id;
     const query = `
         SELECT c.id as conversation_id, 
-               u.name as other_name, u.avatar_url as other_avatar, u.id as other_id,
+               u.name as other_name, u.avatar_url as other_avatar, u.id as other_id, u.phone as other_phone,
                m.content as last_message, m.created_at as last_time,
                p.id as product_id, p.name as product_name, p.price as product_price,
                p.images as product_images_raw,
@@ -291,7 +281,7 @@ router.get('/messages/:otherUserId', async (req, res) => {
         }
 
         const query = `
-            SELECT m.*, u.name as sender_name, c.product_id, c.id as conversation_id,
+            SELECT m.*, u.name as sender_name, u.phone as sender_phone, c.product_id, c.id as conversation_id,
                    parent.content as reply_to_content, parent.sender_id as reply_to_sender,
                    f.status as friendship_status, f.requester_id
             FROM messages m

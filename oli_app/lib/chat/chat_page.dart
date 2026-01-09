@@ -7,7 +7,8 @@ class ChatPage extends ConsumerStatefulWidget {
   final String myId;
   final String otherId;
   final String otherName;
-  final String? productId;
+  final String? otherPhone; // Nouveau champ
+  final String? conversationId; // Nouveau
   final String? productName;
   final double? productPrice;
   final String? productImage;
@@ -17,7 +18,9 @@ class ChatPage extends ConsumerStatefulWidget {
     required this.myId,
     required this.otherId,
     this.otherName = 'Chat',
+    this.otherPhone,
     this.productId,
+    this.conversationId,
     this.productName,
     this.productPrice,
     this.productImage,
@@ -39,7 +42,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(chatControllerProvider(widget.otherId).notifier)
-         .loadMessages(productId: widget.productId);
+         .loadMessages(
+           productId: widget.productId,
+           conversationId: widget.conversationId,
+         );
     });
   }
 
@@ -208,6 +214,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(widget.otherName, style: TextStyle(fontSize: 16, color: theme.colorScheme.onSurface)),
+              if (widget.otherPhone != null)
+                Text(widget.otherPhone!, style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
               Text("En ligne", style: theme.textTheme.labelSmall?.copyWith(color: Colors.green)),
             ],
           ),
@@ -253,7 +261,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           padding: const EdgeInsets.all(10),
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
           decoration: BoxDecoration(
-            color: isMe ? theme.colorScheme.primary : theme.colorScheme.surface,
+            color: isMe ? theme.colorScheme.primary : (Colors.lightBlue[100] ?? theme.colorScheme.surface),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
               topRight: const Radius.circular(16),

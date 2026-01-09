@@ -23,18 +23,31 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
   List<dynamic> _searchResults = [];
   bool _isLoading = true;
   bool _isSearching = false;
+  VoidCallback? _socketCleanup;
 
   @override
   void initState() {
     super.initState();
     _fetchConversations();
     
-    // Écouter les sockets pour rafraîchir en temps réel (NOUVEAU)
+    // Écouter les sockets pour rafraîchir en temps réel
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final socketService = ref.read(socketServiceProvider);
-      socketService.onMessage((_) => _fetchConversations());
-      // On peut aussi écouter un événement spécifique 'new_request' si on veut
+      _socketCleanup = socketService.onMessage((_) => _fetchConversations());
+      
+      // Connexion immédiate si l'utilisateur est déjà chargé
+      final user = ref.read(userProvider).value;
+      if (user != null) {
+        socketService.connect(user.id.toString());
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _socketCleanup?.call();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchConversations() async {
@@ -88,24 +101,29 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
     }
   }
 
-  void _openChat(String otherId, String otherName, {String? productId, String? productName, double? productPrice, String? productImage}) {
-    // userState est un AsyncValue<User?>, donc on doit accéder à .value ou .asData?.value
-    final userState = ref.read(userProvider);
-    final myId = userState.value?.id.toString();
-
-    if (myId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erreur: Profil non chargé")));
-      return;
-    }
+  void _openChat({
+    required String otherId,
+    required String otherName,
+    String? otherPhone,
+    String? productId,
+    String? productName,
+    double? productPrice,
+    String? productImage,
+    String? conversationId, // Nouveau
+  }) {
+    final myId = ref.read(userProvider).value?.id.toString();
+    if (myId == null) return;
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatPage(
+        builder: (context) => ChatPage(
           myId: myId,
           otherId: otherId,
           otherName: otherName,
+          otherPhone: otherPhone,
           productId: productId,
+          conversationId: conversationId, // Passé ici
           productName: productName,
           productPrice: productPrice,
           productImage: productImage,
@@ -116,6 +134,14 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Écouteur pour connecter le socket dès que l'utilisateur est chargé (pour les conversations)
+    ref.listen(userProvider, (previous, next) {
+      final user = next.value;
+      if (user != null) {
+        ref.read(socketServiceProvider).connect(user.id.toString());
+      }
+    });
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -177,7 +203,11 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           ),
           title: Text(user['name']),
           subtitle: Text("Appuyez pour discuter"),
-          onTap: () => _openChat(user['id'].toString(), user['name']),
+          onTap: () => _openChat(
+            otherId: user['id'].toString(), 
+            otherName: user['name'], 
+            otherPhone: user['phone']
+          ),
         );
       },
     );
@@ -266,12 +296,14 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
              style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
           onTap: () => _openChat(
-            conv['other_id'].toString(), 
-            conv['other_name'],
+            otherId: conv['other_id'].toString(), 
+            otherName: conv['other_name'],
+            otherPhone: conv['other_phone'],
             productId: conv['product_id']?.toString(),
             productName: conv['product_name'],
-            productPrice: conv['product_price'] != null ? double.tryParse(conv['product_price'].toString()) : null,
+            productPrice: double.tryParse(conv['product_price']?.toString() ?? '0'),
             productImage: conv['product_image'],
+            conversationId: conv['conversation_id']?.toString(), // Ajouté
           ),
         );
       },

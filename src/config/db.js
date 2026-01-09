@@ -5,9 +5,10 @@ const { Pool } = require("pg");
  * Configuration du Pool PostgreSQL
  * Utilise l'URL complète pour Render, ou les variables locales
  */
+const isLocal = process.env.DATABASE_URL && (process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1'));
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL, // Utilise l'URL complète fournie par Render
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+  connectionString: process.env.DATABASE_URL,
+  ssl: (process.env.DATABASE_URL && !isLocal) ? { rejectUnauthorized: false } : false
 });
 
 // Log de diagnostic

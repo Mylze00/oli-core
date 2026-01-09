@@ -1,6 +1,6 @@
 class User {
   final int id; // Backend ID (Primary Key)
-  final String idOli;
+  final String? idOli;
   final String name;
   final String initial;
   final String? avatarUrl;
@@ -8,7 +8,7 @@ class User {
 
   User({
     required this.id,
-    required this.idOli,
+    this.idOli,
     required this.name,
     required this.initial,
     this.avatarUrl,

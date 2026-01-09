@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../config/api_config.dart';
 import '../auth_controller.dart'; 
@@ -9,39 +10,60 @@ final socketServiceProvider = Provider<SocketService>((ref) {
 });
 
 class SocketService {
-  late IO.Socket socket;
+  IO.Socket? _socket; // Utiliser un nullable au lieu de late
   final _storage = SecureStorageService();
 
-  Future<void> connect() async {
+  IO.Socket get socket {
+    if (_socket == null) throw Exception("Socket non initialisé. Appelez connect() d'abord.");
+    return _socket!;
+  }
+
+  Future<void> connect(String userId) async {
     final token = await _storage.getToken();
     
-    socket = IO.io(
+    if (_socket != null) {
+      if (_socket!.connected) {
+        print("🟡 Socket déjà connecté, on rejoint juste la room");
+        _socket!.emit('join', userId);
+        return;
+      }
+      // Si existant mais déco, on tente reconnect
+      _socket!.connect();
+      return;
+    }
+
+    print("🔵 Initialisation d'une nouvelle connexion Socket");
+    _socket = IO.io(
       ApiConfig.baseUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])
-          .disableAutoConnect()
-          .setExtraHeaders(token != null ? {'Authorization': 'Bearer $token'} : {}) // Auth Headers
+          .setAuth({'token': token}) // Passer ici au lieu des headers pour le Web
           .build(),
     );
 
-    socket.connect();
-
-    socket.onConnect((_) async {
+    _socket!.onConnect((_) {
       print('🟢 Connected to socket');
-      // Pour l'instant on fait confiance au client pour le room join, 
-      // idéalement le serveur le fait via le token.
-      // On va récupérer l'ID user depuis le token ou profile... 
-      // Simplification: On attend que le UI l'appelle ou on le passe en param.
+      _socket!.emit('join', userId);
+    });
+    
+    // Add robustness for reconnects
+    _socket!.onReconnect((_) {
+      print('🔄 Reconnected, re-joining room...');
+      _socket!.emit('join', userId);
     });
 
-    socket.onDisconnect((_) => print('🔴 Disconnected'));
+    if (_socket!.connected) {
+       _socket!.emit('join', userId);
+    } else {
+       _socket!.connect();
+    }
   }
 
   void joinRoom(String userId) {
-    if (socket.connected) {
-      socket.emit('join', userId);
-    } else {
-      socket.onConnect((_) => socket.emit('join', userId));
+    if (_socket != null && _socket!.connected) {
+      _socket!.emit('join', userId);
+    } else if (_socket != null) {
+      _socket!.onConnect((_) => _socket!.emit('join', userId));
     }
   }
 
@@ -51,25 +73,52 @@ class SocketService {
     required String to,
     required String message,
   }) {
-    socket.emit('send_message', {
+    _socket?.emit('send_message', {
       'from': from,
       'to': to,
       'message': message,
     });
   }
 
-  void onMessage(Function(Map<String, dynamic>) callback) {
-    socket.on('new_message', (data) {
+  // Retourne une fonction de nettoyage (dispose) pour retirer les écouteurs
+  VoidCallback onMessage(Function(Map<String, dynamic>) callback) {
+    if (_socket == null) return () {};
+
+    // Wrapper pour new_message
+    final messageHandler = (data) {
+      print("📩 New message received via socket");
       callback(Map<String, dynamic>.from(data));
-    });
-    
-    socket.on('new_request', (data) {
-       // Gérer les nouvelles demandes d'amis
-       print("New friend request received");
-    });
+    };
+
+    // Wrapper pour new_request
+    final requestHandler = (data) {
+       print("👋 New friend request/conversation received via socket");
+       if (data['message'] != null) {
+         callback(Map<String, dynamic>.from(data['message']));
+       } else {
+         callback(Map<String, dynamic>.from(data));
+       }
+    };
+
+    // Wrapper pour request_accepted (Rafraîchir les conversations)
+    final acceptedHandler = (data) {
+      print("🤝 Conversation accepted via socket");
+      callback({'type': 'request_accepted', ...Map<String, dynamic>.from(data)});
+    };
+
+    _socket!.on('new_message', messageHandler);
+    _socket!.on('new_request', requestHandler);
+    _socket!.on('request_accepted', acceptedHandler);
+
+    // Fonction de nettoyage
+    return () {
+      _socket?.off('new_message', messageHandler);
+      _socket?.off('new_request', requestHandler);
+      _socket?.off('request_accepted', acceptedHandler);
+    };
   }
 
   void disconnect() {
-    socket.disconnect();
+    _socket?.disconnect();
   }
 }

@@ -18,7 +18,8 @@ final userProvider = FutureProvider<User>((ref) async {
   );
 
   if (response.statusCode == 200) {
-    return User.fromJson(jsonDecode(response.body));
+    final data = jsonDecode(response.body);
+    return User.fromJson(data['user'] ?? data); // Support both nested and flat for robustness
   }
 
   throw Exception('Erreur lors du chargement utilisateur');
