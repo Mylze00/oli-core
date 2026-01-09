@@ -175,7 +175,7 @@ router.post('/upload', productUpload.array('images', 8), async (req, res) => {
         return res.status(400).json({ error: "Nom et prix requis" });
     }
 
-    const images = req.files ? req.files.map(f => f.filename) : [];
+    const images = req.files ? req.files.map(f => f.path || f.filename) : [];
 
     try {
         const result = await pool.query(`
@@ -187,10 +187,10 @@ router.post('/upload', productUpload.array('images', 8), async (req, res) => {
             RETURNING id
         `, [
             req.user.id,
-            shop_id || null,
+            (shop_id && shop_id !== "" && shop_id !== "null") ? parseInt(shop_id) : null,
             name,
             description || '',
-            parseFloat(price),
+            parseFloat(price) || 0,
             category || 'Général',
             images,
             parseFloat(delivery_price || 0),
@@ -202,6 +202,8 @@ router.post('/upload', productUpload.array('images', 8), async (req, res) => {
             is_negotiable === 'true' || is_negotiable === true
         ]);
 
+        console.log(`✅ Produit créé avec succès : ID ${result.rows[0].id} par User ${req.user.id}`);
+
         // Mettre à jour le compteur de ventes de l'utilisateur
         await pool.query("UPDATE users SET total_sales = COALESCE(total_sales, 0) + 1 WHERE id = $1", [req.user.id]);
 
@@ -211,8 +213,17 @@ router.post('/upload', productUpload.array('images', 8), async (req, res) => {
             message: "Produit publié avec succès"
         });
     } catch (err) {
-        console.error("Erreur POST /products/upload:", err);
-        res.status(500).json({ error: "Erreur base de données" });
+        console.error("❌ ERREUR CRITIQUE POST /products/upload:");
+        console.error("- Message:", err.message);
+        console.error("- Stack:", err.stack);
+        console.error("- Payload:", { name, price, category, shop_id, userId: req.user?.id });
+
+        // Retourner une erreur plus descriptive au client si possible
+        res.status(500).json({
+            error: "Erreur lors de la publication",
+            detail: err.message,
+            code: err.code
+        });
     }
 });
 
