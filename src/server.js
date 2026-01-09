@@ -202,6 +202,24 @@ app.get("/health", (req, res) => {
         environment: config.NODE_ENV
     });
 });
+// --- GESTION DES ERREURS ---
+app.use((err, req, res, next) => {
+    console.error("❌ ERREUR SERVEUR GLOBALE :");
+    console.error("- Message:", err.message);
+    console.error("- Stack:", err.stack);
+    console.error("- Path:", req.path);
+    console.error("- Method:", req.method);
+
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: "Fichier trop volumineux (max 10MB)" });
+    }
+
+    res.status(err.status || 500).json({
+        error: "Erreur serveur interne",
+        message: err.message,
+        path: req.path
+    });
+});
 
 // --- DÉMARRAGE DU SERVEUR ---
 server.listen(config.PORT, "0.0.0.0", () => {

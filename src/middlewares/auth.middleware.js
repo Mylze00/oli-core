@@ -19,8 +19,10 @@ const requireAuth = (req, res, next) => {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
+        console.log(`[AUTH] User identifié (Mandatory): ${decoded.id} (${decoded.phone})`);
         next();
     } catch (err) {
+        console.error(`[AUTH] Échec requireAuth: ${err.message}`);
         if (err.name === "TokenExpiredError") {
             return res.status(401).json({ error: "Session expirée - Veuillez vous reconnecter" });
         }
@@ -40,10 +42,13 @@ const optionalAuth = (req, res, next) => {
         try {
             const decoded = jwt.verify(token, JWT_SECRET);
             req.user = decoded;
+            console.log(`[AUTH] User identifié (Optional): ${decoded.id} (${decoded.phone})`);
         } catch (err) {
             // Token invalide mais on continue sans user
-            console.warn(`⚠️ Token invalide ignoré: ${err.message}`);
+            console.warn(`[AUTH] Token optionnel invalide ignoré: ${err.message}`);
         }
+    } else {
+        console.log(`[AUTH] Requête anonyme (Optional) vers ${req.path}`);
     }
     next();
 };
