@@ -8,6 +8,9 @@ import 'secure_storage_service.dart';
 import 'home_page.dart';
 import 'pages/publish_article_page.dart';
 import 'app/theme/theme_provider.dart';
+import 'features/wallet/screens/wallet_screen.dart';
+import 'features/shop/screens/my_shops_screen.dart';
+import 'features/delivery/screens/delivery_dashboard.dart';
 
 // Provider qui récupère les données réelles du serveur
 final userProfileProvider = FutureProvider((ref) async {
@@ -54,42 +57,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     }
   }
 
-  // Action : Dialogue de Dépôt
-  void _showDepositDialog(BuildContext context) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text("Dépôt Wallet", style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(hintText: "Montant (\$)", hintStyle: TextStyle(color: Colors.grey)),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
-          ElevatedButton(
-            onPressed: () async {
-              final token = await SecureStorageService().getToken();
-              await http.post(
-                Uri.parse('${ApiConfig.baseUrl}/wallet/deposit'),
-                headers: {
-                  'Content-Type': 'application/json',
-                  if (token != null) 'Authorization': 'Bearer $token',
-                },
-                body: jsonEncode({'amount': controller.text}),
-              );
-              ref.invalidate(userProfileProvider);
-              Navigator.pop(context);
-            },
-            child: const Text("Confirmer"),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   // Action : Dialogue Adresse de Livraison
   void _showDeliveryAddressDialog(BuildContext context) {
@@ -222,10 +190,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               _buildMenuSection([
                 _buildMenuItem(
                   Icons.account_balance_wallet_outlined, 
-                  'Paiements et Services', 
+                  'Mon Wallet', 
                   Colors.green, 
-                  trailing: 'Wallet: ${user["wallet"]} \$',
-                  onTap: () => _showDepositDialog(context)
+                  trailing: '${user["wallet"]} \$',
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen()))
                 ),
                 _buildMenuItem(Icons.credit_card, 'Ajouter Carte VISA', Colors.blue, onTap: () {}),
                 _buildMenuItem(Icons.account_balance, 'Ajouter Compte Bancaire', Colors.orange, onTap: () {}),
@@ -235,12 +203,27 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               const _SectionTitle(title: 'Mes Activités'),
               _buildMenuSection([
                 _buildMenuItem(
+                  Icons.store, 'Mes Boutiques', Colors.purpleAccent,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyShopsScreen()))
+                ),
+                _buildMenuItem(
                   Icons.add_box_outlined, 'Mettre en vente un objet', Colors.blue,
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PublishArticlePage()))
                 ),
                 _buildMenuItem(Icons.shopping_bag_outlined, 'Mes achats', Colors.orange, onTap: () {}),
                 _buildMenuItem(Icons.favorite_border, 'Favoris et Suivis', Colors.pink, onTap: () {}),
               ]),
+
+              // --- ESPACE LIVREUR (Conditionnel) ---
+              if (user['is_deliverer'] == true) ...[
+                const _SectionTitle(title: 'Espace Livreur'),
+                _buildMenuSection([
+                  _buildMenuItem(
+                    Icons.delivery_dining, 'Gestion des Courses', Colors.orange,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeliveryDashboard()))
+                  ),
+                ]),
+              ],
 
               // --- PARAMÈTRES ---
               const _SectionTitle(title: 'Paramètres'),

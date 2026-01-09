@@ -155,7 +155,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(p.name.toUpperCase(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
           ),
-          // BLOC VENDEUR
+          // BLOC VENDEUR OU BOUTIQUE
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.all(12),
@@ -163,14 +163,31 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
             child: Row(children: [
               Stack(
                 children: [
-                   CircleAvatar(radius: 25, backgroundColor: Colors.blueAccent, child: Text(p.seller.isNotEmpty ? p.seller[0] : '?', style: const TextStyle(color: Colors.white, fontSize: 20))),
-                   Positioned(bottom: 0, right: 0, child: Container(padding: const EdgeInsets.all(2), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.check_circle, color: Colors.blue, size: 16))),
+                   CircleAvatar(
+                     radius: 25, 
+                     backgroundColor: Colors.blueAccent, 
+                     backgroundImage: p.shopName != null && p.shopVerified 
+                        ? null // TODO: Add Shop Logo if available in model
+                        : p.sellerAvatar != null 
+                            ? NetworkImage(p.sellerAvatar!) 
+                            : null,
+                     child: (p.shopName == null && p.sellerAvatar == null)
+                        ? Text(p.seller.isNotEmpty ? p.seller[0] : '?', style: const TextStyle(color: Colors.white, fontSize: 20))
+                        : null,
+                   ),
+                   if (p.shopVerified || (p.sellerOliId != null)) // Show badge if shop verified or seller has ID
+                     Positioned(bottom: 0, right: 0, child: Container(padding: const EdgeInsets.all(2), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: Icon(Icons.check_circle, color: p.shopVerified ? Colors.orange : Colors.blue, size: 16))),
                 ],
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(p.seller.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16)),
+                  Text(
+                    (p.shopName ?? p.seller).toUpperCase(), 
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16)
+                  ),
+                  if (p.shopName != null)
+                   const Text('CONFIANCE GARANTIE', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
                   Text('${p.totalBuyerRatings}% d\'évaluation positive', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 ]),
               ),

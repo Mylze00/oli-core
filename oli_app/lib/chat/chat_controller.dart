@@ -1,6 +1,5 @@
-import 'dart:ui'; // For VoidCallback
 import 'dart:convert';
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
@@ -8,13 +7,7 @@ import '../secure_storage_service.dart';
 import 'socket_service.dart';
 import '../core/user/user_provider.dart';
 
-// ... (providers and state definitions remain the same) ...
-// Wait, I can only replace one block.
-// I will split this into two edits if needed, or use multi_replace.
-// Let's use multi_replace.
-
 // --- PROVIDERS ---
-
 
 final chatControllerProvider = StateNotifierProvider.family<ChatController, ChatState, String>((ref, otherUserId) {
   final socketService = ref.watch(socketServiceProvider);
@@ -28,9 +21,10 @@ class ChatState {
   final bool isLoading;
   final List<Map<String, dynamic>> messages;
   final String? conversationId;
-  final String? friendshipStatus; // 'pending', 'accepted'
-  final String? requesterId;      // Qui a initié la conversation
+  final String? friendshipStatus;
+  final String? requesterId;
   final String? error;
+  final int unreadCount;
 
   ChatState({
     this.isLoading = true,
@@ -39,6 +33,7 @@ class ChatState {
     this.friendshipStatus,
     this.requesterId,
     this.error,
+    this.unreadCount = 0,
   });
 
   ChatState copyWith({
@@ -48,6 +43,7 @@ class ChatState {
     String? friendshipStatus,
     String? requesterId,
     String? error,
+    int? unreadCount,
   }) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
@@ -56,6 +52,7 @@ class ChatState {
       friendshipStatus: friendshipStatus ?? this.friendshipStatus,
       requesterId: requesterId ?? this.requesterId,
       error: error,
+      unreadCount: unreadCount ?? this.unreadCount,
     );
   }
 }
@@ -64,7 +61,7 @@ class ChatState {
 
 class ChatController extends StateNotifier<ChatState> {
   final String otherUserId;
-  final String? myId; // Ajout
+  final String? myId;
   final SocketService socketService;
   final _storage = SecureStorageService();
   VoidCallback? _socketCleanup;
@@ -83,25 +80,41 @@ class ChatController extends StateNotifier<ChatState> {
       await socketService.connect(myId!);
     }
     
-    // Écoute des messages avec filtrage robuste
     _socketCleanup = socketService.onMessage((data) {
-       print("Données reçues par socket: $data");
+      debugPrint("📩 Socket data received: ${data.keys}");
 
-       // Cas : Request Accepted
-       if (data['type'] == 'request_accepted' && data['by'].toString() == otherUserId) {
-         state = state.copyWith(friendshipStatus: 'accepted');
-         return;
-       }
+      // Cas: Request Accepted
+      if (data['type'] == 'request_accepted' && data['by'].toString() == otherUserId) {
+        state = state.copyWith(friendshipStatus: 'accepted');
+        return;
+      }
+
+      // Cas: Message Read
+      if (data['type'] == 'message_read') {
+        _handleMessageRead(data);
+        return;
+      }
        
-       final senderId = (data['sender_id'] ?? data['senderId']).toString();
-       final convId = (data['conversation_id'] ?? data['conversationId']).toString();
+      final senderId = (data['sender_id'] ?? data['senderId']).toString();
+      final convId = (data['conversation_id'] ?? data['conversationId']).toString();
 
-       // Si le message vient de l'autre ou concerne cette conv
-       if (senderId == otherUserId || 
-           (state.conversationId != null && convId == state.conversationId)) {
-         addMessage(data);
-       }
+      // Si le message vient de l'autre ou concerne cette conv
+      if (senderId == otherUserId || 
+          (state.conversationId != null && convId == state.conversationId)) {
+        addMessage(data);
+      }
     });
+  }
+
+  void _handleMessageRead(Map<String, dynamic> data) {
+    final messageId = data['messageId'];
+    final updatedMessages = state.messages.map((msg) {
+      if (msg['id'] == messageId) {
+        return {...msg, 'is_read': true};
+      }
+      return msg;
+    }).toList();
+    state = state.copyWith(messages: updatedMessages);
   }
 
   Future<void> loadMessages({String? productId, String? conversationId}) async {
@@ -110,6 +123,7 @@ class ChatController extends StateNotifier<ChatState> {
     if (conversationId != null) {
       state = state.copyWith(conversationId: conversationId);
     }
+    
     final token = await _storage.getToken();
 
     String urlStr = '${ApiConfig.baseUrl}/chat/messages/$otherUserId';
@@ -145,9 +159,13 @@ class ChatController extends StateNotifier<ChatState> {
           isLoading: false,
         );
       } else {
-        state = state.copyWith(isLoading: false, error: "Erreur chargement messages");
+        state = state.copyWith(
+          isLoading: false, 
+          error: "Erreur chargement (${response.statusCode})"
+        );
       }
     } catch (e) {
+      debugPrint("Erreur loadMessages: $e");
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -168,7 +186,7 @@ class ChatController extends StateNotifier<ChatState> {
         state = state.copyWith(friendshipStatus: 'accepted');
       }
     } catch (e) {
-      print("Erreur acceptation: $e");
+      debugPrint("Erreur acceptation: $e");
     }
   }
 
@@ -177,21 +195,21 @@ class ChatController extends StateNotifier<ChatState> {
     String? type = 'text',
     double? amount,
     String? productId,
-    int? replyToId, // Support des réponses
+    int? replyToId,
   }) async {
     final token = await _storage.getToken();
     if (token == null) return;
 
-    // 1. Si TYPE IMAGE, uploader d'abord
+    // Si c'est une image, uploader d'abord
     String finalContent = content;
-    if (type == 'image') {
+    if (type == 'image' || type == 'audio') {
       try {
-        final imageUrl = await _uploadImage(content, token); // content est le path ici
-        if (imageUrl == null) {
-          state = state.copyWith(error: "Echec upload image");
+        final mediaUrl = await _uploadMedia(content, token);
+        if (mediaUrl == null) {
+          state = state.copyWith(error: "Échec upload média");
           return;
         }
-        finalContent = imageUrl;
+        finalContent = mediaUrl;
       } catch (e) {
         state = state.copyWith(error: "Erreur upload: $e");
         return;
@@ -200,18 +218,17 @@ class ChatController extends StateNotifier<ChatState> {
       if (content.trim().isEmpty && amount == null) return;
     }
     
-    // 2. Envoyer le message
     final isNewRequest = state.messages.isEmpty && state.conversationId == null;
     final endpoint = isNewRequest ? '/chat/request' : '/chat/messages';
 
     final body = {
-        'recipientId': otherUserId,
-        'content': finalContent,
-        'type': type,
-        if (amount != null) 'amount': amount,
-        if (replyToId != null) 'replyToId': replyToId,  // Ajout
-        if (state.conversationId != null) 'conversationId': state.conversationId,
-        if (productId != null) 'productId': productId,
+      'recipientId': otherUserId,
+      'content': finalContent,
+      'type': type,
+      if (amount != null) 'amount': amount,
+      if (replyToId != null) 'replyToId': replyToId,
+      if (state.conversationId != null) 'conversationId': state.conversationId,
+      if (productId != null) 'productId': productId,
     };
 
     try {
@@ -234,29 +251,44 @@ class ChatController extends StateNotifier<ChatState> {
           state = state.copyWith(
             conversationId: msgData['conversation_id'].toString(),
             friendshipStatus: 'pending',
-            requesterId: msgData['sender_id'].toString(), // C'est moi qui ai envoyé
+            requesterId: msgData['sender_id'].toString(),
           );
         }
         
-        // Si c'était un pending et que j'ai pu envoyer (parce que je suis l'addressee), ça devient accepted
+        // Auto-acceptation
         if (state.friendshipStatus == 'pending' && state.requesterId != otherUserId) {
-           state = state.copyWith(friendshipStatus: 'accepted');
+          state = state.copyWith(friendshipStatus: 'accepted');
         }
       } else if (response.statusCode == 403) {
-         final data = jsonDecode(response.body);
-         state = state.copyWith(error: data['error'] ?? "Accès refusé");
+        final data = jsonDecode(response.body);
+        state = state.copyWith(error: data['error'] ?? "Accès refusé");
       } else {
-         state = state.copyWith(error: "Erreur envoi: ${response.statusCode}");
+        state = state.copyWith(error: "Erreur envoi: ${response.statusCode}");
       }
     } catch (e) {
-       state = state.copyWith(error: "Erreur réseau: $e");
+      state = state.copyWith(error: "Erreur réseau: $e");
     }
   }
 
-  Future<String?> _uploadImage(String filePath, String token) async {
-    final request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/chat/upload'));
+  Future<void> markAsRead(int messageId) async {
+    final token = await _storage.getToken();
+    try {
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/chat/messages/$messageId/read'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (e) {
+      debugPrint("Erreur markAsRead: $e");
+    }
+  }
+
+  Future<String?> _uploadMedia(String filePath, String token) async {
+    final request = http.MultipartRequest(
+      'POST', 
+      Uri.parse('${ApiConfig.baseUrl}/chat/upload')
+    );
     request.headers['Authorization'] = 'Bearer $token';
-    request.files.add(await http.MultipartFile.fromPath('image', filePath));
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
     
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
@@ -276,10 +308,9 @@ class ChatController extends StateNotifier<ChatState> {
     );
   }
 
-
   @override
   void dispose() {
-    _socketCleanup?.call(); // Unsubscribe only
+    _socketCleanup?.call();
     super.dispose();
   }
 }

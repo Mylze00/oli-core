@@ -1,65 +1,116 @@
 const pool = require("../config/db");
 
-// Créer boutique
-async function createShop(userId, name, description) {
+/**
+ * Créer une nouvelle boutique
+ */
+async function create(shopData) {
+  const { owner_id, name, description, category, location, logo_url, banner_url } = shopData;
+
   const query = `
-    INSERT INTO shops (user_id, name, description)
-    VALUES ($1, $2, $3)
-    RETURNING *
-  `;
-  const { rows } = await pool.query(query, [userId, name, description]);
+        INSERT INTO shops (
+            owner_id, name, description, category, location, 
+            logo_url, banner_url, created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+        RETURNING *
+    `;
+
+  const values = [owner_id, name, description, category, location, logo_url, banner_url];
+  const { rows } = await pool.query(query, values);
+
+  // Mettre à jour le flag is_seller de l'utilisateur
+  await pool.query("UPDATE users SET is_seller = true WHERE id = $1", [owner_id]);
+
   return rows[0];
 }
 
-// Lister boutiques d’un utilisateur
-async function getShopsByUser(userId) {
+/**
+ * Trouver une boutique par ID
+ */
+async function findById(id) {
   const query = `
-    SELECT *
-    FROM shops
-    WHERE user_id = $1
-  `;
-  const { rows } = await pool.query(query, [userId]);
-  return rows;
-}
-
-// Lister toutes les boutiques publiques
-async function getAllShops() {
-  const query = `
-    SELECT *
-    FROM shops
-    ORDER BY created_at DESC
-  `;
-  const { rows } = await pool.query(query);
-  return rows;
-}
-
-// Modifier boutique
-async function updateShop(userId, shopId, data) {
-  const { name, description } = data;
-  const query = `
-    UPDATE shops
-    SET name = COALESCE($1, name),
-        description = COALESCE($2, description)
-    WHERE id = $3 AND user_id = $4
-    RETURNING *
-  `;
-  const { rows } = await pool.query(query, [name, description, shopId, userId]);
+        SELECT s.*, u.name as owner_name, u.avatar_url as owner_avatar, u.phone as owner_phone
+        FROM shops s
+        JOIN users u ON s.owner_id = u.id
+        WHERE s.id = $1
+    `;
+  const { rows } = await pool.query(query, [id]);
   return rows[0];
 }
 
-// Supprimer boutique
-async function deleteShop(userId, shopId) {
+/**
+ * Trouver les boutiques d'un utilisateur
+ */
+async function findByOwnerId(ownerId) {
+  const query = `SELECT * FROM shops WHERE owner_id = $1 ORDER BY created_at DESC`;
+  const { rows } = await pool.query(query, [ownerId]);
+  return rows;
+}
+
+/**
+ * Lister toutes les boutiques (avec filtres)
+ */
+async function findAll(limit = 20, offset = 0, category = null, search = null) {
+  let query = `
+        SELECT s.*, u.name as owner_name, u.avatar_url as owner_avatar
+        FROM shops s
+        JOIN users u ON s.owner_id = u.id
+        WHERE 1=1
+    `;
+  const params = [];
+  let paramIndex = 1;
+
+  if (category) {
+    query += ` AND s.category = $${paramIndex++}`;
+    params.push(category);
+  }
+
+  if (search) {
+    query += ` AND (s.name ILIKE $${paramIndex} OR s.description ILIKE $${paramIndex})`;
+    params.push(`%${search}%`);
+    paramIndex++;
+  }
+
+  query += ` ORDER BY s.is_verified DESC, s.rating DESC, s.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
+  params.push(limit, offset);
+
+  const { rows } = await pool.query(query, params);
+  return rows;
+}
+
+/**
+ * Mettre à jour une boutique
+ */
+async function update(id, updates) {
+  const fields = Object.keys(updates);
+  if (fields.length === 0) return null;
+
+  const setClause = fields.map((field, index) => `${field} = $${index + 2}`).join(', ');
+  const values = [id, ...Object.values(updates)];
+
   const query = `
-    DELETE FROM shops
-    WHERE id = $1 AND user_id = $2
-  `;
-  await pool.query(query, [shopId, userId]);
+        UPDATE shops 
+        SET ${setClause}, updated_at = NOW() 
+        WHERE id = $1 
+        RETURNING *
+    `;
+
+  const { rows } = await pool.query(query, values);
+  return rows[0];
+}
+
+/**
+ * Supprimer une boutique
+ */
+async function deleteById(id) {
+  await pool.query("DELETE FROM shops WHERE id = $1", [id]);
 }
 
 module.exports = {
-  createShop,
-  getShopsByUser,
-  getAllShops,
-  updateShop,
-  deleteShop,
+  create,
+  findById,
+  findByOwnerId,
+  findAll,
+  update,
+  deleteById
 };

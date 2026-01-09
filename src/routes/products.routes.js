@@ -1,47 +1,78 @@
+/**
+ * Routes Produits Oli
+ * Marketplace - Catalogue, Upload, Gestion
+ */
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { BASE_URL } = require('../config');
+const { productUpload } = require('../config/upload');
 
-// --- Configuration Upload (Images Produits) ---
-const uploadDir = path.join(__dirname, '../../uploads');
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => { cb(null, uploadDir); },
-    filename: (req, file, cb) => {
-        const cleanName = file.originalname.replace(/[^\w.]+/g, '_');
-        cb(null, 'prod-' + Date.now() + '-' + cleanName);
-    }
-});
-const upload = multer({ storage: storage });
-
-// --- ROUTES ---
-
-// 1. Lister tous les produits (Marketplace)
+/**
+ * GET /products
+ * Liste tous les produits actifs (public)
+ */
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query(
-            "SELECT p.*, u.name as seller_name, u.avatar_url as seller_avatar, u.id_oli as seller_oli_id FROM products p JOIN users u ON p.seller_id = u.id WHERE p.status = 'active' ORDER BY p.created_at DESC"
-        );
+        const { category, minPrice, maxPrice, location, search, limit = 50, offset = 0 } = req.query;
 
-        // Formater les URLs d'images et price
-        const protocol = req.headers['x-forwarded-proto'] || 'http';
-        const host = req.get('host');
+        let query = `
+            SELECT p.*, 
+                   u.name as seller_name, 
+                   u.avatar_url as seller_avatar, 
+                   u.id_oli as seller_oli_id,
+                   s.name as shop_name, 
+                   s.is_verified as shop_verified
+            FROM products p 
+            JOIN users u ON p.seller_id = u.id
+            LEFT JOIN shops s ON p.shop_id = s.id
+            WHERE p.status = 'active'
+        `;
 
+        const params = [];
+        let paramIndex = 1;
+
+        // Filtres dynamiques
+        if (category) {
+            query += ` AND p.category = $${paramIndex++}`;
+            params.push(category);
+        }
+        if (minPrice) {
+            query += ` AND p.price >= $${paramIndex++}`;
+            params.push(parseFloat(minPrice));
+        }
+        if (maxPrice) {
+            query += ` AND p.price <= $${paramIndex++}`;
+            params.push(parseFloat(maxPrice));
+        }
+        if (location) {
+            query += ` AND p.location ILIKE $${paramIndex++}`;
+            params.push(`%${location}%`);
+        }
+        if (search) {
+            query += ` AND (p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex})`;
+            params.push(`%${search}%`);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY p.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
+        params.push(parseInt(limit), parseInt(offset));
+
+        const result = await pool.query(query, params);
+
+        // Formater les URLs d'images
         const products = result.rows.map(p => {
-            // Gérer le cas où images est une string JSON ou un array PostgreSQL
             let imgs = [];
-            if (Array.isArray(p.images)) imgs = p.images;
-            else if (typeof p.images === 'string') {
-                imgs = p.images.replace(/[{}"]/g, '').split(',');
+            if (Array.isArray(p.images)) {
+                imgs = p.images;
+            } else if (typeof p.images === 'string') {
+                imgs = p.images.replace(/[{}\"]/g, '').split(',').filter(Boolean);
             }
 
-            // Correction de l'URL : On utilise une URL absolue si possible
             const imageUrls = imgs.map(img => {
                 if (!img) return null;
                 if (img.startsWith('http')) return img;
-                return `https://oli-core.onrender.com/uploads/${img}`; // Forcer l'URL de prod pour être sûr
+                return `${BASE_URL}/uploads/${img}`;
             }).filter(url => url !== null);
 
             return {
@@ -50,78 +81,247 @@ router.get('/', async (req, res) => {
                 description: p.description,
                 price: parseFloat(p.price).toFixed(2),
                 category: p.category,
+                condition: p.condition,
+                quantity: p.quantity,
+                color: p.color,
+                location: p.location,
+                isNegotiable: p.is_negotiable,
+                deliveryPrice: parseFloat(p.delivery_price || 0).toFixed(2),
+                deliveryTime: p.delivery_time,
                 sellerId: p.seller_id,
                 sellerName: p.seller_name,
                 sellerAvatar: p.seller_avatar,
                 sellerOliId: p.seller_oli_id,
+                shopId: p.shop_id,
+                shopName: p.shop_name,
+                shopVerified: p.shop_verified,
                 imageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
                 images: imageUrls,
                 status: p.status,
-                deliveryPrice: p.delivery_price,
-                deliveryTime: p.delivery_time,
-                condition: p.condition,
-                quantity: p.quantity,
-                color: p.color
+                createdAt: p.created_at,
             };
         });
 
-        console.log(`📡 [API] Renvoi de ${products.length} produits à ${req.ip}`);
         res.json(products);
     } catch (err) {
-        console.error(err);
+        console.error("Erreur GET /products:", err);
         res.status(500).json({ error: "Erreur serveur" });
     }
 });
 
-// 2. Ajouter un produit (Vente)
-router.post('/upload', upload.array('images', 5), async (req, res) => {
-    // Note: Le middleware verifyToken doit être appliqué dans server.js
-    if (!req.user) return res.status(401).json({ error: "Non authentifié" });
+/**
+ * GET /products/:id
+ * Détails d'un produit
+ */
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
 
-    const { name, description, price, category, delivery_price, delivery_time, condition, quantity, color } = req.body;
+        const result = await pool.query(`
+            SELECT p.*, 
+                   u.name as seller_name, 
+                   u.avatar_url as seller_avatar, 
+                   u.id_oli as seller_oli_id,
+                   u.phone as seller_phone,
+                   u.rating as seller_rating,
+                   s.name as shop_name
+            FROM products p 
+            JOIN users u ON p.seller_id = u.id
+            LEFT JOIN shops s ON p.shop_id = s.id
+            WHERE p.id = $1
+        `, [id]);
 
-    if (!name || !price) return res.status(400).json({ error: "Nom et prix requis" });
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Produit non trouvé" });
+        }
 
-    // Récupérer les noms de fichiers
+        const p = result.rows[0];
+
+        // Incrémenter les vues
+        await pool.query("UPDATE products SET view_count = COALESCE(view_count, 0) + 1 WHERE id = $1", [id]);
+
+        // Formater
+        let imgs = Array.isArray(p.images) ? p.images :
+            (typeof p.images === 'string' ? p.images.replace(/[{}\"]/g, '').split(',').filter(Boolean) : []);
+
+        res.json({
+            ...p,
+            images: imgs.map(img => img.startsWith('http') ? img : `${BASE_URL}/uploads/${img}`),
+            price: parseFloat(p.price).toFixed(2),
+            deliveryPrice: parseFloat(p.delivery_price || 0).toFixed(2),
+        });
+    } catch (err) {
+        console.error("Erreur GET /products/:id:", err);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+/**
+ * POST /products/upload
+ * Créer un nouveau produit (auth requise via middleware)
+ */
+router.post('/upload', productUpload.array('images', 8), async (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ error: "Non authentifié" });
+    }
+
+    const {
+        name, description, price, category,
+        delivery_price, delivery_time, condition,
+        quantity, color, location, shop_id, is_negotiable
+    } = req.body;
+
+    if (!name || !price) {
+        return res.status(400).json({ error: "Nom et prix requis" });
+    }
+
     const images = req.files ? req.files.map(f => f.filename) : [];
 
-    // Si aucune image n'est uploadée, on peut accepter ou refuser. Disons qu'on accepte.
-
     try {
-        const result = await pool.query(
-            "INSERT INTO products (seller_id, name, description, price, category, images, delivery_price, delivery_time, condition, quantity, color, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active') RETURNING id",
-            [
-                req.user.id,
-                name,
-                description || '',
-                parseFloat(price),
-                category || 'General',
-                images,
-                parseFloat(delivery_price || 0),
-                delivery_time || '',
-                condition || 'Neuf',
-                parseInt(quantity || 1),
-                color || ''
-            ]
-        );
+        const result = await pool.query(`
+            INSERT INTO products (
+                seller_id, shop_id, name, description, price, category, 
+                images, delivery_price, delivery_time, condition, 
+                quantity, color, location, is_negotiable, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'active') 
+            RETURNING id
+        `, [
+            req.user.id,
+            shop_id || null,
+            name,
+            description || '',
+            parseFloat(price),
+            category || 'Général',
+            images,
+            parseFloat(delivery_price || 0),
+            delivery_time || '',
+            condition || 'Neuf',
+            parseInt(quantity || 1),
+            color || '',
+            location || '',
+            is_negotiable === 'true' || is_negotiable === true
+        ]);
 
-        res.json({ success: true, productId: result.rows[0].id });
+        // Mettre à jour le compteur de ventes de l'utilisateur
+        await pool.query("UPDATE users SET total_sales = COALESCE(total_sales, 0) + 1 WHERE id = $1", [req.user.id]);
+
+        res.status(201).json({
+            success: true,
+            productId: result.rows[0].id,
+            message: "Produit publié avec succès"
+        });
     } catch (err) {
-        console.error(err);
+        console.error("Erreur POST /products/upload:", err);
         res.status(500).json({ error: "Erreur base de données" });
     }
 });
 
-// 3. Mes produits (Profil vendeur)
-router.get('/my-products', async (req, res) => {
-    if (!req.user) return res.status(401).json({ error: "Non authentifié" });
+/**
+ * GET /products/my-products
+ * Produits de l'utilisateur connecté
+ */
+router.get('/user/my-products', async (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ error: "Non authentifié" });
+    }
 
     try {
         const result = await pool.query(
             "SELECT * FROM products WHERE seller_id = $1 ORDER BY created_at DESC",
             [req.user.id]
         );
-        res.json(result.rows);
+
+        const products = result.rows.map(p => ({
+            ...p,
+            images: Array.isArray(p.images) ? p.images.map(img =>
+                img.startsWith('http') ? img : `${BASE_URL}/uploads/${img}`
+            ) : []
+        }));
+
+        res.json(products);
+    } catch (err) {
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+/**
+ * PATCH /products/:id
+ * Modifier un produit
+ */
+router.patch('/:id', async (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ error: "Non authentifié" });
+    }
+
+    const { id } = req.params;
+    const updates = req.body;
+
+    try {
+        // Vérifier que le produit appartient à l'utilisateur
+        const check = await pool.query(
+            "SELECT id FROM products WHERE id = $1 AND seller_id = $2",
+            [id, req.user.id]
+        );
+
+        if (check.rows.length === 0) {
+            return res.status(403).json({ error: "Non autorisé" });
+        }
+
+        // Construire la requête dynamiquement
+        const fields = ['name', 'description', 'price', 'category', 'condition',
+            'quantity', 'color', 'location', 'status', 'delivery_price', 'delivery_time'];
+        const setClauses = [];
+        const values = [];
+        let i = 1;
+
+        for (const field of fields) {
+            if (updates[field] !== undefined) {
+                setClauses.push(`${field} = $${i++}`);
+                values.push(updates[field]);
+            }
+        }
+
+        if (setClauses.length === 0) {
+            return res.status(400).json({ error: "Aucune modification fournie" });
+        }
+
+        setClauses.push(`updated_at = NOW()`);
+        values.push(id);
+
+        const result = await pool.query(
+            `UPDATE products SET ${setClauses.join(', ')} WHERE id = $${i} RETURNING *`,
+            values
+        );
+
+        res.json({ success: true, product: result.rows[0] });
+    } catch (err) {
+        console.error("Erreur PATCH /products/:id:", err);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+/**
+ * DELETE /products/:id
+ * Supprimer un produit (soft delete)
+ */
+router.delete('/:id', async (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ error: "Non authentifié" });
+    }
+
+    const { id } = req.params;
+
+    try {
+        const result = await pool.query(
+            "UPDATE products SET status = 'deleted', updated_at = NOW() WHERE id = $1 AND seller_id = $2 RETURNING id",
+            [id, req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(403).json({ error: "Non autorisé ou produit inexistant" });
+        }
+
+        res.json({ success: true, message: "Produit supprimé" });
     } catch (err) {
         res.status(500).json({ error: "Erreur serveur" });
     }
