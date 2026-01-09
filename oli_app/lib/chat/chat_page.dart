@@ -118,11 +118,76 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   ],
                 ),
           ),
+          if (chatState.friendshipStatus == 'pending')
+             _buildAcceptanceBanner(chatState, theme),
+          if (chatState.error != null)
+             _buildErrorBanner(chatState.error!, theme),
           if (_replyMessage != null) _buildReplyPreview(theme),
-          _buildInputBar(context, chatCtrl, theme),
+          if (_shouldShowInput(chatState))
+            _buildInputBar(context, chatCtrl, theme),
         ],
       ),
     );
+  }
+
+  Widget _buildErrorBanner(String error, ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: theme.colorScheme.errorContainer,
+      child: Text(
+        error,
+        textAlign: TextAlign.center,
+        style: TextStyle(color: theme.colorScheme.onErrorContainer, fontSize: 13, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
+  Widget _buildAcceptanceBanner(ChatState state, ThemeData theme) {
+    bool isRequester = state.requesterId == widget.myId;
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      color: isRequester ? theme.colorScheme.primaryContainer.withOpacity(0.3) : Colors.orange[50],
+      child: isRequester 
+        ? const Text(
+            "En attente d'acceptation par le destinataire...",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w500),
+          )
+        : Column(
+            children: [
+              const Text(
+                "Accepter cette discussion ?",
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => ref.read(chatControllerProvider(widget.otherId).notifier).acceptConversation(),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                    child: const Text("Accepter"),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context), 
+                    child: const Text("Plus tard", style: TextStyle(color: Colors.black54)),
+                  )
+                ],
+              )
+            ],
+          ),
+    );
+  }
+
+  bool _shouldShowInput(ChatState state) {
+    if (state.friendshipStatus == 'pending' && state.requesterId == widget.myId && state.messages.isNotEmpty) {
+      return false;
+    }
+    return true;
   }
 
   PreferredSizeWidget _buildAppBar(ThemeData theme) {

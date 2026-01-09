@@ -6,6 +6,7 @@ import 'chat_page.dart';
 import '../config/api_config.dart';
 import '../secure_storage_service.dart';
 import '../core/user/user_provider.dart';
+import 'socket_service.dart';
 
 class ConversationsPage extends ConsumerStatefulWidget {
   const ConversationsPage({super.key});
@@ -27,6 +28,13 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
   void initState() {
     super.initState();
     _fetchConversations();
+    
+    // Écouter les sockets pour rafraîchir en temps réel (NOUVEAU)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final socketService = ref.read(socketServiceProvider);
+      socketService.onMessage((_) => _fetchConversations());
+      // On peut aussi écouter un événement spécifique 'new_request' si on veut
+    });
   }
 
   Future<void> _fetchConversations() async {

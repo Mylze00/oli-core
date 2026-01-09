@@ -23,12 +23,16 @@ class ChatState {
   final bool isLoading;
   final List<Map<String, dynamic>> messages;
   final String? conversationId;
+  final String? friendshipStatus; // 'pending', 'accepted'
+  final String? requesterId;      // Qui a initié la conversation
   final String? error;
 
   ChatState({
     this.isLoading = true,
     this.messages = const [],
     this.conversationId,
+    this.friendshipStatus,
+    this.requesterId,
     this.error,
   });
 
@@ -36,12 +40,16 @@ class ChatState {
     bool? isLoading,
     List<Map<String, dynamic>>? messages,
     String? conversationId,
+    String? friendshipStatus,
+    String? requesterId,
     String? error,
   }) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
       messages: messages ?? this.messages,
       conversationId: conversationId ?? this.conversationId,
+      friendshipStatus: friendshipStatus ?? this.friendshipStatus,
+      requesterId: requesterId ?? this.requesterId,
       error: error,
     );
   }
@@ -97,13 +105,20 @@ class ChatController extends StateNotifier<ChatState> {
         final messages = data.map((e) => e as Map<String, dynamic>).toList();
         
         String? convId;
+        String? friendshipStatus;
+        String? requesterId;
+        
         if (messages.isNotEmpty) {
-          convId = messages[0]['conversation_id'].toString();
+          convId = messages[0]['conversation_id']?.toString();
+          friendshipStatus = messages[0]['friendship_status']?.toString();
+          requesterId = messages[0]['requester_id']?.toString();
         }
 
         state = state.copyWith(
           messages: messages,
           conversationId: convId,
+          friendshipStatus: friendshipStatus,
+          requesterId: requesterId,
           isLoading: false,
         );
       } else {
@@ -111,6 +126,26 @@ class ChatController extends StateNotifier<ChatState> {
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> acceptConversation() async {
+    final token = await _storage.getToken();
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/chat/accept'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'requesterId': state.requesterId}),
+      );
+
+      if (response.statusCode == 200) {
+        state = state.copyWith(friendshipStatus: 'accepted');
+      }
+    } catch (e) {
+      print("Erreur acceptation: $e");
     }
   }
 
@@ -175,6 +210,14 @@ class ChatController extends StateNotifier<ChatState> {
         if (state.conversationId == null && msgData['conversation_id'] != null) {
           state = state.copyWith(conversationId: msgData['conversation_id'].toString());
         }
+        
+        // Si c'était un pending et que j'ai pu envoyer (parce que je suis l'addressee), ça devient accepted
+        if (state.friendshipStatus == 'pending') {
+           state = state.copyWith(friendshipStatus: 'accepted');
+        }
+      } else if (response.statusCode == 403) {
+         final data = jsonDecode(response.body);
+         state = state.copyWith(error: data['error'] ?? "Accès refusé");
       } else {
          state = state.copyWith(error: "Erreur envoi: ${response.statusCode}");
       }

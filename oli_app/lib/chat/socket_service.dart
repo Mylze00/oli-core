@@ -1,7 +1,12 @@
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../config/api_config.dart';
-import '../auth_controller.dart'; // Pour récupérer le token si besoin (via SecureStorage)
+import '../auth_controller.dart'; 
 import '../secure_storage_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final socketServiceProvider = Provider<SocketService>((ref) {
+  return SocketService();
+});
 
 class SocketService {
   late IO.Socket socket;
