@@ -160,7 +160,10 @@ router.get('/:id', async (req, res) => {
  * POST /products/upload
  * Créer un nouveau produit (auth requise via middleware)
  */
-router.post('/upload', productUpload.array('images', 8), async (req, res) => {
+router.post('/upload', (req, res, next) => {
+    console.log("🛠️ Tentative d'upload - Passage vers Multer...");
+    next();
+}, productUpload.array('images', 8), async (req, res) => {
     if (!req.user) {
         return res.status(401).json({ error: "Non authentifié" });
     }
@@ -175,7 +178,11 @@ router.post('/upload', productUpload.array('images', 8), async (req, res) => {
         return res.status(400).json({ error: "Nom et prix requis" });
     }
 
-    const images = req.files ? req.files.map(f => f.path || f.filename) : [];
+    console.log(`📡 [UPLOAD] Requête reçue de ${req.user?.id}. Fichiers : ${req.files?.length || 0}`);
+    const images = req.files ? req.files.map(f => {
+        console.log(`  - Fichier: ${f.originalname} -> ${f.path || f.filename}`);
+        return f.path || f.filename;
+    }) : [];
 
     try {
         const result = await pool.query(`

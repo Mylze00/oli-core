@@ -19,7 +19,7 @@ const isCloudConfigured = process.env.CLOUDINARY_CLOUD_NAME &&
 let storage;
 
 if (isCloudConfigured) {
-    console.log("☁️  Utilisation de Cloudinary pour le stockage");
+    console.log("☁️  CLOUDINARY: Configuré et prêt");
     storage = new CloudinaryStorage({
         cloudinary: cloudinary,
         params: {
@@ -29,7 +29,10 @@ if (isCloudConfigured) {
         },
     });
 } else {
-    console.warn("⚠️  Clés Cloudinary manquantes. Utilisation du stockage LOCAL (Non persistant sur Render !)");
+    console.warn("⚠️  CLOUDINARY: Clés manquantes (Fallback LOCAL activé)");
+    console.log("- CLOUD_NAME:", process.env.CLOUDINARY_CLOUD_NAME ? "Défini" : "MANQUANT");
+    console.log("- API_KEY:", process.env.CLOUDINARY_API_KEY ? "Défini" : "MANQUANT");
+    console.log("- API_SECRET:", process.env.CLOUDINARY_API_SECRET ? "Défini" : "MANQUANT");
 
     // Créer les dossiers locaux si nécessaire
     const uploadDirs = ['uploads', 'uploads/products', 'uploads/avatars', 'uploads/chat'];
