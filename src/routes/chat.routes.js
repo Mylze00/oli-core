@@ -86,7 +86,7 @@ router.post('/upload', chatUpload.single('file'), (req, res) => {
  * POST /chat/request
  * Démarrer une nouvelle conversation
  */
-rrouter.post('/send', async (req, res) => {
+router.post('/send', async (req, res) => {
     const { recipientId, content, type = 'text', productId, metadata, conversationId: existingConvId } = req.body;
     const senderId = req.user.id;
 
@@ -293,6 +293,96 @@ router.get('/conversations', async (req, res) => {
     }
 });
 
-// ... (Les autres routes GET /messages/:otherUserId et GET /users restent identiques)
+/**
+ * GET /chat/messages/:otherUserId
+ * Historique des messages avec un utilisateur
+ */
+router.get('/messages/:otherUserId', async (req, res) => {
+    const myId = req.user.id;
+    const { otherUserId } = req.params;
+    const { productId, limit = 100 } = req.query;
+
+    try {
+        let conversationFilter = "";
+        const params = [myId, otherUserId, parseInt(limit)];
+
+        if (productId) {
+            conversationFilter = `AND c.product_id = $4`;
+            params.push(productId);
+        }
+
+        const result = await pool.query(`
+            SELECT 
+                m.*, 
+                u.name as sender_name, 
+                u.phone as sender_phone,
+                u.avatar_url as sender_avatar,
+                c.product_id, 
+                c.id as conversation_id,
+                parent.content as reply_to_content, 
+                parent.sender_id as reply_to_sender,
+                f.status as friendship_status, 
+                f.requester_id
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            JOIN conversations c ON m.conversation_id = c.id
+            LEFT JOIN messages parent ON m.reply_to_id = parent.id
+            LEFT JOIN friendships f ON (f.requester_id = $1 AND f.addressee_id = $2) 
+                                    OR (f.requester_id = $2 AND f.addressee_id = $1)
+            WHERE m.conversation_id IN (
+                SELECT cp1.conversation_id 
+                FROM conversation_participants cp1
+                JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+                JOIN conversations c ON cp1.conversation_id = c.id
+                WHERE cp1.user_id = $1 AND cp2.user_id = $2
+                ${conversationFilter}
+            )
+            ORDER BY m.created_at ASC
+            LIMIT $3
+        `, params);
+
+        // Marquer comme lu
+        if (result.rows.length > 0) {
+            const convId = result.rows[0].conversation_id;
+            await pool.query(
+                "UPDATE messages SET is_read = true WHERE conversation_id = $1 AND sender_id = $2 AND is_read = false",
+                [convId, otherUserId]
+            );
+        }
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erreur GET /chat/messages/:otherUserId:", err);
+        res.status(500).json({ error: "Erreur récupération messages" });
+    }
+});
+
+/**
+ * GET /chat/users
+ * Rechercher des utilisateurs pour démarrer une conversation
+ */
+router.get('/users', async (req, res) => {
+    const { q } = req.query;
+    const myId = req.user.id;
+
+    if (!q || q.length < 2) {
+        return res.json([]);
+    }
+
+    try {
+        const result = await pool.query(`
+            SELECT id, name, avatar_url, phone, id_oli 
+            FROM users 
+            WHERE (name ILIKE $1 OR phone ILIKE $1 OR id_oli ILIKE $1) 
+              AND id != $2 
+            LIMIT 20`,
+            [`%${q}%`, myId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erreur GET /chat/users:", err);
+        res.status(500).json({ error: "Erreur recherche" });
+    }
+});
 
 module.exports = router;

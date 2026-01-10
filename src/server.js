@@ -9,13 +9,9 @@ const cors = require("cors");
 const helmet = require("helmet");
 const jwt = require("jsonwebtoken");
 
-// Configuration centralisée
+// Configuration
 const config = require("./config");
 const pool = require("./config/db");
-const { uploadDir } = require("./config/upload");
-
-// Middlewares
-const { requireAuth, optionalAuth } = require("./middlewares/auth.middleware");
 
 // Routes
 const authRoutes = require("./routes/auth.routes");
@@ -25,8 +21,8 @@ const chatRoutes = require("./routes/chat.routes");
 const shopsRoutes = require("./routes/shops.routes");
 const walletRoutes = require("./routes/wallet.routes");
 const deliveryRoutes = require("./routes/delivery.routes");
+const { requireAuth, optionalAuth } = require("./middlewares/auth.middleware");
 
-// --- INITIALISATION ---
 const app = express();
 const server = http.createServer(app);
 
@@ -45,10 +41,7 @@ io.use((socket, next) => {
     const token = (socket.handshake.auth && socket.handshake.auth.token)
         || socket.handshake.headers.authorization;
 
-    if (!token) {
-        console.log("Socket connection attempt without token (Anonyme)");
-        return next();
-    }
+    if (!token) return next();
 
     const cleanToken = token.replace("Bearer ", "");
     try {
@@ -56,6 +49,7 @@ io.use((socket, next) => {
         socket.user = decoded;
         next();
     } catch (err) {
+        console.warn(`[SOCKET] Échec auth : ${err.message}`);
         next(new Error("Authentication error"));
     }
 });
@@ -73,54 +67,44 @@ io.on('connection', (socket) => {
         io.emit('user_online', { userId, online: true });
     }
 
+    // 3. LE JOIN MANUEL (Amélioré)
+    socket.on('join', (roomName) => {
+        if (roomName.startsWith('user_')) {
+            const requestedId = roomName.replace('user_', '');
+            if (userId && userId.toString() === requestedId.toString()) {
+                socket.join(roomName);
+                console.log(`👤 Manual Join: Room ${roomName} confirmée`);
+            }
+        } else if (roomName.startsWith('conversation_')) {
+            socket.join(roomName);
+            console.log(`💬 Joined Chat Room: ${roomName}`);
+        }
+    });
+
     socket.on('join_conversation', (conversationId) => {
         socket.join(`conversation_${conversationId}`);
         console.log(`💬 Client dans la conversation : ${conversationId}`);
     });
 
+    // 4. INDICATEUR DE FRAPPE (Typing)
+    socket.on('typing', ({ conversationId, isTyping }) => {
+        if (userId) {
+            socket.to(`conversation_${conversationId}`).emit('user_typing', {
+                userId,
+                conversationId,
+                isTyping
+            });
+        }
+    });
+
     socket.on('disconnect', () => {
         if (userId) {
             io.emit('user_online', { userId, online: false });
+            console.log(`❌ User ${userId} déconnecté`);
         }
     });
 });
 
-// 3. LE JOIN MANUEL (Amélioré)
-// Utile si tu veux aussi rejoindre des rooms de conversation spécifiques (ex: conversation_12)
-socket.on('join', (roomName) => {
-    // Sécurité : Un utilisateur ne peut rejoindre que sa propre room "user_ID"
-    // ou une room de "conversation_ID" dont il fait partie
-    if (roomName.startsWith('user_')) {
-        const requestedId = roomName.replace('user_', '');
-        if (userId && userId.toString() === requestedId.toString()) {
-            socket.join(roomName);
-            console.log(`👤 Manual Join: Room ${roomName} confirmée`);
-        }
-    } else if (roomName.startsWith('conversation_')) {
-        // Permet de rejoindre une room de chat précise pour les indicateurs de frappe
-        socket.join(roomName);
-        console.log(`💬 Joined Chat Room: ${roomName}`);
-    }
-});
-
-// 4. INDICATEUR DE FRAPPE (Typing)
-socket.on('typing', ({ conversationId, isTyping }) => {
-    if (userId) {
-        // On envoie à tout le monde dans la room de la conversation sauf à l'expéditeur
-        socket.to(`conversation_${conversationId}`).emit('user_typing', {
-            userId,
-            conversationId,
-            isTyping
-        });
-    }
-});
-
-socket.on('disconnect', () => {
-    if (userId) {
-        io.emit('user_online', { userId, online: false });
-        console.log(`❌ User ${userId} déconnecté`);
-    }
-});
 
 // --- MIDDLEWARES GÉNÉRAUX ---
 app.use(cors({
@@ -133,8 +117,8 @@ app.use(cors({
 
 app.options('*', cors());
 
-// Logging middleware (mode dev uniquement)
-if (!config.IS_PRODUCTION) {
+// Logging middleware
+if (config.NODE_ENV !== 'production') {
     app.use((req, res, next) => {
         if (req.method !== 'GET') {
             console.log(`[DEBUG] ${req.method} ${req.url}`, req.body ? Object.keys(req.body) : '');
@@ -185,7 +169,7 @@ const { avatarUpload } = require("./config/upload");
 app.post("/auth/upload-avatar", requireAuth, avatarUpload.single('avatar'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Pas de fichier" });
 
-    const avatarUrl = `${config.BASE_URL}/uploads/${req.file.filename}`;
+    const avatarUrl = req.file.path; // URL Cloudinary
 
     try {
         await pool.query("UPDATE users SET avatar_url = $1 WHERE phone = $2", [avatarUrl, req.user.phone]);
@@ -195,22 +179,11 @@ app.post("/auth/upload-avatar", requireAuth, avatarUpload.single('avatar'), asyn
     }
 });
 
-// Produits (optionalAuth pour accès public + features privées)
 app.use("/products", optionalAuth, productsRoutes);
-
-// Boutiques
 app.use("/shops", optionalAuth, shopsRoutes);
-
-// Commandes (auth obligatoire)
 app.use("/orders", requireAuth, ordersRoutes);
-
-// Wallet (auth obligatoire)
 app.use("/wallet", requireAuth, walletRoutes);
-
-// Livraison (auth obligatoire + role checked in routes)
 app.use("/delivery", requireAuth, deliveryRoutes);
-
-// Chat (auth obligatoire)
 app.use("/chat", requireAuth, chatRoutes);
 
 // Health check
@@ -221,6 +194,7 @@ app.get("/health", (req, res) => {
         environment: config.NODE_ENV
     });
 });
+
 // --- GESTION DES ERREURS ---
 app.use((err, req, res, next) => {
     console.error("❌ ERREUR SERVEUR GLOBALE :");
