@@ -95,30 +95,42 @@ router.post('/send', async (req, res) => {
         let conversationId = existingConvId;
 
         if (!conversationId) {
-            // Vérifier si une discussion existe déjà pour ce produit entre ces deux-là
-            const convCheck = await pool.query(
-                `SELECT id FROM conversations 
-                 WHERE product_id = $1 AND ((user1_id = $2 AND user2_id = $3) OR (user1_id = $3 AND user2_id = $2))`,
-                [productId, senderId, recipientId]
-            );
+            // Vérifier si une discussion existe déjà pour ce produit entre ces deux utilisateurs
+            // Utilise conversation_participants pour la recherche
+            const convCheck = await pool.query(`
+                SELECT c.id 
+                FROM conversations c
+                JOIN conversation_participants cp1 ON cp1.conversation_id = c.id AND cp1.user_id = $1
+                JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id = $2
+                WHERE c.product_id = $3 
+                  AND c.type = 'private'
+                LIMIT 1
+            `, [senderId, recipientId, productId]);
 
             if (convCheck.rows.length > 0) {
                 conversationId = convCheck.rows[0].id;
             } else {
-                // Créer la conversation
+                // Créer la conversation sans user1_id/user2_id
                 const newConv = await pool.query(
-                    "INSERT INTO conversations (user1_id, user2_id, product_id) VALUES ($1, $2, $3) RETURNING id",
-                    [senderId, recipientId, productId]
+                    `INSERT INTO conversations (product_id, type, created_at, updated_at) 
+                     VALUES ($1, 'private', NOW(), NOW()) 
+                     RETURNING id`,
+                    [productId]
                 );
                 conversationId = newConv.rows[0].id;
 
+                // Ajouter les participants à la conversation
+                await pool.query(`
+                    INSERT INTO conversation_participants (conversation_id, user_id, joined_at)
+                    VALUES ($1, $2, NOW()), ($1, $3, NOW())
+                `, [conversationId, senderId, recipientId]);
+
                 // Créer la relation d'amitié (auto-acceptée pour le commerce)
-                await pool.query(
-                    `INSERT INTO friendships (requester_id, addressee_id, status) 
-                     VALUES ($1, $2, 'accepted') 
-                     ON CONFLICT (requester_id, addressee_id) DO NOTHING`,
-                    [senderId, recipientId]
-                );
+                await pool.query(`
+                    INSERT INTO friendships (requester_id, addressee_id, status) 
+                    VALUES ($1, $2, 'accepted') 
+                    ON CONFLICT (requester_id, addressee_id) DO NOTHING
+                `, [senderId, recipientId]);
             }
         }
 
@@ -295,21 +307,33 @@ router.get('/conversations', async (req, res) => {
 
 /**
  * GET /chat/messages/:otherUserId
- * Historique des messages avec un utilisateur
+ * Historique des messages avec un utilisateur (avec pagination cursor-based)
  */
 router.get('/messages/:otherUserId', async (req, res) => {
     const myId = req.user.id;
     const { otherUserId } = req.params;
-    const { productId, limit = 100 } = req.query;
+    const { productId, limit = 50, cursor } = req.query;
 
     try {
         let conversationFilter = "";
-        const params = [myId, otherUserId, parseInt(limit)];
+        const params = [myId, otherUserId];
+        let paramIndex = 3;
 
         if (productId) {
-            conversationFilter = `AND c.product_id = $4`;
+            conversationFilter = `AND c.product_id = $${paramIndex}`;
             params.push(productId);
+            paramIndex++;
         }
+
+        // Pagination cursor-based: cursor = ID du dernier message vu
+        let cursorCondition = "";
+        if (cursor) {
+            cursorCondition = `AND m.id < $${paramIndex}`;
+            params.push(parseInt(cursor));
+            paramIndex++;
+        }
+
+        params.push(parseInt(limit));
 
         const result = await pool.query(`
             SELECT 
@@ -337,8 +361,9 @@ router.get('/messages/:otherUserId', async (req, res) => {
                 WHERE cp1.user_id = $1 AND cp2.user_id = $2
                 ${conversationFilter}
             )
-            ORDER BY m.created_at ASC
-            LIMIT $3
+            ${cursorCondition}
+            ORDER BY m.created_at DESC
+            LIMIT $${paramIndex}
         `, params);
 
         // Marquer comme lu
@@ -350,7 +375,17 @@ router.get('/messages/:otherUserId', async (req, res) => {
             );
         }
 
-        res.json(result.rows);
+        // Préparer la réponse avec next_cursor pour pagination
+        const messages = result.rows.reverse(); // On inverse pour avoir l'ordre chronologique
+        const nextCursor = result.rows.length === parseInt(limit)
+            ? result.rows[result.rows.length - 1].id
+            : null;
+
+        res.json({
+            messages,
+            next_cursor: nextCursor,
+            has_more: nextCursor !== null
+        });
     } catch (err) {
         console.error("Erreur GET /chat/messages/:otherUserId:", err);
         res.status(500).json({ error: "Erreur récupération messages" });
