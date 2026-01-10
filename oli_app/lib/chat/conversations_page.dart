@@ -26,22 +26,25 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
   VoidCallback? _socketCleanup;
 
   @override
-  void initState() {
-    super.initState();
-    _fetchConversations();
+void initState() {
+  super.initState();
+  _fetchConversations();
+  
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final socketService = ref.read(socketServiceProvider);
     
-    // Écouter les sockets pour rafraîchir en temps réel
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final socketService = ref.read(socketServiceProvider);
-      _socketCleanup = socketService.onMessage((_) => _fetchConversations());
-      
-      // Connexion immédiate si l'utilisateur est déjà chargé
-      final user = ref.read(userProvider).value;
-      if (user != null) {
-        socketService.connect(user.id.toString());
-      }
+    // On écoute deux types d'événements pour être sûr
+    _socketCleanup = socketService.onMessage((data) {
+      debugPrint("📩 Nouveau message ou requête reçu, rafraîchissement...");
+      _fetchConversations(); // Re-télécharge la liste depuis le serveur
     });
-  }
+
+    // Optionnel : si ton SocketService sépare les événements
+    socketService.socket.on('new_request', (data) {
+      _fetchConversations();
+    });
+  });
+}
 
   @override
   void dispose() {

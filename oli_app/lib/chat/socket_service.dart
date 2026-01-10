@@ -43,11 +43,12 @@ class SocketService {
     _socket = IO.io(
       ApiConfig.baseUrl,
       IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .setAuth({'token': token})
-          .enableAutoConnect()
-          .enableReconnection()
-          .build(),
+        .setTransports(['websocket']) // Force le WebSocket
+        .enableAutoConnect()         // Reconnexion auto
+        .setReconnectionAttempts(10)  // Nombre de tentatives
+        .setReconnectionDelay(2000)  // Délai entre tentatives (2s)
+        .setAuth({'token': token})    // Authentification
+        .build()
     );
 
     _socket!.onConnect((_) {

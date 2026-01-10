@@ -131,7 +131,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
              _buildErrorBanner(chatState.error!, theme),
           if (_replyMessage != null) _buildReplyPreview(theme),
           if (_shouldShowInput(chatState))
-            _buildInputBar(context, chatCtrl, theme),
+            _buildInputBar(context, chatCtrl, chatState, theme),
         ],
       ),
     );
@@ -353,7 +353,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
-  Widget _buildInputBar(BuildContext context, ChatController chatCtrl, ThemeData theme) {
+  Widget _buildInputBar(BuildContext context, ChatController chatCtrl, ChatState state, ThemeData theme) {
     return Container(
       padding: const EdgeInsets.all(8),
       color: theme.colorScheme.surface,
@@ -382,12 +382,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 icon: const Icon(Icons.send, color: Colors.white, size: 20),
                 onPressed: () {
                   if (_messageController.text.trim().isNotEmpty) {
-                    final isFirstMessage = chatState.messages.isEmpty && chatState.conversationId == null;
+                    final isFirstMessage = state.messages.isEmpty && (state.conversationId == null || state.conversationId!.isEmpty);
                     
                     chatCtrl.sendMessage(
                       content: _messageController.text,
                       replyToId: _replyMessage?['id'],
-                      productId: widget.productId, // Toujours passer le productId si présent
+                      productId: widget.productId,
                       metadata: isFirstMessage && widget.productId != null ? {
                         'product_name': widget.productName,
                         'product_price': widget.productPrice,

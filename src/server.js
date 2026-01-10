@@ -62,45 +62,65 @@ io.use((socket, next) => {
 
 // --- SOCKET.IO EVENTS ---
 io.on('connection', (socket) => {
-    console.log('⚡ Client Socket connecté:', socket.id, socket.user ? `(User ${socket.user.id})` : '(Anonyme)');
+    const userId = socket.user ? socket.user.id : null;
 
-    // Auto-join room basé sur le token
-    if (socket.user) {
-        const userId = socket.user.id;
-        socket.join(`user_${userId}`);
-        console.log(`✅ Auto-Join: User ${userId} joined room user_${userId}`);
+    if (userId) {
+        // IMPORTANT : On utilise une syntaxe simple et constante
+        const userRoom = `user_${userId}`;
+        socket.join(userRoom);
+        console.log(`✅ Room rejointe : ${userRoom}`);
 
-        // Émettre le statut en ligne
         io.emit('user_online', { userId, online: true });
     }
 
-    // Join manuel (fallback)
-    socket.on('join', (userId) => {
-        if (socket.user && socket.user.id.toString() !== userId.toString()) {
-            console.warn(`⚠️ Tentative de join room user_${userId} par user ${socket.user.id}`);
-            return;
-        }
-        socket.join(`user_${userId}`);
-        console.log(`👤 Manual Join: User ${userId} joined room user_${userId}`);
-    });
-
-    // Indicateur de frappe
-    socket.on('typing', ({ conversationId, isTyping }) => {
-        if (socket.user) {
-            socket.to(`conversation_${conversationId}`).emit('user_typing', {
-                userId: socket.user.id,
-                conversationId,
-                isTyping
-            });
-        }
+    socket.on('join_conversation', (conversationId) => {
+        socket.join(`conversation_${conversationId}`);
+        console.log(`💬 Client dans la conversation : ${conversationId}`);
     });
 
     socket.on('disconnect', () => {
-        if (socket.user) {
-            io.emit('user_online', { userId: socket.user.id, online: false });
+        if (userId) {
+            io.emit('user_online', { userId, online: false });
         }
-        console.log('Client déconnecté', socket.user ? `(User ${socket.user.id})` : '');
     });
+});
+
+// 3. LE JOIN MANUEL (Amélioré)
+// Utile si tu veux aussi rejoindre des rooms de conversation spécifiques (ex: conversation_12)
+socket.on('join', (roomName) => {
+    // Sécurité : Un utilisateur ne peut rejoindre que sa propre room "user_ID"
+    // ou une room de "conversation_ID" dont il fait partie
+    if (roomName.startsWith('user_')) {
+        const requestedId = roomName.replace('user_', '');
+        if (userId && userId.toString() === requestedId.toString()) {
+            socket.join(roomName);
+            console.log(`👤 Manual Join: Room ${roomName} confirmée`);
+        }
+    } else if (roomName.startsWith('conversation_')) {
+        // Permet de rejoindre une room de chat précise pour les indicateurs de frappe
+        socket.join(roomName);
+        console.log(`💬 Joined Chat Room: ${roomName}`);
+    }
+});
+
+// 4. INDICATEUR DE FRAPPE (Typing)
+socket.on('typing', ({ conversationId, isTyping }) => {
+    if (userId) {
+        // On envoie à tout le monde dans la room de la conversation sauf à l'expéditeur
+        socket.to(`conversation_${conversationId}`).emit('user_typing', {
+            userId,
+            conversationId,
+            isTyping
+        });
+    }
+});
+
+socket.on('disconnect', () => {
+    if (userId) {
+        io.emit('user_online', { userId, online: false });
+        console.log(`❌ User ${userId} déconnecté`);
+    }
+});
 });
 
 // --- MIDDLEWARES GÉNÉRAUX ---

@@ -22,7 +22,7 @@ class User {
       name: json['name'],
       initial: json['initial'] ?? (json['name'] != null ? json['name'][0].toUpperCase() : '?'),
       avatarUrl: json['avatar_url'],
-      wallet: (json['wallet'] ?? 0).toDouble(),
+      wallet: double.tryParse(json['wallet']?.toString() ?? '0') ?? 0.0,
     );
   }
 }
