@@ -121,7 +121,6 @@ socket.on('disconnect', () => {
         console.log(`❌ User ${userId} déconnecté`);
     }
 });
-});
 
 // --- MIDDLEWARES GÉNÉRAUX ---
 app.use(cors({
