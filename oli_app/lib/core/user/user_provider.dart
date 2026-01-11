@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../config/api_config.dart';
 import 'dart:convert';
-import '../../secure_storage_service.dart';
+import '../storage/secure_storage_service.dart';
 
 import 'user_model.dart';
 

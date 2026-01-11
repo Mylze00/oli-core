@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
-import 'config/api_config.dart';
+import '../../../config/api_config.dart';
 import 'dart:convert';
-import 'secure_storage_service.dart';
-import 'home_page.dart';
-import 'pages/publish_article_page.dart';
-import 'app/theme/theme_provider.dart';
-import 'features/wallet/screens/wallet_screen.dart';
-import 'features/shop/screens/my_shops_screen.dart';
-import 'features/delivery/screens/delivery_dashboard.dart';
+import '../../../core/storage/secure_storage_service.dart';
+import '../../../home/home_page.dart';
+import '../../../pages/publish_article_page.dart';
+import '../../../theme_provider.dart';
+import '../../../features/wallet/screens/wallet_screen.dart';
+import '../../../features/shop/screens/my_shops_screen.dart';
+import '../../../features/delivery/screens/delivery_dashboard.dart';
 
 // Provider qui récupère les données réelles du serveur
 final userProfileProvider = FutureProvider((ref) async {

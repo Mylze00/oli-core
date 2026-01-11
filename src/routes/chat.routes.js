@@ -1,5 +1,5 @@
 /**
- * Routes Chat Oli
+ * Routes Chat Oli - CORRIGÉ
  * Messagerie temps réel - Conversations, Messages, Médias
  */
 const express = require('express');
@@ -83,8 +83,8 @@ router.post('/upload', chatUpload.single('file'), (req, res) => {
 });
 
 /**
- * POST /chat/request
- * Démarrer une nouvelle conversation
+ * POST /chat/send
+ * Démarrer une nouvelle conversation (Premier message)
  */
 router.post('/send', async (req, res) => {
     const { recipientId, content, type = 'text', productId, metadata, conversationId: existingConvId } = req.body;
@@ -93,10 +93,11 @@ router.post('/send', async (req, res) => {
     try {
         // 1. Gérer la conversation
         let conversationId = existingConvId;
+        let friendshipStatus = 'pending';
+        let requesterId = senderId;
 
         if (!conversationId) {
-            // Vérifier si une discussion existe déjà pour ce produit entre ces deux utilisateurs
-            // Utilise conversation_participants pour la recherche
+            // Vérifier si une discussion existe déjà pour ce produit
             const convCheck = await pool.query(`
                 SELECT c.id 
                 FROM conversations c
@@ -109,8 +110,14 @@ router.post('/send', async (req, res) => {
 
             if (convCheck.rows.length > 0) {
                 conversationId = convCheck.rows[0].id;
+                // Récupérer le statut existant
+                const fCheck = await pool.query(`SELECT status, requester_id FROM friendships WHERE (requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)`, [senderId, recipientId]);
+                if (fCheck.rows.length > 0) {
+                    friendshipStatus = fCheck.rows[0].status;
+                    requesterId = fCheck.rows[0].requester_id;
+                }
             } else {
-                // Créer la conversation sans user1_id/user2_id
+                // Créer la conversation
                 const newConv = await pool.query(
                     `INSERT INTO conversations (product_id, type, created_at, updated_at) 
                      VALUES ($1, 'private', NOW(), NOW()) 
@@ -119,16 +126,17 @@ router.post('/send', async (req, res) => {
                 );
                 conversationId = newConv.rows[0].id;
 
-                // Ajouter les participants à la conversation
+                // Ajouter les participants
                 await pool.query(`
                     INSERT INTO conversation_participants (conversation_id, user_id, joined_at)
                     VALUES ($1, $2, NOW()), ($1, $3, NOW())
                 `, [conversationId, senderId, recipientId]);
 
-                // Créer la relation d'amitié (auto-acceptée pour le commerce)
+                // Créer la relation d'amitié (Pending par défaut)
+                // Si c'est lié à un achat direct, on pourrait mettre 'accepted', mais restons safe sur 'pending' sauf si logique métier contraire
                 await pool.query(`
                     INSERT INTO friendships (requester_id, addressee_id, status) 
-                    VALUES ($1, $2, 'accepted') 
+                    VALUES ($1, $2, 'pending') 
                     ON CONFLICT (requester_id, addressee_id) DO NOTHING
                 `, [senderId, recipientId]);
             }
@@ -143,23 +151,32 @@ router.post('/send', async (req, res) => {
 
         const newMessage = msgResult.rows[0];
 
+        // Objet complet à envoyer via socket
+        const socketPayload = {
+            ...newMessage,
+            conversation_id: conversationId,
+            friendship_status: friendshipStatus,
+            requester_id: requesterId
+        };
+
         // 3. ENVOI TEMPS RÉEL (SOCKET.IO)
         const io = req.app.get('io');
+        if (io) {
+            // Envoyer au destinataire (pour sa liste et son chat)
+            io.to(`user_${recipientId}`).emit('new_message', socketPayload);
+            io.to(`user_${recipientId}`).emit('new_request', { sender_id: senderId, conversation_id: conversationId });
 
-        // On envoie au destinataire dans sa room personnelle
-        // C'est ça qui fait apparaître la discussion chez le vendeur !
-        io.to(`user_${recipientId}`).emit('new_message', {
-            ...newMessage,
-            conversation_id: conversationId // Crucial pour le rafraîchissement
+            // Envoyer à l'expéditeur (pour mettre à jour SA liste de discussions en temps réel aussi)
+            io.to(`user_${senderId}`).emit('new_message', socketPayload);
+        }
+
+        res.json({
+            success: true,
+            message: newMessage,
+            conversationId,
+            friendship_status: friendshipStatus,
+            requester_id: requesterId
         });
-
-        // On envoie aussi un signal "nouvelle requête" pour forcer la mise à jour de la liste
-        io.to(`user_${recipientId}`).emit('new_request', {
-            sender_id: senderId,
-            conversation_id: conversationId
-        });
-
-        res.json({ success: true, message: newMessage, conversationId });
 
     } catch (err) {
         console.error("Erreur envoi message:", err);
@@ -194,18 +211,13 @@ router.post('/messages', async (req, res) => {
         const check = await canSendMessage(senderId, recipientId);
         if (!check.allowed) return res.status(403).json({ error: check.error });
 
-        // 3. Auto-accepter la relation si l'autre répond
-        const relRes = await pool.query(
-            "SELECT id, status, addressee_id FROM friendships WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)",
-            [senderId, recipientId]
-        );
-        if (relRes.rows.length > 0) {
-            const rel = relRes.rows[0];
-            if (rel.status === 'pending' && rel.addressee_id === senderId) {
-                await pool.query("UPDATE friendships SET status = 'accepted', updated_at = NOW() WHERE id = $1", [rel.id]);
-                console.log(`✅ Relation ${rel.id} auto-acceptée`);
-            }
-        }
+        // 3. Auto-accepter la relation si l'autre répond (le destinataire devient actif)
+        // Si je suis l'addressee et que je réponds, status -> accepted
+        await pool.query(`
+            UPDATE friendships 
+            SET status = 'accepted', updated_at = NOW() 
+            WHERE status = 'pending' AND addressee_id = $1 AND requester_id = $2
+        `, [senderId, recipientId]);
 
         // 4. Insérer le message
         const msgRes = await pool.query(`
@@ -214,9 +226,19 @@ router.post('/messages', async (req, res) => {
             [conversationId, senderId, type || 'text', content, amount || null, replyToId || null, metadata || null]
         );
 
-        let fullMessage = msgRes.rows[0];
+        // 5. Récupérer le statut à jour pour le frontend
+        const relRes = await pool.query(
+            "SELECT status, requester_id FROM friendships WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)",
+            [senderId, recipientId]
+        );
 
-        // 5. Gérer les détails de la réponse (Reply)
+        let fullMessage = {
+            ...msgRes.rows[0],
+            friendship_status: relRes.rows[0]?.status,
+            requester_id: relRes.rows[0]?.requester_id
+        };
+
+        // 6. Gérer les détails de la réponse (Reply)
         if (replyToId) {
             const parentRes = await pool.query("SELECT content, sender_id FROM messages WHERE id = $1", [replyToId]);
             if (parentRes.rows.length > 0) {
@@ -225,16 +247,18 @@ router.post('/messages', async (req, res) => {
             }
         }
 
-        // 6. Mettre à jour le timestamp de la conversation
+        // 7. Mettre à jour le timestamp de la conversation
         await pool.query("UPDATE conversations SET updated_at = NOW() WHERE id = $1", [conversationId]);
 
-        // 7. Envoi Socket
+        // 8. Envoi Socket
         const io = req.app.get('io');
-        if (io && recipientId) {
-            io.to(`user_${recipientId}`).emit('new_message', fullMessage);
+        if (io) {
+            // Broadcast aux deux
+            if (recipientId) io.to(`user_${recipientId}`).emit('new_message', fullMessage);
+            io.to(`user_${senderId}`).emit('new_message', fullMessage);
         }
 
-        res.json(fullMessage);
+        res.json({ message: fullMessage });
     } catch (err) {
         console.error("Erreur POST /chat/messages:", err);
         res.status(500).json({ error: "Erreur envoi" });
@@ -307,7 +331,6 @@ router.get('/conversations', async (req, res) => {
 
 /**
  * GET /chat/messages/:otherUserId
- * Historique des messages avec un utilisateur (avec pagination cursor-based)
  */
 router.get('/messages/:otherUserId', async (req, res) => {
     const myId = req.user.id;
@@ -325,7 +348,6 @@ router.get('/messages/:otherUserId', async (req, res) => {
             paramIndex++;
         }
 
-        // Pagination cursor-based: cursor = ID du dernier message vu
         let cursorCondition = "";
         if (cursor) {
             cursorCondition = `AND m.id < $${paramIndex}`;
@@ -366,7 +388,6 @@ router.get('/messages/:otherUserId', async (req, res) => {
             LIMIT $${paramIndex}
         `, params);
 
-        // Marquer comme lu
         if (result.rows.length > 0) {
             const convId = result.rows[0].conversation_id;
             await pool.query(
@@ -375,8 +396,7 @@ router.get('/messages/:otherUserId', async (req, res) => {
             );
         }
 
-        // Préparer la réponse avec next_cursor pour pagination
-        const messages = result.rows.reverse(); // On inverse pour avoir l'ordre chronologique
+        const messages = result.rows.reverse();
         const nextCursor = result.rows.length === parseInt(limit)
             ? result.rows[result.rows.length - 1].id
             : null;
@@ -394,7 +414,6 @@ router.get('/messages/:otherUserId', async (req, res) => {
 
 /**
  * GET /chat/users
- * Rechercher des utilisateurs pour démarrer une conversation
  */
 router.get('/users', async (req, res) => {
     const { q } = req.query;

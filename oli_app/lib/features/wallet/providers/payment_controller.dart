@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'config/api_config.dart';
+import '../../../config/api_config.dart';
 
 // On définit l'état du paiement
 class PaymentState {

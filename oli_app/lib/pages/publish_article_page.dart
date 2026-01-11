@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import '../product_controller.dart';
+import '../features/shop/providers/product_controller.dart';
 import '../models/product_model.dart';
 import '../config/api_config.dart';
 

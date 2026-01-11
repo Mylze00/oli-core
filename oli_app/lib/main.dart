@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'login_page.dart'; // Importe votre code avec animations
-import 'auth_controller.dart';
+import 'features/auth/screens/login_page.dart'; // Importe votre code avec animations
+import 'features/auth/providers/auth_controller.dart';
 import 'home/home_page.dart'; // Assurez-vous que ce chemin est correct
 import 'theme_provider.dart'; // ✅ Import du provider de thème
 

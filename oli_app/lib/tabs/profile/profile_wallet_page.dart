@@ -12,8 +12,8 @@ import '../../pages/settings_page.dart';
 import '../../pages/help_page.dart';
 import '../../pages/about_page.dart';
 import '../../pages/payment_methods_page.dart';
-import '../../secure_storage_service.dart';
-import '../../auth_controller.dart';
+import '../../core/storage/secure_storage_service.dart';
+import '../../features/auth/providers/auth_controller.dart';
 
 class ProfileAndWalletPage extends ConsumerStatefulWidget {
   const ProfileAndWalletPage({super.key});

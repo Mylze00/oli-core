@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'core/auth/auth_provider.dart';
 import 'core/auth/auth_state.dart';
 
-import 'features/auth/presentation/pages/login_page.dart';
+import '../../features/auth/screens/login_page.dart';
 import 'home_page.dart';
 
 class AppRouter extends StatelessWidget {

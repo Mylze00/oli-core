@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'chat_page.dart';
 import '../config/api_config.dart';
-import '../secure_storage_service.dart';
+import '../core/storage/secure_storage_service.dart';
 import '../core/user/user_provider.dart';
 import 'socket_service.dart';
 
@@ -23,28 +23,77 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
   List<dynamic> _searchResults = [];
   bool _isLoading = true;
   bool _isSearching = false;
+  
+  // Pour nettoyer l'écouteur du socket à la fermeture
   VoidCallback? _socketCleanup;
 
   @override
-void initState() {
-  super.initState();
-  _fetchConversations();
-  
-  WidgetsBinding.instance.addPostFrameCallback((_) {
+  void initState() {
+    super.initState();
+    _fetchConversations();
+    
+    // Configuration du Socket après le premier rendu
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupSocketListener();
+    });
+  }
+
+  void _setupSocketListener() {
     final socketService = ref.read(socketServiceProvider);
     
-    // On écoute deux types d'événements pour être sûr
-    _socketCleanup = socketService.onMessage((data) {
-      debugPrint("📩 Nouveau message ou requête reçu, rafraîchissement...");
-      _fetchConversations(); // Re-télécharge la liste depuis le serveur
-    });
+    // On s'assure d'être connecté
+    final user = ref.read(userProvider).value;
+    if (user != null) {
+      socketService.connect(user.id.toString());
+    }
 
-    // Optionnel : si ton SocketService sépare les événements
-    socketService.socket.on('new_request', (data) {
-      _fetchConversations();
+    // Écoute des messages entrants pour mise à jour locale
+    _socketCleanup = socketService.onMessage((data) {
+      if (data['conversation_id'] != null || data['conversationId'] != null) {
+        _onNewMessageReceived(data);
+      } else if (data['type'] == 'new_request') {
+        // Pour une toute nouvelle requête, on recharge tout
+        _fetchConversations();
+      }
     });
-  });
-}
+  }
+
+  /// Met à jour la liste localement sans rappeler l'API (Gain de performance + Instantanéité)
+  void _onNewMessageReceived(Map<String, dynamic> data) {
+    if (!mounted) return;
+
+    final myId = ref.read(userProvider).value?.id.toString();
+    final convId = (data['conversation_id'] ?? data['conversationId']).toString();
+    final senderId = (data['sender_id'] ?? data['senderId']).toString();
+
+    setState(() {
+      // 1. Chercher si la conversation existe déjà dans la liste
+      int index = _conversations.indexWhere((c) => c['conversation_id'].toString() == convId);
+
+      if (index != -1) {
+        // A. La conversation existe : on la met à jour et on la déplace en haut
+        final updatedConv = Map<String, dynamic>.from(_conversations[index]);
+        
+        updatedConv['last_message'] = data['content'];
+        updatedConv['last_time'] = data['created_at'] ?? DateTime.now().toIso8601String();
+        updatedConv['last_sender_id'] = senderId; // Pour savoir si c'est moi ou l'autre
+
+        // Incrémenter le compteur non-lu si ce n'est pas moi qui ai envoyé le message
+        if (senderId != myId) {
+          int currentCount = int.tryParse(updatedConv['unread_count']?.toString() ?? '0') ?? 0;
+          updatedConv['unread_count'] = currentCount + 1;
+        }
+
+        // Suppression ancienne position et insertion en tête
+        _conversations.removeAt(index);
+        _conversations.insert(0, updatedConv);
+        
+      } else {
+        // B. Nouvelle conversation inconnue : on recharge depuis le serveur pour avoir les infos profile/produit
+        _fetchConversations();
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -62,17 +111,19 @@ void initState() {
       );
 
       if (response.statusCode == 200) {
-        setState(() {
-          _conversations = jsonDecode(response.body);
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _conversations = jsonDecode(response.body);
+            _isLoading = false;
+          });
+        }
       } else {
-        setState(() => _isLoading = false);
-        print("Erreur API Conversations: ${response.statusCode} - ${response.body}");
+        if (mounted) setState(() => _isLoading = false);
+        debugPrint("Erreur API Conversations: ${response.statusCode}");
       }
     } catch (e) {
-      print("Erreur loading convers: $e");
-      setState(() => _isLoading = false);
+      debugPrint("Erreur loading convers: $e");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -94,13 +145,13 @@ void initState() {
         headers: {'Authorization': 'Bearer $token'},
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && mounted) {
         setState(() {
           _searchResults = jsonDecode(response.body);
         });
       }
     } catch (e) {
-      print("Erreur search: $e");
+      debugPrint("Erreur search: $e");
     }
   }
 
@@ -112,12 +163,13 @@ void initState() {
     String? productName,
     double? productPrice,
     String? productImage,
-    String? conversationId, // Nouveau
-  }) {
+    String? conversationId,
+  }) async {
     final myId = ref.read(userProvider).value?.id.toString();
     if (myId == null) return;
 
-    Navigator.push(
+    // Navigation vers la page de Chat
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ChatPage(
@@ -126,25 +178,20 @@ void initState() {
           otherName: otherName,
           otherPhone: otherPhone,
           productId: productId,
-          conversationId: conversationId, // Passé ici
+          conversationId: conversationId,
           productName: productName,
           productPrice: productPrice,
           productImage: productImage,
         ),
       ),
-    ).then((_) => _fetchConversations()); // Refresh au retour
+    );
+
+    // Au retour, on marque comme lu localement et on rafraîchit
+    _fetchConversations();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Écouteur pour connecter le socket dès que l'utilisateur est chargé (pour les conversations)
-    ref.listen(userProvider, (previous, next) {
-      final user = next.value;
-      if (user != null) {
-        ref.read(socketServiceProvider).connect(user.id.toString());
-      }
-    });
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -205,7 +252,7 @@ void initState() {
             child: user['avatar_url'] == null ? Text(user['name'][0].toUpperCase()) : null,
           ),
           title: Text(user['name']),
-          subtitle: Text("Appuyez pour discuter"),
+          subtitle: const Text("Appuyez pour discuter"),
           onTap: () => _openChat(
             otherId: user['id'].toString(), 
             otherName: user['name'], 
@@ -227,12 +274,6 @@ void initState() {
             Icon(Icons.chat_bubble_outline, size: 60, color: Colors.grey[300]),
             const SizedBox(height: 16),
             const Text("Aucune discussion", style: TextStyle(color: Colors.grey)),
-            TextButton(
-              onPressed: () {
-                // Focus search
-              }, 
-              child: const Text("Chercher quelqu'un")
-            )
           ],
         ),
       );
@@ -242,11 +283,12 @@ void initState() {
       itemCount: _conversations.length,
       itemBuilder: (context, index) {
         final conv = _conversations[index];
-        // conv: conversation_id, other_name, other_avatar, other_id, last_message, last_time
-        // + product_id, product_name, product_price, product_image (si lié à un produit)
-        
         final hasProduct = conv['product_id'] != null;
         
+        // Gestion des messages non lus
+        final int unreadCount = int.tryParse(conv['unread_count']?.toString() ?? '0') ?? 0;
+        final bool hasUnread = unreadCount > 0;
+
         return ListTile(
           leading: Stack(
             children: [
@@ -255,30 +297,45 @@ void initState() {
                 backgroundImage: conv['other_avatar'] != null ? NetworkImage(conv['other_avatar']) : null,
                 child: conv['other_avatar'] == null ? Text(conv['other_name'][0].toUpperCase()) : null,
               ),
-              // Badge produit si lié
               if (hasProduct)
                 Positioned(
                   bottom: 0,
                   right: 0,
                   child: Container(
                     padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.blue,
-                      shape: BoxShape.circle,
-                    ),
+                    decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
                     child: const Icon(Icons.shopping_bag, size: 12, color: Colors.white),
                   ),
                 ),
             ],
           ),
-          title: Text(
-            conv['other_name'], 
-            style: const TextStyle(fontWeight: FontWeight.bold)
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  conv['other_name'], 
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (hasUnread)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    unreadCount.toString(),
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+            ],
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Afficher le nom du produit si lié
               if (hasProduct)
                 Text(
                   "📦 ${conv['product_name']}",
@@ -290,13 +347,23 @@ void initState() {
                 conv['last_message'] ?? 'Démarrer la discussion',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: conv['last_message'] != null ? Colors.black87 : Colors.blue),
+                style: TextStyle(
+                  // Gras si message non lu, couleur différente si vide
+                  fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
+                  color: conv['last_message'] != null 
+                      ? (hasUnread ? Colors.black87 : Colors.grey[700]) 
+                      : Colors.blue,
+                ),
               ),
             ],
           ),
           trailing: Text(
              _formatTime(conv['last_time']),
-             style: const TextStyle(fontSize: 12, color: Colors.grey),
+             style: TextStyle(
+               fontSize: 11, 
+               color: hasUnread ? Colors.green : Colors.grey,
+               fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal
+             ),
           ),
           onTap: () => _openChat(
             otherId: conv['other_id'].toString(), 
@@ -306,7 +373,7 @@ void initState() {
             productName: conv['product_name'],
             productPrice: double.tryParse(conv['product_price']?.toString() ?? '0'),
             productImage: conv['product_image'],
-            conversationId: conv['conversation_id']?.toString(), // Ajouté
+            conversationId: conv['conversation_id']?.toString(),
           ),
         );
       },

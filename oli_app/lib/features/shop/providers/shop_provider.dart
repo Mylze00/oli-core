@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
-import '../../../secure_storage_service.dart';
+import '../../../core/storage/secure_storage_service.dart';
 import '../models/shop_model.dart';
 
 final shopControllerProvider = StateNotifierProvider<ShopController, AsyncValue<List<Shop>>>((ref) {

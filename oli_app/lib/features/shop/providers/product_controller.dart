@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'config/api_config.dart';
-import 'secure_storage_service.dart';
+import '../../../config/api_config.dart';
+import '../../../core/storage/secure_storage_service.dart';
 
 final productControllerProvider = StateNotifierProvider<ProductController, AsyncValue<void>>((ref) {
   return ProductController();

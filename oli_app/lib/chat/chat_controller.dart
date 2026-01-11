@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
-import '../secure_storage_service.dart';
+import '../core/storage/secure_storage_service.dart';
 import 'socket_service.dart';
 import '../core/user/user_provider.dart';
 
@@ -83,6 +83,14 @@ class ChatController extends StateNotifier<ChatState> {
     _socketCleanup = socketService.onMessage((data) {
       debugPrint("📩 Socket data received: ${data.keys}");
 
+      // Mise à jour des statuts si présents dans le payload Socket
+      if (data['friendship_status'] != null) {
+         state = state.copyWith(
+           friendshipStatus: data['friendship_status'].toString(),
+           requesterId: data['requester_id']?.toString(),
+         );
+      }
+
       // Cas: Request Accepted
       if (data['type'] == 'request_accepted' && data['by'].toString() == otherUserId) {
         state = state.copyWith(friendshipStatus: 'accepted');
@@ -98,7 +106,7 @@ class ChatController extends StateNotifier<ChatState> {
       final senderId = (data['sender_id'] ?? data['senderId']).toString();
       final convId = (data['conversation_id'] ?? data['conversationId']).toString();
 
-      // Si le message vient de l'autre ou concerne cette conv
+      // Si le message vient de l'autre ou concerne cette conv, et n'est pas déjà là
       if (senderId == otherUserId || 
           (state.conversationId != null && convId == state.conversationId)) {
         addMessage(data);
@@ -138,7 +146,11 @@ class ChatController extends StateNotifier<ChatState> {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
+        final dynamic jsonData = jsonDecode(response.body);
+        final List<dynamic> data = (jsonData is Map<String, dynamic> && jsonData.containsKey('messages')) 
+            ? jsonData['messages'] 
+            : jsonData as List<dynamic>;
+
         final messages = data.map((e) => e as Map<String, dynamic>).toList();
         
         String? convId;
@@ -220,7 +232,7 @@ class ChatController extends StateNotifier<ChatState> {
     }
     
     final isNewRequest = state.messages.isEmpty && state.conversationId == null;
-    final endpoint = isNewRequest ? '/chat/request' : '/chat/messages';
+    final endpoint = isNewRequest ? '/chat/send' : '/chat/messages';
 
     final body = {
       'recipientId': otherUserId,
@@ -245,20 +257,21 @@ class ChatController extends StateNotifier<ChatState> {
 
       if (response.statusCode == 200) {
         final newMsg = jsonDecode(response.body);
+        // Gérer le format de réponse qui peut varier (wrapper ou direct)
         final msgData = newMsg['message'] ?? newMsg; 
         
+        // Mettre à jour les infos cruciales reçues du backend
+        state = state.copyWith(
+          conversationId: (newMsg['conversationId'] ?? msgData['conversation_id'])?.toString() ?? state.conversationId,
+          friendshipStatus: (newMsg['friendship_status'] ?? msgData['friendship_status'])?.toString() ?? state.friendshipStatus,
+          requesterId: (newMsg['requester_id'] ?? msgData['requester_id'])?.toString() ?? state.requesterId,
+        );
+
         addMessage(msgData);
 
-        if (msgData['conversation_id'] != null) {
-          state = state.copyWith(
-            conversationId: msgData['conversation_id'].toString(),
-            friendshipStatus: state.friendshipStatus ?? 'pending',
-            requesterId: state.requesterId ?? msgData['sender_id']?.toString(),
-          );
-        }
-        
-        // Auto-acceptation
+        // Auto-acceptation locale pour fluidité UI
         if (state.friendshipStatus == 'pending' && state.requesterId != otherUserId) {
+          // Si j'envoie un message alors que j'étais "pending", je deviens accepted
           state = state.copyWith(friendshipStatus: 'accepted');
         }
       } else if (response.statusCode == 403) {
@@ -306,7 +319,7 @@ class ChatController extends StateNotifier<ChatState> {
     if (state.messages.any((m) => m['id'] == msg['id'])) return;
 
     state = state.copyWith(
-      messages: [...state.messages, msg],
+      messages: [msg, ...state.messages], // Ajout en tête de liste
     );
   }
 

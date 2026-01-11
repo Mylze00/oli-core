@@ -7,9 +7,9 @@ class ChatPage extends ConsumerStatefulWidget {
   final String myId;
   final String otherId;
   final String otherName;
-  final String? otherPhone; // Nouveau champ
-  final String? productId; // Restoré
-  final String? conversationId; // Nouveau
+  final String? otherPhone;
+  final String? productId;
+  final String? conversationId;
   final String? productName;
   final double? productPrice;
   final String? productImage;
@@ -34,8 +34,6 @@ class ChatPage extends ConsumerStatefulWidget {
 class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
-  // État local pour la gestion des réponses (Reply)
   Map<String, dynamic>? _replyMessage;
 
   @override
@@ -57,12 +55,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     super.dispose();
   }
 
-  // --- LOGIQUE WHATSAPP-LIKE ---
-
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        0.0, // Scroll vers le bas car la liste est inversée dans l'UI habituelle de chat
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
@@ -77,12 +73,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
     if (pickedFile != null) {
-      // Le controller gère maintenant l'upload quand type='image'
       chatCtrl.sendMessage(content: pickedFile.path, type: 'image');
     }
   }
-
-  // --- UI COMPONENTS ---
 
   @override
   Widget build(BuildContext context) {
@@ -90,39 +83,37 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final chatCtrl = ref.read(chatControllerProvider(widget.otherId).notifier);
     final theme = Theme.of(context);
 
-    // Auto-scroll
+    // Auto-scroll si nouveau message
     ref.listen(chatControllerProvider(widget.otherId), (previous, next) {
       if (next.messages.length > (previous?.messages.length ?? 0)) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+        // Optionnel : ne scroller que si on est déjà en bas
       }
     });
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+      backgroundColor: const Color(0xFFF0F2F5),
       appBar: _buildAppBar(theme),
       body: Column(
         children: [
           Expanded(
             child: chatState.isLoading 
               ? const Center(child: CircularProgressIndicator())
-              : CustomScrollView(
-                  controller: _scrollController,
-                  slivers: [
-                    SliverToBoxAdapter(child: _buildProductHeader(theme)),
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final msg = chatState.messages[index];
-                            final isMe = msg['sender_id'].toString() == widget.myId;
-                            return _buildMessageBubble(context, msg, isMe);
-                          },
-                          childCount: chatState.messages.length,
-                        ),
-                      ),
-                    ),
-                  ],
+              : GestureDetector(
+                  onTap: () => FocusScope.of(context).unfocus(),
+                  child: ListView.builder(
+                    reverse: true, // IMPORTANT: Liste inversée pour chat
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: chatState.messages.length + 1, // +1 pour le header produit
+                    itemBuilder: (context, index) {
+                      if (index == chatState.messages.length) {
+                        return _buildProductHeader(theme);
+                      }
+                      final msg = chatState.messages[index];
+                      final isMe = msg['sender_id'].toString() == widget.myId;
+                      return _buildMessageBubble(context, msg, isMe);
+                    },
+                  ),
                 ),
           ),
           if (chatState.friendshipStatus == 'pending')
@@ -151,12 +142,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildAcceptanceBanner(ChatState state, ThemeData theme) {
-    bool isRequester = state.requesterId == widget.myId;
+    // Correction : Conversion explicite en String pour la comparaison
+    final bool isRequester = state.requesterId.toString() == widget.myId.toString();
     
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
-      color: isRequester ? theme.colorScheme.primaryContainer.withOpacity(0.3) : Colors.orange[50],
+      color: isRequester ? Colors.blue[50] : Colors.orange[50],
       child: isRequester 
         ? const Text(
             "En attente d'acceptation par le destinataire...",
@@ -175,7 +167,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 children: [
                   ElevatedButton(
                     onPressed: () => ref.read(chatControllerProvider(widget.otherId).notifier).acceptConversation(),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
                     child: const Text("Accepter"),
                   ),
                   const SizedBox(width: 8),
@@ -191,61 +183,96 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   bool _shouldShowInput(ChatState state) {
-    if (state.friendshipStatus == 'pending' && state.requesterId == widget.myId && state.messages.isNotEmpty) {
-      return false;
+    // Masquer l'input uniquement si je suis le demandeur et que c'est encore pending
+    // (Selon votre logique métier souhaitée)
+    if (state.friendshipStatus == 'pending' && state.requesterId.toString() == widget.myId.toString() && state.messages.isNotEmpty) {
+      // return false; // Décommentez si vous voulez bloquer l'envoi de messages supplémentaires
     }
     return true;
   }
 
   PreferredSizeWidget _buildAppBar(ThemeData theme) {
     return AppBar(
-      elevation: 0.5,
-      backgroundColor: theme.colorScheme.surface,
+      elevation: 0,
+      scrolledUnderElevation: 2,
+      backgroundColor: Colors.white,
+      foregroundColor: Colors.black87,
       title: Row(
         children: [
           CircleAvatar(
+            radius: 18,
             backgroundColor: theme.colorScheme.primaryContainer,
             child: Text(
               widget.otherName.isNotEmpty ? widget.otherName[0].toUpperCase() : '?',
-              style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
+              style: TextStyle(color: theme.colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.otherName, style: TextStyle(fontSize: 16, color: theme.colorScheme.onSurface)),
-              if (widget.otherPhone != null)
-                Text(widget.otherPhone!, style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
-              Text("En ligne", style: theme.textTheme.labelSmall?.copyWith(color: Colors.green)),
-            ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.otherName, 
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      iconTheme: IconThemeData(color: theme.colorScheme.onSurface),
+      actions: [
+        IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
+      ],
     );
   }
 
   Widget _buildProductHeader(ThemeData theme) {
     if (widget.productId == null) return const SizedBox.shrink();
     return Container(
-      margin: const EdgeInsets.all(12),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+        ],
       ),
       child: Row(
         children: [
-          if (widget.productImage != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(widget.productImage!, width: 50, height: 50, fit: BoxFit.cover),
+          Container(
+            width: 50, 
+            height: 50,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.grey[100],
             ),
-          const SizedBox(width: 12),
-          Expanded(child: Text(widget.productName ?? 'Produit', style: const TextStyle(fontWeight: FontWeight.bold))),
-          Text("${widget.productPrice} \$", style: TextStyle(color: theme.colorScheme.primary)),
+            child: widget.productImage != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(widget.productImage!, fit: BoxFit.cover),
+                  )
+                : const Icon(Icons.shopping_bag_outlined, color: Colors.grey),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.productName ?? 'Produit', 
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "${widget.productPrice} \$", 
+                  style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w600, fontSize: 13)
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -253,54 +280,63 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   Widget _buildMessageBubble(BuildContext context, Map<String, dynamic> msg, bool isMe) {
     final theme = Theme.of(context);
+    final isImage = msg['type'] == 'image';
+    
     return GestureDetector(
-      onHorizontalDragEnd: (_) => _setReply(msg), // Swipe pour répondre
-      child: Align(
-        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.all(10),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-          decoration: BoxDecoration(
-            color: isMe ? theme.colorScheme.primary : (Colors.lightBlue[100] ?? theme.colorScheme.surface),
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(16),
-              topRight: const Radius.circular(16),
-              bottomLeft: Radius.circular(isMe ? 16 : 0),
-              bottomRight: Radius.circular(isMe ? 0 : 16),
-            ),
-            boxShadow: [
-              if (!isMe) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 2, offset: const Offset(0, 1))
+      onHorizontalDragEnd: (_) => _setReply(msg),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (!isMe) ...[
+               CircleAvatar(
+                 radius: 12,
+                 backgroundColor: Colors.grey[200],
+                 child: Text(widget.otherName[0].toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.black54)),
+               ),
+               const SizedBox(width: 8),
             ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (msg['reply_to_content'] != null) _buildReplyBadge(msg['reply_to_content'], theme, isMe),
-              if (msg['metadata'] != null && msg['metadata']['type'] == 'product_link')
-                _buildProductMessageCard(msg['metadata'], theme, isMe),
-              if (msg['type'] == 'image') 
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    msg['content'],
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.white),
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isMe ? theme.colorScheme.primary : Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(18),
+                    topRight: const Radius.circular(18),
+                    bottomLeft: Radius.circular(isMe ? 18 : 4),
+                    bottomRight: Radius.circular(isMe ? 4 : 18),
                   ),
-                )
-              else if (msg['type'] == 'money')
-                _buildMoneyContent(msg, isMe)
-              else
-                Text(
-                  msg['content'] ?? '',
-                  style: TextStyle(color: isMe ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface),
                 ),
-              const SizedBox(height: 2),
-              Text(
-                _formatTime(msg['created_at']), 
-                style: TextStyle(fontSize: 9, color: isMe ? theme.colorScheme.onPrimary.withOpacity(0.7) : theme.colorScheme.outline),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (msg['reply_to_content'] != null) 
+                      _buildReplyBadge(msg['reply_to_content'], theme, isMe),
+                    
+                    if (isImage)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          msg['content'],
+                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.white),
+                        ),
+                      )
+                    else 
+                      Text(
+                        msg['content'] ?? '',
+                        style: TextStyle(
+                          color: isMe ? Colors.white : Colors.black87,
+                          fontSize: 15,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -340,7 +376,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text("Réponse à", style: TextStyle(fontSize: 10, color: theme.colorScheme.primary)),
-                Text(_replyMessage!['content'] ?? 'Image', maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(_replyMessage!['content'] ?? 'Message', maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -382,17 +418,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 icon: const Icon(Icons.send, color: Colors.white, size: 20),
                 onPressed: () {
                   if (_messageController.text.trim().isNotEmpty) {
-                    final isFirstMessage = state.messages.isEmpty && (state.conversationId == null || state.conversationId!.isEmpty);
-                    
                     chatCtrl.sendMessage(
                       content: _messageController.text,
                       replyToId: _replyMessage?['id'],
                       productId: widget.productId,
-                      metadata: isFirstMessage && widget.productId != null ? {
+                      metadata: (state.messages.isEmpty && widget.productId != null) ? {
                         'product_name': widget.productName,
                         'product_price': widget.productPrice,
                         'product_image': widget.productImage,
-                        'type': 'product_link'
                       } : null,
                     );
                     _messageController.clear();
@@ -406,8 +439,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       ),
     );
   }
-
-  // --- FONCTIONNALITÉS COMPLÉMENTAIRES ---
 
   void _showMoneyDialog(BuildContext context, ChatController chatCtrl) {
     final amountCtrl = TextEditingController();
@@ -428,66 +459,5 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ],
       ),
     );
-  }
-
-  String _formatTime(String? iso) {
-    if (iso == null) return '';
-    final dt = DateTime.parse(iso).toLocal();
-    return "${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
-  }
-
-  Widget _buildProductMessageCard(Map<String, dynamic> data, ThemeData theme, bool isMe) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isMe ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (data['product_image'] != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Image.network(data['product_image'], width: 40, height: 40, fit: BoxFit.cover),
-            ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  data['product_name'] ?? 'Produit',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: isMe ? Colors.white : Colors.black87,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  "${data['product_price']} \$",
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isMe ? Colors.white70 : theme.colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMoneyContent(Map<String, dynamic> msg, bool isMe) {
-    final theme = Theme.of(context);
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.payments, color: isMe ? Colors.white70 : Colors.amber),
-      const SizedBox(width: 8),
-      Text("Payé: ${msg['amount']}\$", style: TextStyle(fontWeight: FontWeight.bold, color: isMe ? Colors.white : Colors.black)),
-    ]);
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../auth_controller.dart';
+import '../../features/auth/providers/auth_controller.dart';
 import '../../models/product_model.dart';
 import '../../pages/notifications_view.dart';
 
