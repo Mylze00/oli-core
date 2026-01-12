@@ -13,20 +13,16 @@ class SocketService {
   IO.Socket? _socket;
   final _storage = SecureStorageService();
   
-  final Map<String, bool> _onlineUsers = {};
-
   IO.Socket get socket {
-    if (_socket == null) throw Exception("Socket non initialisé. Appelez connect() d'abord.");
+    if (_socket == null) throw Exception("Socket non initialisé.");
     return _socket!;
   }
 
   bool get isConnected => _socket?.connected ?? false;
 
-  bool isUserOnline(String userId) => _onlineUsers[userId] ?? false;
-
   Future<void> connect(String userId) async {
     final token = await _storage.getToken();
-    // Le serveur attend une room préfixée par 'user_'
+    // CRUCIAL : Doit correspondre à io.to(`user_${recipientId}`) du serveur
     final roomName = "user_$userId"; 
     
     if (_socket != null) {
@@ -39,88 +35,43 @@ class SocketService {
       return;
     }
 
-    debugPrint("🔵 Initialisation Socket pour l'utilisateur: $userId");
     _socket = IO.io(
       ApiConfig.baseUrl,
       IO.OptionBuilder()
         .setTransports(['websocket'])
         .enableAutoConnect()
-        .setReconnectionAttempts(10)
-        .setReconnectionDelay(2000)
         .setAuth({'token': token})
         .build()
     );
 
     _socket!.onConnect((_) {
-      debugPrint('🟢 Connected to socket');
+      debugPrint('🟢 Connecté au socket. Room: $roomName');
       _socket!.emit('join', roomName);
     });
     
-    _socket!.onReconnect((_) {
-      debugPrint('🔄 Reconnected, re-joining room: $roomName');
-      _socket!.emit('join', roomName);
-    });
+    _socket!.onReconnect((_) => _socket!.emit('join', roomName));
+    _socket!.onConnectError((err) => debugPrint('❌ Erreur Socket: $err'));
 
-    _socket!.onConnectError((error) => debugPrint('❌ Socket error: $error'));
-
-    _socket!.on('user_online', (data) {
-      final uId = data['userId']?.toString();
-      final online = data['online'] == true;
-      if (uId != null) {
-        _onlineUsers[uId] = online;
-      }
-    });
-
-    if (!_socket!.connected) _socket!.connect();
+    // Ecoute des messages entrants
+    _socket!.on('new_message', (data) => _onMessageReceived(data));
   }
 
-  void joinRoom(String roomId) {
-    if (_socket != null && _socket!.connected) {
-      // S'assurer que le roomId est aussi au bon format si nécessaire
-      _socket!.emit('join', roomId);
-    }
-  }
-
-  void sendTyping(String conversationId, bool isTyping) {
-    _socket?.emit('typing', {
-      'conversationId': conversationId,
-      'isTyping': isTyping,
-    });
-  }
-
-  VoidCallback onTyping(Function(Map<String, dynamic>) callback) {
-    if (_socket == null) return () {};
-    final handler = (data) => callback(Map<String, dynamic>.from(data));
-    _socket!.on('user_typing', handler);
-    return () => _socket?.off('user_typing', handler);
-  }
+  // Système de callback pour le controller
+  Function(Map<String, dynamic>)? _messageHandler;
 
   VoidCallback onMessage(Function(Map<String, dynamic>) callback) {
-    if (_socket == null) return () {};
+    _messageHandler = callback;
+    return () => _messageHandler = null;
+  }
 
-    final handler = (data) => callback(Map<String, dynamic>.from(data));
-
-    _socket!.on('new_message', handler);
-    _socket!.on('new_request', handler);
-    _socket!.on('request_accepted', (data) => callback({'type': 'request_accepted', ...Map<String, dynamic>.from(data)}));
-    _socket!.on('message_read', (data) => callback({'type': 'message_read', ...Map<String, dynamic>.from(data)}));
-
-    return () {
-      _socket?.off('new_message', handler);
-      _socket?.off('new_request', handler);
-      _socket?.off('request_accepted');
-      _socket?.off('message_read');
-    };
+  void _onMessageReceived(dynamic data) {
+    if (_messageHandler != null) {
+      _messageHandler!(Map<String, dynamic>.from(data));
+    }
   }
 
   void disconnect() {
     _socket?.disconnect();
-    _onlineUsers.clear();
-  }
-
-  void dispose() {
-    disconnect();
-    _socket?.dispose();
-    _socket = null;
+    debugPrint("🔌 Socket déconnecté manuellement");
   }
 }

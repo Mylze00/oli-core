@@ -10,7 +10,7 @@ import 'socket_service.dart';
 class ChatState {
   final bool isLoading;
   final List<Map<String, dynamic>> messages;
-  final String? conversationId; // Stockage de l'ID de conversation
+  final String? conversationId;
   final String? error;
 
   ChatState({this.isLoading = true, this.messages = const [], this.conversationId, this.error});
@@ -44,24 +44,15 @@ class ChatController extends StateNotifier<ChatState> {
 
   Future<void> _init() async {
     await loadMessages();
-    _listenToSocket();
-  }
-
-  void _listenToSocket() {
     _socketCleanup = _socketService.onMessage((data) {
       final incomingConvId = data['conversation_id']?.toString();
       final senderId = data['sender_id']?.toString();
 
-      // Filtrage robuste : par conversationId ou par senderId si la conversation débute
-      bool isRelevant = false;
-      if (state.conversationId != null && incomingConvId != null) {
-        isRelevant = incomingConvId == state.conversationId;
-      } else {
-        isRelevant = (senderId == otherUserId.toString() || senderId == myId.toString());
-      }
+      // Filtrage : On accepte si c'est la même conv ou si ça vient de l'autre utilisateur
+      bool isRelevant = (state.conversationId != null && incomingConvId == state.conversationId) ||
+                        (senderId == otherUserId);
 
       if (isRelevant) {
-        // Mise à jour de l'ID de conversation si c'était le premier message
         if (state.conversationId == null && incomingConvId != null) {
           state = state.copyWith(conversationId: incomingConvId);
         }
@@ -81,45 +72,29 @@ class ChatController extends StateNotifier<ChatState> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List<dynamic> msgs = data['messages'];
-        
-        // On extrait l'ID de conversation depuis la réponse API
-        String? convId;
-        if (msgs.isNotEmpty) {
-          convId = msgs.first['conversation_id']?.toString();
-        }
-
-        state = state.copyWith(
-          messages: List<Map<String, dynamic>>.from(msgs),
-          conversationId: convId,
-          isLoading: false
-        );
+        final convId = msgs.isNotEmpty ? msgs.first['conversation_id']?.toString() : null;
+        state = state.copyWith(messages: List<Map<String, dynamic>>.from(msgs), conversationId: convId, isLoading: false);
       }
     } catch (e) {
-      state = state.copyWith(error: "Erreur: $e", isLoading: false);
+      state = state.copyWith(error: e.toString(), isLoading: false);
     }
   }
 
-  Future<void> sendMessage({required String content, String type = 'text'}) async {
+  Future<void> sendMessage({required String content}) async {
     if (content.trim().isEmpty) return;
     final token = await _storage.getToken();
     try {
-      // Envoi du conversationId pour aider le serveur à router le message
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/chat/messages'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
         body: jsonEncode({
           'recipientId': otherUserId,
-          'conversationId': state.conversationId, 
+          'conversationId': state.conversationId,
           'content': content,
-          'type': type,
+          'type': 'text',
         }),
       );
-    } catch (e) {
-      debugPrint("Erreur envoi: $e");
-    }
+    } catch (e) { debugPrint("Erreur envoi: $e"); }
   }
 
   @override

@@ -18,20 +18,26 @@ void main() {
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
-    @override
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
     final themeMode = ref.watch(themeModeProvider);
 
-    // --- LOGIQUE DE CONNEXION SOCKET ---
-    // On écoute le userProvider. Dès qu'un utilisateur est chargé (non null),
-    // on lance la connexion au Socket.
+    // --- LOGIQUE DE CONNEXION SOCKET OPTIMISÉE ---
+    // On utilise next.whenData pour s'assurer que le code ne s'exécute 
+    // que lorsque les données utilisateur sont réellement disponibles.
     ref.listen(userProvider, (previous, next) {
-      final user = next.value; // On récupère la valeur de l'AsyncValue
-      if (user != null) {
-        debugPrint("🚀 Utilisateur détecté (${user.id}), connexion au Socket...");
-        ref.read(socketServiceProvider).connect(user.id.toString());
-      }
+      next.whenData((user) {
+        if (user != null) {
+          debugPrint("🚀 Utilisateur détecté (${user.id}), connexion au Socket...");
+          // On utilise user.id.toString() pour éviter tout mismatch de type
+          ref.read(socketServiceProvider).connect(user.id.toString());
+        } else {
+          // Si l'utilisateur est null (déconnexion), on ferme le socket
+          debugPrint("🔌 Aucun utilisateur, déconnexion du Socket...");
+          ref.read(socketServiceProvider).disconnect();
+        }
+      });
     });
 
     return MaterialApp(
@@ -56,6 +62,7 @@ class MyApp extends ConsumerWidget {
         ),
       ),
       themeMode: themeMode,
+      // La navigation réagit instantanément à l'état d'authentification
       home: authState.isAuthenticated 
           ? const HomePage() 
           : const LoginPage(),
