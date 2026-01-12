@@ -44,11 +44,21 @@ class ChatController extends StateNotifier<ChatState> {
 
   Future<void> _init() async {
     await loadMessages();
+    
+    // ✅ Attendre que le socket soit vraiment connecté
+    if (!_socketService.isConnected) {
+      debugPrint("⏳ Attente de la connexion Socket...");
+      int attempts = 0;
+      while (!_socketService.isConnected && attempts < 50) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        attempts++;
+      }
+    }
+    
     _socketCleanup = _socketService.onMessage((data) {
       final incomingConvId = data['conversation_id']?.toString();
       final senderId = data['sender_id']?.toString();
 
-      // Filtrage : On accepte si c'est la même conv ou si ça vient de l'autre utilisateur
       bool isRelevant = (state.conversationId != null && incomingConvId == state.conversationId) ||
                         (senderId == otherUserId);
 
@@ -80,20 +90,50 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-Future<void> sendMessage({required String content, String type = 'text'}) async {    if (content.trim().isEmpty) return;
+  Future<void> sendMessage({required String content, String type = 'text'}) async {
+    if (content.trim().isEmpty) return;
     final token = await _storage.getToken();
+    
     try {
-      await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/chat/messages'),
-        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'recipientId': otherUserId,
-          'conversationId': state.conversationId,
-          'content': content,
-          'type': 'text',
-        }),
+      // ✅ Endpoint dynamique selon conversationId
+      final endpoint = state.conversationId == null ? '/chat/send' : '/chat/messages';
+      
+      final body = {
+        'recipientId': otherUserId,
+        'content': content,
+        'type': type,
+        if (state.conversationId != null) 'conversationId': state.conversationId,
+      };
+
+      debugPrint('📤 Envoi vers: $endpoint');
+      
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/chat$endpoint'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
       );
-    } catch (e) { debugPrint("Erreur envoi: $e"); }
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        // ✅ Mettre à jour conversationId si nouveau
+        if (state.conversationId == null && data['conversationId'] != null) {
+          state = state.copyWith(conversationId: data['conversationId']);
+          debugPrint('✅ Nouvelle conversation créée: ${data['conversationId']}');
+        }
+        
+        debugPrint("✅ Message envoyé avec succès");
+      } else {
+        state = state.copyWith(error: "Erreur d'envoi: ${response.statusCode}");
+        debugPrint("❌ Erreur envoi: ${response.body}");
+      }
+    } catch (e) {
+      state = state.copyWith(error: "Erreur: $e");
+      debugPrint("❌ Erreur envoi: $e");
+    }
   }
 
   @override

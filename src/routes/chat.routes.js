@@ -90,6 +90,12 @@ router.post('/send', async (req, res) => {
     const { recipientId, content, type = 'text', productId, metadata, conversationId: existingConvId } = req.body;
     const senderId = req.user.id;
 
+    console.log('\n📨 [/SEND] Nouveau message:');
+    console.log(`   Sender: ${senderId}`);
+    console.log(`   Recipient: ${recipientId}`);
+    console.log(`   Content: ${content.substring(0, 50)}...`);
+    console.log(`   Product: ${productId}`);
+
     try {
         // 1. Gérer la conversation
         let conversationId = existingConvId;
@@ -151,6 +157,12 @@ router.post('/send', async (req, res) => {
 
         const newMessage = msgResult.rows[0];
 
+        console.log(`✅ [BD] Message inséré:`, {
+            id: newMessage.id,
+            conversation_id: newMessage.conversation_id,
+            sender_id: newMessage.sender_id,
+        });
+
         // Objet complet à envoyer via socket
         const socketPayload = {
             ...newMessage,
@@ -162,9 +174,11 @@ router.post('/send', async (req, res) => {
         // 3. ENVOI TEMPS RÉEL (SOCKET.IO)
         const io = req.app.get('io');
         if (io) {
+            console.log(`📡 [SOCKET] Émission new_message vers user_${recipientId}`);
             // Envoyer au destinataire (pour sa liste et son chat)
             io.to(`user_${recipientId}`).emit('new_message', socketPayload);
             io.to(`user_${recipientId}`).emit('new_request', { sender_id: senderId, conversation_id: conversationId });
+            console.log(`📡 [SOCKET] new_request émis vers user_${recipientId}`);
 
             // Envoyer à l'expéditeur (pour mettre à jour SA liste de discussions en temps réel aussi)
             io.to(`user_${senderId}`).emit('new_message', socketPayload);
@@ -193,6 +207,8 @@ router.post('/messages', async (req, res) => {
     let { recipientId } = req.body;
     const senderId = req.user.id;
 
+    console.log(`📨 [/messages] Expéditeur: ${senderId}, Contenu: "${content.substring(0, 50)}..."`);
+
     if (!conversationId || !content) {
         return res.status(400).json({ error: "conversationId et content requis" });
     }
@@ -207,6 +223,8 @@ router.post('/messages', async (req, res) => {
             if (partRes.rows.length > 0) recipientId = partRes.rows[0].user_id;
         }
 
+        console.log(`👤 [/messages] Destinataire: ${recipientId}`);
+
         // 2. Insérer le message en BDD
         const msgResult = await pool.query(
             `INSERT INTO messages (conversation_id, sender_id, content, type, amount, reply_to_id, metadata) 
@@ -215,6 +233,8 @@ router.post('/messages', async (req, res) => {
         );
 
         const newMessage = msgResult.rows[0];
+
+        console.log(`✅ [BD] Message inséré (ID: ${newMessage.id}) dans conversation ${conversationId}`);
 
         // 3. ENVOI TEMPS RÉEL VIA SOCKET.IO (C'est ce qui manquait !)
         const io = req.app.get('io');
@@ -225,8 +245,10 @@ router.post('/messages', async (req, res) => {
                 sender_id: senderId
             };
             // On envoie au destinataire
+            console.log(`📡 [SOCKET] Émission new_message vers user_${recipientId}`);
             io.to(`user_${recipientId}`).emit('new_message', socketPayload);
             // On envoie aussi à l'expéditeur pour confirmer (optionnel mais recommandé pour multi-appareils)
+            console.log(`📡 [SOCKET] Émission new_message vers user_${senderId} (confirmation)`);
             io.to(`user_${senderId}`).emit('new_message', socketPayload);
         }
 

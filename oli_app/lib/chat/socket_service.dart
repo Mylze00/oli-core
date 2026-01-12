@@ -12,13 +12,14 @@ final socketServiceProvider = Provider<SocketService>((ref) {
 class SocketService {
   IO.Socket? _socket;
   final _storage = SecureStorageService();
+  bool _isConnected = false;
   
   IO.Socket get socket {
     if (_socket == null) throw Exception("Socket non initialisé.");
     return _socket!;
   }
 
-  bool get isConnected => _socket?.connected ?? false;
+  bool get isConnected => _isConnected;
 
   Future<void> connect(String userId) async {
     final token = await _storage.getToken();
@@ -45,12 +46,25 @@ class SocketService {
     );
 
     _socket!.onConnect((_) {
+      _isConnected = true;
       debugPrint('🟢 Connecté au socket. Room: $roomName');
       _socket!.emit('join', roomName);
     });
     
-    _socket!.onReconnect((_) => _socket!.emit('join', roomName));
-    _socket!.onConnectError((err) => debugPrint('❌ Erreur Socket: $err'));
+    _socket!.onReconnect((_) {
+      _isConnected = true;
+      _socket!.emit('join', roomName);
+    });
+    
+    _socket!.onDisconnect((_) {
+      _isConnected = false;
+      debugPrint('🔌 Socket déconnecté');
+    });
+    
+    _socket!.onConnectError((err) {
+      _isConnected = false;
+      debugPrint('❌ Erreur Socket: $err');
+    });
 
     // Ecoute des messages entrants
     _socket!.on('new_message', (data) => _onMessageReceived(data));

@@ -41,15 +41,24 @@ io.use((socket, next) => {
     const token = (socket.handshake.auth && socket.handshake.auth.token)
         || socket.handshake.headers.authorization;
 
-    if (!token) return next();
+    if (!token) {
+        console.warn("[SOCKET] Pas de token fourni");
+        return next(new Error("No authentication token"));
+    }
 
     const cleanToken = token.replace("Bearer ", "");
     try {
-        const decoded = jwt.verify(cleanToken, config.JWT_SECRET);
+        const decoded = jwt.verify(cleanToken, config.JWT_SECRET, {
+            ignoreExpiration: false  // ✅ Vérifier l'expiration
+        });
         socket.user = decoded;
+        console.log(`✅ [SOCKET] User ${decoded.id} authentifié`);
         next();
     } catch (err) {
-        console.warn(`[SOCKET] Échec auth : ${err.message}`);
+        console.warn(`❌ [SOCKET] Échec auth : ${err.message}`);
+        if (err.name === 'TokenExpiredError') {
+            return next(new Error("Token expired - please refresh"));
+        }
         next(new Error("Authentication error"));
     }
 });
