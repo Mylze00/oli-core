@@ -7,31 +7,30 @@ import '../core/storage/secure_storage_service.dart';
 import '../core/user/user_provider.dart';
 import 'socket_service.dart';
 
-// --- STATE ---
 class ChatState {
   final bool isLoading;
   final List<Map<String, dynamic>> messages;
+  final String? conversationId; // Stockage de l'ID de conversation
   final String? error;
 
-  ChatState({this.isLoading = true, this.messages = const [], this.error});
+  ChatState({this.isLoading = true, this.messages = const [], this.conversationId, this.error});
 
-  ChatState copyWith({bool? isLoading, List<Map<String, dynamic>>? messages, String? error}) {
+  ChatState copyWith({bool? isLoading, List<Map<String, dynamic>>? messages, String? conversationId, String? error}) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
       messages: messages ?? this.messages,
+      conversationId: conversationId ?? this.conversationId,
       error: error ?? this.error,
     );
   }
 }
 
-// --- PROVIDER ---
 final chatControllerProvider = StateNotifierProvider.family<ChatController, ChatState, String>((ref, otherUserId) {
   final socketService = ref.watch(socketServiceProvider);
   final user = ref.watch(userProvider).value;
   return ChatController(otherUserId, user?.id.toString(), socketService);
 });
 
-// --- CONTROLLER ---
 class ChatController extends StateNotifier<ChatState> {
   final String otherUserId;
   final String? myId;
@@ -50,9 +49,22 @@ class ChatController extends StateNotifier<ChatState> {
 
   void _listenToSocket() {
     _socketCleanup = _socketService.onMessage((data) {
-      // On vérifie si le message appartient à cette conversation
-      final senderId = data['sender_id'].toString();
-      if (senderId == otherUserId || senderId == myId) {
+      final incomingConvId = data['conversation_id']?.toString();
+      final senderId = data['sender_id']?.toString();
+
+      // Filtrage robuste : par conversationId ou par senderId si la conversation débute
+      bool isRelevant = false;
+      if (state.conversationId != null && incomingConvId != null) {
+        isRelevant = incomingConvId == state.conversationId;
+      } else {
+        isRelevant = (senderId == otherUserId.toString() || senderId == myId.toString());
+      }
+
+      if (isRelevant) {
+        // Mise à jour de l'ID de conversation si c'était le premier message
+        if (state.conversationId == null && incomingConvId != null) {
+          state = state.copyWith(conversationId: incomingConvId);
+        }
         state = state.copyWith(messages: [data, ...state.messages]);
       }
     });
@@ -69,13 +81,21 @@ class ChatController extends StateNotifier<ChatState> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List<dynamic> msgs = data['messages'];
+        
+        // On extrait l'ID de conversation depuis la réponse API
+        String? convId;
+        if (msgs.isNotEmpty) {
+          convId = msgs.first['conversation_id']?.toString();
+        }
+
         state = state.copyWith(
           messages: List<Map<String, dynamic>>.from(msgs),
+          conversationId: convId,
           isLoading: false
         );
       }
     } catch (e) {
-      state = state.copyWith(error: "Erreur chargement: $e", isLoading: false);
+      state = state.copyWith(error: "Erreur: $e", isLoading: false);
     }
   }
 
@@ -83,8 +103,7 @@ class ChatController extends StateNotifier<ChatState> {
     if (content.trim().isEmpty) return;
     final token = await _storage.getToken();
     try {
-      // On n'ajoute pas le message localement ici, 
-      // car le Socket le recevra et l'ajoutera via _listenToSocket
+      // Envoi du conversationId pour aider le serveur à router le message
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/chat/messages'),
         headers: {
@@ -93,9 +112,9 @@ class ChatController extends StateNotifier<ChatState> {
         },
         body: jsonEncode({
           'recipientId': otherUserId,
+          'conversationId': state.conversationId, 
           'content': content,
           'type': type,
-          // Ajoute ici le conversationId si tu l'as
         }),
       );
     } catch (e) {

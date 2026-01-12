@@ -72,7 +72,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: _buildAppBar(theme),
       body: Column(
-        children: [
+        children: [                                                           
           Expanded(
             child: chatState.isLoading 
               ? const Center(child: CircularProgressIndicator())
