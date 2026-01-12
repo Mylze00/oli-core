@@ -80,8 +80,7 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  Future<void> sendMessage({required String content}) async {
-    if (content.trim().isEmpty) return;
+Future<void> sendMessage({required String content, String type = 'text'}) async {    if (content.trim().isEmpty) return;
     final token = await _storage.getToken();
     try {
       await http.post(
