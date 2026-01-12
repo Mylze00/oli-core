@@ -207,61 +207,34 @@ router.post('/messages', async (req, res) => {
             if (partRes.rows.length > 0) recipientId = partRes.rows[0].user_id;
         }
 
-        // 2. Vérifier les permissions
-        const check = await canSendMessage(senderId, recipientId);
-        if (!check.allowed) return res.status(403).json({ error: check.error });
-
-        // 3. Auto-accepter la relation si l'autre répond (le destinataire devient actif)
-        // Si je suis l'addressee et que je réponds, status -> accepted
-        await pool.query(`
-            UPDATE friendships 
-            SET status = 'accepted', updated_at = NOW() 
-            WHERE status = 'pending' AND addressee_id = $1 AND requester_id = $2
-        `, [senderId, recipientId]);
-
-        // 4. Insérer le message
-        const msgRes = await pool.query(`
-            INSERT INTO messages (conversation_id, sender_id, type, content, amount, reply_to_id, metadata) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [conversationId, senderId, type || 'text', content, amount || null, replyToId || null, metadata || null]
+        // 2. Insérer le message en BDD
+        const msgResult = await pool.query(
+            `INSERT INTO messages (conversation_id, sender_id, content, type, amount, reply_to_id, metadata) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [conversationId, senderId, content, type || 'text', amount, replyToId, metadata ? JSON.stringify(metadata) : null]
         );
 
-        // 5. Récupérer le statut à jour pour le frontend
-        const relRes = await pool.query(
-            "SELECT status, requester_id FROM friendships WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)",
-            [senderId, recipientId]
-        );
+        const newMessage = msgResult.rows[0];
 
-        let fullMessage = {
-            ...msgRes.rows[0],
-            friendship_status: relRes.rows[0]?.status,
-            requester_id: relRes.rows[0]?.requester_id
-        };
-
-        // 6. Gérer les détails de la réponse (Reply)
-        if (replyToId) {
-            const parentRes = await pool.query("SELECT content, sender_id FROM messages WHERE id = $1", [replyToId]);
-            if (parentRes.rows.length > 0) {
-                fullMessage.reply_to_content = parentRes.rows[0].content;
-                fullMessage.reply_to_sender = parentRes.rows[0].sender_id;
-            }
-        }
-
-        // 7. Mettre à jour le timestamp de la conversation
-        await pool.query("UPDATE conversations SET updated_at = NOW() WHERE id = $1", [conversationId]);
-
-        // 8. Envoi Socket
+        // 3. ENVOI TEMPS RÉEL VIA SOCKET.IO (C'est ce qui manquait !)
         const io = req.app.get('io');
         if (io) {
-            // Broadcast aux deux
-            if (recipientId) io.to(`user_${recipientId}`).emit('new_message', fullMessage);
-            io.to(`user_${senderId}`).emit('new_message', fullMessage);
+            const socketPayload = {
+                ...newMessage,
+                conversation_id: conversationId,
+                sender_id: senderId
+            };
+            // On envoie au destinataire
+            io.to(`user_${recipientId}`).emit('new_message', socketPayload);
+            // On envoie aussi à l'expéditeur pour confirmer (optionnel mais recommandé pour multi-appareils)
+            io.to(`user_${senderId}`).emit('new_message', socketPayload);
         }
 
-        res.json({ message: fullMessage });
+        res.json({ success: true, message: newMessage });
+
     } catch (err) {
-        console.error("Erreur POST /chat/messages:", err);
-        res.status(500).json({ error: "Erreur envoi" });
+        console.error("Erreur envoi message:", err);
+        res.status(500).json({ error: "Erreur lors de l'envoi" });
     }
 });
 
