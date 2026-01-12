@@ -249,18 +249,19 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ),
             ),
             IconButton(
-              icon: Icon(Icons.send, color: theme.colorScheme.primary),
-              onPressed: () {
-                if (_messageController.text.trim().isNotEmpty) {
-                  chatCtrl.sendMessage(content: _messageController.text);
-                  _messageController.clear();
-                  setState(() => _replyMessage = null);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+  icon: Icon(Icons.send, color: theme.colorScheme.primary),
+  onPressed: () {
+    if (_messageController.text.trim().isNotEmpty) {
+      // ON PASSE TOUTES LES INFOS PRODUIT ICI
+      chatCtrl.sendMessage(
+        content: _messageController.text,
+        productId: widget.productId,
+        productName: widget.productName,
+        productImage: widget.productImage,
+        productPrice: widget.productPrice,
+      );
+      _messageController.clear();
+      setState(() => _replyMessage = null);
+    }
+  },
+),

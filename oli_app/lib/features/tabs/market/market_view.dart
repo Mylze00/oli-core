@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // IMPORT TRÈS IMPORTANT :
-import '../../models/product_model.dart'; 
+import '../../../models/product_model.dart'; 
 import 'product_details_page.dart';
 
 class MarketView extends ConsumerStatefulWidget {

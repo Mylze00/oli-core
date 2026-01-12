@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import '../config/api_config.dart';
-import '../core/storage/secure_storage_service.dart';
+import '../../config/api_config.dart';
+import '../../core/storage/secure_storage_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 

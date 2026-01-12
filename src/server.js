@@ -11,7 +11,7 @@ const jwt = require("jsonwebtoken");
 
 // Configuration
 const config = require("./config");
-const pool = require("./config/db");
+
 
 // Routes
 const authRoutes = require("./routes/auth.routes");
@@ -145,48 +145,7 @@ app.use('/uploads', express.static('uploads'));
 // Auth (public)
 app.use("/auth", authRoutes);
 
-// Profil utilisateur
-app.get("/auth/me", requireAuth, async (req, res) => {
-    try {
-        const result = await pool.query(
-            `SELECT id, phone, name, id_oli, wallet, avatar_url, 
-                    is_seller, is_deliverer, rating, reward_points 
-             FROM users WHERE phone = $1`,
-            [req.user.phone]
-        );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: "Utilisateur non trouvé" });
-        }
-
-        const user = result.rows[0];
-        res.json({
-            user: {
-                ...user,
-                wallet: parseFloat(user.wallet || 0).toFixed(2),
-                initial: user.name ? user.name[0].toUpperCase() : "?"
-            }
-        });
-    } catch (err) {
-        console.error("Erreur /auth/me:", err);
-        res.status(500).json({ error: "Erreur base de données" });
-    }
-});
-
-// Upload Avatar
-const { avatarUpload } = require("./config/upload");
-app.post("/auth/upload-avatar", requireAuth, avatarUpload.single('avatar'), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "Pas de fichier" });
-
-    const avatarUrl = req.file.path; // URL Cloudinary
-
-    try {
-        await pool.query("UPDATE users SET avatar_url = $1 WHERE phone = $2", [avatarUrl, req.user.phone]);
-        res.json({ avatar_url: avatarUrl });
-    } catch (err) {
-        res.status(500).json({ error: "Erreur lors de la sauvegarde" });
-    }
-});
 
 app.use("/products", optionalAuth, productsRoutes);
 app.use("/shops", optionalAuth, shopsRoutes);

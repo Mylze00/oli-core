@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../models/product_model.dart';
+import '../../../models/product_model.dart';
 import '../../chat/chat_page.dart';
-import '../../core/user/user_provider.dart';
+import '../../../core/user/user_provider.dart';
 
 class ProductDetailsPage extends ConsumerStatefulWidget {
   final Product product;

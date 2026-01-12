@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'chat_page.dart';
-import '../core/user/user_provider.dart';
-import '../config/api_config.dart';
-import '../core/storage/secure_storage_service.dart';
+import '../../core/user/user_provider.dart';
+import '../../config/api_config.dart';
+import '../../core/storage/secure_storage_service.dart';
 
 class ConversationsPage extends ConsumerStatefulWidget {
   const ConversationsPage({super.key});

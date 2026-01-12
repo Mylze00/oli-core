@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/auth_controller.dart';
-import 'package:oli_app/home/home_page.dart';
+import 'package:oli_app/features/home/home_page.dart';
 
 class OtpPage extends ConsumerStatefulWidget {
   final String phone;

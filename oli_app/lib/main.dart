@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart'; // Ajouté
 import 'features/auth/screens/login_page.dart'; 
 import 'features/auth/providers/auth_controller.dart';
-import 'home/home_page.dart'; 
+import 'features/home/home_page.dart'; 
 import 'theme_provider.dart'; 
-
-// --- CHEMINS CORRIGÉS SELON VOS RÉSULTATS FIND ---
-import 'chat/socket_service.dart'; 
 import 'core/user/user_provider.dart'; 
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(); // Initialisation cruciale
+  
   runApp(
     const ProviderScope(
       child: MyApp(),
@@ -25,19 +26,7 @@ class MyApp extends ConsumerWidget {
     final authState = ref.watch(authControllerProvider);
     final themeMode = ref.watch(themeModeProvider);
 
-    // --- LOGIQUE DE CONNEXION SOCKET ---
-    ref.listen(userProvider, (previous, next) {
-      // Utilisation de whenData pour une gestion propre de l'AsyncValue
-      next.whenData((user) {
-        if (user != null) {
-          debugPrint("🚀 Utilisateur détecté (${user.id}), connexion au Socket...");
-          ref.read(socketServiceProvider).connect(user.id.toString());
-        } else {
-          debugPrint("🔌 Déconnexion du Socket (Utilisateur null)");
-          ref.read(socketServiceProvider).disconnect();
-        }
-      });
-    });
+    // Note: La logique Socket a été supprimée car Firestore gère le temps réel lui-même
 
     return MaterialApp(
       title: 'Oli App',
