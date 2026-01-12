@@ -26,10 +26,11 @@ async function sendOtp(phone, expiresMinutes = 5) {
     // 3. Sauvegarder en base de données via le repository
     await userRepo.saveOtp(user.id, otpCode, expiresAt);
 
-    // ⚠️ LOG DEV : Très utile pour tester sans SMS réel
-    console.log(`[OTP SERVICE] 📩 Code généré pour ${phone} : ${otpCode} (Expire à : ${expiresAt.toLocaleTimeString()})`);
+    // ✅ Logs pour le débogage
+    console.log(`✅ [OTP] Code généré: ${otpCode} pour ${phone}`);
+    console.log(`⏱️ [OTP] Expire à: ${expiresAt.toLocaleTimeString()}`);
 
-    return { user, otpCode };
+    return { user, otpCode };  // 👈 Retourner le code aussi
   } catch (error) {
     console.error("[OTP SERVICE] Erreur dans sendOtp:", error);
     throw error;

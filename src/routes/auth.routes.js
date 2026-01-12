@@ -28,12 +28,18 @@ router.post("/send-otp", async (req, res) => {
     }
 
     console.log("📩 SEND OTP:", cleanPhone);
-    await otpService.sendOtp(cleanPhone);
+    const { user, otpCode } = await otpService.sendOtp(cleanPhone);
+
+    // ⚡ Afficher le code en réponse pour les tests
+    console.log(`✅ OTP GÉNÉRÉ: ${otpCode} pour ${cleanPhone}`);
 
     return res.json({
       message: "Code OTP envoyé",
-      // En mode sandbox, on pourrait retourner le code pour les tests
-      // otp: process.env.NODE_ENV === 'development' ? otpCode : undefined
+      otp: otpCode,  // 👈 Retourner le code pour les tests
+      user: {
+        id: user.id,
+        phone: user.phone
+      }
     });
 
   } catch (e) {
