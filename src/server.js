@@ -22,6 +22,7 @@ const shopsRoutes = require("./routes/shops.routes");
 const walletRoutes = require("./routes/wallet.routes");
 const deliveryRoutes = require("./routes/delivery.routes");
 const userRoutes = require("./routes/user.routes");
+const adminRoutes = require("./routes/admin.routes"); // ✨ Routes admin
 const { requireAuth, optionalAuth } = require("./middlewares/auth.middleware");
 
 const app = express();
@@ -156,6 +157,7 @@ app.use("/delivery", requireAuth, deliveryRoutes);
 app.use("/chat", requireAuth, chatRoutes);
 app.use("/user", requireAuth, userRoutes);
 app.use("/addresses", requireAuth, require('./routes/address.routes'));
+app.use("/admin", adminRoutes); // ✨ Routes admin (protection dans admin.routes.js)
 
 // Health check
 app.get("/health", (req, res) => {
