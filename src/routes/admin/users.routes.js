@@ -69,8 +69,24 @@ router.get('/:id', async (req, res) => {
             SELECT COUNT(*) as count FROM products WHERE seller_id = $1
         `, [id]);
 
+        // Historique des transactions (si la table existe)
+        let transactions = [];
+        try {
+            const txResult = await pool.query(`
+                SELECT * FROM transactions 
+                WHERE user_id = $1 
+                ORDER BY created_at DESC 
+                LIMIT 50
+            `, [id]);
+            transactions = txResult.rows;
+        } catch (err) {
+            console.warn("Table transactions non trouvée ou erreur:", err.message);
+            // On ignore l'erreur pour ne pas bloquer l'affichage du user
+        }
+
         res.json({
             user: userResult.rows[0],
+            transactions: transactions,
             stats: {
                 products_count: parseInt(productsCount.rows[0].count)
             }
