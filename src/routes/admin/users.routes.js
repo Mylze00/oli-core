@@ -169,4 +169,90 @@ router.post('/:id/suspend', async (req, res) => {
     }
 });
 
+/**
+ * GET /admin/users/:id/products
+ * Récupérer les produits d'un utilisateur
+ */
+router.get('/:id/products', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT * FROM products 
+            WHERE seller_id = $1 
+            ORDER BY created_at DESC
+        `, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Erreur GET /admin/users/:id/products:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * POST /admin/users/:id/message
+ * Envoyer un message interne à l'utilisateur (Chat)
+ */
+router.post('/:id/message', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id: targetUserId } = req.params;
+        const { content } = req.body;
+        const adminId = req.user.id; // L'admin connecté
+
+        if (!content) return res.status(400).json({ error: 'Message vide' });
+
+        await client.query('BEGIN');
+
+        // 1. Chercher une conversation existante entre ces deux users
+        // On cherche une conversation où les deux users sont participants
+        const findConvQuery = `
+            SELECT cp1.conversation_id 
+            FROM conversation_participants cp1
+            JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+            WHERE cp1.user_id = $1 AND cp2.user_id = $2
+            LIMIT 1
+        `;
+        let convResult = await client.query(findConvQuery, [adminId, targetUserId]);
+
+        let conversationId;
+
+        if (convResult.rows.length > 0) {
+            conversationId = convResult.rows[0].conversation_id;
+        } else {
+            // 2. Créer nouvelle conversation si inexistante
+            const newConv = await client.query(`
+                INSERT INTO conversations (created_at, updated_at) VALUES (NOW(), NOW()) RETURNING id
+            `);
+            conversationId = newConv.rows[0].id;
+
+            // Ajouter les participants
+            await client.query(`
+                INSERT INTO conversation_participants (conversation_id, user_id, joined_at)
+                VALUES ($1, $2, NOW()), ($1, $3, NOW())
+            `, [conversationId, adminId, targetUserId]);
+        }
+
+        // 3. Insérer le message
+        const insertMsg = await client.query(`
+            INSERT INTO messages (conversation_id, sender_id, content, type, created_at, is_read)
+            VALUES ($1, $2, $3, 'text', NOW(), false)
+            RETURNING *
+        `, [conversationId, adminId, content]);
+
+        // 4. Mettre à jour la date de la conversation
+        await client.query(`UPDATE conversations SET updated_at = NOW() WHERE id = $1`, [conversationId]);
+
+        await client.query('COMMIT');
+
+        res.json({ success: true, message: insertMsg.rows[0] });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Erreur POST /admin/users/:id/message:', err);
+        res.status(500).json({ error: 'Erreur envoi message' });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

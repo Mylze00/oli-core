@@ -21,6 +21,19 @@ Ce plan vise à améliorer la maintenabilité du projet en appliquant les recomm
 #### 3. Standardisation
 - [RENAME] `src/routes/shop.routes.js` -> `src/routes/shops.routes.js` (si applicable, ou vérifier l'usage). *Note: L'audit a révélé deux fichiers: `shop.routes.js` et `shops.routes.js`. Il faudra vérifier si c'est un doublon.*
 
+## Proposed Changes
+
+### [Backend] Database Schema
+#### [NEW] [create_transactions_and_points.sql](file:///wsl.localhost/Ubuntu/home/paolice-mylze/oli-core/src/scripts/create_transactions_and_points.sql)
+- Added `reward_points` column to `users` table.
+- Created `transactions` table (id, user_id, type, amount, description, status, created_at).
+
+### [Backend] API Routes
+#### [MODIFY] src/routes/admin/users.routes.js
+- [NEW] `POST /:id/suspend`: Block/Unblock user.
+- [NEW] `GET /:id/products`: Get user's published products.
+- [NEW] `POST /:id/message`: Send internal Oli message (start/continue conversation).
+
 ## Frontend Restructuring (`oli_app`)
 
 ### Objectifs

@@ -27,6 +27,60 @@ function TabButton({ label, active, onClick }) {
     );
 }
 
+// Sous-composant pour lister les produits
+function UserProducts({ userId }) {
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                const { data } = await api.get(`/admin/users/${userId}/products`);
+                setProducts(data);
+            } catch (error) {
+                console.error("Erreur loading user products", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProducts();
+    }, [userId]);
+
+    if (loading) return <div className="p-4 text-center">Chargement des produits...</div>;
+
+    if (products.length === 0) {
+        return <div className="p-8 text-center text-gray-500 bg-white rounded shadow-sm border border-gray-100">Aucun produit mis en vente par cet utilisateur.</div>;
+    }
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {products.map(product => (
+                <div key={product.id} className="bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
+                    <div className="h-40 bg-gray-100 relative">
+                        <img
+                            src={getImageUrl(product.image_url)}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => e.target.src = 'https://via.placeholder.com/300?text=No+Image'}
+                        />
+                        <span className={`absolute top-2 right-2 px-2 py-1 text-xs rounded-full ${product.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                            {product.status}
+                        </span>
+                    </div>
+                    <div className="p-3">
+                        <h4 className="font-bold text-gray-900 truncate">{product.name}</h4>
+                        <div className="flex justify-between items-center mt-2">
+                            <span className="text-blue-600 font-bold">{product.price} $</span>
+                            <span className="text-xs text-gray-500">{new Date(product.created_at).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export default function UserDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -161,24 +215,43 @@ export default function UserDetail() {
 
                     {/* Actions Buttons */}
                     <div className="flex gap-3 mt-4 md:mt-0">
-                        <a
-                            href={`sms:${user.phone}`}
+                        <button
+                            onClick={async () => {
+                                const msg = prompt("Message à envoyer à " + user.name + " :");
+                                if (msg && msg.trim()) {
+                                    try {
+                                        await api.post(`/admin/users/${user.id}/message`, { content: msg });
+                                        alert("Message envoyé sur la messagerie Oli !");
+                                    } catch (err) {
+                                        console.error(err);
+                                        alert("Erreur lors de l'envoi");
+                                    }
+                                }
+                            }}
                             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded shadow-sm hover:bg-blue-700 transition"
                         >
                             <EnvelopeIcon className="h-4 w-4 mr-2" />
-                            Envoyer Message
-                        </a>
+                            Envoyer Message (Oli)
+                        </button>
                         <button
-                            onClick={() => {
-                                if (window.confirm('Voulez-vous vraiment BLOQUER cet utilisateur ?')) {
-                                    // TODO: Call API /admin/users/:id/block
-                                    alert('Utilisateur bloqué (Simulation)');
+                            onClick={async () => {
+                                if (window.confirm(user.is_active ? 'Voulez-vous vraiment BLOQUER cet utilisateur ?' : 'Voulez-vous DÉBLOQUER cet utilisateur ?')) {
+                                    try {
+                                        await api.post(`/admin/users/${user.id}/suspend`, { suspended: user.is_active }); // Si actif, on suspend (true)
+                                        setUser({ ...user, is_active: !user.is_active });
+                                        alert(user.is_active ? 'Utilisateur bloqué avec succès' : 'Utilisateur débloqué');
+                                    } catch (err) {
+                                        console.error(err);
+                                        alert("Erreur lors de l'action");
+                                    }
                                 }
                             }}
-                            className="flex items-center px-4 py-2 bg-red-600 text-white rounded shadow-sm hover:bg-red-700 transition"
+                            className={`flex items-center px-4 py-2 text-white rounded shadow-sm transition ${user.is_active
+                                ? 'bg-red-600 hover:bg-red-700'
+                                : 'bg-green-600 hover:bg-green-700'}`}
                         >
                             <NoSymbolIcon className="h-4 w-4 mr-2" />
-                            BLOQUER COMPTE
+                            {user.is_active ? 'BLOQUER COMPTE' : 'DÉBLOQUER'}
                         </button>
                     </div>
                 </div>
@@ -263,12 +336,27 @@ export default function UserDetail() {
                 </div>
             )}
 
-            {/* Placeholder pour autres onglets */}
-            {activeTab !== 'finance' && (
-                <div className="bg-white p-12 rounded-lg text-center text-gray-500 border border-gray-100 border-dashed">
-                    Contenu de l'onglet <strong>{activeTab}</strong> en cours de dévelopement...
-                </div>
-            )}
         </div>
+    )
+}
+
+{/* Onglet Marketplace (Produits) */ }
+{
+    activeTab === 'marketplace' && (
+        <div>
+            <UserProducts userId={id} />
+        </div>
+    )
+}
+
+{/* Placeholder pour autres onglets non implémentés */ }
+{
+    activeTab !== 'finance' && activeTab !== 'marketplace' && (
+        <div className="bg-white p-12 rounded-lg text-center text-gray-500 border border-gray-100 border-dashed">
+            Contenu de l'onglet <strong>{activeTab}</strong> en cours de développement...
+        </div>
+    )
+}
+        </div >
     );
 }
