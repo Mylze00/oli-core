@@ -32,7 +32,18 @@ router.get('/', async (req, res) => {
         let query = `
             SELECT o.*,
                    u.name as buyer_name,
-                   u.phone as buyer_phone
+                   u.phone as buyer_phone,
+                   (
+                       SELECT json_agg(json_build_object(
+                           'product_id', oi.product_id,
+                           'quantity', oi.quantity,
+                           'price', oi.price,
+                           'product_name', p.name
+                       ))
+                       FROM order_items oi
+                       JOIN products p ON oi.product_id = p.id
+                       WHERE oi.order_id = o.id
+                   ) as items
             FROM orders o
             JOIN users u ON o.buyer_id = u.id
             WHERE 1=1
