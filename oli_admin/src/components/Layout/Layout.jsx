@@ -4,12 +4,14 @@ import Header from './Header';
 
 export default function Layout() {
     return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-slate-50 flex">
             <Sidebar />
-            <Header />
-            <main className="ml-64 p-8">
-                <Outlet />
-            </main>
+            <div className="flex-1 ml-64">
+                <Header />
+                <main className="p-8">
+                    <Outlet />
+                </main>
+            </div>
         </div>
     );
 }

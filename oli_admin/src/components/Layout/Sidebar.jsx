@@ -55,7 +55,7 @@ export default function Sidebar() {
                                 isActive
                                     ? 'bg-gray-800 text-white border-l-4 border-blue-500'
                                     : 'text-gray-400 hover:bg-gray-800 hover:text-white',
-                                'group flex items-center px-4 py-3 text-sm font-medium rounded-r-md transition-all duration-200'
+                                'group flex items-center px-4 py-3 text-sm font-medium rounded-r-md transition-all duration-200 cursor-pointer relative z-30'
                             )}
                         >
                             <item.icon

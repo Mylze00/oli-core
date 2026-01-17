@@ -28,7 +28,7 @@ function TabButton({ label, active, onClick }) {
 }
 
 // Sous-composant pour lister les produits
-function UserProducts({ userId }) {
+function UserProducts({ userId, limit }) {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -36,7 +36,7 @@ function UserProducts({ userId }) {
         const fetchProducts = async () => {
             try {
                 const { data } = await api.get(`/admin/users/${userId}/products`);
-                setProducts(data);
+                setProducts(limit ? data.slice(0, limit) : data);
             } catch (error) {
                 console.error("Erreur loading user products", error);
             } finally {
@@ -44,7 +44,7 @@ function UserProducts({ userId }) {
             }
         };
         fetchProducts();
-    }, [userId]);
+    }, [userId, limit]);
 
     if (loading) return <div className="p-4 text-center">Chargement des produits...</div>;
 
@@ -84,7 +84,7 @@ function UserProducts({ userId }) {
 export default function UserDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('finance');
+    const [activeTab, setActiveTab] = useState('overview');
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -269,6 +269,35 @@ export default function UserDetail() {
             </div>
 
             {/* Contenu Onglets */}
+            {activeTab === 'overview' && (
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                            <h3 className="text-sm font-medium text-gray-500 uppercase">Solde Wallet</h3>
+                            <p className="mt-2 text-2xl font-bold text-gray-900">{user.wallet_balance.toLocaleString()} FC</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                            <h3 className="text-sm font-medium text-gray-500 uppercase">Points Fidelity</h3>
+                            <p className="mt-2 text-2xl font-bold text-gray-900">{user.reward_points} Pts</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                            <h3 className="text-sm font-medium text-gray-500 uppercase">Produits en vente</h3>
+                            <p className="mt-2 text-2xl font-bold text-gray-900">{user.stats?.products_count || 0}</p>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-gray-900">Aperçu du Marketplace</h3>
+                            <button onClick={() => setActiveTab('marketplace')} className="text-blue-600 text-sm font-medium hover:underline">
+                                Voir tout
+                            </button>
+                        </div>
+                        <UserProducts userId={id} limit={4} />
+                    </div>
+                </div>
+            )}
+
             {activeTab === 'finance' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -335,28 +364,19 @@ export default function UserDetail() {
 
                 </div>
             )}
+            {/* Onglet Marketplace (Produits) */}
+            {activeTab === 'marketplace' && (
+                <div>
+                    <UserProducts userId={id} />
+                </div>
+            )}
 
+            {/* Placeholder pour autres onglets non implémentés */}
+            {activeTab !== 'finance' && activeTab !== 'marketplace' && (
+                <div className="bg-white p-12 rounded-lg text-center text-gray-500 border border-gray-100 border-dashed">
+                    Contenu de l'onglet <strong>{activeTab}</strong> en cours de développement...
+                </div>
+            )}
         </div>
-    )
-}
-
-{/* Onglet Marketplace (Produits) */ }
-{
-    activeTab === 'marketplace' && (
-        <div>
-            <UserProducts userId={id} />
-        </div>
-    )
-}
-
-{/* Placeholder pour autres onglets non implémentés */ }
-{
-    activeTab !== 'finance' && activeTab !== 'marketplace' && (
-        <div className="bg-white p-12 rounded-lg text-center text-gray-500 border border-gray-100 border-dashed">
-            Contenu de l'onglet <strong>{activeTab}</strong> en cours de développement...
-        </div>
-    )
-}
-        </div >
     );
 }
