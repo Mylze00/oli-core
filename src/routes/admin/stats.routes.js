@@ -73,9 +73,10 @@ router.get('/revenue', async (req, res) => {
             SELECT 
                 DATE(created_at) as date,
                 COUNT(*) as orders_count,
-                0 as revenue
-            FROM products
+                COALESCE(SUM(total_amount), 0) as revenue
+            FROM orders
             WHERE created_at >= NOW() - INTERVAL '${days} days'
+            AND status != 'cancelled'
             GROUP BY DATE(created_at)
             ORDER BY date ASC
         `);
