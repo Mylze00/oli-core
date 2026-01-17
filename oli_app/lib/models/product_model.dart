@@ -189,5 +189,62 @@ class MarketNotifier extends StateNotifier<List<Product>> {
   }
 }
 
+/// Notifier pour les produits mis en avant (Featured) - Page Accueil
+class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
+  Timer? _refreshTimer;
+  bool _isLoading = false;
+  String? _error;
+
+  FeaturedProductsNotifier() : super([]) {
+    fetchFeaturedProducts();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) => fetchFeaturedProducts());
+  }
+
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> fetchFeaturedProducts() async {
+    _isLoading = true;
+    _error = null;
+
+    try {
+      final featuredUrl = ApiConfig.products.replaceAll('/products', '/products/featured');
+      final uri = Uri.parse(featuredUrl);
+      final response = await http.get(uri);
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final newProducts = data.map((item) => Product.fromJson(item)).toList();
+        
+        if (newProducts.isNotEmpty) {
+          debugPrint("✅ ${newProducts.length} produits featured chargés");
+        } else {
+          debugPrint("⚠️ Aucun produit featured");
+        }
+
+        state = newProducts;
+        _error = null;
+      } else {
+        _error = "Erreur serveur: ${response.statusCode}";
+        debugPrint("❌ Erreur fetchFeaturedProducts: ${response.statusCode}");
+      }
+    } catch (e) {
+      _error = "Erreur réseau: $e";
+      debugPrint("❌ Exception fetchFeaturedProducts: $e");
+    } finally {
+      _isLoading = false;
+    }
+  }
+}
+
 /// Provider global pour les produits du marketplace
 final marketProductsProvider = StateNotifierProvider<MarketNotifier, List<Product>>((ref) => MarketNotifier());
+
+/// Provider pour les produits featured (page Accueil uniquement)
+final featuredProductsProvider = StateNotifierProvider<FeaturedProductsNotifier, List<Product>>((ref) => FeaturedProductsNotifier());

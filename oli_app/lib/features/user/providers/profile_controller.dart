@@ -47,10 +47,15 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
         await _ref.read(authControllerProvider.notifier).fetchUserProfile();
         state = const AsyncValue.data(null);
       } else {
-        throw Exception("Échec de l'upload");
+        final errorMsg = response.data is Map ? response.data['error'] : "Échec de l'upload";
+        throw Exception(errorMsg);
       }
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      String message = e.toString();
+      if (e is DioException && e.response?.data != null) {
+        message = e.response?.data['error'] ?? message;
+      }
+      state = AsyncValue.error(message, st);
     }
   }
 
@@ -58,7 +63,7 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
     final trimmedName = newName.trim();
     if (trimmedName.isEmpty || trimmedName.length < 2) {
       state = AsyncValue.error(
-        Exception("Le nom doit contenir au moins 2 caractères"),
+        "Le nom doit contenir au moins 2 caractères",
         StackTrace.current,
       );
       return;
@@ -85,19 +90,23 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
       if (response.statusCode == 200) {
         // Confirmation (Optionnel, au cas où le serveur a normalisé le nom)
         final serverData = response.data;
-        if (serverData is Map && serverData['name'] != null) {
-           _ref.read(authControllerProvider.notifier).updateUserData({'name': serverData['name']});
+        if (serverData is Map && serverData['user'] != null && serverData['user']['name'] != null) {
+           _ref.read(authControllerProvider.notifier).updateUserData({'name': serverData['user']['name']});
         }
         state = const AsyncValue.data(null);
       } else {
-        // Revert en cas d'erreur (idéalement)
-        // Pour l'instant on throw, l'utilisateur le verra
-        throw Exception("Échec de la mise à jour du nom");
+        final errorMsg = response.data is Map ? response.data['error'] : "Échec de la mise à jour";
+        throw Exception(errorMsg);
       }
     } catch (e, st) {
-      // En cas d'erreur, on devrait peut-être re-fetch le profil réel pour annuler l'optimistic update
+      // Re-fetch le profil réel pour annuler l'optimistic update en cas d'erreur
       _ref.read(authControllerProvider.notifier).fetchUserProfile();
-      state = AsyncValue.error(e, st);
+      
+      String message = e.toString();
+      if (e is DioException && e.response?.data != null) {
+        message = e.response?.data['error'] ?? message;
+      }
+      state = AsyncValue.error(message, st);
     }
   }
 

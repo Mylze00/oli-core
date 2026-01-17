@@ -9,6 +9,23 @@ final addressProvider = StateNotifierProvider<AddressNotifier, AsyncValue<List<A
   return AddressNotifier();
 });
 
+// Provider pour obtenir l'adresse par défaut uniquement
+final defaultAddressProvider = Provider<Address?>((ref) {
+  final addresses = ref.watch(addressProvider);
+  return addresses.when(
+    data: (list) {
+      if (list.isEmpty) return null;
+      try {
+        return list.firstWhere((a) => a.isDefault);
+      } catch (_) {
+        return list.first;
+      }
+    },
+    loading: () => null,
+    error: (_, __) => null,
+  );
+});
+
 class AddressNotifier extends StateNotifier<AsyncValue<List<Address>>> {
   AddressNotifier() : super(const AsyncValue.loading());
   

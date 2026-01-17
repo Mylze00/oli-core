@@ -28,19 +28,18 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   };
 
   void _onSearch(String value) {
-    if (value.trim().isNotEmpty) {
-      ref.read(marketProductsProvider.notifier).fetchProducts(search: value);
-    } else {
-      // Si vide, on reset
-      ref.read(marketProductsProvider.notifier).fetchProducts();
-    }
+    // Featured products ne sont pas filtrables - ce sont des produits mis en avant par l'admin
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Les produits mis en avant ne sont pas filtrables"))
+    );
   }
 
   void _onCategorySelected(String label) {
     setState(() => _selectedCategory = label);
-    final apiCat = _categories[label];
-    // Si apiCat est vide, on envoie null pour tout récupérer, ou "" selon l'implémentation de fetchProducts
-    ref.read(marketProductsProvider.notifier).fetchProducts(category: apiCat == "" ? null : apiCat);
+    // Featured products ne sont pas filtrables par catégorie
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Utilisez l'onglet Marché pour filtrer par catégorie"))
+    );
   }
 
   void _navigateToProduct(Product product) {
@@ -49,7 +48,8 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
 
   @override
   Widget build(BuildContext context) {
-    final products = ref.watch(marketProductsProvider);
+    // ✨ Utiliser featuredProductsProvider pour afficher uniquement les produits admin
+    final products = ref.watch(featuredProductsProvider);
     final authState = ref.watch(authControllerProvider);
     // On ne les utilise pas directement ici mais c'est dispo si besoin
     // final userName = authState.userData?['name'] ?? "Utilisateur";

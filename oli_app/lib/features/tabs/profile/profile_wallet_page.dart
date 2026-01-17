@@ -7,6 +7,7 @@ import '../../user/providers/user_activity_provider.dart';
 import '../../user/widgets/edit_name_dialog.dart';
 import '../../user/widgets/visited_products_section.dart';
 import '../../user/screens/addresses_page.dart';
+import '../../user/providers/address_provider.dart';
 import '../../wallet/providers/wallet_provider.dart';
 import '../../wallet/screens/wallet_screen.dart';
 
@@ -35,12 +36,14 @@ class ProfileAndWalletPage extends ConsumerWidget {
     final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDarkMode ? Colors.white : Colors.black87;
 
-    // Load wallet data and visited products
+    // Load wallet data, visited products and addresses
     ref.listen(authControllerProvider, (prev, next) {
       if (next.isAuthenticated) {
         Future.microtask(() {
           ref.read(walletProvider.notifier).loadWalletData();
           ref.read(userActivityProvider.notifier).fetchVisitedProducts();
+          final notifier = ref.read(addressProvider.notifier);
+          if (notifier.mounted) notifier.loadAddresses();
         });
       }
     });
@@ -56,6 +59,8 @@ class ProfileAndWalletPage extends ConsumerWidget {
           await ref.read(authControllerProvider.notifier).fetchUserProfile();
           await ref.read(walletProvider.notifier).loadWalletData();
           await ref.read(userActivityProvider.notifier).fetchVisitedProducts();
+          final notifier = ref.read(addressProvider.notifier);
+          if (notifier.mounted) await notifier.loadAddresses();
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -162,6 +167,33 @@ class ProfileAndWalletPage extends ConsumerWidget {
                                   ],
                                 ],
                               ),
+                              const SizedBox(height: 8),
+                              // Default Address Display
+                              Consumer(
+                                builder: (context, ref, child) {
+                                  final defaultAddr = ref.watch(defaultAddressProvider);
+                                  if (defaultAddr != null) {
+                                    return Row(
+                                      children: [
+                                        const Icon(Icons.location_on, color: Colors.white70, size: 12),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            defaultAddr.fullAddress,
+                                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }
+                                  return const Text(
+                                    "Pas d'adresse enregistrée",
+                                    style: TextStyle(color: Colors.white38, fontSize: 11, fontStyle: FontStyle.italic),
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ),
@@ -238,105 +270,103 @@ class ProfileAndWalletPage extends ConsumerWidget {
                 ),
               ),
 
-
-            // 2. MY ORDERS (Alibaba Row)
-            Transform.translate(
-              offset: const Offset(0, -20),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("Mes Commandes", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
-                          GestureDetector(
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchasesPage())),
-                            child: Row(
-                              children: [
-                                Text("Tout voir", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                                Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey[600]),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildOrderIcon(Icons.payment, "Non Payé", textColor),
-                          _buildOrderIcon(Icons.inventory_2_outlined, "À expédier", textColor),
-                          _buildOrderIcon(Icons.local_shipping_outlined, "À recevoir", textColor),
-                            _buildOrderIcon(Icons.rate_review_outlined, "À noter", textColor),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // 2.5 VISITED PRODUCTS SECTION
-            const VisitedProductsSection(),
-            const SizedBox(height: 16),
-
-            // 3. WALLET & TOOLS GRID
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: [
-                  // Services Grid
-                  Container(
+              // 2. MY ORDERS (Alibaba Row)
+              Transform.translate(
+                offset: const Offset(0, -20),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
                     decoration: BoxDecoration(
                       color: cardColor,
                       borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                      ],
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                         Padding(
-                           padding: const EdgeInsets.only(left: 16, bottom: 12),
-                           child: Text("Mes Outils", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
-                         ),
-                        Wrap(
-                          spacing: 0,
-                          runSpacing: 20,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            _buildGridItem(Icons.favorite_border, "Favoris", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage()))),
-                            _buildGridItem(Icons.add_circle_outline, "Vendre", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PublishArticlePage()))),
-                            _buildGridItem(Icons.credit_card, "Cartes", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsPage()))),
-                            _buildGridItem(Icons.location_on_outlined, "Adresses", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesPage()))), 
-                            _buildGridItem(Icons.help_outline, "Aide", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPage()))),
-                            _buildGridItem(Icons.info_outline, "À propos", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutPage()))),
-                            _buildGridItem(Icons.logout, "Déconnexion", Colors.redAccent, () async {
-                              await ref.read(authControllerProvider.notifier).logout();
-                              // Navigation handled by auth state change usually, or simple push
-                              if (context.mounted) Navigator.of(context).pushReplacementNamed('/login');
-                            }),
+                            Text("Mes Commandes", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+                            GestureDetector(
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchasesPage())),
+                              child: Row(
+                                children: [
+                                  Text("Tout voir", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                  Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey[600]),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildOrderIcon(Icons.payment, "Non Payé", textColor),
+                            _buildOrderIcon(Icons.inventory_2_outlined, "À expédier", textColor),
+                            _buildOrderIcon(Icons.local_shipping_outlined, "À recevoir", textColor),
+                            _buildOrderIcon(Icons.rate_review_outlined, "À noter", textColor),
                           ],
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 30),
-          ],
+
+              // 2.5 VISITED PRODUCTS SECTION
+              const VisitedProductsSection(),
+              const SizedBox(height: 16),
+
+              // 3. WALLET & TOOLS GRID
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    // Services Grid
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 16, bottom: 12),
+                            child: Text("Mes Outils", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+                          ),
+                          Wrap(
+                            spacing: 0,
+                            runSpacing: 20,
+                            children: [
+                              _buildGridItem(Icons.favorite_border, "Favoris", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage()))),
+                              _buildGridItem(Icons.add_circle_outline, "Vendre", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PublishArticlePage()))),
+                              _buildGridItem(Icons.credit_card, "Cartes", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsPage()))),
+                              _buildGridItem(Icons.location_on_outlined, "Adresses", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesPage()))), 
+                              _buildGridItem(Icons.help_outline, "Aide", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPage()))),
+                              _buildGridItem(Icons.info_outline, "À propos", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutPage()))),
+                              _buildGridItem(Icons.logout, "Déconnexion", Colors.redAccent, () async {
+                                await ref.read(authControllerProvider.notifier).logout();
+                                if (context.mounted) Navigator.of(context).pushReplacementNamed('/login');
+                              }),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -387,10 +417,8 @@ class ProfileAndWalletPage extends ConsumerWidget {
   }
   
   Widget _buildGridItem(IconData icon, String label, Color color, VoidCallback onTap) {
-    // 4 items par ligne (width / 4)
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Largeur approx
         final width = MediaQuery.of(context).size.width / 4 - 10;
         return GestureDetector(
           onTap: onTap,

@@ -105,8 +105,29 @@ exports.updateProfile = async (req, res) => {
     }
 
     try {
+        // 1. Vérifier la limite de mise à jour (1 fois par 30 jours)
+        const userCheck = await pool.query(
+            'SELECT last_profile_update FROM users WHERE phone = $1',
+            [req.user.phone]
+        );
+
+        if (userCheck.rows.length > 0) {
+            const lastUpdate = userCheck.rows[0].last_profile_update;
+            if (lastUpdate) {
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                if (new Date(lastUpdate) > thirtyDaysAgo) {
+                    return res.status(403).json({
+                        error: "Vous ne pouvez modifier votre profil qu'une fois par mois"
+                    });
+                }
+            }
+        }
+
+        // 2. Mettre à jour le profil avec la nouvelle colonne
         const result = await pool.query(
-            "UPDATE users SET name = $1, updated_at = NOW() WHERE phone = $2 RETURNING *",
+            "UPDATE users SET name = $1, last_profile_update = NOW(), updated_at = NOW() WHERE phone = $2 RETURNING *",
             [name, req.user.phone]
         );
 
