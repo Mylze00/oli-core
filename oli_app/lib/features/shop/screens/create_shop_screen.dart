@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -17,8 +17,13 @@ class _CreateShopScreenState extends ConsumerState<CreateShopScreen> {
   final _descCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
   String _category = 'Général';
-  File? _logo;
-  File? _banner;
+  
+  XFile? _logo;
+  Uint8List? _logoBytes;
+  
+  XFile? _banner;
+  Uint8List? _bannerBytes;
+  
   bool _isLoading = false;
 
   final List<String> _categories = [
@@ -29,11 +34,14 @@ class _CreateShopScreenState extends ConsumerState<CreateShopScreen> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
+      final bytes = await picked.readAsBytes();
       setState(() {
         if (isLogo) {
-          _logo = File(picked.path);
+          _logo = picked;
+          _logoBytes = bytes;
         } else {
-          _banner = File(picked.path);
+          _banner = picked;
+          _bannerBytes = bytes;
         }
       });
     }
@@ -86,11 +94,11 @@ class _CreateShopScreenState extends ConsumerState<CreateShopScreen> {
                   decoration: BoxDecoration(
                     color: Colors.grey[200],
                     borderRadius: BorderRadius.circular(8),
-                    image: _banner != null 
-                      ? DecorationImage(image: FileImage(_banner!), fit: BoxFit.cover)
+                    image: _bannerBytes != null 
+                      ? DecorationImage(image: MemoryImage(_bannerBytes!), fit: BoxFit.cover)
                       : null,
                   ),
-                  child: _banner == null 
+                  child: _bannerBytes == null 
                     ? const Center(child: Icon(Icons.add_photo_alternate, size: 40))
                     : null,
                 ),
@@ -102,8 +110,8 @@ class _CreateShopScreenState extends ConsumerState<CreateShopScreen> {
                   child: CircleAvatar(
                     radius: 40,
                     backgroundColor: Colors.grey[300],
-                    backgroundImage: _logo != null ? FileImage(_logo!) : null,
-                    child: _logo == null ? const Icon(Icons.store, size: 40) : null,
+                    backgroundImage: _logoBytes != null ? MemoryImage(_logoBytes!) : null,
+                    child: _logoBytes == null ? const Icon(Icons.store, size: 40) : null,
                   ),
                 ),
               ),

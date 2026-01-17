@@ -101,6 +101,50 @@ class WalletNotifier extends StateNotifier<WalletState> {
     });
   }
 
+  Future<bool> depositByCard({
+    required String cardNumber,
+    required String expiryDate,
+    required String cvv,
+    required String cardholderName,
+    required double amount,
+  }) async {
+    return _performCardTransaction({
+      'amount': amount,
+      'cardNumber': cardNumber,
+      'expiryDate': expiryDate,
+      'cvv': cvv,
+      'cardholderName': cardholderName,
+    });
+  }
+
+  Future<bool> _performCardTransaction(Map<String, dynamic> body) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final token = await _storage.getToken();
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/wallet/deposit-card'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        // Reload data to reflect new balance
+        await loadWalletData();
+        return true;
+      } else {
+        final err = jsonDecode(response.body);
+        state = state.copyWith(isLoading: false, error: err['error'] ?? 'Erreur inconnue');
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
   Future<bool> _performTransaction(String endpoint, Map<String, dynamic> body) async {
     state = state.copyWith(isLoading: true, error: null);
     try {

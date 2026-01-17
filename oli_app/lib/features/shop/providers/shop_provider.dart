@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
@@ -47,8 +47,8 @@ class ShopController extends StateNotifier<AsyncValue<List<Shop>>> {
     required String description,
     required String category,
     String? location,
-    File? logo,
-    File? banner,
+    XFile? logo,
+    XFile? banner,
   }) async {
     try {
       final token = await _storage.getToken();
@@ -61,10 +61,20 @@ class ShopController extends StateNotifier<AsyncValue<List<Shop>>> {
       if (location != null) request.fields['location'] = location;
 
       if (logo != null) {
-        request.files.add(await http.MultipartFile.fromPath('logo', logo.path));
+        final bytes = await logo.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes(
+          'logo', 
+          bytes, 
+          filename: logo.name
+        ));
       }
       if (banner != null) {
-        request.files.add(await http.MultipartFile.fromPath('banner', banner.path));
+        final bytes = await banner.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes(
+          'banner', 
+          bytes,
+          filename: banner.name
+        ));
       }
 
       final streamedResponse = await request.send();

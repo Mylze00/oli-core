@@ -40,7 +40,7 @@ class _HomePageState extends State<HomePage> {
   void _openPublishPage() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => PublishArticlePage()),
+      MaterialPageRoute(builder: (_) => const PublishArticlePage()),
     );
   }
 

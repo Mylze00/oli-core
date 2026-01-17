@@ -71,4 +71,35 @@ router.post('/withdraw', async (req, res) => {
     }
 });
 
+/**
+ * POST /wallet/deposit-card
+ * Dépôt via Carte Bancaire
+ */
+router.post('/deposit-card', async (req, res) => {
+    const { amount, cardNumber, expiryDate, cvv, cardholderName } = req.body;
+
+    if (!amount || amount <= 0) {
+        return res.status(400).json({ error: "Montant invalide" });
+    }
+
+    if (!cardNumber || !expiryDate || !cvv) {
+        return res.status(400).json({ error: "Informations de carte incomplètes (cardNumber, expiryDate, cvv requis)" });
+    }
+
+    try {
+        const cardInfo = {
+            cardNumber,
+            expiryDate,
+            cvv,
+            cardholderName: cardholderName || 'Card Holder'
+        };
+
+        const result = await walletService.depositByCard(req.user.id, parseFloat(amount), cardInfo);
+        res.json(result);
+    } catch (err) {
+        console.error("Erreur dépôt carte:", err);
+        res.status(400).json({ error: err.message });
+    }
+});
+
 module.exports = router;

@@ -1,11 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'chat_page.dart';
-import '../../core/user/user_provider.dart';
+import 'socket_service.dart';
 import '../../config/api_config.dart';
+import '../../core/user/user_provider.dart';
 import '../../core/storage/secure_storage_service.dart';
+
+// Provider pour les conversations
+final conversationsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final user = ref.watch(userProvider).value;
+  if (user == null) return [];
+  
+  final storage = SecureStorageService();
+  final token = await storage.getToken();
+  final dio = Dio();
+  
+  try {
+    final response = await dio.get(
+      '${ApiConfig.baseUrl}/chat/conversations',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    
+    if (response.statusCode == 200) {
+      return List<Map<String, dynamic>>.from(response.data);
+    }
+  } catch (e) {
+    debugPrint('❌ Erreur chargement conversations: $e');
+  }
+  return [];
+});
 
 class ConversationsPage extends ConsumerStatefulWidget {
   const ConversationsPage({super.key});
@@ -15,191 +39,163 @@ class ConversationsPage extends ConsumerStatefulWidget {
 }
 
 class _ConversationsPageState extends ConsumerState<ConversationsPage> {
-  final TextEditingController _searchController = TextEditingController();
-  final _storage = SecureStorageService();
-
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _initSocket();
   }
 
-  Future<List<dynamic>> _fetchConversations() async {
-    try {
-      final token = await _storage.getToken();
-      debugPrint('🔄 Chargement des conversations...');
+  Future<void> _initSocket() async {
+    final user = ref.read(userProvider).value;
+    if (user != null) {
+      final socketService = ref.read(socketServiceProvider);
+      await socketService.connect(user.id.toString());
       
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/chat/conversations'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        debugPrint('✅ ${data.length} conversations chargées');
-        return data;
-      } else {
-        debugPrint('❌ Erreur chargement: ${response.statusCode}');
-        return [];
-      }
-    } catch (e) {
-      debugPrint("❌ Erreur fetch conversations: $e");
-      return [];
+      // Écouter les nouveaux messages pour mettre à jour la liste
+      socketService.onMessage((data) {
+        // Rafraîchir la liste des conversations
+        ref.invalidate(conversationsProvider);
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider).value;
-    final String? myId = user?.id.toString();
+    final conversationsAsync = ref.watch(conversationsProvider);
+    final theme = Theme.of(context);
+
+    if (user == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Discussions',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
+        title: const Text("Mes Messages"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => ref.invalidate(conversationsProvider),
+          ),
+        ],
       ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          Expanded(
-            child: myId == null
-              ? const Center(child: CircularProgressIndicator())
-              : FutureBuilder<List<dynamic>>(
-                  future: _fetchConversations(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    if (snapshot.hasError || snapshot.data == null) {
-                      return Center(child: Text("Erreur: ${snapshot.error}"));
-                    }
-
-                    final conversations = snapshot.data ?? [];
-
-                    if (conversations.isEmpty) {
-                      return _buildEmptyState();
-                    }
-
-                    return RefreshIndicator(
-                      onRefresh: () async {
-                        setState(() {});
-                      },
-                      child: ListView.builder(
-                        itemCount: conversations.length,
-                        itemBuilder: (context, index) {
-                          final conv = conversations[index];
-                          final int unreadCount = conv['unread_count'] ?? 0;
-
-                          return ListTile(
-                            leading: CircleAvatar(
-                              radius: 28,
-                              backgroundColor: Colors.blue.shade100,
-                              backgroundImage: conv['other_avatar'] != null
-                                ? NetworkImage(conv['other_avatar'])
-                                : null,
-                              child: conv['other_avatar'] == null
-                                ? Text(
-                                    (conv['other_name'] ?? '')[0].toUpperCase(),
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  )
-                                : null,
-                            ),
-                            title: Text(
-                              conv['other_name'] ?? 'Utilisateur',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text(
-                              conv['last_message'] ?? 'Aucun message',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                            trailing: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                if (unreadCount > 0)
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      "$unreadCount",
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ChatPage(
-                                    myId: myId,
-                                    otherId: conv['other_id'].toString(),
-                                    otherName: conv['other_name'] ?? 'Chat',
-                                    conversationId: conv['conversation_id'].toString(),
-                                    productId: conv['product_id']?.toString(),
-                                    productName: conv['product_name'],
-                                    productPrice: conv['product_price'],
-                                    productImage: conv['product_image'],
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    );
-                  },
+      body: conversationsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) {
+          // Si l'erreur est liée à l'auth, on pourrait rediriger, mais main.dart le fait déjà.
+          // Ici on affiche juste l'erreur proprement.
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  "Impossible de charger les messages",
+                  style: theme.textTheme.titleMedium,
                 ),
-          ),
-        ],
-      ),
-    );
-  }
+                Text(
+                  err.toString().replaceAll('Exception: ', ''),
+                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => ref.invalidate(conversationsProvider),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text("Réessayer"),
+                ),
+              ],
+            ),
+          );
+        },
+        data: (conversations) {
+          if (conversations.isEmpty) {
+            return const Center(child: Text("Aucune conversation pour le moment"));
+          }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Rechercher...',
-          prefixIcon: const Icon(Icons.search),
-          filled: true,
-          fillColor: Colors.grey[100],
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
-    );
-  }
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(conversationsProvider),
+            child: ListView.builder(
+              itemCount: conversations.length,
+              itemBuilder: (context, index) {
+                final conv = conversations[index];
+                final otherId = conv['other_id']?.toString() ?? '';
+                final otherName = conv['other_name'] ?? 'Utilisateur';
+                final lastMessage = conv['last_message'] ?? '';
+                final unreadCount = conv['unread_count'] ?? 0;
+                final productImage = conv['product_image'];
+                final productName = conv['product_name'];
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.chat_bubble_outline, size: 60, color: Colors.grey[300]),
-          const Text(
-            "Aucune discussion pour le moment",
-            style: TextStyle(color: Colors.grey),
-          ),
-        ],
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: theme.primaryColor.withOpacity(0.1),
+                    backgroundImage: conv['other_avatar'] != null 
+                        ? NetworkImage(conv['other_avatar']) 
+                        : null,
+                    child: conv['other_avatar'] == null 
+                        ? Text(otherName.isNotEmpty ? otherName[0].toUpperCase() : '?')
+                        : null,
+                  ),
+                  title: Row(
+                    children: [
+                      Expanded(child: Text(otherName)),
+                      if (unreadCount > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: theme.primaryColor,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            unreadCount.toString(),
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                    ],
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (productName != null)
+                        Text(
+                          '📦 $productName',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      Text(
+                        lastMessage,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                  isThreeLine: productName != null,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatPage(
+                          myId: user.id.toString(),
+                          otherId: otherId,
+                          otherName: otherName,
+                          productId: conv['product_id']?.toString(),
+                          productName: productName,
+                          productImage: productImage,
+                          productPrice: double.tryParse(conv['product_price']?.toString() ?? '0'),
+                        ),
+                      ),
+                    ).then((_) {
+                      // Rafraîchir après retour du chat
+                      ref.invalidate(conversationsProvider);
+                    });
+                  },
+                );
+              },
+            ),
+          );
+        },
       ),
     );
   }

@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart'; 
 import 'chat_controller.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   final String myId;
   final String otherId;
   final String otherName;
-  final String? otherPhone;
   final String? productId;
-  final String? conversationId;
   final String? productName;
   final double? productPrice;
   final String? productImage;
@@ -18,10 +15,8 @@ class ChatPage extends ConsumerStatefulWidget {
     super.key,
     required this.myId,
     required this.otherId,
-    this.otherName = 'Chat',
-    this.otherPhone,
+    required this.otherName,
     this.productId,
-    this.conversationId,
     this.productName,
     this.productPrice,
     this.productImage,
@@ -32,236 +27,288 @@ class ChatPage extends ConsumerStatefulWidget {
 }
 
 class _ChatPageState extends ConsumerState<ChatPage> {
-  final TextEditingController _messageController = TextEditingController();
+  final TextEditingController messageCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  Map<String, dynamic>? _replyMessage;
 
   @override
   void initState() {
     super.initState();
-    // Suppression de loadMessages : Firestore gère le flux en temps réel automatiquement via le provider
+    // Charger les messages avec le productId si disponible
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
+      controller.loadMessages(productId: widget.productId);
+    });
   }
 
   @override
   void dispose() {
-    _messageController.dispose();
+    messageCtrl.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _setReply(Map<String, dynamic> message) {
-    setState(() => _replyMessage = message);
-  }
-
-  Future<void> _pickImage(ChatController chatCtrl) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-    if (pickedFile != null) {
-      chatCtrl.sendMessage(content: pickedFile.path, type: 'image');
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // On écoute l'état du contrôleur (qui doit être branché sur un Stream Firestore)
     final chatState = ref.watch(chatControllerProvider(widget.otherId));
-    final chatCtrl = ref.read(chatControllerProvider(widget.otherId).notifier);
     final theme = Theme.of(context);
+
+    // Scroll to bottom when messages change
+    ref.listen(chatControllerProvider(widget.otherId), (previous, next) {
+      if (previous?.messages.length != next.messages.length) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      }
+    });
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: _buildAppBar(theme),
-      body: Column(
-        children: [                                                           
-          Expanded(
-            child: chatState.isLoading 
-              ? const Center(child: CircularProgressIndicator())
-              : GestureDetector(
-                  onTap: () => FocusScope.of(context).unfocus(),
-                  child: ListView.builder(
-                    reverse: true, 
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: chatState.messages.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == chatState.messages.length) {
-                        return _buildProductHeader(theme);
-                      }
-                      final msg = chatState.messages[index];
-                      final isMe = msg['sender_id'].toString() == widget.myId;
-                      return _buildMessageBubble(context, msg, isMe);
-                    },
-                  ),
-                ),
-          ),
-          
-          // Affichage des erreurs si besoin
-          if (chatState.error != null)
-             _buildErrorBanner(chatState.error!, theme),
-             
-          // Aperçu de la réponse
-          if (_replyMessage != null) _buildReplyPreview(theme),
-          
-          // Barre d'envoi
-          _buildInputBar(context, chatCtrl, theme),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorBanner(String error, ThemeData theme) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: theme.colorScheme.errorContainer,
-      child: Text(
-        error,
-        textAlign: TextAlign.center,
-        style: TextStyle(color: theme.colorScheme.onErrorContainer, fontSize: 13),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(ThemeData theme) {
-    return AppBar(
-      elevation: 0,
-      backgroundColor: Colors.white,
-      foregroundColor: Colors.black87,
-      title: Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: Text(
-              widget.otherName.isNotEmpty ? widget.otherName[0].toUpperCase() : '?',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              widget.otherName, 
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductHeader(ThemeData theme) {
-    if (widget.productId == null) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-      ),
-      child: Row(
-        children: [
-          if (widget.productImage != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.network(widget.productImage!, width: 50, height: 50, fit: BoxFit.cover),
-            ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.productName ?? 'Produit', style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text("${widget.productPrice} \$", style: TextStyle(color: theme.colorScheme.primary)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageBubble(BuildContext context, Map<String, dynamic> msg, bool isMe) {
-    final theme = Theme.of(context);
-    final isImage = msg['type'] == 'image';
-    
-    return GestureDetector(
-      onHorizontalDragEnd: (_) => _setReply(msg),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isMe ? theme.colorScheme.primary : Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: isImage
-                  ? Image.network(msg['content'], width: 200)
-                  : Text(
-                      msg['content'] ?? '',
-                      style: TextStyle(color: isMe ? Colors.white : Colors.black87),
-                    ),
+            Text(widget.otherName),
+            if (widget.productName != null)
+              Text(
+                widget.productName!,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
               ),
-            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildReplyPreview(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      color: theme.colorScheme.surface,
-      child: Row(
+      body: Column(
         children: [
-          const Icon(Icons.reply, size: 20),
-          const SizedBox(width: 10),
-          Expanded(child: Text(_replyMessage!['content'] ?? '', maxLines: 1)),
-          IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _replyMessage = null)),
+          // Product card if available
+          if (widget.productImage != null || widget.productName != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              color: Colors.grey[100],
+              child: Row(
+                children: [
+                  if (widget.productImage != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        widget.productImage!,
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: 60,
+                          height: 60,
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.image_not_supported),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.productName ?? 'Produit',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        if (widget.productPrice != null)
+                          Text(
+                            '${widget.productPrice!.toStringAsFixed(0)} FC',
+                            style: TextStyle(color: theme.primaryColor),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Messages list
+          Expanded(
+            child: chatState.isLoading 
+              ? const Center(child: CircularProgressIndicator())
+              : chatState.error != null
+                ? Center(child: Text("Erreur: ${chatState.error}"))
+                : chatState.messages.isEmpty
+                  ? const Center(child: Text("Aucun message. Commencez la conversation !"))
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(8),
+                      itemCount: chatState.messages.length,
+                      itemBuilder: (context, index) {
+                        final msg = chatState.messages[index];
+                        final isMe = msg['sender_id'].toString() == widget.myId;
+                        
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Align(
+                            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                            child: Container(
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width * 0.75,
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isMe ? theme.primaryColor : Colors.grey[200],
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(16),
+                                  topRight: const Radius.circular(16),
+                                  bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
+                                  bottomRight: isMe ? Radius.zero : const Radius.circular(16),
+                                ),
+                              ),
+                              child: Text(
+                                msg['content'] ?? '',
+                                style: TextStyle(
+                                  color: isMe ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+          ),
+          
+          // Input area
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: Row(
+                children: [
+                   IconButton(
+                    icon: Icon(Icons.add_circle, color: theme.primaryColor, size: 28),
+                    onPressed: () => _showChatTools(context),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: messageCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'Votre message...',
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      ),
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    backgroundColor: theme.primaryColor,
+                    child: IconButton(
+                      icon: const Icon(Icons.send, color: Colors.white),
+                      onPressed: _sendMessage,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildInputBar(BuildContext context, ChatController chatCtrl, ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      color: theme.colorScheme.surface,
-      child: SafeArea(
-        child: Row(
-          children: [
-            IconButton(icon: const Icon(Icons.camera_alt), onPressed: () => _pickImage(chatCtrl)),
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                decoration: InputDecoration(
-                  hintText: 'Message...',
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
-                ),
-              ),
-            ),
-            IconButton(
-  icon: Icon(Icons.send, color: theme.colorScheme.primary),
-  onPressed: () {
-    if (_messageController.text.trim().isNotEmpty) {
-      // ON PASSE TOUTES LES INFOS PRODUIT ICI
-      chatCtrl.sendMessage(
-        content: _messageController.text,
-        productId: widget.productId,
-        productName: widget.productName,
-        productImage: widget.productImage,
-        productPrice: widget.productPrice,
-      );
-      _messageController.clear();
-      setState(() => _replyMessage = null);
-    }
-  },
-),
+  void _showChatTools(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          height: 250,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Outils", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildToolItem(Icons.attach_money, "Envoyer Cash", Colors.green, () {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Fonctionnalité Cash bientôt disponible !")),
+                    );
+                  }),
+                  _buildToolItem(Icons.photo, "Galerie", Colors.purple, () {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Envoi d'images bientôt disponible !")),
+                    );
+                  }),
+                  _buildToolItem(Icons.camera_alt, "Caméra", Colors.red, () {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Caméra bientôt disponible !")),
+                    );
+                  }),
+                  _buildToolItem(Icons.location_on, "Position", Colors.blue, () {
+                    Navigator.pop(ctx);
+                    // Placeholder
+                  }),
+                ],
+              )
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildToolItem(IconData icon, String label, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 25,
+            backgroundColor: color.withOpacity(0.1),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  void _sendMessage() {
+    final msg = messageCtrl.text.trim();
+    if (msg.isEmpty) return;
+
+    final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
+    controller.sendMessage(
+      content: msg,
+      productId: widget.productId,
+      productName: widget.productName,
+      productImage: widget.productImage,
+      productPrice: widget.productPrice,
+    );
+    
+    messageCtrl.clear();
+  }
+}

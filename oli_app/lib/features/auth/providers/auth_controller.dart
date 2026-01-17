@@ -11,25 +11,29 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
 
 class AuthState {
   final bool isLoading;
+  final bool isCheckingSession; // Nouveau champ
   final String? error;
   final bool isAuthenticated;
-  final Map<String, dynamic>? userData; // Pour stocker les infos PostgreSQL
+  final Map<String, dynamic>? userData;
 
   const AuthState({
-    this.isLoading = false, 
+    this.isLoading = false,
+    this.isCheckingSession = true, // Par défaut on vérifie la session
     this.error, 
     this.isAuthenticated = false,
     this.userData,
   });
 
   AuthState copyWith({
-    bool? isLoading, 
+    bool? isLoading,
+    bool? isCheckingSession,
     String? error, 
     bool? isAuthenticated,
     Map<String, dynamic>? userData,
   }) {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
+      isCheckingSession: isCheckingSession ?? this.isCheckingSession,
       error: error,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
       userData: userData ?? this.userData,
@@ -51,19 +55,22 @@ class AuthController extends StateNotifier<AuthState> {
       final phone = await _storage.getPhone(); 
       
       if (token != null) {
-        // ✅ CORRECTION FLICKER : On met immédiatement le vrai numéro si dispo
         state = state.copyWith(
           isAuthenticated: true,
+          isCheckingSession: false, // Fini
           userData: {
             'phone': phone ?? 'Numéro inconnu', 
             'name': phone != null ? 'Utilisateur (${phone.substring(phone.length - 4)})' : 'Chargement...'
           }
         );
-        // On lance le fetch en arrière-plan pour compléter (avatar, nom complet...)
         fetchUserProfile(); 
+      } else {
+        // Pas de token, fin de vérification
+        state = state.copyWith(isCheckingSession: false);
       }
     } catch (e) {
       debugPrint("Erreur session : $e");
+      state = state.copyWith(isCheckingSession: false);
     }
   }
 
@@ -160,5 +167,16 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _storage.deleteAll();
     state = const AuthState(isAuthenticated: false, userData: null);
+  }
+
+  /// 🔹 MISE À JOUR LOCALE (Optimistic UI)
+  /// Permet de mettre à jour les données utilisateur instantanément sans attendre le fetch
+  void updateUserData(Map<String, dynamic> newPartialData) {
+    if (state.userData == null) return;
+    
+    final currentData = state.userData!;
+    state = state.copyWith(
+      userData: {...currentData, ...newPartialData}
+    );
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../auth/providers/auth_controller.dart';
 import '../providers/wallet_provider.dart';
 import '../models/transaction_model.dart';
+import '../widgets/payment_dialogs.dart';
 
 class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
@@ -17,11 +19,34 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     Future.microtask(() => ref.read(walletProvider.notifier).loadWalletData());
   }
 
-  void _showTransactionDialog(bool isDeposit) {
-    showDialog(
-      context: context,
-      builder: (_) => TransactionDialog(isDeposit: isDeposit),
-    );
+  void _showTransactionDialog(bool isDeposit) async {
+    if (isDeposit) {
+      // Show payment method selection first
+      final paymentMethod = await showDialog<String>(
+        context: context,
+        builder: (_) => const PaymentMethodSelectionDialog(),
+      );
+
+      if (paymentMethod != null && mounted) {
+        if (paymentMethod == 'mobile') {
+          showDialog(
+            context: context,
+            builder: (_) => TransactionDialog(isDeposit: true),
+          );
+        } else {
+          showDialog(
+            context: context,
+            builder: (_) => const CardPaymentDialog(),
+          );
+        }
+      }
+    } else {
+      // For withdrawals, only mobile money
+      showDialog(
+        context: context,
+        builder: (_) => TransactionDialog(isDeposit: false),
+      );
+    }
   }
 
   @override
@@ -180,6 +205,26 @@ class _TransactionDialogState extends ConsumerState<TransactionDialog> {
   final _phoneCtrl = TextEditingController();
   String _provider = 'orange'; // orange, mpesa, airtel
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill phone number from user profile
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = ref.read(authControllerProvider).userData;
+      if (user != null && user['phone'] != null) {
+        _phoneCtrl.text = user['phone'];
+        // Tenter de deviner le provider (Sommaire)
+        final phone = user['phone'] as String;
+        if (phone.startsWith('07') || phone.startsWith('+2438')) { 
+           // Logique simplifiée, à adapter selon pays
+           // Orange souvent 085, 089, 084...
+           // Vodacom 081, 082...
+           // Airtel 099, 097...
+        }
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

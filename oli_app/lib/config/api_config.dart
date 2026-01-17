@@ -10,4 +10,8 @@ class ApiConfig {
   static const String products = '$baseUrl/products';
   static const String orders = '$baseUrl/orders';
   static const String wallet = '$baseUrl/wallet';
+  static const String chat = '$baseUrl/chat';
+  static const String chatConversations = '$baseUrl/chat/conversations';
+  static const String chatMessages = '$baseUrl/chat/messages';
 }
+

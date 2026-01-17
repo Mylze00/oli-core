@@ -163,7 +163,24 @@ exports.uploadAvatar = async (req, res) => {
     const avatarUrl = req.file.path; // URL Cloudinary
 
     try {
-        await pool.query("UPDATE users SET avatar_url = $1 WHERE phone = $2", [avatarUrl, req.user.phone]);
+        // 1. Check last update time
+        const userCheck = await pool.query('SELECT last_profile_update FROM users WHERE phone = $1', [req.user.phone]);
+        if (userCheck.rows.length > 0) {
+            const lastUpdate = userCheck.rows[0].last_profile_update;
+            if (lastUpdate) {
+                const twoWeeksAgo = new Date();
+                twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+                if (new Date(lastUpdate) > twoWeeksAgo) {
+                    return res.status(403).json({ error: "Vous ne pouvez modifier votre photo qu'une fois toutes les 2 semaines." });
+                }
+            }
+        }
+
+        await pool.query(
+            "UPDATE users SET avatar_url = $1, last_profile_update = NOW() WHERE phone = $2",
+            [avatarUrl, req.user.phone]
+        );
         res.json({ avatar_url: avatarUrl });
     } catch (err) {
         console.error("Erreur upload-avatar:", err);

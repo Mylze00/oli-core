@@ -1,11 +1,12 @@
 {
     "name": "oli-core",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "Oli Core Backend API",
     "main": "src/server.js",
     "scripts": {
         "start": "node src/server.js",
-        "dev": "nodemon src/server.js"
+        "dev": "nodemon src/server.js",
+        "migrate": "node src/run_migration.js"
     },
     "dependencies": {
         "cloudinary": "^1.41.3",

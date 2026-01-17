@@ -21,6 +21,7 @@ const chatRoutes = require("./routes/chat.routes");
 const shopsRoutes = require("./routes/shops.routes");
 const walletRoutes = require("./routes/wallet.routes");
 const deliveryRoutes = require("./routes/delivery.routes");
+const userRoutes = require("./routes/user.routes");
 const { requireAuth, optionalAuth } = require("./middlewares/auth.middleware");
 
 const app = express();
@@ -153,6 +154,8 @@ app.use("/orders", requireAuth, ordersRoutes);
 app.use("/wallet", requireAuth, walletRoutes);
 app.use("/delivery", requireAuth, deliveryRoutes);
 app.use("/chat", requireAuth, chatRoutes);
+app.use("/user", requireAuth, userRoutes);
+app.use("/addresses", requireAuth, require('./routes/address.routes'));
 
 // Health check
 app.get("/health", (req, res) => {
