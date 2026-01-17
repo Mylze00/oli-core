@@ -60,11 +60,12 @@ exports.verifyOtp = async (req, res) => {
             return res.status(401).json({ error: "Code invalide ou expiré" });
         }
 
-        // Générer le token JWT avec toutes les infos utiles
+        // Générer le token JWT avec toutes les infos utiles (dont is_admin !)
         const token = jwt.sign(
             {
                 id: result.user.id,
                 phone: result.user.phone,
+                is_admin: result.user.is_admin || false, // ✨ AJOUTÉ
                 is_seller: result.user.is_seller || false,
                 is_deliverer: result.user.is_deliverer || false
             },
@@ -81,6 +82,7 @@ exports.verifyOtp = async (req, res) => {
                 id_oli: result.user.id_oli,
                 avatar_url: result.user.avatar_url,
                 wallet: parseFloat(result.user.wallet || 0).toFixed(2),
+                is_admin: result.user.is_admin || false, // ✨ AJOUTÉ
                 is_seller: result.user.is_seller || false,
                 is_deliverer: result.user.is_deliverer || false,
             },
