@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../models/product_model.dart';
+import '../../../widgets/verification_badge.dart';
 import '../../chat/chat_page.dart';
 import '../../../core/user/user_provider.dart';
 
@@ -162,6 +163,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
             child: Row(children: [
               Stack(
+                clipBehavior: Clip.none,
                 children: [
                    CircleAvatar(
                      radius: 25, 
@@ -175,8 +177,22 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                         ? Text(p.seller.isNotEmpty ? p.seller[0] : '?', style: const TextStyle(color: Colors.white, fontSize: 20))
                         : null,
                    ),
-                   if (p.shopVerified || (p.sellerOliId != null)) // Show badge if shop verified or seller has ID
-                     Positioned(bottom: 0, right: 0, child: Container(padding: const EdgeInsets.all(2), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: Icon(Icons.check_circle, color: p.shopVerified ? Colors.orange : Colors.blue, size: 16))),
+                   // Verification Badge Overlay
+                   if (p.sellerIsVerified || p.sellerAccountType != 'ordinaire' || p.sellerHasCertifiedShop || p.shopVerified)
+                     Positioned(
+                       bottom: -4, 
+                       right: -4, 
+                       child: VerificationBadge(
+                         type: p.shopVerified 
+                           ? BadgeType.gold
+                           : VerificationBadge.fromSellerData(
+                               isVerified: p.sellerIsVerified,
+                               accountType: p.sellerAccountType,
+                               hasCertifiedShop: p.sellerHasCertifiedShop,
+                             ),
+                         size: 20,
+                       ),
+                     ),
                 ],
               ),
               const SizedBox(width: 12),

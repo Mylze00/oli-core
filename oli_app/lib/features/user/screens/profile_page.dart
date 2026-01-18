@@ -11,6 +11,7 @@ import '../../../theme_provider.dart';
 import '../../../features/wallet/screens/wallet_screen.dart';
 import '../../../features/shop/screens/my_shops_screen.dart';
 import '../../../features/delivery/screens/delivery_dashboard.dart';
+import '../../../widgets/verification_badge.dart';
 
 // Provider qui récupère les données réelles du serveur
 final userProfileProvider = FutureProvider((ref) async {
@@ -130,20 +131,39 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                   children: [
                     GestureDetector(
                       onTap: _updateAvatar,
-                      child: Container(
-                        width: 80, height: 80,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(15),
-                          gradient: user['avatar_url'] == null 
-                            ? const LinearGradient(colors: [Colors.blueAccent, Colors.purpleAccent])
-                            : null,
-                          image: user['avatar_url'] != null 
-                            ? DecorationImage(image: NetworkImage(user['avatar_url']), fit: BoxFit.cover)
-                            : null,
-                        ),
-                        child: user['avatar_url'] == null 
-                          ? Center(child: Text(user["initial"], style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)))
-                          : null,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 80, height: 80,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(15),
+                              gradient: user['avatar_url'] == null 
+                                ? const LinearGradient(colors: [Colors.blueAccent, Colors.purpleAccent])
+                                : null,
+                              image: user['avatar_url'] != null 
+                                ? DecorationImage(image: NetworkImage(user['avatar_url']), fit: BoxFit.cover)
+                                : null,
+                            ),
+                            child: user['avatar_url'] == null 
+                              ? Center(child: Text(user["initial"], style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)))
+                              : null,
+                          ),
+                          // Verification Badge Overlay
+                          if (user['is_verified'] == true || user['account_type'] != 'ordinaire' || user['has_certified_shop'] == true)
+                            Positioned(
+                              bottom: -8,
+                              right: -8,
+                              child: VerificationBadge(
+                                type: VerificationBadge.fromSellerData(
+                                  isVerified: user['is_verified'] == true,
+                                  accountType: user['account_type'] ?? 'ordinaire',
+                                  hasCertifiedShop: user['has_certified_shop'] == true,
+                                ),
+                                size: 24,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -154,7 +174,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                           Text(user["name"], style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                           Text('ID Oli: ${user["id_oli"]}', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
                           const SizedBox(height: 8),
-                          _buildStatusBadge(),
+                          _buildStatusBadge(user),
                         ],
                       ),
                     ),
@@ -258,14 +278,33 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 
   // --- WIDGETS DE CONSTRUCTION (Badge, Section, Item) ---
-  Widget _buildStatusBadge() {
+  Widget _buildStatusBadge(dynamic user) {
+    // Determine badge type/color/text based on user data
+    String text = "Compte Ordinaire";
+    Color color = Colors.grey;
+    IconData icon = Icons.person_outline;
+    
+    if (user['has_certified_shop'] == true || user['account_type'] == 'entreprise') {
+      text = "Magasin Certifié";
+      color = const Color(0xFFD4A500); // Gold
+      icon = Icons.store;
+    } else if (user['account_type'] == 'premium') {
+      text = "Compte Premium";
+      color = const Color(0xFF00BA7C); // Green
+      icon = Icons.star;
+    } else if (user['account_type'] == 'certifie' || user['is_verified'] == true) {
+      text = "Utilisateur Certifié";
+      color = const Color(0xFF1DA1F2); // Blue
+      icon = Icons.verified_user;
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(border: Border.all(color: Colors.white.withOpacity(0.2)), borderRadius: BorderRadius.circular(20)),
-      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.verified_user, size: 14, color: Colors.blueAccent),
-        SizedBox(width: 4),
-        Text('Utilisateur Certifié', style: TextStyle(color: Colors.white, fontSize: 11)),
+      decoration: BoxDecoration(border: Border.all(color: color.withOpacity(0.5)), borderRadius: BorderRadius.circular(20)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
       ]),
     );
   }

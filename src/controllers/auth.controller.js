@@ -154,7 +154,8 @@ exports.getMe = async (req, res) => {
     try {
         const result = await pool.query(
             `SELECT id, phone, name, id_oli, wallet, avatar_url, 
-                  is_seller, is_deliverer, rating, reward_points 
+                  is_seller, is_deliverer, rating, reward_points,
+                  is_verified, account_type, has_certified_shop 
            FROM users WHERE phone = $1`,
             [req.user.phone]
         );
