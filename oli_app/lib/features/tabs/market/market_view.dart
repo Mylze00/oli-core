@@ -28,7 +28,6 @@ class _MarketViewState extends ConsumerState<MarketView> {
   @override
   void initState() {
     super.initState();
-    // Charger les produits au démarrage
     Future.microtask(() {
       ref.read(marketProductsProvider.notifier).fetchProducts();
     });
@@ -59,6 +58,9 @@ class _MarketViewState extends ConsumerState<MarketView> {
   @override
   Widget build(BuildContext context) {
     final products = ref.watch(marketProductsProvider);
+    final topSellers = ref.watch(topSellersProvider);
+    final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
+    final featuredProducts = ref.watch(featuredProductsProvider);
     
     // Mélanger l'ordre des produits pour affichage aléatoire
     final shuffledProducts = List<Product>.from(products)..shuffle();
@@ -145,19 +147,56 @@ class _MarketViewState extends ConsumerState<MarketView> {
             ),
           ),
 
-          // 3. HEADER INFO
+          // 3. WIDGET: MEILLEURS VENDEURS
+          SliverToBoxAdapter(
+            child: _buildHorizontalSection(
+              title: "⭐ Meilleurs Vendeurs",
+              subtitle: "Les plus populaires",
+              products: topSellers,
+              gradient: [Colors.orange.shade900, Colors.orange.shade700],
+              badgeText: "TOP",
+              badgeColor: Colors.orange,
+            ),
+          ),
+
+          // 4. WIDGET: PRODUITS SPONSORISÉS
+          SliverToBoxAdapter(
+            child: _buildHorizontalSection(
+              title: "🎯 Produits Sponsorisés",
+              subtitle: "Sélection premium",
+              products: featuredProducts,
+              gradient: [Colors.purple.shade900, Colors.purple.shade600],
+              badgeText: "PROMO",
+              badgeColor: Colors.purple,
+            ),
+          ),
+
+          // 5. WIDGET: MAGASINS CERTIFIÉS
+          SliverToBoxAdapter(
+            child: _buildHorizontalSection(
+              title: "🏪 Magasins Certifiés",
+              subtitle: "Boutiques vérifiées",
+              products: verifiedShopsProducts,
+              gradient: [Colors.blue.shade900, Colors.blue.shade600],
+              badgeText: "VÉRIFIÉ",
+              badgeColor: Colors.green,
+              showVerifiedBadge: true,
+            ),
+          ),
+
+          // 6. HEADER INFO - Tous les produits
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "${shuffledProducts.length} produits",
-                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                    "Tous les produits (${shuffledProducts.length})",
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    "Tous les vendeurs",
+                    "Tous vendeurs",
                     style: TextStyle(color: Colors.grey[500], fontSize: 12),
                   ),
                 ],
@@ -165,46 +204,42 @@ class _MarketViewState extends ConsumerState<MarketView> {
             ),
           ),
 
-          // 4. GRILLE PRODUITS
+          // 7. GRILLE PRODUITS 3 COLONNES
           shuffledProducts.isEmpty
-            ? SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.shopping_bag_outlined, size: 60, color: Colors.grey[700]),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Aucun produit trouvé",
-                        style: TextStyle(color: Colors.grey[500], fontSize: 16),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _selectedCategory = "Tout");
-                          ref.read(marketProductsProvider.notifier).fetchProducts();
-                        },
-                        child: const Text("Réinitialiser les filtres"),
-                      ),
-                    ],
+            ? SliverToBoxAdapter(
+                child: Container(
+                  height: 200,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shopping_bag_outlined, size: 50, color: Colors.grey[700]),
+                        const SizedBox(height: 12),
+                        Text("Aucun produit trouvé", style: TextStyle(color: Colors.grey[500])),
+                        TextButton(
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _selectedCategory = "Tout");
+                            ref.read(marketProductsProvider.notifier).fetchProducts();
+                          },
+                          child: const Text("Réinitialiser"),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               )
             : SliverPadding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.7,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                    crossAxisCount: 3, // 3 colonnes comme sur l'accueil
+                    childAspectRatio: 0.55,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                   ),
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) => _ProductCard(
-                      product: shuffledProducts[index],
-                      onTap: () => _navigateToProduct(shuffledProducts[index]),
-                    ),
+                    (context, index) => _buildCompactProductCard(shuffledProducts[index]),
                     childCount: shuffledProducts.length,
                   ),
                 ),
@@ -212,6 +247,223 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
           const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
         ],
+      ),
+    );
+  }
+
+  /// Section horizontale réutilisable pour les widgets
+  Widget _buildHorizontalSection({
+    required String title,
+    required String subtitle,
+    required List<Product> products,
+    required List<Color> gradient,
+    required String badgeText,
+    required Color badgeColor,
+    bool showVerifiedBadge = false,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11)),
+                ],
+              ),
+              if (showVerifiedBadge)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.verified, color: Colors.white, size: 12),
+                      SizedBox(width: 2),
+                      Text("Certifié", style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 140,
+            child: products.isEmpty 
+              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              : ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: products.length,
+                  itemBuilder: (context, index) => _buildSectionCard(
+                    products[index], 
+                    badgeText, 
+                    badgeColor,
+                  ),
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Carte pour les sections horizontales
+  Widget _buildSectionCard(Product product, String badgeText, Color badgeColor) {
+    return GestureDetector(
+      onTap: () => _navigateToProduct(product),
+      child: Container(
+        width: 110,
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2C2C2C),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                    child: product.images.isNotEmpty 
+                      ? Image.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
+                      : const Center(child: Icon(Icons.image, color: Colors.grey)),
+                  ),
+                  Positioned(
+                    top: 0, left: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: badgeColor,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          bottomRight: Radius.circular(8),
+                        ),
+                      ),
+                      child: Text(badgeText, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(6.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
+                  Text("\$${product.price}", style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Carte compacte pour la grille 3 colonnes
+  Widget _buildCompactProductCard(Product product) {
+    return GestureDetector(
+      onTap: () => _navigateToProduct(product),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF2C2C2C),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+                child: Stack(
+                  children: [
+                    product.images.isEmpty
+                      ? const Center(child: Icon(Icons.image, size: 40, color: Colors.grey))
+                      : Image.network(
+                          product.images[0],
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 30, color: Colors.grey),
+                        ),
+                    // Overlay vendeur
+                    Positioned(
+                      bottom: 0, left: 0, right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [Colors.black.withValues(alpha: 0.8), Colors.transparent],
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 7,
+                              backgroundImage: product.sellerAvatar != null ? NetworkImage(product.sellerAvatar!) : null,
+                              child: product.sellerAvatar == null ? const Icon(Icons.person, size: 8, color: Colors.white) : null,
+                            ),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                product.seller,
+                                style: const TextStyle(color: Colors.white, fontSize: 8),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Badge vérifié
+                    if (product.shopVerified)
+                      Positioned(
+                        top: 2, right: 2,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                          child: const Icon(Icons.verified, size: 10, color: Colors.white),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(5.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
+                  const SizedBox(height: 2),
+                  Text("\$${product.price}", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -277,99 +529,6 @@ class _MarketViewState extends ConsumerState<MarketView> {
         backgroundColor: Colors.grey[900],
         selectedColor: Colors.blueAccent,
         checkmarkColor: Colors.white,
-      ),
-    );
-  }
-}
-
-class _ProductCard extends StatelessWidget {
-  final Product product;
-  final VoidCallback onTap;
-  
-  const _ProductCard({required this.product, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                child: Stack(
-                  children: [
-                    product.images.isEmpty
-                      ? const Center(child: Icon(Icons.image, size: 50, color: Colors.grey))
-                      : Image.network(
-                          product.images[0],
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 50, color: Colors.grey),
-                        ),
-                    // Badge vendeur si vérifié
-                    if (product.shopVerified)
-                      Positioned(
-                        top: 4, right: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Icon(Icons.verified, size: 12, color: Colors.white),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name, 
-                    maxLines: 2, 
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "\$${product.price}", 
-                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 8,
-                        backgroundImage: product.sellerAvatar != null ? NetworkImage(product.sellerAvatar!) : null,
-                        child: product.sellerAvatar == null ? const Icon(Icons.person, size: 10) : null,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          product.seller,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
