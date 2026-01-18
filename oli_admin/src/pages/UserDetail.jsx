@@ -187,28 +187,48 @@ export default function UserDetail() {
                         {/* Actions Badges (Clickable) */}
                         <div className="flex gap-2 mt-3">
                             <button
-                                onClick={() => {
-                                    if (window.confirm('Changer le statut Vérifié ?')) {
-                                        // TODO: Call API
-                                        alert('Statut mis à jour (Simulation)');
+                                onClick={async () => {
+                                    const newValue = !user.is_verified;
+                                    if (window.confirm(`${newValue ? 'Vérifier' : 'Retirer la vérification de'} cet utilisateur ?`)) {
+                                        try {
+                                            await api.patch(`/admin/users/${user.id}/verify`, { verified: newValue });
+                                            setUser({ ...user, is_verified: newValue });
+                                            alert(newValue ? 'Utilisateur vérifié !' : 'Vérification retirée');
+                                        } catch (err) {
+                                            console.error(err);
+                                            alert("Erreur lors de la mise à jour");
+                                        }
                                     }
                                 }}
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 transition ${user.roles?.includes('verified')
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 transition ${user.is_verified
                                     ? 'bg-green-100 text-green-800 border-green-200'
                                     : 'bg-gray-100 text-gray-500 border-gray-200'
                                     }`}
                             >
                                 <TagIcon className="h-3 w-3 mr-1" />
-                                {user.roles?.includes('verified') ? 'Vendeur Vérifié' : 'Non Vérifié'}
+                                {user.is_verified ? 'Vendeur Vérifié' : 'Non Vérifié'}
                             </button>
 
                             <button
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 transition ${user.roles?.includes('premium')
+                                onClick={async () => {
+                                    const newValue = !user.is_seller;
+                                    if (window.confirm(`${newValue ? 'Promouvoir' : 'Retirer'} le statut vendeur ?`)) {
+                                        try {
+                                            await api.patch(`/admin/users/${user.id}/role`, { is_seller: newValue });
+                                            setUser({ ...user, is_seller: newValue });
+                                            alert(newValue ? 'Statut vendeur accordé !' : 'Statut vendeur retiré');
+                                        } catch (err) {
+                                            console.error(err);
+                                            alert("Erreur lors de la mise à jour");
+                                        }
+                                    }
+                                }}
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 transition ${user.is_seller
                                     ? 'bg-blue-100 text-blue-800 border-blue-200'
                                     : 'bg-gray-100 text-gray-500 border-gray-200'
                                     }`}
                             >
-                                {user.roles?.includes('premium') ? 'Premium' : 'Standard'}
+                                {user.is_seller ? 'Vendeur' : 'Client'}
                             </button>
                         </div>
                     </div>

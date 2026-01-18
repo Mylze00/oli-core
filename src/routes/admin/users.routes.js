@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
         let query = `
             SELECT 
                 id, phone, name, id_oli, wallet, avatar_url,
-                is_admin, is_seller, is_deliverer, is_suspended,
+                is_admin, is_seller, is_deliverer, is_suspended, is_verified,
                 created_at, last_profile_update
             FROM users
             WHERE 1=1
@@ -36,6 +36,7 @@ router.get('/', async (req, res) => {
         if (role === 'admin') query += ` AND is_admin = TRUE`;
         if (role === 'seller') query += ` AND is_seller = TRUE`;
         if (role === 'deliverer') query += ` AND is_deliverer = TRUE`;
+        if (role === 'verified') query += ` AND is_verified = TRUE`;
 
         query += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
         params.push(parseInt(limit), parseInt(offset));
@@ -165,6 +166,36 @@ router.post('/:id/suspend', async (req, res) => {
         });
     } catch (err) {
         console.error('Erreur POST /admin/users/:id/suspend:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * PATCH /admin/users/:id/verify
+ * Toggle le statut vérifié d'un utilisateur
+ */
+router.patch('/:id/verify', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { verified } = req.body;
+
+        const result = await pool.query(`
+            UPDATE users 
+            SET is_verified = $1, updated_at = NOW()
+            WHERE id = $2
+            RETURNING id, name, phone, is_verified
+        `, [verified, id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Utilisateur non trouvé' });
+        }
+
+        res.json({
+            message: verified ? 'Utilisateur vérifié' : 'Vérification retirée',
+            user: result.rows[0]
+        });
+    } catch (err) {
+        console.error('Erreur PATCH /admin/users/:id/verify:', err);
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });

@@ -13,8 +13,9 @@ import {
 const navigation = [
     { name: 'Tableau de bord', href: '/', icon: HomeIcon },
     { name: 'Utilisateurs', href: '/users', icon: UsersIcon },
-    { name: 'Marchands', href: '/products', icon: ShoppingBagIcon }, // "Produits" -> "Marchands" (contextuel)
-    { name: 'Livreurs', href: '/delivery', icon: TruckIcon }, // Nouveau placeholder
+    { name: 'Marchands', href: '/shops', icon: ShoppingBagIcon },
+    { name: 'Produits', href: '/products', icon: CubeIcon },
+    { name: 'Livreurs', href: '/delivery', icon: TruckIcon },
     { name: 'Commandes', href: '/orders', icon: CubeIcon },
     { name: 'Finances', href: '/finances', icon: CreditCardIcon },
     { name: 'Modération', href: '/disputes', icon: ShieldCheckIcon },
