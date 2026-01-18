@@ -22,7 +22,19 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
   final TextEditingController _description = TextEditingController();
   final TextEditingController _quantity = TextEditingController();
   String _condition = 'Neuf';
+  String _category = 'Électronique'; // Nouvelle catégorie par défaut
   final _formKey = GlobalKey<FormState>();
+
+  // Liste des catégories disponibles
+  final List<String> _categories = [
+    'Électronique',
+    'Mode',
+    'Maison',
+    'Véhicules',
+    'Industrie',
+    'Alimentation',
+    'Autres',
+  ];
 
   Future<void> _pickImages() async {
     final imgs = await ImagePicker().pickMultiImage();
@@ -107,6 +119,24 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
             const SizedBox(height: 15),
             TextFormField(controller: _price, keyboardType: TextInputType.number, validator: (v) => v == null || v.trim().isEmpty ? 'Prix requis' : null, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Prix (\$)", filled: true, fillColor: Colors.white10, border: OutlineInputBorder())),
             const SizedBox(height: 15),
+            // NOUVELLE CATÉGORIE DROPDOWN
+            DropdownButtonFormField<String>(
+              value: _category,
+              dropdownColor: Colors.grey[900],
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: "Catégorie",
+                filled: true,
+                fillColor: Colors.white10,
+                border: OutlineInputBorder(),
+              ),
+              items: _categories.map((cat) => DropdownMenuItem(
+                value: cat,
+                child: Text(cat, style: const TextStyle(color: Colors.white)),
+              )).toList(),
+              onChanged: (v) => setState(() => _category = v!),
+            ),
+            const SizedBox(height: 15),
             TextFormField(controller: _deliveryPrice, keyboardType: TextInputType.number, validator: (v) => v == null || v.trim().isEmpty ? 'Coût de livraison requis' : null, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Coût de livraison (\$)", filled: true, fillColor: Colors.white10, border: OutlineInputBorder())),
             const SizedBox(height: 15),
             TextFormField(controller: _deliveryTime, validator: (v) => v == null || v.trim().isEmpty ? 'Temps requis' : null, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Temps de livraison (ex: 2-3 jours)", filled: true, fillColor: Colors.white10, border: OutlineInputBorder())),
@@ -153,6 +183,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                           quantity: int.tryParse(_quantity.text.trim()) ?? 1,
                           color: _color.text.trim(),
                           images: _images,
+                          category: _category, // Ajout de la catégorie
                         );
                         if (ok) {
                           // On demande au provider de rafraîchir la liste depuis le serveur

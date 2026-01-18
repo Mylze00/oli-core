@@ -209,7 +209,7 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
     super.dispose();
   }
 
-  Future<void> fetchFeaturedProducts() async {
+  Future<void> fetchFeaturedProducts({bool shuffle = true}) async {
     _isLoading = true;
     _error = null;
 
@@ -228,6 +228,11 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
           debugPrint("⚠️ Aucun produit featured");
         }
 
+        // Ordre aléatoire si demandé
+        if (shuffle) {
+          newProducts.shuffle();
+        }
+
         state = newProducts;
         _error = null;
       } else {
@@ -243,8 +248,122 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
   }
 }
 
+/// Notifier pour les meilleurs vendeurs du marketplace
+class TopSellersNotifier extends StateNotifier<List<Product>> {
+  Timer? _refreshTimer;
+  bool _isLoading = false;
+  String? _error;
+
+  TopSellersNotifier() : super([]) {
+    fetchTopSellers();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 120), (_) => fetchTopSellers());
+  }
+
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> fetchTopSellers({bool shuffle = false}) async {
+    _isLoading = true;
+    _error = null;
+
+    try {
+      final topSellersUrl = ApiConfig.products.replaceAll('/products', '/products/top-sellers');
+      final uri = Uri.parse(topSellersUrl);
+      final response = await http.get(uri);
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final newProducts = data.map((item) => Product.fromJson(item)).toList();
+        
+        debugPrint("✅ ${newProducts.length} top sellers chargés");
+
+        if (shuffle) {
+          newProducts.shuffle();
+        }
+
+        state = newProducts;
+        _error = null;
+      } else {
+        _error = "Erreur serveur: ${response.statusCode}";
+        debugPrint("❌ Erreur fetchTopSellers: ${response.statusCode}");
+      }
+    } catch (e) {
+      _error = "Erreur réseau: $e";
+      debugPrint("❌ Exception fetchTopSellers: $e");
+    } finally {
+      _isLoading = false;
+    }
+  }
+}
+
+/// Notifier pour les produits des grands magasins vérifiés
+class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
+  Timer? _refreshTimer;
+  bool _isLoading = false;
+  String? _error;
+
+  VerifiedShopsProductsNotifier() : super([]) {
+    fetchVerifiedShopsProducts();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 120), (_) => fetchVerifiedShopsProducts());
+  }
+
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> fetchVerifiedShopsProducts({bool shuffle = true}) async {
+    _isLoading = true;
+    _error = null;
+
+    try {
+      final verifiedUrl = ApiConfig.products.replaceAll('/products', '/products/verified-shops');
+      final uri = Uri.parse(verifiedUrl);
+      final response = await http.get(uri);
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final newProducts = data.map((item) => Product.fromJson(item)).toList();
+        
+        debugPrint("✅ ${newProducts.length} produits grands magasins chargés");
+
+        if (shuffle) {
+          newProducts.shuffle();
+        }
+
+        state = newProducts;
+        _error = null;
+      } else {
+        _error = "Erreur serveur: ${response.statusCode}";
+        debugPrint("❌ Erreur fetchVerifiedShopsProducts: ${response.statusCode}");
+      }
+    } catch (e) {
+      _error = "Erreur réseau: $e";
+      debugPrint("❌ Exception fetchVerifiedShopsProducts: $e");
+    } finally {
+      _isLoading = false;
+    }
+  }
+}
+
 /// Provider global pour les produits du marketplace
 final marketProductsProvider = StateNotifierProvider<MarketNotifier, List<Product>>((ref) => MarketNotifier());
 
 /// Provider pour les produits featured (page Accueil uniquement)
 final featuredProductsProvider = StateNotifierProvider<FeaturedProductsNotifier, List<Product>>((ref) => FeaturedProductsNotifier());
+
+/// Provider pour les meilleurs vendeurs
+final topSellersProvider = StateNotifierProvider<TopSellersNotifier, List<Product>>((ref) => TopSellersNotifier());
+
+/// Provider pour les produits des grands magasins vérifiés
+final verifiedShopsProductsProvider = StateNotifierProvider<VerifiedShopsProductsNotifier, List<Product>>((ref) => VerifiedShopsProductsNotifier());

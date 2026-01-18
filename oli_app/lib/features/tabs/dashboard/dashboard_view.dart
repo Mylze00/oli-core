@@ -48,11 +48,13 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
 
   @override
   Widget build(BuildContext context) {
-    // ✨ Utiliser featuredProductsProvider pour afficher uniquement les produits admin
+    // ✨ Produits admin (featured)
     final products = ref.watch(featuredProductsProvider);
+    // ⭐ Meilleurs vendeurs du marketplace
+    final topSellers = ref.watch(topSellersProvider);
+    // 🏪 Produits des grands magasins vérifiés
+    final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
     final authState = ref.watch(authControllerProvider);
-    // On ne les utilise pas directement ici mais c'est dispo si besoin
-    // final userName = authState.userData?['name'] ?? "Utilisateur";
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -202,7 +204,111 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             ),
           ),
 
-          // 6. TOP RANKING (Grid 3 Colonnes)
+          // 6. MEILLEURS VENDEURS (Top Sellers du Marketplace)
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.orange.shade900, Colors.orange.shade700],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("⭐ Meilleurs Vendeurs", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                      Icon(Icons.trending_up, color: Colors.white.withValues(alpha: 0.8), size: 18),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text("Les produits les plus populaires", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 160,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: topSellers.isEmpty ? 3 : topSellers.length,
+                      itemBuilder: (context, index) {
+                        if (topSellers.isEmpty) return _buildPlaceholderCard();
+                        return GestureDetector(
+                          onTap: () => _navigateToProduct(topSellers[index]),
+                          child: _buildTopSellerCard(topSellers[index]),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 7. GRANDS MAGASINS VÉRIFIÉS
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue.shade900, Colors.blue.shade600],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("🏪 Grands Magasins", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.verified, color: Colors.white, size: 12),
+                            SizedBox(width: 2),
+                            Text("Certifié", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text("Supermarchés et commerces vérifiés", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 160,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: verifiedShopsProducts.isEmpty ? 3 : verifiedShopsProducts.length,
+                      itemBuilder: (context, index) {
+                        if (verifiedShopsProducts.isEmpty) return _buildPlaceholderCard();
+                        return GestureDetector(
+                          onTap: () => _navigateToProduct(verifiedShopsProducts[index]),
+                          child: _buildVerifiedShopCard(verifiedShopsProducts[index]),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 8. TOP RANKING (Grid 3 Colonnes)
           const SliverPadding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             sliver: SliverToBoxAdapter(
@@ -457,6 +563,130 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
       margin: const EdgeInsets.only(right: 10),
       color: Colors.grey[900],
       child: const Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  /// Carte pour les meilleurs vendeurs du marketplace
+  Widget _buildTopSellerCard(Product product) {
+    return Container(
+      width: 130,
+      margin: const EdgeInsets.only(right: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2C2C2C),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  child: product.images.isNotEmpty 
+                    ? Image.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
+                    : const Center(child: Icon(Icons.image, color: Colors.grey)),
+                ),
+                Positioned(
+                  top: 0, left: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: const BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(8),
+                        bottomRight: Radius.circular(8),
+                      ),
+                    ),
+                    child: const Text("TOP", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                const SizedBox(height: 2),
+                Text("\$${product.price}", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 14)),
+                Row(
+                  children: [
+                    const Icon(Icons.visibility, size: 10, color: Colors.grey),
+                    const SizedBox(width: 2),
+                    Text("Populaire", style: TextStyle(color: Colors.grey[500], fontSize: 10)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Carte pour les produits des grands magasins vérifiés
+  Widget _buildVerifiedShopCard(Product product) {
+    return Container(
+      width: 130,
+      margin: const EdgeInsets.only(right: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2C2C2C),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  child: product.images.isNotEmpty 
+                    ? Image.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
+                    : const Center(child: Icon(Icons.image, color: Colors.grey)),
+                ),
+                Positioned(
+                  top: 0, right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: const BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.only(
+                        topRight: Radius.circular(8),
+                        bottomLeft: Radius.circular(8),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified, size: 10, color: Colors.white),
+                        SizedBox(width: 2),
+                        Text("Vérifié", style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                const SizedBox(height: 2),
+                Text("\$${product.price}", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 14)),
+                if (product.shopName != null)
+                  Text(product.shopName!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[500], fontSize: 10)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

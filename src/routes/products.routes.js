@@ -85,6 +85,156 @@ router.get('/featured', async (req, res) => {
 });
 
 /**
+ * GET /products/top-sellers
+ * Meilleurs vendeurs du marketplace (produits les plus vendus/consultés)
+ */
+router.get('/top-sellers', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+
+        const query = `
+            SELECT p.*, 
+                   u.name as seller_name, 
+                   u.avatar_url as seller_avatar, 
+                   u.id_oli as seller_oli_id,
+                   s.name as shop_name, 
+                   s.is_verified as shop_verified
+            FROM products p 
+            JOIN users u ON p.seller_id = u.id
+            LEFT JOIN shops s ON p.shop_id = s.id
+            WHERE p.status = 'active'
+            ORDER BY COALESCE(p.view_count, 0) DESC, p.created_at DESC
+            LIMIT $1
+        `;
+
+        const result = await pool.query(query, [limit]);
+
+        const products = result.rows.map(p => {
+            let imgs = [];
+            if (Array.isArray(p.images)) {
+                imgs = p.images;
+            } else if (typeof p.images === 'string') {
+                imgs = p.images.replace(/[{}"]/g, '').split(',').filter(Boolean);
+            }
+
+            const imageUrls = imgs.map(img => {
+                if (!img) return null;
+                if (img.startsWith('http')) return img;
+                return `${BASE_URL}/uploads/${img}`;
+            }).filter(url => url !== null);
+
+            return {
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                price: parseFloat(p.price).toFixed(2),
+                category: p.category,
+                condition: p.condition,
+                quantity: p.quantity,
+                color: p.color,
+                location: p.location,
+                isNegotiable: p.is_negotiable,
+                deliveryPrice: parseFloat(p.delivery_price || 0).toFixed(2),
+                deliveryTime: p.delivery_time,
+                sellerId: p.seller_id,
+                sellerName: p.seller_name,
+                sellerAvatar: p.seller_avatar,
+                sellerOliId: p.seller_oli_id,
+                shopId: p.shop_id,
+                shopName: p.shop_name,
+                shopVerified: p.shop_verified,
+                imageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
+                images: imageUrls,
+                status: p.status,
+                createdAt: p.created_at,
+                viewCount: p.view_count || 0
+            };
+        });
+
+        res.json(products);
+    } catch (err) {
+        console.error("Erreur GET /products/top-sellers:", err);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+/**
+ * GET /products/verified-shops
+ * Produits des grands magasins vérifiés (shops is_verified = true)
+ */
+router.get('/verified-shops', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+
+        const query = `
+            SELECT p.*, 
+                   u.name as seller_name, 
+                   u.avatar_url as seller_avatar, 
+                   u.id_oli as seller_oli_id,
+                   s.name as shop_name, 
+                   s.is_verified as shop_verified,
+                   s.logo_url as shop_logo
+            FROM products p 
+            JOIN users u ON p.seller_id = u.id
+            JOIN shops s ON p.shop_id = s.id
+            WHERE p.status = 'active'
+              AND s.is_verified = TRUE
+            ORDER BY p.created_at DESC
+            LIMIT $1
+        `;
+
+        const result = await pool.query(query, [limit]);
+
+        const products = result.rows.map(p => {
+            let imgs = [];
+            if (Array.isArray(p.images)) {
+                imgs = p.images;
+            } else if (typeof p.images === 'string') {
+                imgs = p.images.replace(/[{}"]/g, '').split(',').filter(Boolean);
+            }
+
+            const imageUrls = imgs.map(img => {
+                if (!img) return null;
+                if (img.startsWith('http')) return img;
+                return `${BASE_URL}/uploads/${img}`;
+            }).filter(url => url !== null);
+
+            return {
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                price: parseFloat(p.price).toFixed(2),
+                category: p.category,
+                condition: p.condition,
+                quantity: p.quantity,
+                color: p.color,
+                location: p.location,
+                isNegotiable: p.is_negotiable,
+                deliveryPrice: parseFloat(p.delivery_price || 0).toFixed(2),
+                deliveryTime: p.delivery_time,
+                sellerId: p.seller_id,
+                sellerName: p.seller_name,
+                sellerAvatar: p.seller_avatar,
+                sellerOliId: p.seller_oli_id,
+                shopId: p.shop_id,
+                shopName: p.shop_name,
+                shopVerified: true,
+                shopLogo: p.shop_logo,
+                imageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
+                images: imageUrls,
+                status: p.status,
+                createdAt: p.created_at
+            };
+        });
+
+        res.json(products);
+    } catch (err) {
+        console.error("Erreur GET /products/verified-shops:", err);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+/**
  * GET /products
  * Liste tous les produits actifs (public)
  */

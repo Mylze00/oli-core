@@ -25,6 +25,7 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
     required int quantity,
     required String color,
     required List<XFile> images,
+    String? category, // Nouvelle catégorie optionnelle
   }) async {
     state = const AsyncValue.loading();
 
@@ -55,6 +56,7 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
         'condition': condition,
         'quantity': quantity,
         'color': color,
+        'category': category ?? 'Autres', // Catégorie avec valeur par défaut
         'images': multipartFiles,
       });
 
