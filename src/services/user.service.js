@@ -16,7 +16,7 @@ async function getVisitedProducts(userId, limit = 20) {
                 p.id,
                 p.name,
                 p.price,
-                p.image_url,
+                p.images,
                 p.description,
                 upv.viewed_at,
                 u.name as seller_name
@@ -29,7 +29,24 @@ async function getVisitedProducts(userId, limit = 20) {
         `;
 
         const result = await pool.query(query, [userId, limit]);
-        return result.rows;
+
+        // Formater les résultats avec imageUrl
+        const products = result.rows.map(p => {
+            let imgs = [];
+            if (Array.isArray(p.images)) {
+                imgs = p.images;
+            } else if (typeof p.images === 'string') {
+                imgs = p.images.replace(/[{}"]/g, '').split(',').filter(Boolean);
+            }
+
+            return {
+                ...p,
+                imageUrl: imgs.length > 0 ? imgs[0] : null,
+                images: imgs
+            };
+        });
+
+        return products;
     } catch (error) {
         console.error('Erreur getVisitedProducts:', error);
         throw new Error('Erreur lors de la récupération des produits visités');
