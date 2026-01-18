@@ -42,8 +42,25 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
       );
 
       if (response.statusCode == 200) {
-        // Optimistic Update: On suppose que l'URL sera celle retournée ou on refetch
-        // Pour l'avatar, on est obligé de refetch car l'URL change (Cloudinary)
+        // Extraire la nouvelle URL d'avatar depuis la réponse
+        final responseData = response.data;
+        String? newAvatarUrl;
+        if (responseData is Map && responseData['avatarUrl'] != null) {
+          newAvatarUrl = responseData['avatarUrl'];
+        } else if (responseData is Map && responseData['avatar_url'] != null) {
+          newAvatarUrl = responseData['avatar_url'];
+        }
+        
+        // Mise à jour optimiste immédiate si on a l'URL
+        if (newAvatarUrl != null) {
+          // Ajouter un timestamp pour forcer le cache à se rafraîchir
+          final cacheBustedUrl = newAvatarUrl.contains('?') 
+              ? '$newAvatarUrl&t=${DateTime.now().millisecondsSinceEpoch}'
+              : '$newAvatarUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+          _ref.read(authControllerProvider.notifier).updateUserData({'avatar_url': cacheBustedUrl});
+        }
+        
+        // Puis refetch pour avoir les données complètes du serveur
         await _ref.read(authControllerProvider.notifier).fetchUserProfile();
         state = const AsyncValue.data(null);
       } else {

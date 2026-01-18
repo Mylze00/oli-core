@@ -10,11 +10,13 @@ const { productUpload } = require('../config/upload');
 
 /**
  * GET /products/featured
- * Produits mis en avant par l'admin (pour page Accueil)
+ * Produits de l'administrateur uniquement (pour page Accueil)
+ * Admin défini par phone: +243827088682
  */
 router.get('/featured', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 20;
+        const ADMIN_PHONE = '+243827088682';
 
         const query = `
             SELECT p.*, 
@@ -26,13 +28,13 @@ router.get('/featured', async (req, res) => {
             FROM products p 
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
-            WHERE p.is_featured = TRUE 
+            WHERE u.phone = $1
               AND p.status = 'active'
             ORDER BY p.created_at DESC
-            LIMIT $1
+            LIMIT $2
         `;
 
-        const result = await pool.query(query, [limit]);
+        const result = await pool.query(query, [ADMIN_PHONE, limit]);
 
         // Formater les URLs d'images (même logique que GET /)
         const products = result.rows.map(p => {
