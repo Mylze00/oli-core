@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Menu, Transition } from '@headlessui/react';
 import {
     BellIcon,
@@ -13,10 +13,24 @@ import { getImageUrl } from '../../utils/image';
 export default function Header() {
     const navigate = useNavigate();
     const user = getUser();
+    const [searchQuery, setSearchQuery] = useState('');
 
     const handleLogout = () => {
         removeToken();
         navigate('/login');
+    };
+
+    const handleSearch = (e) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+
+        // Détecter si c'est un numéro de téléphone
+        if (searchQuery.includes('+') || /^\d+$/.test(searchQuery.trim())) {
+            navigate(`/users?search=${encodeURIComponent(searchQuery)}`);
+        } else {
+            // Sinon rechercher dans les produits
+            navigate(`/products?search=${encodeURIComponent(searchQuery)}`);
+        }
     };
 
     return (
@@ -28,7 +42,7 @@ export default function Header() {
                 </button>
 
                 {/* Search Bar */}
-                <div className="relative w-full max-w-md hidden md:block">
+                <form onSubmit={handleSearch} className="relative w-full max-w-md hidden md:block">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
                     </div>
@@ -36,10 +50,12 @@ export default function Header() {
                         type="text"
                         name="search"
                         id="search"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                         className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         placeholder="Rechercher (ex: +243 82 000...)"
                     />
-                </div>
+                </form>
             </div>
 
             {/* Right: Actions & Profile */}

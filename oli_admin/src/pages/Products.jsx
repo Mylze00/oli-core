@@ -99,9 +99,18 @@ export default function Products() {
                                         {product.status}
                                     </span>
                                 </div>
-                                <div className="mt-4 pt-4 border-t text-sm text-gray-500 flex justify-between">
-                                    <span>Vendeur: {product.seller_name}</span>
-                                    <span>{new Date(product.created_at).toLocaleDateString()}</span>
+                                <div className="mt-4 pt-4 border-t flex items-center gap-2">
+                                    <img
+                                        src={getImageUrl(product.seller_avatar) || `https://ui-avatars.com/api/?name=${product.seller_name || 'V'}&size=32`}
+                                        alt=""
+                                        className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                        onError={(e) => e.target.src = `https://ui-avatars.com/api/?name=${product.seller_name || 'V'}&size=32`}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium text-gray-900 truncate">{product.seller_name || 'Vendeur'}</div>
+                                        <div className="text-xs text-gray-500">{product.seller_phone}</div>
+                                    </div>
+                                    <span className="text-xs text-gray-400">{new Date(product.created_at).toLocaleDateString()}</span>
                                 </div>
                             </div>
                         </div>

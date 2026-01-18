@@ -7,7 +7,8 @@ import {
     CreditCardIcon,
     ExclamationTriangleIcon,
     TruckIcon,
-    ShieldCheckIcon
+    ShieldCheckIcon,
+    ClipboardDocumentListIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -15,6 +16,7 @@ const navigation = [
     { name: 'Utilisateurs', href: '/users', icon: UsersIcon },
     { name: 'Marchands', href: '/shops', icon: ShoppingBagIcon },
     { name: 'Produits', href: '/products', icon: CubeIcon },
+    { name: 'Demandes', href: '/requests', icon: ClipboardDocumentListIcon },
     { name: 'Livreurs', href: '/delivery', icon: TruckIcon },
     { name: 'Commandes', href: '/orders', icon: CubeIcon },
     { name: 'Finances', href: '/finances', icon: CreditCardIcon },

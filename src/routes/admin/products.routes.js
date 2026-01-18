@@ -12,12 +12,13 @@ const pool = require('../../config/db');
  */
 router.get('/', async (req, res) => {
     try {
-        const { status, is_featured, limit = 100, offset = 0 } = req.query;
+        const { status, is_featured, search, limit = 100, offset = 0 } = req.query;
 
         let query = `
             SELECT p.*, 
                    u.name as seller_name, 
                    u.phone as seller_phone,
+                   u.avatar_url as seller_avatar,
                    u.is_admin as seller_is_admin
             FROM products p
             JOIN users u ON p.seller_id = u.id
@@ -25,6 +26,13 @@ router.get('/', async (req, res) => {
         `;
         const params = [];
         let paramIndex = 1;
+
+        // Recherche par nom produit ou téléphone vendeur
+        if (search) {
+            query += ` AND (p.name ILIKE $${paramIndex} OR u.phone ILIKE $${paramIndex} OR u.name ILIKE $${paramIndex})`;
+            params.push(`%${search}%`);
+            paramIndex++;
+        }
 
         if (status) {
             query += ` AND p.status = $${paramIndex++}`;
