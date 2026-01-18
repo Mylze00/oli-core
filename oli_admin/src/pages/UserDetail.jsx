@@ -161,14 +161,31 @@ export default function UserDetail() {
                     {/* Avatar */}
                     <div className="relative">
                         <img
-                            src={getImageUrl(user.avatar) || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
+                            src={getImageUrl(user.avatar_url || user.avatar) || `https://ui-avatars.com/api/?name=${user.name || 'User'}&background=0B1727&color=fff&size=256`}
                             alt={user.name}
                             className="w-32 h-32 rounded-full border-4 border-white shadow-md object-cover bg-white"
                             onError={(e) => {
                                 e.target.onerror = null;
-                                e.target.src = "https://ui-avatars.com/api/?name=" + (user.name || 'User') + "&background=random";
+                                e.target.src = `https://ui-avatars.com/api/?name=${user.name || 'User'}&background=0B1727&color=fff`;
                             }}
                         />
+                        {/* Twitter-style Scalloped Verification Badge */}
+                        {(user.is_verified || user.account_type === 'certifie' || user.account_type === 'premium' || user.account_type === 'entreprise' || user.has_certified_shop) && (
+                            <div className="absolute bottom-0 right-0">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path
+                                        d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5c-1.51 0-2.816.917-3.437 2.25-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .494.083.964.237 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484z"
+                                        fill={
+                                            user.has_certified_shop ? '#D4A500' :
+                                                user.account_type === 'entreprise' ? '#D4A500' :
+                                                    user.account_type === 'premium' ? '#00BA7C' :
+                                                        '#1DA1F2'
+                                        }
+                                    />
+                                    <path d="M9.5 16.5L5.5 12.5l1.41-1.41L9.5 13.67l7.09-7.09L18 8l-8.5 8.5z" fill="white" />
+                                </svg>
+                            </div>
+                        )}
                     </div>
 
                     {/* Infos Principales */}
@@ -258,8 +275,8 @@ export default function UserDetail() {
                                         }
                                     }}
                                     className={`px-3 py-1 rounded-full text-xs font-medium border transition ${user.account_type === type.value
-                                            ? `bg-${type.color}-500 text-white border-${type.color}-600`
-                                            : `bg-${type.color}-50 text-${type.color}-700 border-${type.color}-200 hover:bg-${type.color}-100`
+                                        ? `bg-${type.color}-500 text-white border-${type.color}-600`
+                                        : `bg-${type.color}-50 text-${type.color}-700 border-${type.color}-200 hover:bg-${type.color}-100`
                                         }`}
                                     style={{
                                         backgroundColor: user.account_type === type.value

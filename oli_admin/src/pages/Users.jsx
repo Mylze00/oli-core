@@ -2,30 +2,54 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { getImageUrl } from '../utils/image';
-import { CheckBadgeIcon, BuildingStorefrontIcon, StarIcon, BriefcaseIcon } from '@heroicons/react/24/solid';
 
-// Badge components
+// Twitter/X-style Scalloped Verification Badge
+const VerificationBadge = ({ type = 'blue', size = 20 }) => {
+    const colors = {
+        blue: '#1DA1F2',    // Certifié
+        gold: '#D4A500',    // Magasin certifié / Entreprise
+        gray: '#71767B',    // Standard  
+        green: '#00BA7C',   // Premium
+        purple: '#9333EA'   // Entreprise
+    };
+    const color = colors[type] || colors.blue;
+
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Scalloped background */}
+            <path
+                d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5c-1.51 0-2.816.917-3.437 2.25-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .494.083.964.237 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484z"
+                fill={color}
+            />
+            {/* Checkmark */}
+            <path
+                d="M9.5 16.5L5.5 12.5l1.41-1.41L9.5 13.67l7.09-7.09L18 8l-8.5 8.5z"
+                fill="white"
+            />
+        </svg>
+    );
+};
+
+// Badge for account type (text badge)
 const AccountBadge = ({ type }) => {
     const badges = {
-        'certifie': { icon: CheckBadgeIcon, label: 'Certifié', bg: 'bg-blue-100', text: 'text-blue-600', border: 'border-blue-200' },
-        'premium': { icon: StarIcon, label: 'Premium', bg: 'bg-yellow-100', text: 'text-yellow-600', border: 'border-yellow-200' },
-        'entreprise': { icon: BriefcaseIcon, label: 'Entreprise', bg: 'bg-purple-100', text: 'text-purple-600', border: 'border-purple-200' }
+        'certifie': { label: 'Certifié', bg: 'bg-blue-100', text: 'text-blue-600', border: 'border-blue-200' },
+        'premium': { label: 'Premium', bg: 'bg-green-100', text: 'text-green-600', border: 'border-green-200' },
+        'entreprise': { label: 'Entreprise', bg: 'bg-purple-100', text: 'text-purple-600', border: 'border-purple-200' }
     };
     const badge = badges[type];
     if (!badge) return null;
-    const Icon = badge.icon;
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text} border ${badge.border}`}>
-            <Icon className="h-3 w-3 mr-1" />
             {badge.label}
         </span>
     );
 };
 
+// Gold shop badge
 const ShopBadge = () => (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-300">
-        <BuildingStorefrontIcon className="h-3 w-3 mr-1" />
-        Magasin Certifié
+        🏪 Magasin Certifié
     </span>
 );
 
@@ -110,8 +134,19 @@ export default function Users() {
                                                     }}
                                                 />
                                                 {/* Badge overlay for verified accounts */}
-                                                {user.is_verified && (
-                                                    <CheckBadgeIcon className="absolute -bottom-1 -right-1 h-5 w-5 text-blue-500 bg-white rounded-full" />
+                                                {(user.is_verified || user.account_type === 'certifie' || user.account_type === 'premium' || user.account_type === 'entreprise' || user.has_certified_shop) && (
+                                                    <div className="absolute -bottom-1 -right-1">
+                                                        <VerificationBadge
+                                                            type={
+                                                                user.has_certified_shop ? 'gold' :
+                                                                    user.account_type === 'entreprise' ? 'gold' :
+                                                                        user.account_type === 'premium' ? 'green' :
+                                                                            user.account_type === 'certifie' ? 'blue' :
+                                                                                user.is_verified ? 'blue' : 'gray'
+                                                            }
+                                                            size={18}
+                                                        />
+                                                    </div>
                                                 )}
                                             </div>
                                             <div className="ml-4">
