@@ -201,6 +201,59 @@ router.patch('/:id/verify', async (req, res) => {
 });
 
 /**
+ * PATCH /admin/users/:id/account-type
+ * Modifier le type de compte d'un utilisateur
+ */
+router.patch('/:id/account-type', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { account_type, has_certified_shop } = req.body;
+
+        const updates = [];
+        const values = [];
+        let paramIndex = 1;
+
+        if (account_type) {
+            const validTypes = ['ordinaire', 'certifie', 'premium', 'entreprise'];
+            if (!validTypes.includes(account_type)) {
+                return res.status(400).json({ error: 'Type de compte invalide' });
+            }
+            updates.push(`account_type = $${paramIndex++}`);
+            values.push(account_type);
+        }
+
+        if (typeof has_certified_shop === 'boolean') {
+            updates.push(`has_certified_shop = $${paramIndex++}`);
+            values.push(has_certified_shop);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'Aucune modification fournie' });
+        }
+
+        values.push(id);
+        const result = await pool.query(`
+            UPDATE users 
+            SET ${updates.join(', ')}, updated_at = NOW()
+            WHERE id = $${paramIndex}
+            RETURNING id, name, phone, account_type, has_certified_shop
+        `, values);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Utilisateur non trouvé' });
+        }
+
+        res.json({
+            message: 'Type de compte mis à jour',
+            user: result.rows[0]
+        });
+    } catch (err) {
+        console.error('Erreur PATCH /admin/users/:id/account-type:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
  * GET /admin/users/:id/products
  * Récupérer les produits d'un utilisateur
  */

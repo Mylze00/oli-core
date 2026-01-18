@@ -233,6 +233,47 @@ export default function UserDetail() {
                         </div>
                     </div>
 
+                    {/* Account Type Selector */}
+                    <div className="flex flex-col gap-2 mt-4 md:mt-0 mr-4">
+                        <span className="text-xs text-gray-500 font-medium">Type de compte:</span>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                { value: 'ordinaire', label: 'Ordinaire', color: 'gray' },
+                                { value: 'certifie', label: 'Certifié ✓', color: 'blue' },
+                                { value: 'premium', label: 'Premium ⭐', color: 'yellow' },
+                                { value: 'entreprise', label: 'Entreprise 🏢', color: 'purple' }
+                            ].map(type => (
+                                <button
+                                    key={type.value}
+                                    onClick={async () => {
+                                        if (window.confirm(`Définir comme compte ${type.label} ?`)) {
+                                            try {
+                                                await api.patch(`/admin/users/${user.id}/account-type`, { account_type: type.value });
+                                                setUser({ ...user, account_type: type.value });
+                                                alert(`Compte défini comme ${type.label}`);
+                                            } catch (err) {
+                                                console.error(err);
+                                                alert("Erreur lors de la mise à jour");
+                                            }
+                                        }
+                                    }}
+                                    className={`px-3 py-1 rounded-full text-xs font-medium border transition ${user.account_type === type.value
+                                            ? `bg-${type.color}-500 text-white border-${type.color}-600`
+                                            : `bg-${type.color}-50 text-${type.color}-700 border-${type.color}-200 hover:bg-${type.color}-100`
+                                        }`}
+                                    style={{
+                                        backgroundColor: user.account_type === type.value
+                                            ? (type.color === 'gray' ? '#6b7280' : type.color === 'blue' ? '#3b82f6' : type.color === 'yellow' ? '#eab308' : '#9333ea')
+                                            : undefined,
+                                        color: user.account_type === type.value ? 'white' : undefined
+                                    }}
+                                >
+                                    {type.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Actions Buttons */}
                     <div className="flex gap-3 mt-4 md:mt-0">
                         <button
@@ -257,7 +298,7 @@ export default function UserDetail() {
                             onClick={async () => {
                                 if (window.confirm(user.is_active ? 'Voulez-vous vraiment BLOQUER cet utilisateur ?' : 'Voulez-vous DÉBLOQUER cet utilisateur ?')) {
                                     try {
-                                        await api.post(`/admin/users/${user.id}/suspend`, { suspended: user.is_active }); // Si actif, on suspend (true)
+                                        await api.post(`/admin/users/${user.id}/suspend`, { suspended: user.is_active });
                                         setUser({ ...user, is_active: !user.is_active });
                                         alert(user.is_active ? 'Utilisateur bloqué avec succès' : 'Utilisateur débloqué');
                                     } catch (err) {
