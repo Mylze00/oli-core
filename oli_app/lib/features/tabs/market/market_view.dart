@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/product_model.dart'; 
+import '../../../widgets/verification_badge.dart';
 import 'product_details_page.dart';
 
 class MarketView extends ConsumerStatefulWidget {
@@ -419,10 +420,32 @@ class _MarketViewState extends ConsumerState<MarketView> {
                         ),
                         child: Row(
                           children: [
-                            CircleAvatar(
-                              radius: 7,
-                              backgroundImage: product.sellerAvatar != null ? NetworkImage(product.sellerAvatar!) : null,
-                              child: product.sellerAvatar == null ? const Icon(Icons.person, size: 8, color: Colors.white) : null,
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                CircleAvatar(
+                                  radius: 7,
+                                  backgroundImage: product.sellerAvatar != null ? NetworkImage(product.sellerAvatar!) : null,
+                                  child: product.sellerAvatar == null ? const Icon(Icons.person, size: 8, color: Colors.white) : null,
+                                ),
+                                // Verification badge centered at bottom
+                                if (product.sellerIsVerified || product.sellerAccountType != 'ordinaire' || product.sellerHasCertifiedShop)
+                                  Positioned(
+                                    bottom: -2,
+                                    left: 0,
+                                    right: 0,
+                                    child: Center(
+                                      child: VerificationBadge(
+                                        type: VerificationBadge.fromSellerData(
+                                          isVerified: product.sellerIsVerified,
+                                          accountType: product.sellerAccountType,
+                                          hasCertifiedShop: product.sellerHasCertifiedShop,
+                                        ),
+                                        size: 10,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                             const SizedBox(width: 3),
                             Expanded(

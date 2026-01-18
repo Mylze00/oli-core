@@ -23,6 +23,9 @@ router.get('/featured', async (req, res) => {
                    u.name as seller_name, 
                    u.avatar_url as seller_avatar, 
                    u.id_oli as seller_oli_id,
+                   u.is_verified as seller_is_verified,
+                   u.account_type as seller_account_type,
+                   u.has_certified_shop as seller_has_certified_shop,
                    s.name as shop_name, 
                    s.is_verified as shop_verified
             FROM products p 
@@ -99,6 +102,9 @@ router.get('/top-sellers', async (req, res) => {
                    u.name as seller_name, 
                    u.avatar_url as seller_avatar, 
                    u.id_oli as seller_oli_id,
+                   u.is_verified as seller_is_verified,
+                   u.account_type as seller_account_type,
+                   u.has_certified_shop as seller_has_certified_shop,
                    s.name as shop_name, 
                    s.is_verified as shop_verified
             FROM products p 
@@ -173,6 +179,9 @@ router.get('/verified-shops', async (req, res) => {
                    u.name as seller_name, 
                    u.avatar_url as seller_avatar, 
                    u.id_oli as seller_oli_id,
+                   u.is_verified as seller_is_verified,
+                   u.account_type as seller_account_type,
+                   u.has_certified_shop as seller_has_certified_shop,
                    s.name as shop_name, 
                    s.is_verified as shop_verified,
                    s.logo_url as shop_logo
@@ -246,9 +255,11 @@ router.get('/', async (req, res) => {
 
         let query = `
             SELECT p.*, 
-                   u.name as seller_name, 
-                   u.avatar_url as seller_avatar, 
+                   u.name as seller_name, \n                   u.avatar_url as seller_avatar, 
                    u.id_oli as seller_oli_id,
+                   u.is_verified as seller_is_verified,
+                   u.account_type as seller_account_type,
+                   u.has_certified_shop as seller_has_certified_shop,
                    s.name as shop_name, 
                    s.is_verified as shop_verified
             FROM products p 
@@ -352,7 +363,11 @@ router.get('/:id', async (req, res) => {
                    u.id_oli as seller_oli_id,
                    u.phone as seller_phone,
                    u.rating as seller_rating,
-                   s.name as shop_name
+                   u.is_verified as seller_is_verified,
+                   u.account_type as seller_account_type,
+                   u.has_certified_shop as seller_has_certified_shop,
+                   s.name as shop_name, 
+                   s.is_verified as shop_verified
             FROM products p 
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id

@@ -14,6 +14,9 @@ class Product {
   final String sellerId;
   final String? sellerAvatar;
   final String? sellerOliId;
+  final bool sellerIsVerified;
+  final String sellerAccountType;
+  final bool sellerHasCertifiedShop;
   final String condition;
   final String description;
   final String color;
@@ -39,6 +42,9 @@ class Product {
     required this.sellerId,
     this.sellerAvatar,
     this.sellerOliId,
+    this.sellerIsVerified = false,
+    this.sellerAccountType = 'ordinaire',
+    this.sellerHasCertifiedShop = false,
     required this.condition,
     required this.description,
     required this.color,
@@ -83,6 +89,9 @@ class Product {
       sellerId: json['sellerId']?.toString() ?? json['seller_id']?.toString() ?? '',
       sellerAvatar: json['sellerAvatar'] ?? json['seller_avatar'],
       sellerOliId: json['sellerOliId'] ?? json['seller_oli_id'],
+      sellerIsVerified: json['sellerIsVerified'] ?? json['seller_is_verified'] ?? false,
+      sellerAccountType: json['sellerAccountType'] ?? json['seller_account_type'] ?? 'ordinaire',
+      sellerHasCertifiedShop: json['sellerHasCertifiedShop'] ?? json['seller_has_certified_shop'] ?? false,
       condition: json['condition'] ?? 'Inconnu',
       description: json['description'] ?? '',
       color: json['color'] ?? '',
