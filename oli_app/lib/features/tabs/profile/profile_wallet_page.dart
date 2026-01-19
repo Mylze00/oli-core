@@ -4,22 +4,15 @@ import '../../../app/theme/theme_provider.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../user/providers/profile_controller.dart';
 import '../../user/providers/user_activity_provider.dart';
-import '../../user/widgets/edit_name_dialog.dart';
-import '../../user/widgets/visited_products_section.dart';
-import '../../user/screens/addresses_page.dart';
 import '../../user/providers/address_provider.dart';
 import '../../wallet/providers/wallet_provider.dart';
-import '../../wallet/screens/wallet_screen.dart';
-import '../../../widgets/verification_badge.dart';
 
-// Imports des pages (Legacy - à migrer progressivement si nécessaire)
-import '../../../pages/publish_article_page.dart';
-import '../../../pages/purchases_page.dart';
-import '../../../pages/favorites_page.dart';
-import '../../../pages/settings_page.dart';
-import '../../../pages/help_page.dart';
-import '../../../pages/about_page.dart';
-import '../../../pages/payment_methods_page.dart';
+// Widgets Refactorisés
+import 'widgets/profile_header.dart';
+import 'widgets/wallet_summary_card.dart';
+import 'widgets/order_status_bar.dart';
+import 'widgets/profile_tools_grid.dart';
+import '../../user/widgets/visited_products_section.dart';
 
 class ProfileAndWalletPage extends ConsumerWidget {
   const ProfileAndWalletPage({super.key});
@@ -27,7 +20,6 @@ class ProfileAndWalletPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
-    final walletState = ref.watch(walletProvider);
     final isDarkMode = ref.watch(themeProvider);
     final user = authState.userData ?? {};
     
@@ -67,7 +59,7 @@ class ProfileAndWalletPage extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
-              // 1. HEADER AMÉLIORÉ avec Wallet Ultra-Visible
+              // 1. HEADER (Blue Background + Avatar + Info)
               Container(
                 padding: const EdgeInsets.only(top: 50, left: 20, right: 20, bottom: 30),
                 decoration: BoxDecoration(
@@ -83,216 +75,12 @@ class ProfileAndWalletPage extends ConsumerWidget {
                 ),
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        // Avatar
-                        GestureDetector(
-                          onTap: () => ref.read(profileControllerProvider.notifier).updateAvatar(),
-                          child: Stack(
-                            children: [
-                              Container(
-                                width: 70, height: 70,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                  image: user['avatar_url'] != null
-                                      ? DecorationImage(
-                                          image: NetworkImage(user['avatar_url']),
-                                          fit: BoxFit.cover,
-                                        )
-                                      : null,
-                                ),
-                                child: user['avatar_url'] == null
-                                    ? const Icon(Icons.person, color: Colors.white, size: 40)
-                                    : null,
-                              ),
-                              Positioned(
-                                bottom: 0, 
-                                left: 0, // Camera icon moved to left to make space for badge
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.amber,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.camera_alt, size: 12, color: Colors.black),
-                                ),
-                              ),
-                              // Verification Badge Overlay (Bottom Right)
-                              if (user['is_verified'] == true || user['account_type'] != 'ordinaire' || user['has_certified_shop'] == true)
-                                Positioned(
-                                  bottom: -5,
-                                  right: -5,
-                                  child: VerificationBadge(
-                                    type: VerificationBadge.fromSellerData(
-                                      isVerified: user['is_verified'] == true,
-                                      accountType: user['account_type'] ?? 'ordinaire',
-                                      hasCertifiedShop: user['has_certified_shop'] == true,
-                                    ),
-                                    size: 24,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // User Info
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      user["name"] ?? "Utilisateur Oli",
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.white, size: 18),
-                                    onPressed: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (_) => EditNameDialog(
-                                          currentName: user["name"] ?? "Utilisateur Oli",
-                                        ),
-                                      );
-                                    },
-                                    padding: const EdgeInsets.all(4),
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              // Badges Row
-                              Row(
-                                children: [
-                                  // Status Badges
-                                  if (user['account_type'] == 'entreprise' || user['has_certified_shop'] == true)
-                                     _buildBadge('Entreprise', const Color(0xFFD4A500).withOpacity(0.2), const Color(0xFFD4A500)),
-                                  
-                                  if (user['account_type'] == 'premium')
-                                     _buildBadge('Premium ⭐', const Color(0xFF00BA7C).withOpacity(0.2), const Color(0xFF00BA7C)),
-
-                                  if (user['account_type'] == 'certifie' || user['is_verified'] == true) ...[
-                                    if (user['account_type'] != 'entreprise' && user['account_type'] != 'premium') // Avoid duplicates if higher tier
-                                      _buildBadge('Certifié ✓', const Color(0xFF1DA1F2).withOpacity(0.2), const Color(0xFF1DA1F2)),
-                                  ],
-                                  
-                                  if (user['is_seller'] == true) ...[
-                                     const SizedBox(width: 8),
-                                     _buildBadge('Vendeur', Colors.white24),
-                                  ] else ...[
-                                     const SizedBox(width: 8),
-                                     _buildBadge('Membre', Colors.white24),
-                                  ],
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              // Default Address Display
-                              Consumer(
-                                builder: (context, ref, child) {
-                                  final defaultAddr = ref.watch(defaultAddressProvider);
-                                  if (defaultAddr != null) {
-                                    return Row(
-                                      children: [
-                                        const Icon(Icons.location_on, color: Colors.white70, size: 12),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            defaultAddr.fullAddress,
-                                            style: const TextStyle(color: Colors.white70, fontSize: 11),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  }
-                                  return const Text(
-                                    "Pas d'adresse enregistrée",
-                                    style: TextStyle(color: Colors.white38, fontSize: 11, fontStyle: FontStyle.italic),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Settings Icon
-                        IconButton(
-                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())),
-                          icon: const Icon(Icons.settings, color: Colors.white),
-                        ),
-                      ],
-                    ),
+                    ProfileHeader(user: user),
                     
-                    // WALLET ULTRA-VISIBLE
                     const SizedBox(height: 24),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.account_balance_wallet, color: Colors.white.withOpacity(0.9), size: 24),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Solde Wallet',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '\$${walletState.balance.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 42,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: oliBlue,
-                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                              elevation: 4,
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const WalletScreen()),
-                              );
-                            },
-                            icon: const Icon(Icons.add_circle_outline),
-                            label: const Text(
-                              'Recharger',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    
+                    // Wallet Card (Inserted here to overlap header slightly if needed, but keeping inside for now)
+                    const WalletSummaryCard(),
                   ],
                 ),
               ),
@@ -302,46 +90,7 @@ class ProfileAndWalletPage extends ConsumerWidget {
                 offset: const Offset(0, -20),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text("Mes Commandes", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
-                            GestureDetector(
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchasesPage())),
-                              child: Row(
-                                children: [
-                                  Text("Tout voir", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                                  Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey[600]),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildOrderIcon(Icons.payment, "Non Payé", textColor),
-                            _buildOrderIcon(Icons.inventory_2_outlined, "À expédier", textColor),
-                            _buildOrderIcon(Icons.local_shipping_outlined, "À recevoir", textColor),
-                            _buildOrderIcon(Icons.rate_review_outlined, "À noter", textColor),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  child: OrderStatusBar(cardColor: cardColor, textColor: textColor),
                 ),
               ),
 
@@ -349,46 +98,10 @@ class ProfileAndWalletPage extends ConsumerWidget {
               const VisitedProductsSection(),
               const SizedBox(height: 16),
 
-              // 3. WALLET & TOOLS GRID
+              // 3. TOOLS GRID
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    // Services Grid
-                    Container(
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(left: 16, bottom: 12),
-                            child: Text("Mes Outils", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
-                          ),
-                          Wrap(
-                            spacing: 0,
-                            runSpacing: 20,
-                            children: [
-                              _buildGridItem(Icons.favorite_border, "Favoris", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage()))),
-                              _buildGridItem(Icons.add_circle_outline, "Vendre", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PublishArticlePage()))),
-                              _buildGridItem(Icons.credit_card, "Cartes", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsPage()))),
-                              _buildGridItem(Icons.location_on_outlined, "Adresses", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesPage()))), 
-                              _buildGridItem(Icons.help_outline, "Aide", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPage()))),
-                              _buildGridItem(Icons.info_outline, "À propos", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutPage()))),
-                              _buildGridItem(Icons.logout, "Déconnexion", Colors.redAccent, () async {
-                                await ref.read(authControllerProvider.notifier).logout();
-                                if (context.mounted) Navigator.of(context).pushReplacementNamed('/login');
-                              }),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                child: ProfileToolsGrid(cardColor: cardColor, textColor: textColor),
               ),
               const SizedBox(height: 30),
             ],
@@ -416,57 +129,6 @@ class ProfileAndWalletPage extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildBadge(String text, Color bgColor, [Color textColor = Colors.white]) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text.toUpperCase(),
-        style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Widget _buildOrderIcon(IconData icon, String label, Color color) {
-    return Column(
-      children: [
-        Icon(icon, size: 28, color: color.withOpacity(0.7)),
-        const SizedBox(height: 6),
-        Text(label, style: TextStyle(fontSize: 12, color: color.withOpacity(0.7))),
-      ],
-    );
-  }
-  
-  Widget _buildGridItem(IconData icon, String label, Color color, VoidCallback onTap) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = MediaQuery.of(context).size.width / 4 - 10;
-        return GestureDetector(
-          onTap: onTap,
-          child: SizedBox(
-            width: width,
-            child: Column(
-              children: [
-                Icon(icon, size: 28, color: color),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: color),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        );
-      }
     );
   }
 }
