@@ -10,6 +10,7 @@ import '../../user/screens/addresses_page.dart';
 import '../../user/providers/address_provider.dart';
 import '../../wallet/providers/wallet_provider.dart';
 import '../../wallet/screens/wallet_screen.dart';
+import '../../../widgets/verification_badge.dart';
 
 // Imports des pages (Legacy - à migrer progressivement si nécessaire)
 import '../../../pages/publish_article_page.dart';
@@ -106,7 +107,8 @@ class ProfileAndWalletPage extends ConsumerWidget {
                                     : null,
                               ),
                               Positioned(
-                                bottom: 0, right: 0,
+                                bottom: 0, 
+                                left: 0, // Camera icon moved to left to make space for badge
                                 child: Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: const BoxDecoration(
@@ -116,6 +118,20 @@ class ProfileAndWalletPage extends ConsumerWidget {
                                   child: const Icon(Icons.camera_alt, size: 12, color: Colors.black),
                                 ),
                               ),
+                              // Verification Badge Overlay (Bottom Right)
+                              if (user['is_verified'] == true || user['account_type'] != 'ordinaire' || user['has_certified_shop'] == true)
+                                Positioned(
+                                  bottom: -5,
+                                  right: -5,
+                                  child: VerificationBadge(
+                                    type: VerificationBadge.fromSellerData(
+                                      isVerified: user['is_verified'] == true,
+                                      accountType: user['account_type'] ?? 'ordinaire',
+                                      hasCertifiedShop: user['has_certified_shop'] == true,
+                                    ),
+                                    size: 24,
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -157,13 +173,24 @@ class ProfileAndWalletPage extends ConsumerWidget {
                               // Badges Row
                               Row(
                                 children: [
-                                  _buildBadge(
-                                    user['is_admin'] == true ? 'ADMIN' : (user['is_seller'] == true ? 'Vendeur' : 'Membre'),
-                                    Colors.white24,
-                                  ),
-                                  if (user['is_verified'] == true) ...[ 
-                                    const SizedBox(width: 8),
-                                    _buildBadge('Certifié', Colors.greenAccent.withOpacity(0.2), Colors.greenAccent),
+                                  // Status Badges
+                                  if (user['account_type'] == 'entreprise' || user['has_certified_shop'] == true)
+                                     _buildBadge('Entreprise', const Color(0xFFD4A500).withOpacity(0.2), const Color(0xFFD4A500)),
+                                  
+                                  if (user['account_type'] == 'premium')
+                                     _buildBadge('Premium ⭐', const Color(0xFF00BA7C).withOpacity(0.2), const Color(0xFF00BA7C)),
+
+                                  if (user['account_type'] == 'certifie' || user['is_verified'] == true) ...[
+                                    if (user['account_type'] != 'entreprise' && user['account_type'] != 'premium') // Avoid duplicates if higher tier
+                                      _buildBadge('Certifié ✓', const Color(0xFF1DA1F2).withOpacity(0.2), const Color(0xFF1DA1F2)),
+                                  ],
+                                  
+                                  if (user['is_seller'] == true) ...[
+                                     const SizedBox(width: 8),
+                                     _buildBadge('Vendeur', Colors.white24),
+                                  ] else ...[
+                                     const SizedBox(width: 8),
+                                     _buildBadge('Membre', Colors.white24),
                                   ],
                                 ],
                               ),
