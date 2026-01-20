@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../widgets/verification_badge.dart';
+import '../../../../widgets/auto_refresh_avatar.dart';
 import '../../../user/providers/profile_controller.dart';
 import '../../../user/widgets/edit_name_dialog.dart';
 import '../../../user/providers/address_provider.dart';
@@ -24,25 +25,9 @@ class ProfileHeader extends ConsumerWidget {
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    width: 70, height: 70,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                      image: user['avatar_url'] != null
-                          ? DecorationImage(
-                              image: NetworkImage(
-                                user['avatar_url'].startsWith('http')
-                                    ? user['avatar_url']
-                                    : '${ApiConfig.baseUrl}/${user['avatar_url'].replaceAll(RegExp(r'^/+'), '')}'
-                              ),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: user['avatar_url'] == null
-                        ? const Icon(Icons.person, color: Colors.white, size: 40)
-                        : null,
+                  AutoRefreshAvatar(
+                    avatarUrl: user['avatar_url'],
+                    size: 70,
                   ),
                   Positioned(
                     bottom: 0, 

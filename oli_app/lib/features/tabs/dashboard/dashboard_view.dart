@@ -14,6 +14,7 @@ import '../../services/live_shopping_page.dart';
 import '../../shop/shop_details_page.dart';
 import '../dashboard/providers/shops_provider.dart';
 import '../../../models/shop_model.dart';
+import '../../../widgets/auto_refresh_avatar.dart';
 
 class MainDashboardView extends ConsumerStatefulWidget {
   const MainDashboardView({super.key});
@@ -91,28 +92,9 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             title: Row(
               children: [
                 // Coin Gauche : Avatar + Nom
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: Colors.grey[800],
-                  backgroundImage: () {
-                    // 🔍 DEBUG: Afficher l'état complet de userData
-                    print('📸 DEBUG AVATAR - authState.userData: ${authState.userData}');
-                    print('📸 DEBUG AVATAR - avatar_url: ${authState.userData?['avatar_url']}');
-                    
-                    if (authState.userData != null && authState.userData!['avatar_url'] != null) {
-                      final avatarUrl = authState.userData!['avatar_url'];
-                      final fullUrl = avatarUrl.startsWith('http')
-                          ? avatarUrl
-                          : '${ApiConfig.baseUrl}/${avatarUrl.replaceAll(RegExp(r'^/+'), '')}';
-                      
-                      print('📸 DEBUG AVATAR - Full URL: $fullUrl');
-                      return NetworkImage(fullUrl);
-                    }
-                    return null;
-                  }(),
-                  child: (authState.userData == null || authState.userData!['avatar_url'] == null)
-                      ? const Icon(Icons.person, size: 20, color: Colors.white)
-                      : null,
+                AutoRefreshAvatar(
+                  avatarUrl: authState.userData?['avatar_url'],
+                  size: 32,
                 ),
                 const SizedBox(width: 8),
                 Expanded(

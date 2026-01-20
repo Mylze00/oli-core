@@ -22,7 +22,12 @@ const DEFAULT_ORIGINS = [
     "https://oli-core.firebaseapp.com",
     "https://oli-app.web.app",
     "https://oli-app.firebaseapp.com",
+    // Admin Dashboard Vercel
+    "https://oli-admin-windx.vercel.app",
+    "https://oli-admin-efls2c6tm-mylze00s-projects.vercel.app",
+    // Backend
     "https://oli-core.onrender.com",
+    // Local development
     "http://localhost:3000",
     "http://localhost:5000",
     "http://127.0.0.1:3000"
@@ -70,7 +75,7 @@ module.exports = {
     // Upload
     UPLOAD_MAX_SIZE,
     UPLOAD_MAX_FILES,
-    
+
     // AWS S3 / Wasabi
     S3_BUCKET: process.env.S3_BUCKET || "oli-storage",
     S3_REGION: process.env.S3_REGION || "us-east-1",
