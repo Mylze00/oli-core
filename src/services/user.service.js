@@ -72,6 +72,7 @@ async function updateUserName(userId, newName) {
     }
 
     try {
+        /*
         // 1. Check last update time
         const user = await userRepository.findById(userId);
         if (user && user.last_profile_update) {
@@ -82,6 +83,7 @@ async function updateUserName(userId, newName) {
                 throw new Error('Vous ne pouvez modifier votre nom qu\'une fois toutes les 2 semaines.');
             }
         }
+        */
 
         const updatedUser = await userRepository.updateName(userId, newName.trim());
         if (!updatedUser) {
