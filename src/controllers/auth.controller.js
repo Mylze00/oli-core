@@ -208,10 +208,18 @@ exports.uploadAvatar = async (req, res) => {
         }
         */
 
-        await pool.query(
+        const result = await pool.query(
             "UPDATE users SET avatar_url = $1, last_profile_update = NOW() WHERE phone = $2",
             [avatarUrl, req.user.phone]
         );
+
+        console.log(`📸 Avatar Update: Phone=${req.user.phone}, URL=${avatarUrl}`);
+        console.log(`📊 Rows affected: ${result.rowCount}`);
+
+        if (result.rowCount === 0) {
+            console.error("⚠️ AUCUNE LIGNE mise à jour ! Le numéro de téléphone ne matche pas ?");
+        }
+
         res.json({ avatar_url: avatarUrl });
     } catch (err) {
         console.error("Erreur upload-avatar:", err);
