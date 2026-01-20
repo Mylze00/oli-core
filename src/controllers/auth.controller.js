@@ -110,6 +110,7 @@ exports.updateProfile = async (req, res) => {
     }
 
     try {
+        /*
         // 1. Vérifier la limite de mise à jour (1 fois par 30 jours)
         const userCheck = await pool.query(
             'SELECT last_profile_update FROM users WHERE phone = $1',
@@ -129,6 +130,7 @@ exports.updateProfile = async (req, res) => {
                 }
             }
         }
+        */
 
         // 2. Mettre à jour le profil avec la nouvelle colonne
         const result = await pool.query(
@@ -190,6 +192,7 @@ exports.uploadAvatar = async (req, res) => {
     const avatarUrl = req.file.path; // URL Cloudinary
 
     try {
+        /*
         // 1. Check last update time
         const userCheck = await pool.query('SELECT last_profile_update FROM users WHERE phone = $1', [req.user.phone]);
         if (userCheck.rows.length > 0) {
@@ -203,6 +206,7 @@ exports.uploadAvatar = async (req, res) => {
                 }
             }
         }
+        */
 
         await pool.query(
             "UPDATE users SET avatar_url = $1, last_profile_update = NOW() WHERE phone = $2",
