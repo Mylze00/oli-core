@@ -48,6 +48,23 @@ async function findByOwnerId(ownerId) {
 }
 
 /**
+ * Trouver les boutiques vérifiées (pour Carousel Accueil)
+ */
+async function findVerified(limit = 10) {
+  const query = `
+      SELECT s.*, u.name as owner_name, u.avatar_url as owner_avatar
+      FROM shops s
+      JOIN users u ON s.owner_id = u.id
+      -- WHERE s.is_verified = TRUE OR u.account_type = 'entreprise'
+      WHERE 1=1 -- TEMP DEBUG: Afficher toutes les boutiques
+      ORDER BY s.is_verified DESC, s.created_at DESC
+      LIMIT $1
+  `;
+  const { rows } = await pool.query(query, [limit]);
+  return rows;
+}
+
+/**
  * Lister toutes les boutiques (avec filtres)
  */
 async function findAll(limit = 20, offset = 0, category = null, search = null) {
@@ -110,6 +127,7 @@ module.exports = {
   create,
   findById,
   findByOwnerId,
+  findVerified,
   findAll,
   update,
   deleteById
