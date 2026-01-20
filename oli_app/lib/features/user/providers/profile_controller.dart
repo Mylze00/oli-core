@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/painting.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../../../config/api_config.dart';
@@ -21,6 +23,17 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image == null) return;
+
+    // 📸 Prévisualisation immédiate avec l'image locale
+    try {
+      final bytes = await image.readAsBytes();
+      final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      
+      // Mise à jour optimiste IMMÉDIATE avec l'image locale
+      _ref.read(authControllerProvider.notifier).updateUserData({'avatar_url': base64Image});
+    } catch (e) {
+      print("⚠️ Erreur prévisualisation image: $e");
+    }
 
     state = const AsyncValue.loading();
 
@@ -59,10 +72,26 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
               : '$newAvatarUrl?t=${DateTime.now().millisecondsSinceEpoch}';
           
           print("🔄 Updating Avatar State with: $cacheBustedUrl");
+          
+          // FORCER L'EVICTION DU CACHE IMAGE
+          try {
+             final authState = _ref.read(authControllerProvider);
+             if (authState.userData != null && authState.userData!['avatar_url'] != null) {
+               final oldUrl = authState.userData!['avatar_url'];
+               // Ne pas éviter le cache de l'image base64 temporaire
+               if (!oldUrl.startsWith('data:image')) {
+                 final imageProvider = NetworkImage(oldUrl.startsWith('http') ? oldUrl : '${ApiConfig.baseUrl}/$oldUrl');
+                 PaintingBinding.instance.imageCache.evict(imageProvider);
+               }
+             }
+          } catch (e) {
+             print("Cache eviction error: $e");
+          }
+
           _ref.read(authControllerProvider.notifier).updateUserData({'avatar_url': cacheBustedUrl});
         }
         
-        // Puis refetch pour avoir les données complètes du serveur
+        // Refetch pour synchroniser avec la base de données
         await _ref.read(authControllerProvider.notifier).fetchUserProfile();
         state = const AsyncValue.data(null);
       } else {

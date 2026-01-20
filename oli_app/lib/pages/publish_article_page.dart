@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -63,7 +64,15 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
           return;
       }
 
-      Position position = await Geolocator.getCurrentPosition();
+      // LocationSettings pour plus de précision et un timeout
+      const LocationSettings locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 100,
+      );
+
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: locationSettings
+      ).timeout(const Duration(seconds: 10)); // Timeout de 10s
       setState(() {
         // Format simple: "Lat, Long". Idéalement utiliser Geocoding pour avoir une adresse
         _location = "${position.latitude}, ${position.longitude}"; 
@@ -132,16 +141,29 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                           }
                           return Stack(
                             children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                    image: DecorationImage(
-                                      image: kIsWeb 
-                                        ? NetworkImage(_images[i].path)
-                                        : _getMobileImage(_images[i].path),
-                                      fit: BoxFit.cover
-                                    )
-                                )
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: kIsWeb
+                                    ? Image.network(
+                                        _images[i].path,
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                      )
+                                    : FutureBuilder<Uint8List>(
+                                        future: _images[i].readAsBytes(),
+                                        builder: (context, snapshot) {
+                                          if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
+                                            return Image.memory(
+                                              snapshot.data!,
+                                              fit: BoxFit.cover,
+                                              width: double.infinity,
+                                              height: double.infinity,
+                                            );
+                                          }
+                                          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                        },
+                                      ),
                               ),
                               Positioned(
                                 top: 0, right: 0,
@@ -280,7 +302,5 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     );
   }
 
-  ImageProvider _getMobileImage(String path) {
-    return NetworkImage(path); 
-  }
+
 }

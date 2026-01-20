@@ -5,6 +5,7 @@ import '../../../user/providers/profile_controller.dart';
 import '../../../user/widgets/edit_name_dialog.dart';
 import '../../../user/providers/address_provider.dart';
 import '../../../../pages/settings_page.dart';
+import '../../../../config/api_config.dart';
 
 class ProfileHeader extends ConsumerWidget {
   final Map<String, dynamic> user;
@@ -30,7 +31,11 @@ class ProfileHeader extends ConsumerWidget {
                       border: Border.all(color: Colors.white, width: 2),
                       image: user['avatar_url'] != null
                           ? DecorationImage(
-                              image: NetworkImage(user['avatar_url']),
+                              image: NetworkImage(
+                                user['avatar_url'].startsWith('http')
+                                    ? user['avatar_url']
+                                    : '${ApiConfig.baseUrl}/${user['avatar_url'].replaceAll(RegExp(r'^/+'), '')}'
+                              ),
                               fit: BoxFit.cover,
                             )
                           : null,

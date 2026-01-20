@@ -235,10 +235,10 @@ class _MarketViewState extends ConsumerState<MarketView> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3, // 3 colonnes comme sur l'accueil
-                    childAspectRatio: 0.55,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                    crossAxisCount: 2, 
+                    childAspectRatio: 0.95, // Hauteur réduite de ~25%
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) => _buildCompactProductCard(shuffledProducts[index]),

@@ -55,8 +55,7 @@ async function findVerified(limit = 10) {
       SELECT s.*, u.name as owner_name, u.avatar_url as owner_avatar
       FROM shops s
       JOIN users u ON s.owner_id = u.id
-      -- WHERE s.is_verified = TRUE OR u.account_type = 'entreprise'
-      WHERE 1=1 -- TEMP DEBUG: Afficher toutes les boutiques
+      WHERE s.is_verified = TRUE OR u.account_type = 'entreprise'
       ORDER BY s.is_verified DESC, s.created_at DESC
       LIMIT $1
   `;

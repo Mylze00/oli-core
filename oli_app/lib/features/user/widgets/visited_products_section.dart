@@ -124,7 +124,7 @@ class _VisitedProductCard extends StatelessWidget {
                         product.imageUrl!,
                         height: 80,
                         width: 120,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.fill,
                         errorBuilder: (_, __, ___) => Container(
                           height: 80,
                           width: 120,

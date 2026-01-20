@@ -40,7 +40,8 @@ exports.getAll = async (req, res) => {
             minPrice: req.query.minPrice,
             maxPrice: req.query.maxPrice,
             location: req.query.location,
-            search: req.query.search
+            search: req.query.search,
+            shopId: req.query.shopId
         };
         const limit = parseInt(req.query.limit) || 50;
         const offset = parseInt(req.query.offset) || 0;

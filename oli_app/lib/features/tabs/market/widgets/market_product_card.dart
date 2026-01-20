@@ -36,6 +36,7 @@ class MarketProductCard extends ConsumerWidget {
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
                 child: Stack(
+                  fit: StackFit.expand, // Ensure stack fills the parent
                   children: [
                     // Image
                     product.images.isEmpty
@@ -43,7 +44,7 @@ class MarketProductCard extends ConsumerWidget {
                       : Image.network(
                           product.images[0],
                           width: double.infinity,
-                          fit: BoxFit.cover,
+                          fit: BoxFit.fill, // Etirer l'image comme demandé
                           errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 30, color: Colors.grey),
                         ),
                     

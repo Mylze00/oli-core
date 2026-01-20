@@ -100,13 +100,14 @@ async function verifyOtp(phone, otpCode) {
 }
 
 /**
- * Marquer l'utilisateur comme vérifié et nettoyer l'OTP
+ * Nettoyer l'OTP après vérification réussie
+ * IMPORTANT: Ne PAS marquer l'utilisateur comme vérifié automatiquement
+ * La vérification (badge) doit être accordée manuellement par l'admin
  */
-async function markVerified(userId) {
+async function clearOtp(userId) {
   const query = `
     UPDATE users
     SET
-      is_verified = true,
       otp_code = NULL,
       otp_expires_at = NULL,
       updated_at = NOW()
@@ -170,7 +171,7 @@ module.exports = {
   createUser,
   saveOtp,
   verifyOtp,
-  markVerified,
+  clearOtp,
   findVisitedProducts,
   trackProductView,
   updateName

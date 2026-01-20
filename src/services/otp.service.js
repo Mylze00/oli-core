@@ -52,14 +52,15 @@ async function verifyOtp(phone, otpCode) {
       return null;
     }
 
-    // 2. Marquer l'utilisateur comme vérifié (optionnel selon votre logique métier)
-    await userRepo.markVerified(user.id);
+    // 2. Nettoyer l'OTP (SANS marquer comme vérifié automatiquement)
+    // La vérification (badge) sera accordée par l'admin manuellement  
+    await userRepo.clearOtp(user.id);
 
     console.log(`[OTP SERVICE] ✅ Vérification réussie pour : ${phone}`);
 
     // 3. Retourner l'objet utilisateur (Correction de la variable inexistante ici)
     return { user };
-    
+
   } catch (error) {
     console.error("[OTP SERVICE] Erreur dans verifyOtp:", error);
     throw error;

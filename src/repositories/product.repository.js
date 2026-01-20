@@ -111,6 +111,10 @@ class ProductRepository {
             params.push(`%${filters.search}%`);
             paramIndex++;
         }
+        if (filters.shopId) {
+            query += ` AND p.shop_id = $${paramIndex++}`;
+            params.push(filters.shopId);
+        }
 
         query += ` ORDER BY p.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
         params.push(parseInt(limit), parseInt(offset));
@@ -147,8 +151,8 @@ class ProductRepository {
 
     async create(productData) {
         const {
-            seller_id, shop_id, name, description, price, category, 
-            images, delivery_price, delivery_time, condition, 
+            seller_id, shop_id, name, description, price, category,
+            images, delivery_price, delivery_time, condition,
             quantity, color, location, is_negotiable
         } = productData;
 

@@ -107,6 +107,29 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     );
   }
 
+  String _calculateDeliveryDate(String deliveryTime) {
+    try {
+      // Extraire le nombre de jours (ex: "3 jours" -> 3)
+      final RegExp regExp = RegExp(r'\d+');
+      final match = regExp.firstMatch(deliveryTime);
+      
+      if (match != null) {
+        final int days = int.parse(match.group(0)!);
+        final DateTime deliveryDate = DateTime.now().add(Duration(days: days));
+        
+        // Formatage manuel (Sans intl) : JJ/MM/AAAA
+        final String day = deliveryDate.day.toString().padLeft(2, '0');
+        final String month = deliveryDate.month.toString().padLeft(2, '0');
+        final String year = deliveryDate.year.toString();
+        
+        return "Le $day/$month/$year";
+      }
+    } catch (e) {
+      debugPrint("Erreur calcul date livraison: $e");
+    }
+    return deliveryTime; // Fallback si pas de chiffre trouvé
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = widget.product;
@@ -137,7 +160,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                       itemCount: p.images.length,
                       itemBuilder: (c, i) => Image.network(
                         p.images[i], 
-                        fit: BoxFit.cover,
+                        fit: BoxFit.fill,
                         errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
                       ),
                     ),
@@ -234,7 +257,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text("${p.deliveryPrice}\$ de livraison", style: const TextStyle(color: Colors.white70, fontSize: 14)),
-              Text("Livraison estimée : ${p.deliveryTime}", style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              Text("Livraison estimée : ${_calculateDeliveryDate(p.deliveryTime)}", style: const TextStyle(color: Colors.white70, fontSize: 14)),
               const Divider(color: Colors.white24, height: 24),
               Text("Etat : ${p.condition}", style: const TextStyle(color: Colors.white, fontSize: 14)),
               const SizedBox(height: 16),

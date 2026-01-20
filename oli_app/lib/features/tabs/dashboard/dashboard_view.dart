@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_controller.dart';
+import '../../../config/api_config.dart';
 import '../../../models/product_model.dart';
 import '../../../pages/notifications_view.dart';
 import '../market/product_details_page.dart';
@@ -10,6 +11,9 @@ import '../../services/request_product_page.dart';
 import '../../services/services_page.dart';
 import '../../services/miniapps_page.dart';
 import '../../services/live_shopping_page.dart';
+import '../../shop/shop_details_page.dart';
+import '../dashboard/providers/shops_provider.dart';
+import '../../../models/shop_model.dart';
 
 class MainDashboardView extends ConsumerStatefulWidget {
   const MainDashboardView({super.key});
@@ -60,6 +64,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     final topSellers = ref.watch(topSellersProvider);
     // 🏪 Produits des grands magasins vérifiés
     final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
+    final verifiedShops = ref.watch(verifiedShopsProvider); // ✨ Boutiques vérifiées (Carousel)
     final authState = ref.watch(authControllerProvider);
 
     return Scaffold(
@@ -89,9 +94,22 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 CircleAvatar(
                   radius: 16,
                   backgroundColor: Colors.grey[800],
-                  backgroundImage: (authState.userData != null && authState.userData!['avatar_url'] != null)
-                      ? NetworkImage(authState.userData!['avatar_url'])
-                      : null,
+                  backgroundImage: () {
+                    // 🔍 DEBUG: Afficher l'état complet de userData
+                    print('📸 DEBUG AVATAR - authState.userData: ${authState.userData}');
+                    print('📸 DEBUG AVATAR - avatar_url: ${authState.userData?['avatar_url']}');
+                    
+                    if (authState.userData != null && authState.userData!['avatar_url'] != null) {
+                      final avatarUrl = authState.userData!['avatar_url'];
+                      final fullUrl = avatarUrl.startsWith('http')
+                          ? avatarUrl
+                          : '${ApiConfig.baseUrl}/${avatarUrl.replaceAll(RegExp(r'^/+'), '')}';
+                      
+                      print('📸 DEBUG AVATAR - Full URL: $fullUrl');
+                      return NetworkImage(fullUrl);
+                    }
+                    return null;
+                  }(),
                   child: (authState.userData == null || authState.userData!['avatar_url'] == null)
                       ? const Icon(Icons.person, size: 20, color: Colors.white)
                       : null,
@@ -192,7 +210,61 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           
 
 
-          // 5. CATEGORY TABS (Conserver)
+          // 3. CAROUSEL BOUTIQUES VÉRIFIÉES
+          SliverToBoxAdapter(
+            child: verifiedShops.isEmpty
+              ? const SizedBox.shrink() // On cache si vide pour l'instant (mais le user dit que ça ne s'affiche pas)
+              // TEST DEBUG : Si le user dit que ça ne s'affiche pas, peut-être qu'il veut voir un truc vide ?
+              // Non, c'est moche.
+              // Je vais forcer l'affichage temporaire pour vérifier que le code passe ici
+              : Container(
+                height: 100,
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: verifiedShops.length,
+                  itemBuilder: (context, index) {
+                    final shop = verifiedShops[index];
+                    return GestureDetector(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopDetailsPage(shop: shop))),
+                      child: Container(
+                        width: 80,
+                        margin: const EdgeInsets.only(right: 12),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 60, height: 60,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                border: Border.all(color: Colors.white, width: 2),
+                                image: shop.logoUrl != null 
+                                   ? DecorationImage(image: NetworkImage(shop.logoUrl!), fit: BoxFit.cover)
+                                   : null,
+                              ),
+                              child: shop.logoUrl == null 
+                                  ? Center(child: Text(shop.name[0], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black)))
+                                  : null,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              shop.name,
+                              maxLines: 1,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+
+          // 4. CATEGORY TABS (Conserver)
           SliverToBoxAdapter(
             child: Container(
               height: 50,
@@ -382,20 +454,20 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             sliver: SliverGrid(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3, // 3 colonnes demandées
-                childAspectRatio: 0.55, // Ratio hauteur/largeur ajusté pour 3 colonnes
+                childAspectRatio: 0.75, // Ratio hauteur/largeur ajusté (Réduit de ~25% vs 0.55)
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   if (products.isEmpty) return _buildPlaceholderCard();
-                  final product = products[index % products.length];
+                  final product = products[index];
                   return GestureDetector(
                     onTap: () => _navigateToProduct(product),
                     child: _buildProductGridCard(product),
                   );
                 },
-                childCount: products.isEmpty ? 6 : products.length * 2,
+                childCount: products.isEmpty ? 6 : products.length,
               ),
             ),
           ),
