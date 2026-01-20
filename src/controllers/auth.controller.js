@@ -73,6 +73,9 @@ exports.verifyOtp = async (req, res) => {
             { expiresIn: JWT_EXPIRES_IN }
         );
 
+        // DEBUG: Afficher le token généré
+        console.log("🔑 Token généré pour", phone, ":", token.substring(0, 20) + "...");
+
         return res.json({
             message: "Connexion réussie",
             user: {

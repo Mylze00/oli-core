@@ -22,11 +22,16 @@ const requireAuth = (req, res, next) => {
         console.log(`[AUTH] User identifié (Mandatory): ${decoded.id} (${decoded.phone})`);
         next();
     } catch (err) {
-        console.error(`[AUTH] Échec requireAuth: ${err.message}`);
+        console.error(`[AUTH] Échec requireAuth:`, err);
         if (err.name === "TokenExpiredError") {
             return res.status(401).json({ error: "Session expirée - Veuillez vous reconnecter" });
         }
-        return res.status(403).json({ error: "Token invalide" });
+        // Retourner l'erreur exacte pour le débug
+        return res.status(403).json({
+            error: "Token invalide",
+            details: err.message,
+            name: err.name
+        });
     }
 };
 
