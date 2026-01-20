@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../wallet/providers/wallet_provider.dart';
-import '../../wallet/screens/wallet_screen.dart';
+import '../../../wallet/providers/wallet_provider.dart';
+import '../../../wallet/screens/wallet_screen.dart';
 
 class WalletSummaryCard extends ConsumerWidget {
   const WalletSummaryCard({super.key});

@@ -9,6 +9,7 @@
         "migrate": "node src/run_migration.js"
     },
     "dependencies": {
+        "@aws-sdk/client-s3": "^3.971.0",
         "cloudinary": "^1.41.3",
         "cors": "^2.8.5",
         "dotenv": "^16.4.5",

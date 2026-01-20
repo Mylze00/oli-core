@@ -57,6 +57,8 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
           final cacheBustedUrl = newAvatarUrl.contains('?') 
               ? '$newAvatarUrl&t=${DateTime.now().millisecondsSinceEpoch}'
               : '$newAvatarUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+          
+          print("🔄 Updating Avatar State with: $cacheBustedUrl");
           _ref.read(authControllerProvider.notifier).updateUserData({'avatar_url': cacheBustedUrl});
         }
         

@@ -102,12 +102,29 @@ exports.sendInitialMessage = async (req, res) => {
  * Envoyer un message dans une conversation existante
  */
 exports.sendMessage = async (req, res) => {
-    const { conversationId, content, type, amount, replyToId, metadata } = req.body;
-    let { recipientId } = req.body;
+    const { conversationId, type, amount, replyToId, mediaUrl, mediaType } = req.body;
+    let { content, recipientId, metadata } = req.body;
     const senderId = req.user.id;
 
-    if (!conversationId || !content) {
-        return res.status(400).json({ error: "conversationId et content requis" });
+    // Validation : Soit du contenu, soit un média est requis
+    if (!conversationId || (!content && !mediaUrl)) {
+        return res.status(400).json({ error: "conversationId et content (ou mediaUrl) requis" });
+    }
+
+    // Si c'est un message média sans texte, on met un texte par défaut
+    if (!content && mediaUrl) {
+        content = mediaType === 'image' ? '📷 Image' : '📎 Fichier';
+    }
+
+    // Enrichissement des métadonnées avec les infos média
+    let messageMetadata = metadata || {};
+    if (typeof messageMetadata === 'string') {
+        try { messageMetadata = JSON.parse(messageMetadata); } catch (e) { }
+    }
+
+    if (mediaUrl) {
+        messageMetadata.mediaUrl = mediaUrl;
+        messageMetadata.mediaType = mediaType || 'file';
     }
 
     try {
@@ -122,7 +139,15 @@ exports.sendMessage = async (req, res) => {
         const msgResult = await pool.query(
             `INSERT INTO messages (conversation_id, sender_id, content, type, amount, reply_to_id, metadata) 
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [conversationId, senderId, content, type || 'text', amount, replyToId, metadata ? JSON.stringify(metadata) : null]
+            [
+                conversationId,
+                senderId,
+                content,
+                type || (mediaUrl ? 'media' : 'text'),
+                amount,
+                replyToId,
+                JSON.stringify(messageMetadata)
+            ]
         );
 
         const newMessage = msgResult.rows[0];

@@ -70,6 +70,13 @@ module.exports = {
     // Upload
     UPLOAD_MAX_SIZE,
     UPLOAD_MAX_FILES,
+    
+    // AWS S3 / Wasabi
+    S3_BUCKET: process.env.S3_BUCKET || "oli-storage",
+    S3_REGION: process.env.S3_REGION || "us-east-1",
+    S3_ENDPOINT: process.env.S3_ENDPOINT || "https://s3.wasabisys.com",
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID || "",
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY || "",
 
     // Mobile Money
     ORANGE_MONEY_API_URL,

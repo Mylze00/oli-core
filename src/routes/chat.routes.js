@@ -5,12 +5,14 @@
 const express = require('express');
 const router = express.Router();
 const chatController = require('../controllers/chat.controller');
-const { chatUpload } = require('../config/upload');
+const chatUploadController = require('../controllers/chat-upload.controller');
 
 // --- Routes ---
 
-// Médias
-router.post('/upload', chatUpload.single('file'), chatController.uploadFile);
+const { chatUpload } = require('../config/upload'); // Centralized upload config
+
+// Médias (Via Cloudinary/Local)
+router.post('/upload', chatUpload.single('file'), chatUploadController.uploadFile);
 
 // Conversations & Messages
 router.post('/send', chatController.sendInitialMessage);

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart'; // Import Geolocator
+import 'dart:convert';
 import 'chat_controller.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -29,11 +32,12 @@ class ChatPage extends ConsumerStatefulWidget {
 class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController messageCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ImagePicker _picker = ImagePicker();
+  bool _isUploading = false;
 
   @override
   void initState() {
     super.initState();
-    // Charger les messages avec le productId si disponible
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
       controller.loadMessages(productId: widget.productId);
@@ -57,12 +61,46 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(source: source, imageQuality: 70);
+      if (image == null) return;
+
+      setState(() => _isUploading = true);
+      
+      final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
+      final url = await controller.uploadImage(image);
+
+      setState(() => _isUploading = false);
+
+      if (url != null) {
+        controller.sendMessage(
+          content: "",
+          mediaUrl: url,
+          mediaType: 'image',
+          productId: widget.productId,
+          productName: widget.productName,
+          productImage: widget.productImage,
+          productPrice: widget.productPrice,
+        );
+      } else {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(content: Text("Échec de l'upload")),
+           );
+        }
+      }
+    } catch (e) {
+      setState(() => _isUploading = false);
+      debugPrint("Erreur pickImage: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatControllerProvider(widget.otherId));
     final theme = Theme.of(context);
 
-    // Scroll to bottom when messages change
     ref.listen(chatControllerProvider(widget.otherId), (previous, next) {
       if (previous?.messages.length != next.messages.length) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -85,7 +123,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       ),
       body: Column(
         children: [
-          // Product card if available
           if (widget.productImage != null || widget.productName != null)
             Container(
               padding: const EdgeInsets.all(12),
@@ -129,7 +166,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ),
             ),
 
-          // Messages list
+          if (_isUploading)
+            const LinearProgressIndicator(),
+
           Expanded(
             child: chatState.isLoading 
               ? const Center(child: CircularProgressIndicator())
@@ -145,6 +184,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         final msg = chatState.messages[index];
                         final isMe = msg['sender_id'].toString() == widget.myId;
                         
+                        // Extraction Metadata
+                        String? mediaUrl;
+                        if (msg['metadata'] != null) {
+                           try {
+                             final meta = msg['metadata'] is String 
+                                 ? jsonDecode(msg['metadata']) 
+                                 : msg['metadata'];
+                             mediaUrl = meta['mediaUrl'];
+                           } catch (e) { /* ignore */ }
+                        }
+
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Align(
@@ -163,11 +213,31 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                   bottomRight: isMe ? Radius.zero : const Radius.circular(16),
                                 ),
                               ),
-                              child: Text(
-                                msg['content'] ?? '',
-                                style: TextStyle(
-                                  color: isMe ? Colors.white : Colors.black87,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (mediaUrl != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 8.0),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Image.network(
+                                          mediaUrl,
+                                          height: 200,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (c,e,s) => const Icon(Icons.broken_image),
+                                        ),
+                                      ),
+                                    ),
+                                  if (msg['content'] != null && msg['content'].toString().isNotEmpty && msg['content'] != '📷 Image')
+                                    Text(
+                                      msg['content'],
+                                      style: TextStyle(
+                                        color: isMe ? Colors.white : Colors.black87,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
@@ -176,7 +246,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     ),
           ),
           
-          // Input area
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -230,6 +299,41 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  Future<void> _shareLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('La localisation est désactivée')));
+         return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      
+      if (permission == LocationPermission.deniedForever) return;
+
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Obtention de la position...')));
+      
+      Position position = await Geolocator.getCurrentPosition();
+      final String mapsUrl = "https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}";
+      
+      final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
+      controller.sendMessage(
+        content: "📍 Ma position actuelle:\n$mapsUrl",
+        productId: widget.productId,
+        productName: widget.productName,
+        productImage: widget.productImage,
+        productPrice: widget.productPrice,
+      );
+    } catch (e) {
+      debugPrint("Erreur shareLocation: $e");
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur récupération position')));
+    }
+  }
+
   void _showChatTools(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -256,19 +360,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   }),
                   _buildToolItem(Icons.photo, "Galerie", Colors.purple, () {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Envoi d'images bientôt disponible !")),
-                    );
+                    _pickImage(ImageSource.gallery);
                   }),
                   _buildToolItem(Icons.camera_alt, "Caméra", Colors.red, () {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Caméra bientôt disponible !")),
-                    );
+                    _pickImage(ImageSource.camera);
                   }),
                   _buildToolItem(Icons.location_on, "Position", Colors.blue, () {
                     Navigator.pop(ctx);
-                    // Placeholder
+                    _shareLocation();
                   }),
                 ],
               )

@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../../models/product_model.dart';
 import '../../../pages/notifications_view.dart';
 import '../market/product_details_page.dart';
+import '../market/widgets/market_product_card.dart';
+import '../../services/request_product_page.dart';
+import '../../services/services_page.dart';
+import '../../services/miniapps_page.dart';
+import '../../services/live_shopping_page.dart';
 
 class MainDashboardView extends ConsumerStatefulWidget {
   const MainDashboardView({super.key});
@@ -60,94 +66,133 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
       backgroundColor: Colors.black,
       body: CustomScrollView(
         slivers: [
-          // 1. APP BAR AVEC BARRE DE RECHERCHE
+          // 1. APP BAR AVEC HEADER PERSONNALISÉ & RECHERCHE
           SliverAppBar(
-            backgroundColor: Colors.black,
+            backgroundColor: Colors.transparent,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.blue, Colors.black],
+                ),
+              ),
+            ),
             floating: true,
             pinned: true,
             elevation: 0,
-            title: Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: TextField(
-                controller: _searchCtrl,
-                textInputAction: TextInputAction.search,
-                onSubmitted: _onSearch,
-                decoration: InputDecoration(
-                  hintText: 'Rechercher un produit...',
-                  hintStyle: TextStyle(color: Colors.grey[600], fontSize: 14),
-                  prefixIcon: const Icon(Icons.search, color: Colors.orange, size: 20),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.camera_alt_outlined, color: Colors.black54, size: 20),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Recherche par image bientôt disponible")));
-                    },
+            // Augmenter la hauteur pour accommoder le Header + SearchBar
+            expandedHeight: 120, 
+            title: Row(
+              children: [
+                // Coin Gauche : Avatar + Nom
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.grey[800],
+                  backgroundImage: (authState.userData != null && authState.userData!['avatar_url'] != null)
+                      ? NetworkImage(authState.userData!['avatar_url'])
+                      : null,
+                  child: (authState.userData == null || authState.userData!['avatar_url'] == null)
+                      ? const Icon(Icons.person, size: 20, color: Colors.white)
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    authState.userData?['name'] ?? 'Utilisateur',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                
+                // Centre : Logo Oli
+                Expanded(
+                  flex: 2,
+                  child: Center(
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      height: 30,
+                    ),
+                  ),
+                ),
+                
+                // Équilibrer l'espace à droite
+                const Spacer(),
+                const SizedBox(width: 40), // Placeholder pour actions ou vide
+              ],
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(60),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: TextField(
+                  controller: _searchCtrl,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: _onSearch,
+                  decoration: InputDecoration(
+                    hintText: 'Rechercher un produit...',
+                    hintStyle: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    prefixIcon: const Icon(Icons.search, color: Colors.orange, size: 20),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.camera_alt_outlined, color: Colors.black54, size: 20),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Recherche par image bientôt disponible")));
+                      },
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
                 ),
               ),
             ),
             actions: [
-              IconButton(
+               IconButton(
                 icon: const Icon(Icons.notifications_outlined, color: Colors.white),
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsView())),
               ),
             ],
           ),
 
-          // 2. BOUTONS D'ACTION RAPIDE
+          // 2. BOUTONS D'ACTION RAPIDE (Modification précédente conservée)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Row(
                 children: [
-                   // Exemple: Scroll vers la liste des catégories ou filtre spécifique
-                  _buildQuickActionCard("Par Catégorie", Icons.category_outlined, Colors.orange, () {
-                     // Pour l'instant, simple feedback visuel ou scroll to tabs
-                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Filtrez via les onglets ci-dessous")));
+                  // 3. ROW NAVIGATION (5 Items fixe)
+                  _buildQuickActionCard("Catégorie", Icons.grid_view, Colors.orange, () {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Filtrez via les onglets ci-dessous")));
                   }),
-                  const SizedBox(width: 8),
-                  _buildQuickActionCard("Devis", Icons.request_quote_outlined, Colors.blue, null),
-                  const SizedBox(width: 8),
-                  _buildQuickActionCard("Sur Mesure", Icons.handyman_outlined, Colors.green, null),
+                  _buildQuickActionCard("Demande", Icons.campaign, Colors.blue, () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestProductPage()));
+                  }),
+                  _buildQuickActionCard("Service", Icons.public, Colors.green, () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ServicesPage()));
+                  }),
+                  _buildQuickActionCard("Mini-app", Icons.apps, Colors.purple, () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const MiniAppsPage()));
+                  }),
+                  _buildQuickActionCard("Live", Icons.live_tv, Colors.red, () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveShoppingPage()));
+                  }),
                 ],
               ),
             ),
           ),
+          
+          // 3. HISTORIQUE ("Continuer à regarder") (Conservé ou déplacé ?)
+          // L'utilisateur voulait "une ligne avant super offre".
+          // Je vais insérer la "Singing Product Row" ICI, avant "Super offres" mais après l'historique ou à la place ?
+          // "avant le widget super offre" -> OK.
+          
 
-          // 3. HORIZONTAL SCROLL ("Continuer à regarder")
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text("Continuer à regarder", style: TextStyle(color: Colors.white.withOpacity(0.9), fontWeight: FontWeight.bold, fontSize: 16)),
-                ),
-                SizedBox(
-                  height: 140,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: products.isEmpty ? 5 : products.length,
-                    itemBuilder: (context, index) {
-                      if (products.isEmpty) return _buildPlaceholderCard();
-                      return GestureDetector(
-                        onTap: () => _navigateToProduct(products[index]),
-                        child: _buildHistoryCard(products[index]),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
 
-          // 4. CATEGORY TABS
+          // 5. CATEGORY TABS (Conserver)
           SliverToBoxAdapter(
             child: Container(
               height: 50,
@@ -204,7 +249,23 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             ),
           ),
 
-          // 6. MEILLEURS VENDEURS (Top Sellers du Marketplace)
+          // 6. SECTION DÉCOUVERTE (Carousel Auto)
+          const SliverPadding(
+             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+             sliver: SliverToBoxAdapter(
+               child: Text("Découverte", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+             ),
+          ),
+          SliverToBoxAdapter(
+            child: products.isEmpty 
+              ? const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()))
+              : _DiscoveryCarousel(
+                  products: products, 
+                  onTap: (p) => _navigateToProduct(p)
+                ),
+          ),
+
+          // 7. MEILLEURS VENDEURS (Top Sellers du Marketplace)
           SliverToBoxAdapter(
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
@@ -348,24 +409,27 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback? onTap) {
     return Expanded(
       child: GestureDetector(
-        onTap: onTap ?? () {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$title bientôt disponible")));
-        },
-        child: Container(
-          height: 80,
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 4),
-              Text(title, textAlign: TextAlign.center, style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold)),
-            ],
-          ),
+        onTap: onTap ?? () {},
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05), // Fond subtil
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title, 
+              textAlign: TextAlign.center, 
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.normal)
+            ),
+          ],
         ),
       ),
     );
@@ -455,81 +519,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     );
   }
 
+
+
   Widget _buildProductGridCard(Product product) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2C2C2C),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Image Produit
-          Expanded(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              child: Stack(
-                children: [
-                  product.images.isNotEmpty 
-                    ? Image.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
-                    : const Center(child: Icon(Icons.image, color: Colors.grey)),
-                  // Info Vendeur (Overlay)
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [Colors.black.withOpacity(0.8), Colors.transparent],
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 8,
-                            backgroundImage: product.sellerAvatar != null 
-                                ? NetworkImage(product.sellerAvatar!) 
-                                : null,
-                            child: product.sellerAvatar == null 
-                                ? const Icon(Icons.person, size: 10, color: Colors.white) 
-                                : null,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              product.seller,
-                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w500),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(6.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 11)),
-                const SizedBox(height: 2),
-                Text("\$${product.price}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                Text("${product.quantity} vendus", style: TextStyle(color: Colors.grey[500], fontSize: 9)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return MarketProductCard(product: product);
   }
 
   Widget _buildCategoryChip(String label, bool isSelected) {
@@ -686,6 +679,116 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DiscoveryCarousel extends StatefulWidget {
+  final List<Product> products;
+  final Function(Product) onTap;
+
+  const _DiscoveryCarousel({required this.products, required this.onTap});
+
+  @override
+  State<_DiscoveryCarousel> createState() => _DiscoveryCarouselState();
+}
+
+class _DiscoveryCarouselState extends State<_DiscoveryCarousel> {
+  int _currentIndex = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentIndex = (_currentIndex + 1) % widget.products.length;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.products.isEmpty) return const SizedBox();
+    final product = widget.products[_currentIndex];
+
+    return GestureDetector(
+      onTap: () => widget.onTap(product),
+      child: Container(
+        height: 120, // Taille réduite pour mobile
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 500),
+          transitionBuilder: (Widget child, Animation<double> animation) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          child: Container(
+            key: ValueKey<String>(product.id), // Clé unique pour l'animation
+            decoration: BoxDecoration(
+              color: const Color(0xFF2C2C2C),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                // Image Carrée à gauche
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: product.images.isNotEmpty 
+                     ? Image.network(product.images.first, width: 100, height: 100, fit: BoxFit.cover)
+                     : Container(width: 100, height: 100, color: Colors.grey[800], child: const Icon(Icons.image)),
+                ),
+                const SizedBox(width: 12),
+                // Infos Produit
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.blueAccent.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text("DÉCOUVERTE", style: TextStyle(color: Colors.blueAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        product.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "\$${product.price}", 
+                        style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 16)
+                      ),
+                    ],
+                  ),
+                ),
+                // Icône Arrow
+                Icon(Icons.arrow_forward_ios, color: Colors.grey[600], size: 14),
+                const SizedBox(width: 4),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

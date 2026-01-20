@@ -22,7 +22,7 @@ class VisitedProduct {
       id: json['id'],
       name: json['name'],
       price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
-      imageUrl: json['image_url'],
+      imageUrl: _parseImage(json),
       description: json['description'],
       viewedAt: DateTime.parse(json['viewed_at']),
       sellerName: json['seller_name'],
@@ -40,4 +40,28 @@ class VisitedProduct {
       'seller_name': sellerName,
     };
   }
+  static String? _parseImage(Map<String, dynamic> json) {
+    // 1. Essayer image_url direct
+    if (json['image_url'] != null && json['image_url'] is String) {
+       return json['image_url'];
+    }
+
+    // 2. Essayer 'images' (array ou string JSON)
+    var images = json['images'];
+    if (images != null) {
+      if (images is List && images.isNotEmpty) {
+        return images.first;
+      } else if (images is String) {
+        // Nettoyer format {url1,url2} ou ["url1"]
+        final clean = images.replaceAll(RegExp(r'[{}"\[\]]'), '');
+        final parts = clean.split(',');
+        if (parts.isNotEmpty && parts.first.isNotEmpty) {
+          return parts.first;
+        }
+      }
+    }
+
+    return null;
+  }
 }
+

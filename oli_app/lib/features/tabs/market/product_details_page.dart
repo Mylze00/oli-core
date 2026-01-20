@@ -5,6 +5,7 @@ import '../../../models/product_model.dart';
 import '../../../widgets/verification_badge.dart';
 import '../../chat/chat_page.dart';
 import '../../../core/user/user_provider.dart';
+import '../../user/providers/user_activity_provider.dart';
 
 class ProductDetailsPage extends ConsumerStatefulWidget {
   final Product product;
@@ -25,6 +26,15 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       debugPrint("📤 [DEBUG] Partage terminé: ${result.status}");
     }).catchError((e) {
       debugPrint("❌ [DEBUG] Erreur Partage: $e");
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // 🔍 Tracking "Produits Consultés"
+    Future.microtask(() {
+      ref.read(userActivityProvider.notifier).addToVisited(widget.product);
     });
   }
 

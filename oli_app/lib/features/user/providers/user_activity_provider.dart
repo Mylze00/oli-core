@@ -73,6 +73,24 @@ class UserActivityNotifier extends StateNotifier<UserActivityState> {
     }
   }
 
+  /// Alias pour trackProductView compatible avec l'appel UI
+  Future<void> addToVisited(dynamic product) async {
+      if (product == null) return;
+      try {
+        // Tenter de récupérer l'ID, qu'il soit String ou int
+        final idStr = product is int ? product.toString() : product.id.toString();
+        final id = int.tryParse(idStr);
+        
+        if (id != null) {
+          await trackProductView(id);
+        } else {
+          print("⚠️ Impossible de tracker le produit: ID invalide ($idStr)");
+        }
+      } catch (e) {
+        print("⚠️ Erreur addToVisited: $e");
+      }
+  }
+
   /// Enregistre une vue de produit
   Future<void> trackProductView(int productId) async {
     try {

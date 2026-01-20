@@ -1,7 +1,8 @@
 /**
  * Service User - Gestion du profil et activité utilisateur
  */
-const pool = require('../config/db');
+const userRepository = require('../repositories/user.repository');
+const { BASE_URL } = require('../config');
 
 /**
  * Récupère les produits visités par un utilisateur
@@ -11,27 +12,10 @@ const pool = require('../config/db');
  */
 async function getVisitedProducts(userId, limit = 20) {
     try {
-        const query = `
-            SELECT 
-                p.id,
-                p.name,
-                p.price,
-                p.images,
-                p.description,
-                upv.viewed_at,
-                u.name as seller_name
-            FROM user_product_views upv
-            INNER JOIN products p ON upv.product_id = p.id
-            LEFT JOIN users u ON p.seller_id = u.id
-            WHERE upv.user_id = $1
-            ORDER BY upv.viewed_at DESC
-            LIMIT $2
-        `;
-
-        const result = await pool.query(query, [userId, limit]);
+        const productsRaw = await userRepository.findVisitedProducts(userId, limit);
 
         // Formater les résultats avec imageUrl
-        const products = result.rows.map(p => {
+        return productsRaw.map(p => {
             let imgs = [];
             if (Array.isArray(p.images)) {
                 imgs = p.images;
@@ -39,14 +23,18 @@ async function getVisitedProducts(userId, limit = 20) {
                 imgs = p.images.replace(/[{}"]/g, '').split(',').filter(Boolean);
             }
 
+            const imageUrls = imgs.map(img => {
+                if (!img) return null;
+                if (img.startsWith('http')) return img;
+                return `${BASE_URL}/uploads/${img}`;
+            }).filter(url => url !== null);
+
             return {
                 ...p,
-                imageUrl: imgs.length > 0 ? imgs[0] : null,
-                images: imgs
+                imageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
+                images: imageUrls
             };
         });
-
-        return products;
     } catch (error) {
         console.error('Erreur getVisitedProducts:', error);
         throw new Error('Erreur lors de la récupération des produits visités');
@@ -61,17 +49,10 @@ async function getVisitedProducts(userId, limit = 20) {
  */
 async function trackProductView(userId, productId) {
     try {
-        // On insère toujours une nouvelle entrée pour garder l'historique complet
-        const query = `
-            INSERT INTO user_product_views (user_id, product_id, viewed_at)
-            VALUES ($1, $2, NOW())
-        `;
-
-        await pool.query(query, [userId, productId]);
+        await userRepository.trackProductView(userId, productId);
     } catch (error) {
         console.error('Erreur trackProductView:', error);
-        // On ne throw pas d'erreur ici pour ne pas bloquer l'affichage du produit
-        // Le tracking est une feature secondaire
+        // Fail silently
     }
 }
 
@@ -92,33 +73,22 @@ async function updateUserName(userId, newName) {
 
     try {
         // 1. Check last update time
-        const userCheck = await pool.query('SELECT last_profile_update FROM users WHERE id = $1', [userId]);
-        if (userCheck.rows.length > 0) {
-            const lastUpdate = userCheck.rows[0].last_profile_update;
-            if (lastUpdate) {
-                const twoWeeksAgo = new Date();
-                twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+        const user = await userRepository.findById(userId);
+        if (user && user.last_profile_update) {
+            const twoWeeksAgo = new Date();
+            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
-                if (new Date(lastUpdate) > twoWeeksAgo) {
-                    throw new Error('Vous ne pouvez modifier votre nom qu\'une fois toutes les 2 semaines.');
-                }
+            if (new Date(user.last_profile_update) > twoWeeksAgo) {
+                throw new Error('Vous ne pouvez modifier votre nom qu\'une fois toutes les 2 semaines.');
             }
         }
 
-        const query = `
-            UPDATE users 
-            SET name = $1, updated_at = NOW(), last_profile_update = NOW()
-            WHERE id = $2
-            RETURNING id, name, phone, id_oli, avatar_url, wallet, is_seller, is_deliverer, last_profile_update
-        `;
-
-        const result = await pool.query(query, [newName.trim(), userId]);
-
-        if (result.rows.length === 0) {
+        const updatedUser = await userRepository.updateName(userId, newName.trim());
+        if (!updatedUser) {
             throw new Error('Utilisateur non trouvé');
         }
 
-        return result.rows[0];
+        return updatedUser;
     } catch (error) {
         console.error('Erreur updateUserName:', error);
         throw error;

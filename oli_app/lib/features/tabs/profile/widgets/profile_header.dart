@@ -21,6 +21,7 @@ class ProfileHeader extends ConsumerWidget {
             GestureDetector(
               onTap: () => ref.read(profileControllerProvider.notifier).updateAvatar(),
               child: Stack(
+                clipBehavior: Clip.none,
                 children: [
                   Container(
                     width: 70, height: 70,
@@ -54,7 +55,7 @@ class ProfileHeader extends ConsumerWidget {
                   if (user['is_verified'] == true || user['account_type'] != 'ordinaire' || user['has_certified_shop'] == true)
                     Positioned(
                       bottom: -5,
-                      right: -5,
+                      right: -2,
                       child: VerificationBadge(
                         type: VerificationBadge.fromSellerData(
                           isVerified: user['is_verified'] == true,
@@ -113,17 +114,9 @@ class ProfileHeader extends ConsumerWidget {
                       if (user['account_type'] == 'premium')
                          _buildBadge('Premium ⭐', const Color(0xFF00BA7C).withOpacity(0.2), const Color(0xFF00BA7C)),
 
-                      if (user['account_type'] == 'certifie' || user['is_verified'] == true) ...[
-                        if (user['account_type'] != 'entreprise' && user['account_type'] != 'premium')
-                          _buildBadge('Certifié ✓', const Color(0xFF1DA1F2).withOpacity(0.2), const Color(0xFF1DA1F2)),
-                      ],
-                      
                       if (user['is_seller'] == true) ...[
                          const SizedBox(width: 8),
                          _buildBadge('Vendeur', Colors.white24),
-                      ] else ...[
-                         const SizedBox(width: 8),
-                         _buildBadge('Membre', Colors.white24),
                       ],
                     ],
                   ),

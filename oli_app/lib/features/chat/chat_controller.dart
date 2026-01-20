@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/api_config.dart';
@@ -160,15 +161,59 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
+  Future<String?> uploadImage(dynamic fileObj) async {
+    try {
+      final token = await _storage.getToken();
+      
+      String fileName;
+      List<int> fileBytes;
+      String? mimeType;
+      
+      // Support pour XFile (mobile/web) ou File (mobile)
+      if (fileObj.runtimeType.toString().contains('XFile')) {
+         fileName = fileObj.name;
+         fileBytes = await fileObj.readAsBytes();
+         mimeType = fileObj.mimeType;
+      } else {
+        // Fallback générique
+         throw Exception("Type de fichier non supporté: ${fileObj.runtimeType}");
+      }
+
+      FormData formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(
+          fileBytes, 
+          filename: fileName,
+          contentType: mimeType != null ? DioMediaType.parse(mimeType) : null,
+        ),
+      });
+
+      final response = await _dio.post(
+        '${ApiConfig.baseUrl}/chat/upload',
+        data: formData,
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data['mediaUrl']; 
+      }
+    } catch (e) {
+      debugPrint('❌ Erreur uploadImage: $e');
+    }
+    return null;
+  }
+
   Future<void> sendMessage({
     required String content,
     String type = 'text',
+    String? mediaUrl,
+    String? mediaType,
     String? productId,
     String? productName,
     String? productImage,
     double? productPrice,
   }) async {
-    if ((content.trim().isEmpty && type == 'text') || myId == null) return;
+    // Si pas de contenu et pas de média, on n'envoie rien
+    if ((content.trim().isEmpty && mediaUrl == null) || myId == null) return;
 
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -176,9 +221,13 @@ class ChatController extends StateNotifier<ChatState> {
     final optimisticMessage = {
       'id': tempId,
       'sender_id': int.parse(myId!),
-      'content': content,
+      'content': content.isEmpty && mediaUrl != null ? (mediaType == 'image' ? '📷 Image' : '📎 Fichier') : content,
       'type': type,
       'created_at': DateTime.now().toIso8601String(),
+      'metadata': mediaUrl != null ? jsonEncode({
+        'mediaUrl': mediaUrl,
+        'mediaType': mediaType ?? 'file'
+      }) : null
     };
     
     // On ajoute tout de suite
@@ -190,18 +239,24 @@ class ChatController extends StateNotifier<ChatState> {
       dynamic data;
       String url;
 
+      final Map<String, dynamic> metadata = {
+          if (productName != null) 'product_name': productName,
+          if (productImage != null) 'product_image': productImage,
+          if (productPrice != null) 'product_price': productPrice,
+          if (mediaUrl != null) 'mediaUrl': mediaUrl,
+          if (mediaUrl != null) 'mediaType': mediaType ?? 'file',
+      };
+
       if (state.conversationId == null) {
         url = '${ApiConfig.baseUrl}/chat/send';
         data = {
           'recipientId': int.parse(otherUserId),
           'content': content,
           'type': type,
+          'mediaUrl': mediaUrl,
+          'mediaType': mediaType,
           'productId': productId != null ? int.parse(productId) : null,
-          'metadata': {
-            if (productName != null) 'product_name': productName,
-            if (productImage != null) 'product_image': productImage,
-            if (productPrice != null) 'product_price': productPrice,
-          },
+          'metadata': metadata,
         };
       } else {
         url = '${ApiConfig.baseUrl}/chat/messages';
@@ -210,6 +265,9 @@ class ChatController extends StateNotifier<ChatState> {
           'recipientId': int.parse(otherUserId),
           'content': content,
           'type': type,
+          'mediaUrl': mediaUrl,
+          'mediaType': mediaType,
+          'metadata': metadata,
         };
       }
 
@@ -229,12 +287,9 @@ class ChatController extends StateNotifier<ChatState> {
             requesterId: resData['requester_id'],
           );
         }
-        // Note: On ne supprime pas le message optimiste ici, 
-        // on laisse le socket s'en charger ou on pourrait le mettre à jour avec le vrai ID si l'API le renvoyait.
       }
     } catch (e) {
       debugPrint('❌ Erreur sendMessage: $e');
-      // En cas d'erreur, on pourrait marquer le message comme "échec" ou le retirer
       state = state.copyWith(
         error: "Erreur d'envoi",
         messages: state.messages.where((m) => m['id'] != tempId).toList(), // Retrait si erreur

@@ -174,9 +174,13 @@ class AuthController extends StateNotifier<AuthState> {
   void updateUserData(Map<String, dynamic> newPartialData) {
     if (state.userData == null) return;
     
-    final currentData = state.userData!;
+    print("📝 updateUserData called with: $newPartialData");
+    print("📝 Current user data before update: ${state.userData}");
+    
     state = state.copyWith(
-      userData: {...currentData, ...newPartialData}
+      userData: {...state.userData ?? {}, ...newPartialData},
     );
+    
+    print("✅ Updated user data: ${state.userData}");
   }
 }

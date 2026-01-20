@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart'; // Import Geolocator
 import '../features/shop/providers/product_controller.dart';
 import '../models/product_model.dart';
 import '../config/api_config.dart';
@@ -35,6 +36,47 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     'Alimentation',
     'Autres',
   ];
+
+  String? _location;
+  bool _gettingLocation = false;
+
+  Future<void> _getCurrentLocation() async {
+    setState(() => _gettingLocation = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('La localisation est désactivée')));
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permission de localisation refusée')));
+            return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permission de localisation définitivement refusée')));
+          return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition();
+      setState(() {
+        // Format simple: "Lat, Long". Idéalement utiliser Geocoding pour avoir une adresse
+        _location = "${position.latitude}, ${position.longitude}"; 
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Position acquise: $_location')));
+
+    } catch (e) {
+      debugPrint("Erreur localisation: $e");
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur récupération position')));
+    } finally {
+      if (mounted) setState(() => _gettingLocation = false);
+    }
+  }
 
   Future<void> _pickImages() async {
     final imgs = await ImagePicker().pickMultiImage();
@@ -160,7 +202,39 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(labelText: "Description du produit", filled: true, fillColor: Colors.white10, border: OutlineInputBorder()),
             ),
+            const SizedBox(height: 15),
+
+            // UI Bouton Localisation
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.white38),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.blueAccent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _location ?? "Ajouter ma position actuelle",
+                      style: TextStyle(color: _location != null ? Colors.white : Colors.white54),
+                    ),
+                  ),
+                  if (_gettingLocation)
+                    const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  else
+                    TextButton(
+                      onPressed: _getCurrentLocation,
+                      child: const Text("Obtenir"),
+                    )
+                ],
+              ),
+            ),
+            
             const SizedBox(height: 30),
+            
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -183,10 +257,10 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                           quantity: int.tryParse(_quantity.text.trim()) ?? 1,
                           color: _color.text.trim(),
                           images: _images,
-                          category: _category, // Ajout de la catégorie
+                          category: _category, 
+                          location: _location, 
                         );
                         if (ok) {
-                          // On demande au provider de rafraîchir la liste depuis le serveur
                           ref.read(marketProductsProvider.notifier).fetchProducts();
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Article publié avec succès')));

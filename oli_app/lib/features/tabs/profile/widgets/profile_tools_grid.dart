@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../auth/providers/auth_controller.dart';
+import '../../../auth/providers/auth_controller.dart';
 
 import '../../../../pages/publish_article_page.dart';
 import '../../../../pages/favorites_page.dart';
 import '../../../../pages/help_page.dart';
 import '../../../../pages/about_page.dart';
 import '../../../../pages/payment_methods_page.dart';
-import '../../user/screens/addresses_page.dart';
+import '../../../user/screens/addresses_page.dart';
 
 class ProfileToolsGrid extends ConsumerWidget {
   final Color cardColor;
