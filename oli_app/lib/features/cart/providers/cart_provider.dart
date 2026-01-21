@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/order_model.dart';
+import '../../../models/order_model.dart';
 
 /// Modèle d'un item dans le panier
 class CartItem {

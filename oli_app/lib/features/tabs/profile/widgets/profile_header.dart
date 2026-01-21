@@ -5,7 +5,7 @@ import '../../../../widgets/auto_refresh_avatar.dart';
 import '../../../user/providers/profile_controller.dart';
 import '../../../user/widgets/edit_name_dialog.dart';
 import '../../../user/providers/address_provider.dart';
-import '../../../../pages/settings_page.dart';
+import '../../../settings/screens/settings_page.dart';
 import '../../../../config/api_config.dart';
 
 class ProfileHeader extends ConsumerWidget {

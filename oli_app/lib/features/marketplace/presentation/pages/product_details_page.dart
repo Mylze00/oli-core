@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../../models/product_model.dart';
-import '../../../widgets/verification_badge.dart';
-import '../../chat/chat_page.dart';
-import '../../../core/user/user_provider.dart';
-import '../../user/providers/user_activity_provider.dart';
+import '../../../../config/api_config.dart';
+import '../../../../models/product_model.dart'; 
+import '../../../../widgets/verification_badge.dart';
+import '../../../chat/chat_page.dart';
+import '../../../../core/user/user_provider.dart';
+import '../../../user/providers/user_activity_provider.dart';
 
 class ProductDetailsPage extends ConsumerStatefulWidget {
   final Product product;

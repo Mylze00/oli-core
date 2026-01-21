@@ -2,6 +2,7 @@
  * Service User - Gestion du profil et activité utilisateur
  */
 const userRepository = require('../repositories/user.repository');
+const pool = require('../config/db'); // Needed for direct updates if repo doesn't support it yet
 const { BASE_URL } = require('../config');
 
 /**
@@ -100,5 +101,43 @@ async function updateUserName(userId, newName) {
 module.exports = {
     getVisitedProducts,
     trackProductView,
-    updateUserName
+    updateUserName,
+    updateProfile,
+    uploadAvatar
 };
+
+/**
+ * Met à jour le profil (nom)
+ * @param {string} phone 
+ * @param {string} name 
+ * @returns 
+ */
+async function updateProfile(phone, name) {
+    try {
+        const result = await pool.query(
+            "UPDATE users SET name = $1, last_profile_update = NOW(), updated_at = NOW() WHERE phone = $2 RETURNING *",
+            [name, phone]
+        );
+        return result.rows[0];
+    } catch (e) {
+        throw e;
+    }
+}
+
+/**
+ * Met à jour l'avatar
+ * @param {string} phone 
+ * @param {string} avatarUrl 
+ * @returns 
+ */
+async function uploadAvatar(phone, avatarUrl) {
+    try {
+        const result = await pool.query(
+            "UPDATE users SET avatar_url = $1, last_profile_update = NOW() WHERE phone = $2",
+            [avatarUrl, phone]
+        );
+        return result.rowCount > 0;
+    } catch (e) {
+        throw e;
+    }
+}

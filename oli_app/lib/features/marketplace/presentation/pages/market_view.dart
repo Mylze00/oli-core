@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../models/product_model.dart'; 
-import '../../../widgets/verification_badge.dart';
+import '../../../../models/product_model.dart'; 
+import '../../../../widgets/verification_badge.dart';
+import '../../providers/market_provider.dart';
 import 'product_details_page.dart';
-import 'widgets/market_product_card.dart';
+import '../widgets/market_product_card.dart';
 
 class MarketView extends ConsumerStatefulWidget {
   const MarketView({super.key});
@@ -30,9 +31,8 @@ class _MarketViewState extends ConsumerState<MarketView> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      ref.read(marketProductsProvider.notifier).fetchProducts();
-    });
+    // Fetch products is called in constructor of the provider, but good to refresh/ensure
+    // ref.read(marketProductsProvider.notifier).fetchProducts();
   }
 
   void _onSearch(String value) {
@@ -59,7 +59,9 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
   @override
   Widget build(BuildContext context) {
-    final products = ref.watch(marketProductsProvider);
+    final productsAsync = ref.watch(marketProductsProvider);
+    final products = productsAsync.valueOrNull ?? []; // Handle AsyncValue
+
     final topSellers = ref.watch(topSellersProvider);
     final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
     final featuredProducts = ref.watch(featuredProductsProvider);

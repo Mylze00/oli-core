@@ -49,5 +49,11 @@
 	<string>Cette application a besoin d'accéder à votre localisation pour afficher les produits proches et envoyer votre position.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>Cette application a besoin d'accéder à votre localisation pour afficher les produits proches et envoyer votre position.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cette application a besoin d'accéder à votre galerie pour envoyer des images.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Cette application a besoin d'accéder à votre caméra pour prendre des photos et les envoyer.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cette application a besoin d'accéder à votre microphone pour les vidéos.</string>
 </dict>
 </plist>

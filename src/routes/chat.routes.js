@@ -12,7 +12,7 @@ const chatUploadController = require('../controllers/chat-upload.controller');
 const { chatUpload } = require('../config/upload'); // Centralized upload config
 
 // Médias (Via Cloudinary/Local)
-router.post('/upload', chatUpload.single('file'), chatUploadController.uploadFile);
+router.post('/upload', chatUpload.single('chat_file'), chatUploadController.uploadFile);
 
 // Conversations & Messages
 router.post('/send', chatController.sendInitialMessage);

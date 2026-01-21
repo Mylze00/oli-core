@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../../config/api_config.dart';
 import '../../../models/product_model.dart';
-import '../../../pages/notifications_view.dart';
-import '../market/product_details_page.dart';
-import '../market/widgets/market_product_card.dart';
+import '../../notifications/screens/notifications_view.dart';
+import '../../marketplace/presentation/pages/product_details_page.dart';
+import '../../marketplace/presentation/widgets/market_product_card.dart';
 import '../../services/request_product_page.dart';
 import '../../services/services_page.dart';
 import '../../services/miniapps_page.dart';
@@ -15,6 +15,7 @@ import '../../shop/shop_details_page.dart';
 import '../dashboard/providers/shops_provider.dart';
 import '../../../models/shop_model.dart';
 import '../../../widgets/auto_refresh_avatar.dart';
+import '../../marketplace/providers/market_provider.dart';
 
 class MainDashboardView extends ConsumerStatefulWidget {
   const MainDashboardView({super.key});
@@ -65,7 +66,8 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     final topSellers = ref.watch(topSellersProvider);
     // 🏪 Produits des grands magasins vérifiés
     final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
-    final verifiedShops = ref.watch(verifiedShopsProvider); // ✨ Boutiques vérifiées (Carousel)
+    final verifiedShopsAsync = ref.watch(verifiedShopsProvider); 
+    final verifiedShops = verifiedShopsAsync.valueOrNull ?? []; // ✨ Boutiques vérifiées (Carousel)
     final authState = ref.watch(authControllerProvider);
 
     return Scaffold(

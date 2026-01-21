@@ -32,7 +32,13 @@ class SecureStorageService {
   Future<String?> getToken() async {
     if (_useFallback) {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_tokenKey);
+      var token = prefs.getString(_tokenKey);
+      
+      // 🔥 FIX ROBUSTE: Enlever tous les guillemets parasites
+      if (token != null) {
+        token = token.replaceAll('"', '');
+      }
+      return token;
     }
     try {
       return await _secureStorage.read(key: _tokenKey);

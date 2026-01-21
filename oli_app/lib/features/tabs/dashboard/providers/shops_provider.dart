@@ -6,24 +6,17 @@ import '../../../../config/api_config.dart';
 import '../../../../models/shop_model.dart';
 
 // Provider global
-final verifiedShopsProvider = StateNotifierProvider<VerifiedShopsNotifier, List<Shop>>((ref) {
+final verifiedShopsProvider = StateNotifierProvider<VerifiedShopsNotifier, AsyncValue<List<Shop>>>((ref) {
   return VerifiedShopsNotifier();
 });
 
-class VerifiedShopsNotifier extends StateNotifier<List<Shop>> {
-  bool _isLoading = false;
-  String? _error;
-
-  VerifiedShopsNotifier() : super([]) {
+class VerifiedShopsNotifier extends StateNotifier<AsyncValue<List<Shop>>> {
+  VerifiedShopsNotifier() : super(const AsyncValue.loading()) {
     fetchVerifiedShops();
   }
 
-  bool get isLoading => _isLoading;
-  String? get error => _error;
-
   Future<void> fetchVerifiedShops() async {
-    _isLoading = true;
-    _error = null;
+    state = const AsyncValue.loading();
 
     try {
       final uri = Uri.parse('${ApiConfig.baseUrl}/shops/verified?limit=10');
@@ -37,16 +30,14 @@ class VerifiedShopsNotifier extends StateNotifier<List<Shop>> {
            debugPrint("✅ ${shops.length} boutiques vérifiées chargées");
         }
         
-        state = shops;
+        state = AsyncValue.data(shops);
       } else {
-        _error = "Erreur serveur: ${response.statusCode}";
         debugPrint("❌ Erreur fetchVerifiedShops: ${response.statusCode}");
+        state = AsyncValue.error("Erreur serveur: ${response.statusCode}", StackTrace.current);
       }
-    } catch (e) {
-      _error = "Erreur: $e";
+    } catch (e, st) {
       debugPrint("❌ Exception fetchVerifiedShops: $e");
-    } finally {
-      _isLoading = false;
+      state = AsyncValue.error("Erreur: $e", st);
     }
   }
 }

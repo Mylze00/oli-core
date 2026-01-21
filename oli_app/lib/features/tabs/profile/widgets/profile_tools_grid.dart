@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/providers/auth_controller.dart';
 
-import '../../../../pages/publish_article_page.dart';
-import '../../../../pages/favorites_page.dart';
-import '../../../../pages/help_page.dart';
-import '../../../../pages/about_page.dart';
-import '../../../../pages/payment_methods_page.dart';
+import '../../../shop/screens/publish_article_page.dart';
+import '../../../favorites/screens/favorites_page.dart';
+import '../../../settings/screens/help_page.dart';
+import '../../../settings/screens/about_page.dart';
+import '../../../checkout/screens/payment_methods_page.dart';
 import '../../../user/screens/addresses_page.dart';
 
 class ProfileToolsGrid extends ConsumerWidget {

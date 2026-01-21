@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../pages/purchases_page.dart';
+import '../../../orders/screens/purchases_page.dart';
 
 class OrderStatusBar extends StatelessWidget {
   final Color cardColor;

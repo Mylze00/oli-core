@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../features/user/providers/favorites_provider.dart';
-import '../models/product_model.dart';
-import '../features/tabs/market/widgets/market_product_card.dart';
+import '../../user/providers/favorites_provider.dart';
+import '../../../models/product_model.dart';
+import '../../marketplace/presentation/widgets/market_product_card.dart';
 
 /// Page "Favoris et Suivis"
 /// Refactorisée pour utiliser le FavoritesProvider

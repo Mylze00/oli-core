@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/cart_provider.dart';
-import 'checkout_page.dart';
+import '../../checkout/screens/checkout_page.dart';
 
 /// Page Panier
 class CartPage extends ConsumerWidget {

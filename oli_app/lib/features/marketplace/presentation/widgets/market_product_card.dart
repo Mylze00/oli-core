@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
 import '../../../../widgets/verification_badge.dart';
 import '../../../user/providers/favorites_provider.dart';
-import '../product_details_page.dart';
+import '../pages/product_details_page.dart';
 
 class MarketProductCard extends ConsumerWidget {
   final Product product;

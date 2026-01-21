@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart'; // Import Geolocator
-import '../features/shop/providers/product_controller.dart';
-import '../models/product_model.dart';
-import '../config/api_config.dart';
+import '../../marketplace/providers/market_provider.dart';
+import '../providers/product_controller.dart';
+import '../../../models/product_model.dart';
+import '../../../config/api_config.dart';
 
 class PublishArticlePage extends ConsumerStatefulWidget {
   const PublishArticlePage({super.key});

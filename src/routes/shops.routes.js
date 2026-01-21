@@ -56,6 +56,21 @@ router.get('/my-shops', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /shops/verified
+ * Boutiques vérifiées ou Entreprises (Carousel Accueil)
+ */
+router.get('/verified', async (req, res) => {
+    try {
+        const { limit } = req.query;
+        const shops = await shopRepo.findVerified(limit);
+        res.json(shops.map(formatShopUrls));
+    } catch (err) {
+        console.error("Erreur GET /shops/verified:", err);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+/**
  * GET /shops/:id
  * Détails d'une boutique
  */

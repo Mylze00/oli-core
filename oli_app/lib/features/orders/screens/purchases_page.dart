@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/order_model.dart';
-import '../../providers/orders_provider.dart';
+import '../../../models/order_model.dart';
+import '../providers/orders_provider.dart';
 
 /// Page "Mes Achats" - Historique des commandes (Reel)
 class PurchasesPage extends ConsumerStatefulWidget {

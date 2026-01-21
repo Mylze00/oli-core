@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/shop_model.dart';
 import '../../models/product_model.dart';
 import 'providers/shop_products_provider.dart';
-import '../tabs/market/widgets/market_product_card.dart';
-import '../tabs/market/product_details_page.dart';
+import '../marketplace/presentation/widgets/market_product_card.dart';
+import '../marketplace/presentation/pages/product_details_page.dart';
 
 class ShopDetailsPage extends ConsumerWidget {
   final Shop shop;

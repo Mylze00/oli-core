@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../tabs/dashboard/dashboard_view.dart';
 import '../tabs/messaging/messaging_view.dart';
-import '../tabs/market/market_view.dart';
+import '../marketplace/presentation/pages/market_view.dart';
 import '../tabs/profile/profile_wallet_page.dart';
-import '../../pages/publish_article_page.dart';
+import '../shop/screens/publish_article_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

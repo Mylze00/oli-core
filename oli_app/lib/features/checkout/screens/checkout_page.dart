@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/cart_provider.dart';
-import '../providers/orders_provider.dart';
+import '../../cart/providers/cart_provider.dart';
+import '../../orders/providers/orders_provider.dart';
 
 /// Page de Checkout / Validation de commande
 class CheckoutPage extends ConsumerStatefulWidget {

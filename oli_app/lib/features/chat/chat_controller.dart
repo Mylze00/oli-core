@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http_parser/http_parser.dart';
 import '../../config/api_config.dart';
 import '../../core/storage/secure_storage_service.dart';
 import '../../core/user/user_provider.dart';
@@ -180,10 +181,10 @@ class ChatController extends StateNotifier<ChatState> {
       }
 
       FormData formData = FormData.fromMap({
-        'file': MultipartFile.fromBytes(
+        'chat_file': MultipartFile.fromBytes(
           fileBytes, 
           filename: fileName,
-          contentType: mimeType != null ? DioMediaType.parse(mimeType) : null,
+          contentType: mimeType != null ? MediaType.parse(mimeType) : null,
         ),
       });
 

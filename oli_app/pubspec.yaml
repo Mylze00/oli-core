@@ -31,7 +31,7 @@ dependencies:
   riverpod: ^2.6.1
   flutter_riverpod: ^2.6.1
   go_router: ^14.6.0
-  provider: ^6.0.5
+
   image_picker: ^1.0.4
   connectivity_plus: ^6.0.3
   cupertino_icons: ^1.0.8

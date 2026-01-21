@@ -110,41 +110,17 @@ exports.updateProfile = async (req, res) => {
     }
 
     try {
-        /*
-        // 1. Vérifier la limite de mise à jour (1 fois par 30 jours)
-        const userCheck = await pool.query(
-            'SELECT last_profile_update FROM users WHERE phone = $1',
-            [req.user.phone]
-        );
+        // 2. Mettre à jour le profil via le service
+        const userService = require('../services/user.service');
+        const user = await userService.updateProfile(req.user.phone, name);
 
-        if (userCheck.rows.length > 0) {
-            const lastUpdate = userCheck.rows[0].last_profile_update;
-            if (lastUpdate) {
-                const thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-                if (new Date(lastUpdate) > thirtyDaysAgo) {
-                    return res.status(403).json({
-                        error: "Vous ne pouvez modifier votre profil qu'une fois par mois"
-                    });
-                }
-            }
-        }
-        */
-
-        // 2. Mettre à jour le profil avec la nouvelle colonne
-        const result = await pool.query(
-            "UPDATE users SET name = $1, last_profile_update = NOW(), updated_at = NOW() WHERE phone = $2 RETURNING *",
-            [name, req.user.phone]
-        );
-
-        if (result.rows.length === 0) {
+        if (!user) {
             return res.status(404).json({ error: "Utilisateur non trouvé" });
         }
 
         res.json({
             message: "Profil mis à jour",
-            user: result.rows[0]
+            user: user
         });
     } catch (e) {
         console.error("Erreur update-profile:", e);
@@ -192,31 +168,12 @@ exports.uploadAvatar = async (req, res) => {
     const avatarUrl = req.file.path; // URL Cloudinary
 
     try {
-        /*
-        // 1. Check last update time
-        const userCheck = await pool.query('SELECT last_profile_update FROM users WHERE phone = $1', [req.user.phone]);
-        if (userCheck.rows.length > 0) {
-            const lastUpdate = userCheck.rows[0].last_profile_update;
-            if (lastUpdate) {
-                const twoWeeksAgo = new Date();
-                twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-
-                if (new Date(lastUpdate) > twoWeeksAgo) {
-                    return res.status(403).json({ error: "Vous ne pouvez modifier votre photo qu'une fois toutes les 2 semaines." });
-                }
-            }
-        }
-        */
-
-        const result = await pool.query(
-            "UPDATE users SET avatar_url = $1, last_profile_update = NOW() WHERE phone = $2",
-            [avatarUrl, req.user.phone]
-        );
+        const userService = require('../services/user.service');
+        const success = await userService.uploadAvatar(req.user.phone, avatarUrl);
 
         console.log(`📸 Avatar Update: Phone=${req.user.phone}, URL=${avatarUrl}`);
-        console.log(`📊 Rows affected: ${result.rowCount}`);
 
-        if (result.rowCount === 0) {
+        if (!success) {
             console.error("⚠️ AUCUNE LIGNE mise à jour ! Le numéro de téléphone ne matche pas ?");
         }
 
