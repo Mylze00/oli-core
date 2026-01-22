@@ -1,6 +1,7 @@
+const express = require('express');
+const router = express.Router();
+const adRepo = require('../../repositories/ad.repository');
 const { genericUpload } = require('../../config/upload');
-
-// ... imports
 
 /**
  * GET /admin/ads

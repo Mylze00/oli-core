@@ -45,7 +45,7 @@ export default function Sidebar() {
                 </div>
             </div>
 
-            <nav className="flex-1 px-4 py-6 space-y-1">
+            <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
                 {navigation.map((item) => {
                     // Check if active (starts with href to handle sub-routes like /users/123)
                     const isActive = item.href === '/'
