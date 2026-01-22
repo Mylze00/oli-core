@@ -21,13 +21,22 @@ class _AdsCarouselState extends State<AdsCarousel> {
     _startAutoScroll();
   }
 
+  List<Map<String, dynamic>> get _effectiveAds {
+    if (widget.ads.isNotEmpty) return widget.ads;
+    return [
+      {'asset': 'assets/images/ads/ad1.png', 'title': 'Super Promo Voda'},
+      {'asset': 'assets/images/ads/ad2.png', 'title': 'Concert Fally'},
+      {'asset': 'assets/images/ads/ad3.png', 'title': 'Kin Marché'},
+    ];
+  }
+
   void _startAutoScroll() {
-    _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (!mounted) return;
-      if (widget.ads.isEmpty) return;
+      if (_effectiveAds.isEmpty) return;
 
       int nextPage = _currentPage + 1;
-      if (nextPage >= widget.ads.length) {
+      if (nextPage >= _effectiveAds.length) {
         nextPage = 0;
       }
 
@@ -51,8 +60,11 @@ class _AdsCarouselState extends State<AdsCarousel> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    if (widget.ads.isEmpty) {
+    final adsList = _effectiveAds;
+
+    if (adsList.isEmpty) {
       return Container(
         height: 150,
         color: Colors.grey[900],
@@ -66,19 +78,27 @@ class _AdsCarouselState extends State<AdsCarousel> {
         children: [
           PageView.builder(
             controller: _pageController,
-            itemCount: widget.ads.length,
+            itemCount: adsList.length,
             onPageChanged: (index) {
               setState(() => _currentPage = index);
             },
             itemBuilder: (context, index) {
-              final ad = widget.ads[index];
+              final ad = adsList[index];
+              ImageProvider imageProvider;
+              
+              if (ad['asset'] != null) {
+                imageProvider = AssetImage(ad['asset']);
+              } else {
+                imageProvider = NetworkImage(ad['image_url'] ?? '');
+              }
+
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
+                margin: const EdgeInsets.symmetric(horizontal: 0), // Full width better
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   image: DecorationImage(
-                    image: NetworkImage(ad['image_url'] ?? ''),
-                    fit: BoxFit.cover,
+                    image: imageProvider,
+                    fit: BoxFit.fill, // Fill to avoid black bars
                     onError: (e, s) {},
                   ),
                 ),
@@ -90,7 +110,7 @@ class _AdsCarouselState extends State<AdsCarousel> {
                         gradient: LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
-                          colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+                          colors: [Colors.black.withOpacity(0.3), Colors.transparent],
                         ),
                       ),
                     ),
@@ -119,7 +139,7 @@ class _AdsCarouselState extends State<AdsCarousel> {
              right: 8,
              child: Row(
                children: List.generate(
-                 widget.ads.length,
+                 adsList.length,
                  (index) => Container(
                    margin: const EdgeInsets.symmetric(horizontal: 2),
                    width: _currentPage == index ? 12 : 6,
