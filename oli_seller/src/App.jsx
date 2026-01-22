@@ -19,10 +19,27 @@ const ProtectedRoute = ({ children }) => {
 };
 
 const SellerLayout = ({ children }) => {
+    const user = JSON.parse(localStorage.getItem('seller_user') || '{}');
+
     const handleLogout = () => {
         localStorage.removeItem('seller_token');
         localStorage.removeItem('seller_user');
         window.location.href = '/login';
+    };
+
+    const getAvatarUrl = (avatarPath) => {
+        if (!avatarPath) return null;
+        if (avatarPath.startsWith('http')) return avatarPath;
+
+        const CLOUD_NAME = 'dbfpnxjmm';
+        const cleanPath = avatarPath.startsWith('/') ? avatarPath.slice(1) : avatarPath;
+
+        if (cleanPath.startsWith('uploads/')) {
+            const API_URL = import.meta.env.VITE_API_URL || 'https://oli-core.onrender.com';
+            return `${API_URL}/${cleanPath}`;
+        }
+
+        return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${cleanPath}`;
     };
 
     return (
@@ -30,7 +47,24 @@ const SellerLayout = ({ children }) => {
             {/* Sidebar */}
             <aside className="w-64 bg-slate-900 text-white flex flex-col">
                 <div className="p-4">
-                    <h1 className="text-xl font-bold mb-8">Oli Seller Center</h1>
+                    <h1 className="text-xl font-bold mb-4">Oli Seller Center</h1>
+
+                    {/* User Profile Section */}
+                    <div className="bg-slate-800 rounded-lg p-3 mb-6">
+                        <div className="flex items-center gap-3">
+                            <img
+                                src={getAvatarUrl(user.avatar_url) || `https://ui-avatars.com/api/?name=${user.name || 'User'}&background=3b82f6&color=fff&size=128`}
+                                alt="Avatar"
+                                className="w-12 h-12 rounded-full object-cover border-2 border-blue-500"
+                                onError={(e) => e.target.src = `https://ui-avatars.com/api/?name=${user.name || 'User'}&background=3b82f6&color=fff`}
+                            />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold truncate">{user.name || 'Vendeur'}</p>
+                                <p className="text-xs text-gray-400 truncate">{user.phone || ''}</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <nav className="space-y-2">
                         <a href="/dashboard" className="block p-3 rounded hover:bg-slate-800">Tableau de bord</a>
                         <a href="/products" className="block p-3 rounded hover:bg-slate-800">Produits</a>
