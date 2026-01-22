@@ -71,7 +71,22 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Mes Messages"),
+        centerTitle: true,
+        title: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.blueAccent, width: 1.5),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Text(
+            "Message",
+            style: TextStyle(
+              fontSize: 16, // Reduced size (~20% smaller than default 20)
+              fontWeight: FontWeight.bold,
+              color: Colors.blueAccent,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -79,7 +94,15 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           ),
         ],
       ),
-      body: conversationsAsync.when(
+      body: Container(
+        decoration: const BoxDecoration(
+           image: DecorationImage(
+             image: AssetImage("assets/images/chat_bg.png"),
+             fit: BoxFit.cover,
+             opacity: 0.1, 
+           ),
+        ),
+        child: conversationsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) {
           // Si l'erreur est liée à l'auth, on pourrait rediriger, mais main.dart le fait déjà.
@@ -198,6 +221,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           );
         },
       ),
+     ),
     );
   }
 }

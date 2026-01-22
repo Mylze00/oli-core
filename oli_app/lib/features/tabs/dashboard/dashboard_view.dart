@@ -194,13 +194,28 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           
 
 
-          // 3. CAROUSEL BOUTIQUES VÉRIFIÉES
+          // 4. CATEGORY TABS (Conserver)
+          SliverToBoxAdapter(
+            child: Container(
+              height: 50,
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: _categories.keys.map((label) {
+                  return GestureDetector(
+                    onTap: () => _onCategorySelected(label),
+                    child: _buildCategoryChip(label, _selectedCategory == label),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+
+          // 3. CAROUSEL BOUTIQUES VÉRIFIÉES (Déplacé ici)
           SliverToBoxAdapter(
             child: verifiedShops.isEmpty
-              ? const SizedBox.shrink() // On cache si vide pour l'instant (mais le user dit que ça ne s'affiche pas)
-              // TEST DEBUG : Si le user dit que ça ne s'affiche pas, peut-être qu'il veut voir un truc vide ?
-              // Non, c'est moche.
-              // Je vais forcer l'affichage temporaire pour vérifier que le code passe ici
+              ? const SizedBox.shrink()
               : Container(
                 height: 100,
                 margin: const EdgeInsets.symmetric(vertical: 10),
@@ -247,24 +262,6 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 ),
               ),
             ),
-
-          // 4. CATEGORY TABS (Conserver)
-          SliverToBoxAdapter(
-            child: Container(
-              height: 50,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: _categories.keys.map((label) {
-                  return GestureDetector(
-                    onTap: () => _onCategorySelected(label),
-                    child: _buildCategoryChip(label, _selectedCategory == label),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
 
           // 5. SECTIONS SPECIALES (Top Deals)
           SliverToBoxAdapter(

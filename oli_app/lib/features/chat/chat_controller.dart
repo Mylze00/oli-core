@@ -6,6 +6,7 @@ import 'package:http_parser/http_parser.dart';
 import '../../config/api_config.dart';
 import '../../core/storage/secure_storage_service.dart';
 import '../../core/user/user_provider.dart';
+import 'package:image_picker/image_picker.dart';
 import 'socket_service.dart';
 
 class ChatState {
@@ -122,7 +123,10 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  void _handleMessagesRead(Map<String, dynamic> data) {
+  void _handleMessagesRead(dynamic rawData) {
+    if (rawData is! Map<String, dynamic>) return;
+    final data = rawData;
+    
     // Si l'autre utilisateur a lu la conversation
     if (data['conversation_id'] == state.conversationId && data['reader_id'].toString() == otherUserId) {
       // On marque tous NOS messages comme lus
@@ -181,23 +185,13 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  Future<String?> uploadImage(dynamic fileObj) async {
+  Future<String?> uploadImage(XFile file) async {
     try {
       final token = await _storage.getToken();
       
-      String fileName;
-      List<int> fileBytes;
-      String? mimeType;
-      
-      // Support pour XFile (mobile/web) ou File (mobile)
-      if (fileObj.runtimeType.toString().contains('XFile')) {
-         fileName = fileObj.name;
-         fileBytes = await fileObj.readAsBytes();
-         mimeType = fileObj.mimeType;
-      } else {
-        // Fallback générique
-         throw Exception("Type de fichier non supporté: ${fileObj.runtimeType}");
-      }
+      final fileName = file.name;
+      final fileBytes = await file.readAsBytes();
+      final mimeType = file.mimeType;
 
       FormData formData = FormData.fromMap({
         'chat_file': MultipartFile.fromBytes(

@@ -153,10 +153,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.call, color: Colors.black54),
-            onPressed: () {}, // TODO
-          ),
-          IconButton(
             icon: const Icon(Icons.more_vert, color: Colors.black54),
             onPressed: () {},
           ),
@@ -253,10 +249,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
+        if (permission == LocationPermission.denied) {
+           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permission de localisation refusée')));
+           return;
+        }
       }
       
-      if (permission == LocationPermission.deniedForever) return;
+      if (permission == LocationPermission.deniedForever) {
+         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Localisation définitivement refusée. Activez-la dans les paramètres.')));
+         return;
+      }
 
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Géolocalisation en cours...')));
       

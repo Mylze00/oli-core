@@ -77,6 +77,19 @@ class SocketService {
     _messageHandler = callback;
     return () => _messageHandler = null;
   }
+  
+  // Generic handler for other events
+  void on(String event, Function(dynamic) callback) {
+    if (_socket != null) {
+      _socket!.on(event, (data) {
+        if (data is Map) {
+           callback(Map<String, dynamic>.from(data));
+        } else {
+           callback(data);
+        }
+      });
+    }
+  }
 
   void _onMessageReceived(dynamic data) {
     if (_messageHandler != null) {
