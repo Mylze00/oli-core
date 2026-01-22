@@ -51,18 +51,24 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> checkSession() async {
     try {
-      final token = await _storage.getToken();
-      final phone = await _storage.getPhone(); 
+      final localData = await _storage.getUserData();
+      final token = localData['token'];
+      final phone = localData['phone'];
+      final name = localData['name'];
+      final avatarUrl = localData['avatar_url'];
       
-      if (token != null) {
+      if (token != null && token.isNotEmpty) {
+        // 1. Restaurer immédiatement l'état local (Optimistic UI)
         state = state.copyWith(
           isAuthenticated: true,
-          isCheckingSession: false, // Fini
+          isCheckingSession: false, 
           userData: {
             'phone': phone ?? 'Numéro inconnu', 
-            'name': phone != null ? 'Utilisateur (${phone.substring(phone.length - 4)})' : 'Chargement...'
+            'name': name ?? (phone != null ? 'Utilisateur (${phone.substring(phone.length - 4)})' : 'Chargement...'),
+            'avatar_url': avatarUrl,
           }
         );
+        // 2. Rafraîchir depuis le serveur
         fetchUserProfile(); 
       } else {
         // Pas de token, fin de vérification
@@ -94,13 +100,36 @@ class AuthController extends StateNotifier<AuthState> {
             ? data['user'] 
             : (data is Map ? data as Map<String, dynamic> : null);
         
-        // On fusionne les nouvelles données (nom, email) avec le téléphone déjà présent
+        // On fusionne les nouvelles données
         final currentData = state.userData ?? {};
-        state = state.copyWith(
-          userData: {...currentData, ...?userData}
-        ); 
+        
+        // Log pour debug
+        debugPrint("📥 Fetch Profile: Server Avatar = ${userData?['avatar_url']}");
+        debugPrint("💾 Local State Avatar = ${currentData['avatar_url']}");
+
+        // Défense: Si le serveur renvoie null pour l'avatar, on garde ce qu'on a en local (Optimistic/Storage)
+        // Sauf si on explicitement veut permettre la suppression (TODO: gérer ça autrement si besoin)
+        final serverAvatar = userData?['avatar_url'];
+        final mergedAvatar = serverAvatar ?? currentData['avatar_url'];
+        
+        // Création du map fusionné avec protection
+        final Map<String, dynamic> newData = {
+          ...currentData,
+          ...?userData,
+          'avatar_url': mergedAvatar, // Force le garde
+        };
+        
+        state = state.copyWith(userData: newData); 
+        
+        // 🔥 Sauvegarder uniiquement si on a une valeur valide
+        if (mergedAvatar != null) {
+          await _storage.saveProfile(
+            name: newData['name'],
+            avatarUrl: mergedAvatar
+          );
+        }
+
       } else if (response.statusCode == 401 || response.statusCode == 403) {
-        // Token invalide ou expiré -> Déconnexion
         debugPrint("🔴 Session expirée ou invalide. Déconnexion automatique.");
         logout();
       }
@@ -136,22 +165,32 @@ class AuthController extends StateNotifier<AuthState> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final token = data['token'] ?? data['accessToken']; // Robustesse
+        final token = data['token'] ?? data['accessToken']; 
+        final user = data['user'];
+
         if (token != null) {
           await _storage.saveSession(token, phone);
+          if (user != null) {
+             await _storage.saveProfile(
+               name: user['name'],
+               avatarUrl: user['avatar_url']
+             );
+          }
         }
 
-        // --- MODIFICATION ICI : On injecte le numéro de téléphone immédiatement ---
         state = state.copyWith(
           isLoading: false, 
           isAuthenticated: true,
           userData: {
             'phone': phone, 
-            'name': 'Utilisateur (${phone.substring(phone.length - 4)})', 
+            'name': user?['name'] ?? 'Utilisateur (${phone.substring(phone.length - 4)})', 
+            'avatar_url': user?['avatar_url']
           },
         );
         
-        await fetchUserProfile(); // Puis on complète avec PostgreSQL
+        // Pas besoin de fetchUserProfile immédiatement si on a déjà les données login
+        // mais on peut le faire pour être sûr d'avoir tout (wallet, etc.)
+        fetchUserProfile(); 
         return true;
       }
       
@@ -170,17 +209,26 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   /// 🔹 MISE À JOUR LOCALE (Optimistic UI)
-  /// Permet de mettre à jour les données utilisateur instantanément sans attendre le fetch
   void updateUserData(Map<String, dynamic> newPartialData) {
     if (state.userData == null) return;
-    
-    print("📝 updateUserData called with: $newPartialData");
-    print("📝 Current user data before update: ${state.userData}");
     
     state = state.copyWith(
       userData: {...state.userData ?? {}, ...newPartialData},
     );
     
-    print("✅ Updated user data: ${state.userData}");
+    // Persister les changements locaux importants
+    if (newPartialData.containsKey('name') || newPartialData.containsKey('avatar_url')) {
+      final newAvatar = newPartialData['avatar_url'];
+      // 🛡️ SÉCURITÉ : Ne jamais sauvegarder une image Base64 (trop lourd)
+      // On ne sauvegarde que les "vraies" URL HTTP (Cloudinary)
+      if (newAvatar != null && newAvatar.toString().startsWith('data:')) {
+         return; 
+      }
+
+      _storage.saveProfile(
+        name: newPartialData['name'],
+        avatarUrl: newAvatar
+      );
+    }
   }
 }

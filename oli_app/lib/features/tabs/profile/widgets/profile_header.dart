@@ -95,7 +95,17 @@ class ProfileHeader extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   
-                  // Badges Row
+                  // Phone Number
+                  Text(
+                    user["phone"] ?? "Non renseigné",
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 13, 
+                      fontWeight: FontWeight.w500
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       if (user['account_type'] == 'entreprise' || user['has_certified_shop'] == true)

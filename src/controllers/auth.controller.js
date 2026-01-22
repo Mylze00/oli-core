@@ -163,23 +163,31 @@ exports.getMe = async (req, res) => {
  * Upload de l'avatar utilisateur
  */
 exports.uploadAvatar = async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "Pas de fichier" });
+    if (!req.file) {
+        console.error("❌ Upload Avatar: Aucun fichier reçu dans req.file");
+        return res.status(400).json({ error: "Pas de fichier" });
+    }
 
     const avatarUrl = req.file.path; // URL Cloudinary
+    const userPhone = req.user ? req.user.phone : 'UNKNOWN';
+
+    console.log(`📸 START Avatar Update for ${userPhone}`);
+    console.log(`   - File URL: ${avatarUrl}`);
 
     try {
         const userService = require('../services/user.service');
-        const success = await userService.uploadAvatar(req.user.phone, avatarUrl);
+        const success = await userService.uploadAvatar(userPhone, avatarUrl);
 
-        console.log(`📸 Avatar Update: Phone=${req.user.phone}, URL=${avatarUrl}`);
-
-        if (!success) {
-            console.error("⚠️ AUCUNE LIGNE mise à jour ! Le numéro de téléphone ne matche pas ?");
+        if (success) {
+            console.log(`✅ Avatar Update SUCCESS in DB for ${userPhone}`);
+            res.json({ avatar_url: avatarUrl });
+        } else {
+            console.error(`⚠️ Avatar Update FAILED: Aucune ligne modifiée pour ${userPhone}`);
+            console.error(`   - Est-ce que le numéro de téléphone en base est exactement "${userPhone}" ?`);
+            res.status(404).json({ error: "Utilisateur non trouvé ou update échoué" });
         }
-
-        res.json({ avatar_url: avatarUrl });
     } catch (err) {
-        console.error("Erreur upload-avatar:", err);
+        console.error("❌ Erreur CRITIQUE upload-avatar:", err);
         res.status(500).json({ error: "Erreur lors de la sauvegarde" });
     }
 };

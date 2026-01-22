@@ -29,8 +29,23 @@ if (isCloudConfigured) {
         },
     });
 } else {
-    console.warn("⚠️  CLOUDINARY: Clés manquantes (Fallback LOCAL activé)");
-    console.log("- CLOUD_NAME:", process.env.CLOUDINARY_CLOUD_NAME ? "Défini" : "MANQUANT");
+    // 🚨 SÉCURITÉ : En PRODUCTION (Render), on ne PEUT PAS utiliser le stockage local
+    // car les fichiers disparaissent à chaque redémarrage.
+    if (process.env.NODE_ENV === 'production') {
+        const missingKeys = [];
+        if (!process.env.CLOUDINARY_CLOUD_NAME) missingKeys.push('CLOUDINARY_CLOUD_NAME');
+        if (!process.env.CLOUDINARY_API_KEY) missingKeys.push('CLOUDINARY_API_KEY');
+        if (!process.env.CLOUDINARY_API_SECRET) missingKeys.push('CLOUDINARY_API_SECRET');
+
+        console.error("❌ ERREUR CRITIQUE : Cloudinary non configuré en PRODUCTION !");
+        console.error(`   Clés manquantes: ${missingKeys.join(', ')}`);
+        // Throw pour empêcher le démarrage avec une config cassée
+        // throw new Error("Cloudinary configuration required in production");
+    } else {
+        console.warn("⚠️  CLOUDINARY: Clés manquantes (Fallback LOCAL activé pour le dev)");
+    }
+
+    console.log("- CLOUD_NAME:", process.env.CLOUDINARY_CLOUD_NAME ? `${process.env.CLOUDINARY_CLOUD_NAME.substring(0, 3)}...` : "MANQUANT");
     console.log("- API_KEY:", process.env.CLOUDINARY_API_KEY ? "Défini" : "MANQUANT");
     console.log("- API_SECRET:", process.env.CLOUDINARY_API_SECRET ? "Défini" : "MANQUANT");
 

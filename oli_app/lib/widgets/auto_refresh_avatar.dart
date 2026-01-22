@@ -32,9 +32,15 @@ class AutoRefreshAvatar extends StatelessWidget {
     }
 
     // Construire l'URL complète
-    final String fullUrl = avatarUrl!.startsWith('http') || avatarUrl!.startsWith('data:image')
+    String finalUrl = avatarUrl!.startsWith('http') || avatarUrl!.startsWith('data:image')
         ? avatarUrl!
         : '${ApiConfig.baseUrl}/${avatarUrl!.replaceAll(RegExp(r'^/+'), '')}';
+
+    // 🔥 FORCE HTTPS (Correction Mixed Content)
+    // Cloudinary et Render sont servis en HTTPS. Si l'URL est http, ça bloque sur PC.
+    if (finalUrl.startsWith('http:')) {
+      finalUrl = finalUrl.replaceFirst('http:', 'https:');
+    }
 
     // Utiliser Image.network au lieu de DecorationImage pour meilleur contrôle
     return Container(
@@ -45,7 +51,7 @@ class AutoRefreshAvatar extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 2),
       ),
       child: ClipOval(
-        child: _buildImageWidget(fullUrl),
+        child: _buildImageWidget(finalUrl),
       ),
     );
   }
@@ -57,10 +63,7 @@ class AutoRefreshAvatar extends StatelessWidget {
         url,
         key: ValueKey(url), // Force rebuild avec nouvelle URL
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          print('⚠️ Erreur chargement avatar base64: $error');
-          return Icon(fallbackIcon, color: Colors.white, size: size * 0.6);
-        },
+        errorBuilder: (context, error, stackTrace) => _buildErrorWidget(url),
       );
     }
 
@@ -85,11 +88,19 @@ class AutoRefreshAvatar extends StatelessWidget {
       },
       errorBuilder: (context, error, stackTrace) {
         print('⚠️ Erreur chargement avatar depuis $url: $error');
-        return Container(
-          color: Colors.grey[800],
-          child: Icon(fallbackIcon, color: Colors.white, size: size * 0.6),
-        );
+        return _buildErrorWidget(url);
       },
+    );
+  }
+  
+  Widget _buildErrorWidget(String url) {
+    return Container(
+      color: Colors.grey[800],
+      child: Tooltip(
+        message: "Erreur: $url", // Affiche l'URL au survol sur PC
+        triggerMode: TooltipTriggerMode.tap, // Au clic sur mobile
+        child: Icon(fallbackIcon, color: Colors.redAccent, size: size * 0.6),
+      ),
     );
   }
 }
