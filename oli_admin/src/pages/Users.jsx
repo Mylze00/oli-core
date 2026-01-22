@@ -88,6 +88,22 @@ export default function Users() {
         }
     };
 
+    const handleSuspend = async (user) => {
+        const action = user.is_suspended ? "débloquer" : "suspendre";
+        if (!window.confirm(`Voulez-vous vraiment ${action} ${user.name || "cet utilisateur"} ?`)) return;
+
+        try {
+            await api.post(`/admin/users/${user.id}/suspend`, { suspended: !user.is_suspended });
+            // Optimistic update
+            setUsers(users.map(u =>
+                u.id === user.id ? { ...u, is_suspended: !u.is_suspended } : u
+            ));
+        } catch (error) {
+            console.error("Erreur suspend:", error);
+            alert("Erreur lors de la suspension");
+        }
+    };
+
     const filteredUsers = users.filter(u =>
         u.phone?.includes(search) || u.name?.toLowerCase().includes(search.toLowerCase())
     );
@@ -166,14 +182,21 @@ export default function Users() {
                                         {/* Account type badges */}
                                         <AccountBadge type={user.account_type} />
                                         {user.has_certified_shop && <ShopBadge />}
+                                        {user.is_suspended && <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-600 text-white">SUSPENDU</span>}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {parseFloat(user.wallet || 0).toFixed(2)} $
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <button onClick={() => handlePromote(user.id, 'is_admin', user.is_admin)} className="text-indigo-600 hover:text-indigo-900 mr-4">
-                                        {user.is_admin ? 'Administrateur du retrait' : 'Mettre Admin'}
+                                    <button onClick={() => handlePromote(user.id, 'is_admin', user.is_admin)} className="text-indigo-600 hover:text-indigo-900 mr-4 text-xs">
+                                        {user.is_admin ? 'Retirer Admin' : 'Mettre Admin'}
+                                    </button>
+                                    <button
+                                        onClick={() => handleSuspend(user)}
+                                        className={`text-xs font-semibold px-3 py-1 rounded-full transition-colors ${user.is_suspended ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                                    >
+                                        {user.is_suspended ? 'Débloquer' : 'Suspendre'}
                                     </button>
                                 </td>
                             </tr>

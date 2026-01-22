@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Trash2, Plus, ToggleLeft, ToggleRight, ExternalLink } from 'lucide-react';
+import { Trash2, Plus, ToggleLeft, ToggleRight, ExternalLink, Upload } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -81,14 +81,48 @@ function AdsManager() {
                 <form onSubmit={handleSubmit} className="flex gap-4 flex-wrap items-end">
                     <div className="flex-1 min-w-[300px]">
                         <label className="block text-gray-400 text-sm mb-1">URL Image (Landscape recommandé)</label>
-                        <input
-                            type="text"
-                            required
-                            placeholder="https://..."
-                            className="w-full bg-gray-900 text-white rounded p-2 border border-gray-700 outline-none focus:border-blue-500"
-                            value={newAd.image_url}
-                            onChange={e => setNewAd({ ...newAd, image_url: e.target.value })}
-                        />
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                required
+                                placeholder="https://..."
+                                className="flex-1 bg-gray-900 text-white rounded p-2 border border-gray-700 outline-none focus:border-blue-500"
+                                value={newAd.image_url}
+                                onChange={e => setNewAd({ ...newAd, image_url: e.target.value })}
+                            />
+                            <label className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded cursor-pointer transition-colors flex items-center justify-center" title="Uploader une image">
+                                <Upload size={20} />
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept="image/*"
+                                    onChange={async (e) => {
+                                        const file = e.target.files[0];
+                                        if (!file) return;
+
+                                        const formData = new FormData();
+                                        formData.append('image', file);
+
+                                        try {
+                                            setLoading(true); // Petit loading global ou local ? Global c'est bourrin mais simple
+                                            const token = localStorage.getItem('token');
+                                            const res = await axios.post(`${API_URL}/admin/ads/upload`, formData, {
+                                                headers: {
+                                                    'Content-Type': 'multipart/form-data',
+                                                    Authorization: `Bearer ${token}`
+                                                }
+                                            });
+                                            setNewAd(prev => ({ ...prev, image_url: res.data.url }));
+                                        } catch (err) {
+                                            alert("Erreur upload image");
+                                            console.error(err);
+                                        } finally {
+                                            setLoading(false);
+                                        }
+                                    }}
+                                />
+                            </label>
+                        </div>
                     </div>
                     <div className="flex-1 min-w-[200px]">
                         <label className="block text-gray-400 text-sm mb-1">Titre (Optionnel)</label>

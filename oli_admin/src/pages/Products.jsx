@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { getImageUrl } from '../utils/image';
-import { StarIcon } from '@heroicons/react/24/outline'; // Outline = non featured
+import { StarIcon, TrashIcon } from '@heroicons/react/24/outline'; // Outline = non featured
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'; // Solid = featured
 
 export default function Products() {
@@ -35,6 +35,17 @@ export default function Products() {
         } catch (error) {
             console.error("Erreur toggle featured:", error);
             alert("Erreur lors de la modification");
+        }
+    };
+
+    const handleDelete = async (productId) => {
+        if (!window.confirm("Voulez-vous vraiment supprimer ce produit ? (Cette action est irréversible)")) return;
+        try {
+            await api.delete(`/admin/products/${productId}`);
+            setProducts(products.filter(p => p.id !== productId));
+        } catch (error) {
+            console.error("Erreur delete:", error);
+            alert("Erreur lors de la suppression");
         }
     };
 
@@ -80,17 +91,26 @@ export default function Products() {
                                         <h3 className="text-lg font-bold text-gray-900">{product.name}</h3>
                                         <p className="text-gray-500 text-sm">{product.category}</p>
                                     </div>
-                                    <button
-                                        onClick={() => toggleFeatured(product)}
-                                        className="p-1 rounded-full hover:bg-gray-100"
-                                        title="Mettre en avant"
-                                    >
-                                        {product.is_featured ? (
-                                            <StarIconSolid className="h-6 w-6 text-yellow-400" />
-                                        ) : (
-                                            <StarIcon className="h-6 w-6 text-gray-400" />
-                                        )}
-                                    </button>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => toggleFeatured(product)}
+                                            className="p-1 rounded-full hover:bg-gray-100"
+                                            title="Mettre en avant"
+                                        >
+                                            {product.is_featured ? (
+                                                <StarIconSolid className="h-6 w-6 text-yellow-400" />
+                                            ) : (
+                                                <StarIcon className="h-6 w-6 text-gray-400" />
+                                            )}
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(product.id)}
+                                            className="p-1 rounded-full hover:bg-red-50 text-red-500"
+                                            title="Supprimer / Bannir"
+                                        >
+                                            <TrashIcon className="h-6 w-6" />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="mt-2 flex justify-between items-center">
                                     <span className="text-xl font-bold text-primary">{product.price} $</span>
