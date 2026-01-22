@@ -1,10 +1,45 @@
-const express = require('express');
-const router = express.Router();
-const adRepo = require('../../repositories/ad.repository');
+const { genericUpload } = require('../../config/upload');
+
+// ... imports
 
 /**
  * GET /admin/ads
  * Liste toutes les pubs (admin)
+ */
+// ...
+
+/**
+ * POST /admin/ads/upload
+ * Uploader une image de pub
+ */
+router.post('/upload', genericUpload.single('image'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Aucun fichier fourni' });
+        }
+
+        let imageUrl = req.file.path;
+
+        // Si stockage local (pas Cloudinary), construire l'URL complète
+        if (!imageUrl.startsWith('http')) {
+            const baseUrl = `${req.protocol}://${req.get('host')}`;
+            // req.file.path est ex: "uploads/products/xyz.jpg" (dépend config upload.js)
+            // upload.js utilise "uploads/" comme base, mais faut vérifier le path retourné
+            // Sur Windows, path peut avoir des backslashes.
+            const cleanPath = req.file.path.replace(/\\/g, '/');
+            imageUrl = `${baseUrl}/${cleanPath}`;
+        }
+
+        res.json({ url: imageUrl });
+    } catch (err) {
+        console.error('Erreur Upload Pub:', err);
+        res.status(500).json({ error: 'Erreur upload' });
+    }
+});
+
+/**
+ * POST /admin/ads
+ * Créer une nouvelle pub
  */
 router.get('/', async (req, res) => {
     try {

@@ -100,7 +100,7 @@ class BonDealsGrid extends StatelessWidget {
             Positioned(
               top: 0, left: 0,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: isSmall ? 2 : 4, vertical: isSmall ? 1 : 2),
+                padding: EdgeInsets.symmetric(horizontal: isSmall ? 2 : 4, vertical: isSmall ? 1 : 2),
                 decoration: const BoxDecoration(
                   color: Colors.red,
                   borderRadius: BorderRadius.only(topLeft: Radius.circular(8), bottomRight: Radius.circular(4)),

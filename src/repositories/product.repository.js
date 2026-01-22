@@ -81,7 +81,7 @@ class ProductRepository {
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE p.status = 'active'
               AND p.is_good_deal = TRUE
-            ORDER BY p.created_at DESC
+            ORDER BY RANDOM()
             LIMIT $1
         `;
         const result = await pool.query(query, [limit]);

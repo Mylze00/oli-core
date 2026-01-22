@@ -83,7 +83,6 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
     final verifiedShopsAsync = ref.watch(verifiedShopsProvider); 
     final verifiedShops = verifiedShopsAsync.valueOrNull ?? []; // ✨ Boutiques vérifiées (Carousel)
-    final verifiedShops = verifiedShopsAsync.valueOrNull ?? []; // ✨ Boutiques vérifiées (Carousel)
     final authState = ref.watch(authControllerProvider);
     
     // 🔥 Bons Deals (Aléatoires & Sans Doublons)
