@@ -20,7 +20,7 @@ class ProductService {
 
     _formatProduct(p) {
         const imageUrls = this._formatImages(p.images);
-        
+
         return {
             id: p.id,
             name: p.name,
@@ -54,7 +54,7 @@ class ProductService {
     async getFeaturedProducts(limit = 20) {
         const ADMIN_PHONE = '+243827088682';
         const products = await productRepository.findFeatured(ADMIN_PHONE, limit);
-        
+
         return products.map(p => {
             const formatted = this._formatProduct(p);
             formatted.isFeatured = true;
@@ -89,7 +89,7 @@ class ProductService {
 
         // Custom formatting for detail view (consistent with previous route)
         const imageUrls = this._formatImages(product.images);
-        
+
         return {
             ...product,
             images: imageUrls,
@@ -105,7 +105,7 @@ class ProductService {
         }
 
         const images = files ? files.map(f => f.path || f.filename) : [];
-        
+
         const productData = {
             seller_id: userId,
             shop_id: (data.shop_id && data.shop_id !== "" && data.shop_id !== "null") ? parseInt(data.shop_id) : null,
@@ -120,7 +120,11 @@ class ProductService {
             quantity: parseInt(data.quantity || 1),
             color: data.color,
             location: data.location,
-            is_negotiable: data.is_negotiable === 'true' || data.is_negotiable === true
+            is_negotiable: data.is_negotiable === 'true' || data.is_negotiable === true,
+            b2b_pricing: data.b2b_pricing ? JSON.parse(data.b2b_pricing) : [],
+            unit: data.unit || 'Pièce',
+            brand: data.brand || '',
+            weight: data.weight || ''
         };
 
         const createdProduct = await productRepository.create(productData);
