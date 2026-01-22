@@ -18,7 +18,7 @@ import '../../../widgets/auto_refresh_avatar.dart';
 import '../../marketplace/providers/market_provider.dart';
 import 'widgets/dynamic_search_bar.dart';
 import 'widgets/ads_carousel.dart';
-import 'widgets/bon_deals_grid.dart';
+
 
 import '../../marketplace/presentation/pages/all_categories_page.dart';
 
@@ -85,13 +85,8 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     final verifiedShops = verifiedShopsAsync.valueOrNull ?? []; // ✨ Boutiques vérifiées (Carousel)
     final authState = ref.watch(authControllerProvider);
     
-    // 🔥 Bons Deals (Aléatoires & Sans Doublons)
-    final rawGoodDeals = ref.watch(goodDealsProvider);
-    final displayedIds = allProducts.map((p) => p.id).toSet();
-    final filteredGoodDeals = rawGoodDeals
-        .where((p) => !displayedIds.contains(p.id))
-        .take(3)
-        .toList();
+    // 🔥 Bons Deals (Code supprimé à la demande, mais provider conservé si besoin futur)
+    // final rawGoodDeals = ref.watch(goodDealsProvider);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -313,21 +308,12 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               height: 160,
-              child: Row(
-                children: [
-                  // Widget Pub à Gauche
-                  Expanded(
-                    flex: 5,
+                  // Widget Pub (Full Width)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 160,
                     child: AdsCarousel(ads: ref.watch(adsProvider)),
                   ),
-                  const SizedBox(width: 10),
-                  // Widget Bons Deals à Droite
-                  Expanded(
-                    flex: 5,
-                    child: BonDealsGrid(deals: filteredGoodDeals),
-                  ),
-                ],
-              ),
             ),
           ),
 
