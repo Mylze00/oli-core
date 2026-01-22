@@ -248,7 +248,19 @@ exports.getMessages = async (req, res) => {
 
         if (result.rows.length > 0) {
             const convId = result.rows[0].conversation_id;
-            await pool.query("UPDATE messages SET is_read = true WHERE conversation_id = $1 AND sender_id = $2 AND is_read = false", [convId, otherUserId]);
+            const updateResult = await pool.query("UPDATE messages SET is_read = true WHERE conversation_id = $1 AND sender_id = $2 AND is_read = false RETURNING id", [convId, otherUserId]);
+
+            // 🔥 NOUVEAU : Notifier l'expéditeur que ses messages ont été lus
+            if (updateResult.rowCount > 0) {
+                const io = req.app.get('io');
+                if (io) {
+                    io.to(`user_${otherUserId}`).emit('messages_read', {
+                        conversation_id: convId,
+                        reader_id: myId,
+                        read_count: updateResult.rowCount
+                    });
+                }
+            }
         }
 
         res.json({

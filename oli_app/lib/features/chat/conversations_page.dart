@@ -184,6 +184,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                           productName: productName,
                           productImage: productImage,
                           productPrice: double.tryParse(conv['product_price']?.toString() ?? '0'),
+                          otherAvatarUrl: conv['other_avatar'],
                         ),
                       ),
                     ).then((_) {

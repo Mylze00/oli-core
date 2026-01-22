@@ -65,6 +65,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
               productName: p.name,
               productPrice: double.tryParse(p.price),
               productImage: p.images.isNotEmpty ? p.images.first : null,
+              otherAvatarUrl: p.sellerAvatar,
             ),
           ),
         );

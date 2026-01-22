@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:geolocator/geolocator.dart'; // Import Geolocator
+import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'chat_controller.dart';
+import 'widgets/chat_message_bubble.dart';
+import 'widgets/product_context_header.dart';
+import 'widgets/chat_input_area.dart';
+import '../../../../widgets/auto_refresh_avatar.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   final String myId;
   final String otherId;
   final String otherName;
-  final String? productId;
+  final String? productId; // ID optionnel pour le contexte
   final String? productName;
   final double? productPrice;
   final String? productImage;
+  final String? otherAvatarUrl; // Nouveau paramètre pour l'avatar dans le header/bulles
 
   const ChatPage({
     super.key,
@@ -23,6 +28,7 @@ class ChatPage extends ConsumerStatefulWidget {
     this.productName,
     this.productPrice,
     this.productImage,
+    this.otherAvatarUrl,
   });
 
   @override
@@ -30,23 +36,27 @@ class ChatPage extends ConsumerStatefulWidget {
 }
 
 class _ChatPageState extends ConsumerState<ChatPage> {
-  final TextEditingController messageCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
+  
+  // URL d'avatar (récupéré depuis args ou controller)
+  String? _effectiveAvatarUrl;
 
   @override
   void initState() {
     super.initState();
+    _effectiveAvatarUrl = widget.otherAvatarUrl;
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
       controller.loadMessages(productId: widget.productId);
+      _scrollToBottom();
     });
   }
 
   @override
   void dispose() {
-    messageCtrl.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -101,200 +111,133 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final chatState = ref.watch(chatControllerProvider(widget.otherId));
     final theme = Theme.of(context);
 
+    // Écouteur pour scroll automatique lors de nouveaux messages
     ref.listen(chatControllerProvider(widget.otherId), (previous, next) {
       if (previous?.messages.length != next.messages.length) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+        // Petit délai pour laisser le temps à la liste de se construire
+        Future.delayed(const Duration(milliseconds: 100), () => _scrollToBottom());
       }
     });
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5), // Fond gris clair moderne
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        titleSpacing: 0,
+        backgroundColor: Colors.white,
+        elevation: 1,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Row(
           children: [
-            Text(widget.otherName),
-            if (widget.productName != null)
-              Text(
-                widget.productName!,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
-              ),
+            AutoRefreshAvatar(
+               avatarUrl: _effectiveAvatarUrl,
+               size: 36,
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.otherName,
+                  style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Text(
+                  "En ligne", // TODO: Statut réel via Socket
+                  style: TextStyle(color: Colors.green, fontSize: 12),
+                ),
+              ],
+            ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.call, color: Colors.black54),
+            onPressed: () {}, // TODO
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.black54),
+            onPressed: () {},
+          ),
+        ],
       ),
-      body: Column(
-        children: [
-          if (widget.productImage != null || widget.productName != null)
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: Colors.grey[100],
-              child: Row(
-                children: [
-                  if (widget.productImage != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        widget.productImage!,
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 60,
-                          height: 60,
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.image_not_supported),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.productName ?? 'Produit',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        if (widget.productPrice != null)
-                          Text(
-                            '${widget.productPrice!.toStringAsFixed(0)} FC',
-                            style: TextStyle(color: theme.primaryColor),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage("assets/images/chat_bg.png"),
+            fit: BoxFit.cover,
+            opacity: 0.1, // Légère transparence pour la lisibilité
+          ),
+        ),
+        child: Column(
+          children: [
+            // En-tête de contexte produit (si présent)
+            if (widget.productName != null || widget.productImage != null)
+              ProductContextHeader(
+                productName: widget.productName,
+                productPrice: widget.productPrice,
+                productImage: widget.productImage,
               ),
-            ),
 
-          if (_isUploading)
-            const LinearProgressIndicator(),
+            if (_isUploading)
+              const LinearProgressIndicator(minHeight: 2),
 
           Expanded(
             child: chatState.isLoading 
               ? const Center(child: CircularProgressIndicator())
               : chatState.error != null
-                ? Center(child: Text("Erreur: ${chatState.error}"))
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                        const SizedBox(height: 8),
+                        Text("Erreur: ${chatState.error}"),
+                        TextButton(
+                          onPressed: () => ref.read(chatControllerProvider(widget.otherId).notifier).loadMessages(),
+                          child: const Text("Réessayer"),
+                        )
+                      ],
+                    ),
+                  )
                 : chatState.messages.isEmpty
-                  ? const Center(child: Text("Aucun message. Commencez la conversation !"))
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                           Icon(Icons.chat_bubble_outline, size: 60, color: Colors.grey.shade300),
+                           const SizedBox(height: 10),
+                           Text(
+                             "Démarrez la conversation avec ${widget.otherName}",
+                             style: TextStyle(color: Colors.grey.shade500),
+                           ),
+                        ],
+                      ),
+                    )
                   : ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       itemCount: chatState.messages.length,
                       itemBuilder: (context, index) {
                         final msg = chatState.messages[index];
                         final isMe = msg['sender_id'].toString() == widget.myId;
                         
-                        // Extraction Metadata
-                        String? mediaUrl;
-                        if (msg['metadata'] != null) {
-                           try {
-                             final meta = msg['metadata'] is String 
-                                 ? jsonDecode(msg['metadata']) 
-                                 : msg['metadata'];
-                             mediaUrl = meta['mediaUrl'];
-                           } catch (e) { /* ignore */ }
-                        }
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Align(
-                            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                            child: Container(
-                              constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width * 0.75,
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isMe ? theme.primaryColor : Colors.grey[200],
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(16),
-                                  topRight: const Radius.circular(16),
-                                  bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
-                                  bottomRight: isMe ? Radius.zero : const Radius.circular(16),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (mediaUrl != null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 8.0),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image.network(
-                                          mediaUrl,
-                                          height: 200,
-                                          width: double.infinity,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (c,e,s) => const Icon(Icons.broken_image),
-                                        ),
-                                      ),
-                                    ),
-                                  if (msg['content'] != null && msg['content'].toString().isNotEmpty && msg['content'] != '📷 Image')
-                                    Text(
-                                      msg['content'],
-                                      style: TextStyle(
-                                        color: isMe ? Colors.white : Colors.black87,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
+                        return ChatMessageBubble(
+                          message: msg,
+                          isMe: isMe,
+                          otherAvatarUrl: _effectiveAvatarUrl,
                         );
                       },
                     ),
           ),
           
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
-              ],
+            ChatInputArea(
+              onSendMessage: _sendMessage,
+              onShowTools: () => _showChatTools(context),
             ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                   IconButton(
-                    icon: Icon(Icons.add_circle, color: theme.primaryColor, size: 28),
-                    onPressed: () => _showChatTools(context),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: messageCtrl,
-                      decoration: InputDecoration(
-                        hintText: 'Votre message...',
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      ),
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendMessage(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  CircleAvatar(
-                    backgroundColor: theme.primaryColor,
-                    child: IconButton(
-                      icon: const Icon(Icons.send, color: Colors.white),
-                      onPressed: _sendMessage,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -303,7 +246,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('La localisation est désactivée. Veuillez l\'activer.')));
+         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('La localisation est désactivée.')));
          return;
       }
 
@@ -315,11 +258,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       
       if (permission == LocationPermission.deniedForever) return;
 
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Obtention de la position...')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Géolocalisation en cours...')));
       
       Position position = await Geolocator.getCurrentPosition();
       final String mapsUrl = "https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}";
       
+      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
       final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
       controller.sendMessage(
         content: "📍 Ma position actuelle:\n$mapsUrl",
@@ -337,28 +282,26 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void _showChatTools(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
         return Container(
-          padding: const EdgeInsets.all(20),
-          height: 250,
+          padding: const EdgeInsets.all(24),
+          height: 280,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Outils", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
+              Text(
+                "Partager", 
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)
+              ),
+              const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildToolItem(Icons.attach_money, "Envoyer Cash", Colors.green, () {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Fonctionnalité Cash bientôt disponible !")),
-                    );
-                  }),
-                  _buildToolItem(Icons.photo, "Galerie", Colors.purple, () {
+                   _buildToolItem(Icons.image, "Galerie", Colors.purple, () {
                     Navigator.pop(ctx);
                     _pickImage(ImageSource.gallery);
                   }),
@@ -369,6 +312,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   _buildToolItem(Icons.location_on, "Position", Colors.blue, () {
                     Navigator.pop(ctx);
                     _shareLocation();
+                  }),
+                  _buildToolItem(Icons.attach_money, "Cash", Colors.green, () {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Paiement via Chat bientôt disponible !")),
+                    );
                   }),
                 ],
               )
@@ -384,21 +333,23 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       onTap: onTap,
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 25,
-            backgroundColor: color.withOpacity(0.1),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
             child: Icon(icon, color: color, size: 28),
           ),
           const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 12)),
+          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 
-  void _sendMessage() {
-    final msg = messageCtrl.text.trim();
-    if (msg.isEmpty) return;
+  void _sendMessage(String msg) {
+    if (msg.trim().isEmpty) return;
 
     final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
     controller.sendMessage(
@@ -408,7 +359,5 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       productImage: widget.productImage,
       productPrice: widget.productPrice,
     );
-    
-    messageCtrl.clear();
   }
 }

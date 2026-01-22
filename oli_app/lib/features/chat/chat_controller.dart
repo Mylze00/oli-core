@@ -75,6 +75,9 @@ class ChatController extends StateNotifier<ChatState> {
       await _socketService.connect(myId!);
       _socketUnsubscribe = _socketService.onMessage(_handleNewMessage);
       
+      // Écouter les reçus de lecture
+      _socketService.on('messages_read', _handleMessagesRead);
+      
       // Charger les messages depuis le backend
       await loadMessages();
     } catch (e) {
@@ -92,29 +95,45 @@ class ChatController extends StateNotifier<ChatState> {
       // 1. Déduplication stricte par ID (String vs Int fix)
       final existingIds = state.messages.map((m) => m['id']?.toString()).toSet();
       if (incomingId != null && existingIds.contains(incomingId)) {
-        return; // Déjà présent
+        return; 
       }
 
-      // 2. Gestion Optimiste : Si c'est MON message, vérifier s'il existe déjà en "temp"
+      // 2. Gestion Optimiste : Remplacement du message temporaire par le réel
       if (senderId == myId) {
+        // On cherche un message temporaire avec le même contenu ET qui est récent (pour éviter les faux positifs)
         final pendingIndex = state.messages.lastIndexWhere((m) {
-          final isOptimistic = m['id'] == null || m['id'].toString().startsWith('temp_');
+          final isOptimistic = m['id'] != null && m['id'].toString().startsWith('temp_');
+          // Comparaison simple sur le contenu. Idéalement on utiliserait un UUID temporaire envoyé au back.
           return isOptimistic && m['content'] == data['content'];
         });
 
         if (pendingIndex != -1) {
-          // On remplace le message optimiste par le vrai
           final newMessages = List<Map<String, dynamic>>.from(state.messages);
-          newMessages[pendingIndex] = data;
+          newMessages[pendingIndex] = data; // Remplacement in-place
           state = state.copyWith(messages: newMessages);
           return;
         }
       }
 
-      // Sinon, on ajoute simplement à la fin
+      // Sinon, ajout normal
       state = state.copyWith(
         messages: [...state.messages, data],
       );
+    }
+  }
+
+  void _handleMessagesRead(Map<String, dynamic> data) {
+    // Si l'autre utilisateur a lu la conversation
+    if (data['conversation_id'] == state.conversationId && data['reader_id'].toString() == otherUserId) {
+      // On marque tous NOS messages comme lus
+      final updatedMessages = state.messages.map((m) {
+        if (m['sender_id'].toString() == myId && (m['is_read'] == false || m['is_read'] == null)) {
+          return {...m, 'is_read': true};
+        }
+        return m;
+      }).toList();
+      
+      state = state.copyWith(messages: updatedMessages);
     }
   }
 

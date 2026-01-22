@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../tabs/dashboard/dashboard_view.dart';
-import '../tabs/messaging/messaging_view.dart';
+import '../chat/conversations_page.dart';
 import '../marketplace/presentation/pages/market_view.dart';
 import '../tabs/profile/profile_wallet_page.dart';
 import '../shop/screens/publish_article_page.dart';
@@ -19,7 +19,7 @@ class _HomePageState extends State<HomePage> {
   // Tabs principaux (sans le bouton +)
   late final List<Widget> _pages = [
     MainDashboardView(),
-    MessagingView(),
+    ConversationsPage(),
     MarketView(),
     ProfileAndWalletPage(),
   ];
