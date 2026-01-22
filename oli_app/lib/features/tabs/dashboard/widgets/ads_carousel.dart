@@ -24,9 +24,9 @@ class _AdsCarouselState extends State<AdsCarousel> {
   List<Map<String, dynamic>> get _effectiveAds {
     if (widget.ads.isNotEmpty) return widget.ads;
     return [
-      {'asset': 'assets/images/ads/ad1.png', 'title': 'Super Promo Voda'},
-      {'asset': 'assets/images/ads/ad2.png', 'title': 'Concert Fally'},
-      {'asset': 'assets/images/ads/ad3.png', 'title': 'Kin Marché'},
+      {'image_url': 'https://i.ibb.co/W881chq/Dmf-BLn-TW4-AA4l-Ri.jpg', 'title': 'Super Promo'},
+      {'image_url': 'https://i.ibb.co/QvqSTNJ9/Fally-Ipupa-Sd-F-879x555-Fiche-e-ve-nement-concert-supp-jpg.webp', 'title': 'Concert Fally Ipupa'},
+      {'image_url': 'https://i.ibb.co/svk6yQzZ/Screenshot-2-thumbnail.jpg', 'title': 'Kin Marché'},
     ];
   }
 
@@ -84,50 +84,39 @@ class _AdsCarouselState extends State<AdsCarousel> {
             },
             itemBuilder: (context, index) {
               final ad = adsList[index];
-              ImageProvider imageProvider;
-              
-              if (ad['asset'] != null) {
-                imageProvider = AssetImage(ad['asset']);
-              } else {
-                imageProvider = NetworkImage(ad['image_url'] ?? '');
-              }
-
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 0), // Full width better
+                margin: const EdgeInsets.symmetric(horizontal: 0),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  image: DecorationImage(
-                    image: imageProvider,
-                    fit: BoxFit.fill, // Fill to avoid black bars
-                    onError: (e, s) {},
-                  ),
+                  color: Colors.grey[900], // Fallback background
                 ),
+                clipBehavior: Clip.antiAlias, // Ensure child respects border radius
                 child: Stack(
                   children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [Colors.black.withOpacity(0.3), Colors.transparent],
-                        ),
-                      ),
+                    Positioned.fill(
+                      child: ad['asset'] != null
+                          ? Image.asset(
+                              ad['asset'],
+                              fit: BoxFit.fill,
+                              errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.image_not_supported, color: Colors.white24)),
+                            )
+                          : Image.network(
+                              ad['image_url'] ?? '',
+                              fit: BoxFit.fill,
+                              errorBuilder: (ctx, err, stack) {
+                                return const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.broken_image, color: Colors.white24, size: 30),
+                                      SizedBox(height: 4),
+                                      Text("Image indisponible", style: TextStyle(color: Colors.white24, fontSize: 10)),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                     ),
-                    if (ad['title'] != null && ad['title'].isNotEmpty)
-                      Positioned(
-                        bottom: 8,
-                        left: 8,
-                        child: Text(
-                          ad['title'],
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               );

@@ -309,7 +309,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               height: 160,
                   // Widget Pub (Full Width)
-                  SizedBox(
+                  child: SizedBox(
                     width: double.infinity,
                     height: 160,
                     child: AdsCarousel(ads: ref.watch(adsProvider)),

@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/solid';
 import api from '../services/api';
 import { getImageUrl } from '../utils/image';
+import EnterpriseProfile from './EnterpriseProfile';
 
 // Composant Helper pour les onglets
 function TabButton({ label, active, onClick }) {
@@ -139,6 +140,12 @@ export default function UserDetail() {
     };
 
     if (loading) return <div>Chargement...</div>;
+
+    // Redirection vers le profil Entreprise si c'est un compte entreprise ou magasin certifié
+    // On passe toggleView pour permettre de revenir à la vue admin classique si besoin (optionnel)
+    if (user.account_type === 'entreprise' || user.has_certified_shop) {
+        return <EnterpriseProfile user={user} onBack={() => navigate('/users')} />;
+    }
 
     return (
         <div className="space-y-6">
