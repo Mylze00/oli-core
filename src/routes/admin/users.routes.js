@@ -243,9 +243,32 @@ router.patch('/:id/account-type', async (req, res) => {
             return res.status(404).json({ error: 'Utilisateur non trouvé' });
         }
 
+        const updatedUser = result.rows[0];
+
+        // ✨ AUTO-CREATION BOUTIQUE pour les ENTREPRISES
+        // Si l'utilisateur devient "entreprise" et n'a pas de boutique, on en crée une basique
+        if (account_type === 'entreprise') {
+            const shopRepo = require('../../repositories/shop.repository');
+            // Note: le chemin relatif dépend de la structure, ici src/routes/admin/users.routes.js -> ../../repositories
+
+            const userShops = await shopRepo.findByOwnerId(id);
+            if (userShops.length === 0) {
+                console.log(`🏗️ Auto-création boutique pour Entreprise User ${id}`);
+                await shopRepo.create({
+                    owner_id: id,
+                    name: updatedUser.name || 'Boutique Entreprise',
+                    description: 'Boutique officielle',
+                    category: 'Autres', // Par défaut
+                    location: 'En ligne',
+                    logo_url: null, // Utilisera l'avatar user par défaut dans le front si null
+                    banner_url: null
+                });
+            }
+        }
+
         res.json({
             message: 'Type de compte mis à jour',
-            user: result.rows[0]
+            user: updatedUser
         });
     } catch (err) {
         console.error('Erreur PATCH /admin/users/:id/account-type:', err);
