@@ -116,7 +116,6 @@ export default function UserDetail() {
                 wallet_balance: parseFloat(userData.wallet || 0),
                 reward_points: userData.reward_points || 0,
                 is_active: !userData.is_suspended,
-                is_active: !userData.is_suspended,
                 stats: stats,
                 transactions: data.transactions || []
             });
