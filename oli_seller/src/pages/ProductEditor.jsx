@@ -11,8 +11,23 @@ export default function ProductEditor() {
         name: '',
         category: '',
         basePrice: '',
-        moq: 1
+        moq: 1,
+        brand: '',
+        unit: 'Pièce',
+        unit: 'Pièce',
+        weight: ''
     });
+    const [images, setImages] = useState([]); // State pour les images
+
+    const units = [
+        "Pièce", "Kg", "Litre", "Carton (6)", "Carton (12)", "Carton (24)",
+        "Douzaine", "Paquet", "Sac (25kg)", "Sac (50kg)", "Palette"
+    ];
+
+    const categories = [
+        "Alimentation > Épicerie", "Alimentation > Boissons", "Alimentation > Frais",
+        "Maison & Entretien", "Beauté & Hygiène", "Électronique", "Textile"
+    ];
 
     const addTier = () => {
         const lastMax = b2bPricing[b2bPricing.length - 1]?.max || 0;
@@ -29,11 +44,46 @@ export default function ProductEditor() {
         setB2bPricing(b2bPricing.filter((_, i) => i !== index));
     };
 
-    const handleSubmit = (e) => {
+    const handleImageChange = (e) => {
+        if (e.target.files) {
+            setImages([...images, ...Array.from(e.target.files)]);
+        }
+    };
+
+    const removeImage = (index) => {
+        setImages(images.filter((_, i) => i !== index));
+    };
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log("Saving Product:", { ...product, b2b_pricing: b2bPricing });
-        alert("Produit sauvegardé ! (Console log)");
-        navigate('/products');
+
+        try {
+            const formData = new FormData();
+
+            // Append basic fields
+            Object.keys(product).forEach(key => {
+                formData.append(key, product[key]);
+            });
+
+            // Append images
+            images.forEach(image => {
+                formData.append('images', image);
+            });
+
+            // Append B2B pricing as JSON string
+            formData.append('b2b_pricing', JSON.stringify(b2bPricing));
+
+            console.log("Saving Product via FormData...");
+            await api.post('/products/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            alert("Produit publié avec succès !");
+            navigate('/products');
+        } catch (err) {
+            console.error("Erreur upload:", err);
+            alert("Erreur lors de la publication");
+        }
     };
 
     return (
@@ -60,11 +110,24 @@ export default function ProductEditor() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
-                            <select className="w-full border p-2 rounded">
-                                <option>Électronique</option>
-                                <option>Maison</option>
-                                <option>Mode</option>
+                            <select
+                                className="w-full border p-2 rounded"
+                                value={product.category}
+                                onChange={e => setProduct({ ...product, category: e.target.value })}
+                            >
+                                <option value="">Choisir...</option>
+                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Marque</label>
+                            <input
+                                type="text"
+                                className="w-full border p-2 rounded"
+                                placeholder="ex: Coca-Cola, Samsung"
+                                value={product.brand}
+                                onChange={e => setProduct({ ...product, brand: e.target.value })}
+                            />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Prix Standard (1 unité)</label>
@@ -76,7 +139,68 @@ export default function ProductEditor() {
                                 required
                             />
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Unité de vente</label>
+                            <select
+                                className="w-full border p-2 rounded"
+                                value={product.unit}
+                                onChange={e => setProduct({ ...product, unit: e.target.value })}
+                            >
+                                {units.map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Poids / Volume</label>
+                            <input
+                                type="text"
+                                className="w-full border p-2 rounded"
+                                placeholder="ex: 500g, 1.5L"
+                                value={product.weight}
+                                onChange={e => setProduct({ ...product, weight: e.target.value })}
+                            />
+                        </div>
                     </div>
+                </div>
+
+                {/* Image Upload Section */}
+                <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
+                    <h2 className="text-lg font-bold mb-4">Photos du produit</h2>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative">
+                        <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onChange={handleImageChange}
+                        />
+                        <div className="flex flex-col items-center justify-center text-gray-500">
+                            <Plus size={32} className="mb-2 text-blue-500" />
+                            <p className="font-medium">Cliquez ou glissez vos images ici</p>
+                            <p className="text-sm text-gray-400">Jusqu'à 8 photos (JPG, PNG)</p>
+                        </div>
+                    </div>
+
+                    {/* Image Previews */}
+                    {images.length > 0 && (
+                        <div className="grid grid-cols-4 gap-4 mt-6">
+                            {images.map((img, idx) => (
+                                <div key={idx} className="relative group aspect-square rounded overflow-hidden border">
+                                    <img
+                                        src={URL.createObjectURL(img)}
+                                        alt="Preview"
+                                        className="w-full h-full object-cover"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeImage(idx)}
+                                        className="absolute top-1 right-1 bg-white rounded-full p-1 shadow hover:text-red-600"
+                                    >
+                                        <Trash size={14} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* B2B Pricing Section */}
