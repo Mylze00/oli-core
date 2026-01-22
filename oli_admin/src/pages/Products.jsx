@@ -99,6 +99,32 @@ export default function Products() {
                                         {product.status}
                                     </span>
                                 </div>
+                                <div className="mt-2 text-sm text-gray-600">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={product.is_good_deal || false}
+                                            onChange={async (e) => {
+                                                const newVal = e.target.checked;
+                                                const newPrice = newVal ? prompt("Prix promo ?", product.promo_price || product.price) : null;
+                                                if (newVal && !newPrice) return; // Cancel if no price entered
+
+                                                try {
+                                                    await api.patch(`/admin/products/${product.id}/good-deal`, {
+                                                        is_good_deal: newVal,
+                                                        promo_price: newVal ? newPrice : null
+                                                    });
+                                                    // Optimistic update
+                                                    setProducts(products.map(p =>
+                                                        p.id === product.id ? { ...p, is_good_deal: newVal, promo_price: newVal ? newPrice : null } : p
+                                                    ));
+                                                } catch (err) { alert('Erreur'); }
+                                            }}
+                                            className="form-checkbox h-4 w-4 text-blue-600"
+                                        />
+                                        <span className="font-medium text-xs">🔥 Bon Deal {product.is_good_deal && `(${product.promo_price}$)`}</span>
+                                    </label>
+                                </div>
                                 <div className="mt-4 pt-4 border-t flex items-center gap-2">
                                     <img
                                         src={getImageUrl(product.seller_avatar) || `https://ui-avatars.com/api/?name=${product.seller_name || 'V'}&size=32`}

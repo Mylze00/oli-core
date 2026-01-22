@@ -157,7 +157,14 @@ app.use("/delivery", requireAuth, deliveryRoutes);
 app.use("/chat", requireAuth, chatRoutes);
 app.use("/user", requireAuth, userRoutes);
 app.use("/addresses", requireAuth, require('./routes/address.routes'));
+app.use("/user", requireAuth, userRoutes);
+app.use("/addresses", requireAuth, require('./routes/address.routes'));
 app.use("/admin", adminRoutes); // ✨ Routes admin (protection dans admin.routes.js)
+app.use("/admin/ads", adminRoutes); // Mounting admin ads handled inside admin.routes?? No, I created src/routes/admin/ads.routes.js
+// Let's mount explicit paths
+app.use("/ads", require("./routes/ads.routes"));
+app.use("/admin/ads", requireAuth, require("./routes/admin/ads.routes")); // Protect with requireAuth or admin middleware if available
+app.use("/setup", require("./routes/setup.routes")); // Utility route for migration
 
 // Health check
 app.get("/health", (req, res) => {

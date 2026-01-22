@@ -33,6 +33,8 @@ class Product {
   final bool shopVerified;
   final List<String> images;
   final DateTime? createdAt;
+  final bool isGoodDeal;
+  final double? promoPrice;
 
   Product({
     required this.id,
@@ -61,6 +63,8 @@ class Product {
     this.shopVerified = false,
     this.images = const [],
     this.createdAt,
+    this.isGoodDeal = false,
+    this.promoPrice,
   });
 
   /// Factory pour parser la réponse API (supporte camelCase ET snake_case)
@@ -113,6 +117,8 @@ class Product {
       createdAt: json['createdAt'] != null 
           ? DateTime.tryParse(json['createdAt']) 
           : (json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null),
+      isGoodDeal: json['isGoodDeal'] ?? json['is_good_deal'] ?? false,
+      promoPrice: double.tryParse((json['promoPrice'] ?? json['promo_price'])?.toString() ?? ''),
     );
   }
 

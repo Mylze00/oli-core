@@ -10,6 +10,8 @@ import Orders from './pages/Orders';
 import Disputes from './pages/Disputes';
 import Shops from './pages/Shops';
 import Requests from './pages/Requests';
+import AdsManager from './pages/AdsManager';
+import AdsManager from './pages/AdsManager';
 
 function App() {
   return (
@@ -26,7 +28,11 @@ function App() {
             <Route path="/shops" element={<Shops />} />
             <Route path="/requests" element={<Requests />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/orders" element={<Orders />} />
             <Route path="/disputes" element={<Disputes />} />
+            <Route path="/ads" element={<AdsManager />} />
+            <Route path="/ads" element={<AdsManager />} />
           </Route>
         </Route>
 

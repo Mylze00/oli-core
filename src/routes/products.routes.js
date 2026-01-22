@@ -10,6 +10,21 @@ const { productUpload } = require('../config/upload');
 // --- Routes Publiques ---
 
 /**
+ * GET /products/good-deals
+ * Récupère les bons deals (Public)
+ */
+router.get('/good-deals', async (req, res) => {
+    try {
+        const productRepo = require('../repositories/product.repository');
+        const products = await productRepo.findGoodDeals(10);
+        res.json(products);
+    } catch (err) {
+        console.error('Erreur GET /products/good-deals:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
  * GET /products/featured
  * Produits de l'administrateur uniquement (pour page Accueil)
  */

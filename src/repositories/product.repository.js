@@ -70,6 +70,24 @@ class ProductRepository {
         return result.rows;
     }
 
+    async findGoodDeals(limit) {
+        const query = `
+            SELECT p.*, 
+                   u.name as seller_name, 
+                   u.avatar_url as seller_avatar, 
+                   s.name as shop_name
+            FROM products p 
+            JOIN users u ON p.seller_id = u.id
+            LEFT JOIN shops s ON p.shop_id = s.id
+            WHERE p.status = 'active'
+              AND p.is_good_deal = TRUE
+            ORDER BY p.created_at DESC
+            LIMIT $1
+        `;
+        const result = await pool.query(query, [limit]);
+        return result.rows;
+    }
+
     async findAll(filters, limit, offset) {
         let query = `
             SELECT p.*, 
@@ -204,7 +222,8 @@ class ProductRepository {
 
     async update(id, updates) {
         const fields = ['name', 'description', 'price', 'category', 'condition',
-            'quantity', 'color', 'location', 'status', 'delivery_price', 'delivery_time'];
+            'quantity', 'color', 'location', 'status', 'delivery_price', 'delivery_time',
+            'is_good_deal', 'promo_price'];
         const setClauses = [];
         const values = [];
         let i = 1;

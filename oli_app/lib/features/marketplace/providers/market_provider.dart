@@ -212,3 +212,49 @@ final topSellersProvider = StateNotifierProvider<TopSellersNotifier, List<Produc
 
 /// Provider pour les produits des grands magasins vérifiés
 final verifiedShopsProductsProvider = StateNotifierProvider<VerifiedShopsProductsNotifier, List<Product>>((ref) => VerifiedShopsProductsNotifier());
+
+
+/// ✨ Notifier pour les publicités (Ads Carousel)
+class AdsNotifier extends StateNotifier<List<Map<String, dynamic>>> {
+  AdsNotifier() : super([]) {
+    fetchAds();
+  }
+
+  Future<void> fetchAds() async {
+    try {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/ads');
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        state = data.cast<Map<String, dynamic>>();
+      }
+    } catch (e) {
+      print("Erreur fetch ads: $e");
+    }
+  }
+}
+
+final adsProvider = StateNotifierProvider<AdsNotifier, List<Map<String, dynamic>>>((ref) => AdsNotifier());
+
+
+/// 🔥 Notifier pour les Bons Deals (Good Deals)
+class GoodDealsNotifier extends StateNotifier<List<Product>> {
+  GoodDealsNotifier() : super([]) {
+    fetchGoodDeals();
+  }
+
+  Future<void> fetchGoodDeals() async {
+    try {
+      final uri = Uri.parse('${ApiConfig.products}/good-deals');
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        state = data.map((item) => Product.fromJson(item)).toList();
+      }
+    } catch (e) {
+      print("Erreur fetch good deals: $e");
+    }
+  }
+}
+
+final goodDealsProvider = StateNotifierProvider<GoodDealsNotifier, List<Product>>((ref) => GoodDealsNotifier());

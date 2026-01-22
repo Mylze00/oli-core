@@ -16,6 +16,11 @@ import '../dashboard/providers/shops_provider.dart';
 import '../../../models/shop_model.dart';
 import '../../../widgets/auto_refresh_avatar.dart';
 import '../../marketplace/providers/market_provider.dart';
+import 'widgets/dynamic_search_bar.dart';
+import 'widgets/ads_carousel.dart';
+import 'widgets/bon_deals_grid.dart';
+
+import '../../marketplace/presentation/pages/all_categories_page.dart';
 
 class MainDashboardView extends ConsumerStatefulWidget {
   const MainDashboardView({super.key});
@@ -61,7 +66,17 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   @override
   Widget build(BuildContext context) {
     // ✨ Produits admin (featured)
-    final products = ref.watch(featuredProductsProvider);
+    // ✨ Produits admin (featured)
+    final allProducts = ref.watch(featuredProductsProvider);
+    
+    // Découpage pour éviter les doublons (5 pour Super Offres, 5 pour Découverte, le reste pour Top)
+    // Si pas assez de produits, on gère les cas limites
+    final superOffersList = allProducts.take(5).toList();
+    final discoveryList = allProducts.length > 5 ? allProducts.skip(5).take(5).toList() : <Product>[];
+    final rankingList = allProducts.length > 10 ? allProducts.skip(10).toList() : <Product>[];
+
+    // Si vraiment peu de produits (<5), on affiche quand même en Top Classement pour ne pas faire vide
+    final effectiveRankingList = rankingList.isEmpty && discoveryList.isEmpty ? superOffersList : rankingList;
     // ⭐ Meilleurs vendeurs du marketplace
     final topSellers = ref.watch(topSellersProvider);
     // 🏪 Produits des grands magasins vérifiés
@@ -125,32 +140,14 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             ),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(60),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: TextField(
+                child: DynamicSearchBar(
                   controller: _searchCtrl,
-                  textInputAction: TextInputAction.search,
                   onSubmitted: _onSearch,
-                  decoration: InputDecoration(
-                    hintText: 'Rechercher un produit...',
-                    hintStyle: TextStyle(color: Colors.grey[600], fontSize: 14),
-                    prefixIcon: const Icon(Icons.search, color: Colors.orange, size: 20),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.camera_alt_outlined, color: Colors.black54, size: 20),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Recherche par image bientôt disponible")));
-                      },
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
+                  productNames: [
+                    ...allProducts.map((p) => p.name),
+                    ...verifiedShopsProducts.map((p) => p.name)
+                  ].take(10).toList(), // On prend les 10 premiers pour l'anim
                 ),
-              ),
             ),
             actions: [
                IconButton(
@@ -168,7 +165,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 children: [
                   // 3. ROW NAVIGATION (5 Items fixe)
                   _buildQuickActionCard("Catégorie", Icons.grid_view, Colors.orange, () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Filtrez via les onglets ci-dessous")));
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AllCategoriesPage()));
                   }),
                   _buildQuickActionCard("Demande", Icons.campaign, Colors.blue, () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestProductPage()));
@@ -198,7 +195,8 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           SliverToBoxAdapter(
             child: Container(
               height: 50,
-              margin: const EdgeInsets.symmetric(vertical: 10),
+              // Marge réduite au strict minimum (2)
+              margin: const EdgeInsets.symmetric(vertical: 2), 
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -217,8 +215,8 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             child: verifiedShops.isEmpty
               ? const SizedBox.shrink()
               : Container(
-                height: 100,
-                margin: const EdgeInsets.symmetric(vertical: 10),
+                height: 115, // Ajusté pour cercles 80px
+                margin: const EdgeInsets.only(top: 0, bottom: 2), // Marge quasi nulle
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -228,12 +226,12 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                     return GestureDetector(
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopDetailsPage(shop: shop))),
                       child: Container(
-                        width: 80,
-                        margin: const EdgeInsets.only(right: 12),
+                        width: 100, // Augmenté pour éviter de couper
+                        margin: const EdgeInsets.only(right: 8), // Réduit l'espace entre les cercles
                         child: Column(
                           children: [
                             Container(
-                              width: 60, height: 60,
+                              width: 80, height: 80, // +10% de plus (Total ~80px)
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: Colors.white,
@@ -243,10 +241,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                                    : null,
                               ),
                               child: shop.logoUrl == null 
-                                  ? Center(child: Text(shop.name[0], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black)))
+                                  ? Center(child: Text(shop.name[0], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 26, color: Colors.black)))
                                   : null,
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 2), // Espace texte reduit
                             Text(
                               shop.name,
                               maxLines: 1,
@@ -287,15 +285,38 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                     height: 160,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      itemCount: products.isEmpty ? 3 : products.length,
+                      itemCount: superOffersList.isEmpty ? 3 : superOffersList.length,
                       itemBuilder: (context, index) {
-                        if (products.isEmpty) return _buildPlaceholderCard();
+                        if (superOffersList.isEmpty) return _buildPlaceholderCard();
                         return GestureDetector(
-                          onTap: () => _navigateToProduct(products[index]),
-                          child: _buildDealCard(products[index]),
+                          onTap: () => _navigateToProduct(superOffersList[index]),
+                          child: _buildDealCard(superOffersList[index]),
                         );
                       },
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 🆕 SECTION PUBS ET BONS DEALS
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              height: 160,
+              child: Row(
+                children: [
+                  // Widget Pub à Gauche
+                  Expanded(
+                    flex: 5,
+                    child: AdsCarousel(ads: ref.watch(adsProvider)),
+                  ),
+                  const SizedBox(width: 10),
+                  // Widget Bons Deals à Droite
+                  Expanded(
+                    flex: 5,
+                    child: BonDealsGrid(deals: ref.watch(goodDealsProvider)),
                   ),
                 ],
               ),
@@ -310,10 +331,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
              ),
           ),
           SliverToBoxAdapter(
-            child: products.isEmpty 
-              ? const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()))
+            child: discoveryList.isEmpty 
+              ? const SizedBox.shrink() // On cache si vide
               : _DiscoveryCarousel(
-                  products: products, 
+                  products: discoveryList, 
                   onTap: (p) => _navigateToProduct(p)
                 ),
           ),
@@ -441,14 +462,14 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
-                  if (products.isEmpty) return _buildPlaceholderCard();
-                  final product = products[index];
+                  if (effectiveRankingList.isEmpty) return _buildPlaceholderCard();
+                  final product = effectiveRankingList[index];
                   return GestureDetector(
                     onTap: () => _navigateToProduct(product),
                     child: _buildProductGridCard(product),
                   );
                 },
-                childCount: products.isEmpty ? 6 : products.length,
+                childCount: effectiveRankingList.isEmpty ? 6 : effectiveRankingList.length,
               ),
             ),
           ),
