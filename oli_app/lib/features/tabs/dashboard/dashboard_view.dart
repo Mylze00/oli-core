@@ -83,7 +83,16 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
     final verifiedShopsAsync = ref.watch(verifiedShopsProvider); 
     final verifiedShops = verifiedShopsAsync.valueOrNull ?? []; // ✨ Boutiques vérifiées (Carousel)
+    final verifiedShops = verifiedShopsAsync.valueOrNull ?? []; // ✨ Boutiques vérifiées (Carousel)
     final authState = ref.watch(authControllerProvider);
+    
+    // 🔥 Bons Deals (Aléatoires & Sans Doublons)
+    final rawGoodDeals = ref.watch(goodDealsProvider);
+    final displayedIds = allProducts.map((p) => p.id).toSet();
+    final filteredGoodDeals = rawGoodDeals
+        .where((p) => !displayedIds.contains(p.id))
+        .take(3)
+        .toList();
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -316,7 +325,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                   // Widget Bons Deals à Droite
                   Expanded(
                     flex: 5,
-                    child: BonDealsGrid(deals: ref.watch(goodDealsProvider)),
+                    child: BonDealsGrid(deals: filteredGoodDeals),
                   ),
                 ],
               ),
