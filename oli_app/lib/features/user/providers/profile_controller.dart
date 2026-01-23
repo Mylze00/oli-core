@@ -18,16 +18,29 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
 
   ProfileController(this._ref) : super(const AsyncValue.data(null));
 
-  Future<void> updateAvatar() async {
+  /// Sélectionne une image depuis la galerie (sans upload immédiat)
+  Future<XFile?> pickAvatarImage() async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    return await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
+    );
+  }
 
-    if (image == null) return;
-
+  /// Upload l'avatar vers le backend (appelé après confirmation)
+  Future<void> uploadAvatarImage(XFile image) async {
+    print("🚀 [ProfileController] Upload avatar démarré");
+    print("   - Image path: ${image.path}");
+    print("   - Image name: ${image.name}");
+    
     // 📸 Prévisualisation immédiate avec l'image locale
     try {
       final bytes = await image.readAsBytes();
       final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      
+      print("   - Base64 preview créé: ${base64Image.substring(0, 50)}...");
       
       // Mise à jour optimiste IMMÉDIATE avec l'image locale
       _ref.read(authControllerProvider.notifier).updateUserData({'avatar_url': base64Image});
@@ -41,10 +54,15 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
       final token = await _storage.getToken();
       if (token == null) throw Exception("Non authentifié");
 
+      print("   - Token récupéré: ${token.substring(0, 20)}...");
+
       String fileName = image.path.split('/').last;
       FormData formData = FormData.fromMap({
         "avatar": await MultipartFile.fromFile(image.path, filename: fileName),
       });
+
+      print("   - FormData créé avec filename: $fileName");
+      print("   - Envoi vers: ${ApiConfig.baseUrl}/auth/upload-avatar");
 
       final response = await _dio.post(
         '${ApiConfig.baseUrl}/auth/upload-avatar',
@@ -53,6 +71,9 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
           "Authorization": "Bearer $token",
         }),
       );
+
+      print("   - Réponse reçue: ${response.statusCode}");
+      print("   - Données: ${response.data}");
 
       if (response.statusCode == 200) {
         // Extraire la nouvelle URL d'avatar depuis la réponse
@@ -63,6 +84,8 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
         } else if (responseData is Map && responseData['avatar_url'] != null) {
           newAvatarUrl = responseData['avatar_url'];
         }
+        
+        print("   - Avatar URL extraite: $newAvatarUrl");
         
         // Mise à jour optimiste immédiate si on a l'URL
         if (newAvatarUrl != null) {
@@ -93,9 +116,12 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
         
         // Refetch pour synchroniser avec la base de données
         await _ref.read(authControllerProvider.notifier).fetchUserProfile();
+        
+        print("✅ [ProfileController] Upload avatar terminé avec succès");
         state = const AsyncValue.data(null);
       } else {
         final errorMsg = response.data is Map ? response.data['error'] : "Échec de l'upload";
+        print("❌ [ProfileController] Upload échoué: $errorMsg");
         throw Exception(errorMsg);
       }
     } catch (e, st) {
@@ -103,6 +129,7 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
       if (e is DioException && e.response?.data != null) {
         message = e.response?.data['error'] ?? message;
       }
+      print("❌ [ProfileController] Exception lors de l'upload: $message");
       state = AsyncValue.error(message, st);
     }
   }

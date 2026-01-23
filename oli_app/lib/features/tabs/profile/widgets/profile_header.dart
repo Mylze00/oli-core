@@ -7,6 +7,7 @@ import '../../../user/widgets/edit_name_dialog.dart';
 import '../../../user/providers/address_provider.dart';
 import '../../../settings/screens/settings_page.dart';
 import '../../../../config/api_config.dart';
+import 'avatar_preview_dialog.dart';
 
 class ProfileHeader extends ConsumerWidget {
   final Map<String, dynamic> user;
@@ -21,7 +22,41 @@ class ProfileHeader extends ConsumerWidget {
           children: [
             // Avatar with Badge
             GestureDetector(
-              onTap: () => ref.read(profileControllerProvider.notifier).updateAvatar(),
+              onTap: () async {
+                print("🎯 Avatar tap detected");
+                
+                // 1. Sélectionner l'image
+                final image = await ref.read(profileControllerProvider.notifier).pickAvatarImage();
+                
+                if (image == null) {
+                  print("   ℹ️ Aucune image sélectionnée");
+                  return;
+                }
+                
+                print("   ✅ Image sélectionnée: ${image.path}");
+                
+                // 2. Afficher le dialog de prévisualisation avec confirmation
+                if (context.mounted) {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (dialogContext) => AvatarPreviewDialog(
+                      imageFile: image,
+                      onConfirm: () {
+                        print("   ✅ Utilisateur a confirmé l'upload");
+                        Navigator.pop(dialogContext);
+                        
+                        // 3. Upload l'avatar après confirmation
+                        ref.read(profileControllerProvider.notifier).uploadAvatarImage(image);
+                      },
+                      onCancel: () {
+                        print("   ❌ Utilisateur a annulé l'upload");
+                        Navigator.pop(dialogContext);
+                      },
+                    ),
+                  );
+                }
+              },
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
