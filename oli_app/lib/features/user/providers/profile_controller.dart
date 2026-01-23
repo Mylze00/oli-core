@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/painting.dart';
+import 'package:http_parser/http_parser.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../../../config/api_config.dart';
@@ -18,26 +20,50 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
 
   ProfileController(this._ref) : super(const AsyncValue.data(null));
 
-  /// Sélectionne une image depuis la galerie (sans upload immédiat)
-  Future<XFile?> pickAvatarImage() async {
-    final picker = ImagePicker();
-    return await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 85,
-    );
+  /// Sélectionne une image depuis la galerie (compatible Web)
+  /// Retourne un Map avec 'bytes', 'name' pour utilisation sur Web et Mobile
+  Future<Map<String, dynamic>?> pickAvatarImage() async {
+    try {
+      print("🎯 [ProfileController] Ouverture du sélecteur de fichiers");
+      
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+        allowMultiple: false,
+        withData: true, // IMPORTANT: Pour obtenir les bytes sur Web
+      );
+
+      if (result != null && result.files.single.bytes != null) {
+        final bytes = result.files.single.bytes!;
+        final name = result.files.single.name;
+        
+        print("✅ [ProfileController] Image sélectionnée");
+        print("   - Nom: $name");
+        print("   - Taille: ${bytes.length} bytes");
+        
+        return {
+          'bytes': bytes,
+          'name': name,
+        };
+      }
+      
+      print("ℹ️ [ProfileController] Aucune image sélectionnée");
+      return null;
+    } catch (e) {
+      print("❌ [ProfileController] Erreur sélection image: $e");
+      return null;
+    }
   }
 
   /// Upload l'avatar vers le backend (appelé après confirmation)
-  Future<void> uploadAvatarImage(XFile image) async {
+  /// Utilise bytes pour compatibilité Web
+  Future<void> uploadAvatarImage(Uint8List bytes, String fileName) async {
     print("🚀 [ProfileController] Upload avatar démarré");
-    print("   - Image path: ${image.path}");
-    print("   - Image name: ${image.name}");
+    print("   - File name: $fileName");
+    print("   - Bytes length: ${bytes.length}");
     
     // 📸 Prévisualisation immédiate avec l'image locale
     try {
-      final bytes = await image.readAsBytes();
       final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
       
       print("   - Base64 preview créé: ${base64Image.substring(0, 50)}...");
@@ -56,9 +82,13 @@ class ProfileController extends StateNotifier<AsyncValue<void>> {
 
       print("   - Token récupéré: ${token.substring(0, 20)}...");
 
-      String fileName = image.path.split('/').last;
+      // Créer MultipartFile depuis les bytes (compatible Web)
       FormData formData = FormData.fromMap({
-        "avatar": await MultipartFile.fromFile(image.path, filename: fileName),
+        "avatar": MultipartFile.fromBytes(
+          bytes,
+          filename: fileName,
+          contentType: MediaType('image', 'jpeg'),
+        ),
       });
 
       print("   - FormData créé avec filename: $fileName");

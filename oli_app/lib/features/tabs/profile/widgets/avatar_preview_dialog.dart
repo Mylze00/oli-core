@@ -1,17 +1,18 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 /// Dialog de prévisualisation de l'avatar avant upload
 /// Permet à l'utilisateur de voir l'image sélectionnée et de confirmer ou annuler
 class AvatarPreviewDialog extends StatelessWidget {
-  final XFile imageFile;
+  final Uint8List imageBytes;
+  final String imageName;
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
 
   const AvatarPreviewDialog({
     Key? key,
-    required this.imageFile,
+    required this.imageBytes,
+    required this.imageName,
     required this.onConfirm,
     required this.onCancel,
   }) : super(key: key);
@@ -50,8 +51,8 @@ class AvatarPreviewDialog extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(122),
-                child: Image.file(
-                  File(imageFile.path),
+                child: Image.memory(
+                  imageBytes,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return const Center(

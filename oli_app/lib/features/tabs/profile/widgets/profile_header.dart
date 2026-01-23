@@ -25,15 +25,15 @@ class ProfileHeader extends ConsumerWidget {
               onTap: () async {
                 print("🎯 Avatar tap detected");
                 
-                // 1. Sélectionner l'image
-                final image = await ref.read(profileControllerProvider.notifier).pickAvatarImage();
+                // 1. Sélectionner l'image (retourne Map avec 'bytes' et 'name')
+                final imageData = await ref.read(profileControllerProvider.notifier).pickAvatarImage();
                 
-                if (image == null) {
+                if (imageData == null) {
                   print("   ℹ️ Aucune image sélectionnée");
                   return;
                 }
                 
-                print("   ✅ Image sélectionnée: ${image.path}");
+                print("   ✅ Image sélectionnée: ${imageData['name']}");
                 
                 // 2. Afficher le dialog de prévisualisation avec confirmation
                 if (context.mounted) {
@@ -41,13 +41,17 @@ class ProfileHeader extends ConsumerWidget {
                     context: context,
                     barrierDismissible: false,
                     builder: (dialogContext) => AvatarPreviewDialog(
-                      imageFile: image,
+                      imageBytes: imageData['bytes'],
+                      imageName: imageData['name'],
                       onConfirm: () {
                         print("   ✅ Utilisateur a confirmé l'upload");
                         Navigator.pop(dialogContext);
                         
-                        // 3. Upload l'avatar après confirmation
-                        ref.read(profileControllerProvider.notifier).uploadAvatarImage(image);
+                        // 3. Upload l'avatar après confirmation (avec bytes)
+                        ref.read(profileControllerProvider.notifier).uploadAvatarImage(
+                          imageData['bytes'],
+                          imageData['name'],
+                        );
                       },
                       onCancel: () {
                         print("   ❌ Utilisateur a annulé l'upload");
