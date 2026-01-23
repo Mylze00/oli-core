@@ -5,7 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const notificationRepo = require('../repositories/notification.repository');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middlewares/auth.middleware');
 
 /**
  * GET /notifications

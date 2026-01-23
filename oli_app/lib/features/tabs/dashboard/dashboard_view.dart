@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../../config/api_config.dart';
 import '../../../models/product_model.dart';
+import '../../notifications/providers/notification_provider.dart';
 import '../../notifications/screens/notifications_view.dart';
 import '../../marketplace/presentation/pages/product_details_page.dart';
 import '../../marketplace/presentation/widgets/market_product_card.dart';
@@ -153,9 +154,52 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 ),
             ),
             actions: [
-               IconButton(
-                icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsView())),
+              // Badge de notifications avec compteur
+              Consumer(
+                builder: (context, ref, child) {
+                  final notificationState = ref.watch(notificationProvider);
+                  final unreadCount = notificationState.unreadCount;
+
+                  return Stack(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 26),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => NotificationsView()),
+                          );
+                        },
+                      ),
+                      // Badge rouge avec compteur
+                      if (unreadCount > 0)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            child: Text(
+                              unreadCount > 99 ? '99+' : '$unreadCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
