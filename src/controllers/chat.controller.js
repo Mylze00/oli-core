@@ -106,9 +106,9 @@ exports.sendMessage = async (req, res) => {
     let { content, recipientId, metadata } = req.body;
     const senderId = req.user.id;
 
-    // Validation : Soit du contenu, soit un média est requis
-    if (!conversationId || (!content && !mediaUrl)) {
-        return res.status(400).json({ error: "conversationId et content (ou mediaUrl) requis" });
+    // Validation : Soit du contenu, soit un média, soit une location/metadata est requis
+    if (!conversationId || (!content && !mediaUrl && type !== 'location' && !metadata)) {
+        return res.status(400).json({ error: "conversationId et content (ou mediaUrl/location) requis" });
     }
 
     // Si c'est un message média sans texte, on met un texte par défaut
