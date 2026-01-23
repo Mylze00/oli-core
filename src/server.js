@@ -159,6 +159,7 @@ app.use("/user", requireAuth, userRoutes);
 app.use("/addresses", requireAuth, require('./routes/address.routes'));
 app.use("/user", requireAuth, userRoutes);
 app.use("/addresses", requireAuth, require('./routes/address.routes'));
+app.use("/notifications", require('./routes/notifications.routes')); // Notifications
 app.use("/admin", adminRoutes); // ✨ Routes admin (protection dans admin.routes.js)
 app.use("/admin/ads", adminRoutes); // Mounting admin ads handled inside admin.routes?? No, I created src/routes/admin/ads.routes.js
 // Let's mount explicit paths
