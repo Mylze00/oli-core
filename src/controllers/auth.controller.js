@@ -164,31 +164,108 @@ exports.getMe = async (req, res) => {
  * Upload de l'avatar utilisateur
  */
 exports.uploadAvatar = async (req, res) => {
+    console.log("=".repeat(60));
+    console.log("🔍 AVATAR UPLOAD DEBUG - START");
+    console.log("=".repeat(60));
+
+    // STEP 1: Vérifier la réception du fichier
+    console.log("📥 STEP 1: Vérification du fichier reçu");
     if (!req.file) {
-        console.error("❌ Upload Avatar: Aucun fichier reçu dans req.file");
+        console.error("❌ ERREUR: Aucun fichier reçu dans req.file");
+        console.log("   req.body:", JSON.stringify(req.body, null, 2));
         return res.status(400).json({ error: "Pas de fichier" });
     }
+    console.log("✅ Fichier reçu:");
+    console.log("   - filename:", req.file.filename);
+    console.log("   - originalname:", req.file.originalname);
+    console.log("   - mimetype:", req.file.mimetype);
+    console.log("   - size:", req.file.size, "bytes");
+    console.log("   - path (Cloudinary):", req.file.path);
 
+    // STEP 2: Extraire les informations
     const avatarUrl = req.file.path; // URL Cloudinary
     const userPhone = req.user ? req.user.phone : 'UNKNOWN';
+    const userId = req.user ? req.user.id : 'UNKNOWN';
 
-    console.log(`📸 START Avatar Update for ${userPhone}`);
-    console.log(`   - File URL: ${avatarUrl}`);
+    console.log("\n📋 STEP 2: Informations extraites");
+    console.log("   - User ID:", userId);
+    console.log("   - User Phone:", userPhone);
+    console.log("   - Avatar URL (brut):", avatarUrl);
+    console.log("   - Type de path:",
+        avatarUrl.startsWith('http') ? 'URL complète' :
+            avatarUrl.startsWith('v') ? 'Cloudinary path relatif' :
+                'Format inconnu'
+    );
 
     try {
+        // STEP 3: Sauvegarder dans la base de données
+        console.log("\n💾 STEP 3: Sauvegarde dans la base de données");
+        console.log("   - SQL: UPDATE users SET avatar_url = $1 WHERE phone = $2");
+        console.log("   - Paramètre 1 (avatar_url):", avatarUrl);
+        console.log("   - Paramètre 2 (phone):", userPhone);
+
         const userService = require('../services/user.service');
         const success = await userService.uploadAvatar(userPhone, avatarUrl);
 
+        console.log("   - Résultat DB:", success ? "✅ SUCCESS" : "❌ FAILED");
+
         if (success) {
-            console.log(`✅ Avatar Update SUCCESS in DB for ${userPhone}`);
-            res.json({ avatar_url: avatarUrl });
+            // STEP 4: Vérifier la valeur sauvegardée
+            console.log("\n🔎 STEP 4: Vérification de la valeur en base");
+            const checkResult = await pool.query(
+                "SELECT avatar_url FROM users WHERE phone = $1",
+                [userPhone]
+            );
+
+            if (checkResult.rows.length > 0) {
+                const savedAvatarUrl = checkResult.rows[0].avatar_url;
+                console.log("   - Valeur en DB:", savedAvatarUrl);
+                console.log("   - Match avec uploaded?", savedAvatarUrl === avatarUrl ? "✅ OUI" : "❌ NON");
+
+                // STEP 5: Formatter avec imageService
+                console.log("\n🎨 STEP 5: Formatage avec imageService");
+                console.log("   - Input (DB value):", savedAvatarUrl);
+                const formattedUrl = imageService.formatImageUrl(savedAvatarUrl);
+                console.log("   - Output (formatted):", formattedUrl);
+                console.log("   - Est une URL complète?", formattedUrl?.startsWith('http') ? "✅ OUI" : "❌ NON");
+
+                // STEP 6: Retourner au client
+                console.log("\n📤 STEP 6: Réponse au client");
+                console.log("   - avatar_url retourné:", formattedUrl);
+
+                console.log("\n" + "=".repeat(60));
+                console.log("✅ AVATAR UPLOAD DEBUG - SUCCESS");
+                console.log("=".repeat(60));
+
+                res.json({
+                    avatar_url: formattedUrl,
+                    debug: {
+                        raw_path: avatarUrl,
+                        saved_in_db: savedAvatarUrl,
+                        formatted_url: formattedUrl
+                    }
+                });
+            } else {
+                console.error("⚠️ ERREUR: Utilisateur non trouvé après update!");
+                res.status(404).json({ error: "Utilisateur introuvable après update" });
+            }
         } else {
-            console.error(`⚠️ Avatar Update FAILED: Aucune ligne modifiée pour ${userPhone}`);
-            console.error(`   - Est-ce que le numéro de téléphone en base est exactement "${userPhone}" ?`);
+            console.error("\n❌ ERREUR: Update DB a échoué");
+            console.error("   - Aucune ligne modifiée pour phone:", userPhone);
+            console.error("   - Vérifiez que ce numéro existe en base");
+            console.log("\n" + "=".repeat(60));
+            console.log("❌ AVATAR UPLOAD DEBUG - FAILED");
+            console.log("=".repeat(60));
             res.status(404).json({ error: "Utilisateur non trouvé ou update échoué" });
         }
     } catch (err) {
-        console.error("❌ Erreur CRITIQUE upload-avatar:", err);
+        console.error("\n💥 STEP ERROR: Exception capturée");
+        console.error("   - Message:", err.message);
+        console.error("   - Stack:", err.stack);
+        console.log("\n" + "=".repeat(60));
+        console.log("❌ AVATAR UPLOAD DEBUG - EXCEPTION");
+        console.log("=".repeat(60));
         res.status(500).json({ error: "Erreur lors de la sauvegarde" });
     }
 };
+

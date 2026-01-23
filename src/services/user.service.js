@@ -131,13 +131,21 @@ async function updateProfile(phone, name) {
  * @returns 
  */
 async function uploadAvatar(phone, avatarUrl) {
+    console.log("   [UserService.uploadAvatar] Début");
+    console.log("   [UserService.uploadAvatar] Phone:", phone);
+    console.log("   [UserService.uploadAvatar] Avatar URL:", avatarUrl);
+
     try {
         const result = await pool.query(
             "UPDATE users SET avatar_url = $1, last_profile_update = NOW() WHERE phone = $2",
             [avatarUrl, phone]
         );
+
+        console.log("   [UserService.uploadAvatar] Rows affected:", result.rowCount);
+
         return result.rowCount > 0;
     } catch (e) {
+        console.error("   [UserService.uploadAvatar] Exception:", e.message);
         throw e;
     }
 }
