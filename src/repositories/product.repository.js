@@ -255,7 +255,57 @@ class ProductRepository {
             "UPDATE products SET status = 'deleted', updated_at = NOW() WHERE id = $1 AND seller_id = $2 RETURNING id",
             [id, sellerId]
         );
-        return result.rows.length > 0;
+        return result.rows;
+    }
+
+    /**
+     * Recherche produits par mots-clés (pour recherche visuelle)
+     * @param {Array<string>} keywords - Liste de mots-clés à rechercher
+     * @param {number} limit - Nombre maximum de résultats
+     */
+    async searchByKeywords(keywords, limit = 50) {
+        if (!keywords || keywords.length === 0) {
+            return [];
+        }
+
+        // Construire la requête dynamiquement
+        const conditions = [];
+        const values = [];
+        let paramIndex = 1;
+
+        keywords.forEach(keyword => {
+            const pattern = `%${keyword.toLowerCase()}%`;
+            conditions.push(`(
+                LOWER(p.name) LIKE $${paramIndex}
+                OR LOWER(p.description) LIKE $${paramIndex}
+                OR LOWER(p.category) LIKE $${paramIndex}
+                OR LOWER(p.color) LIKE $${paramIndex}
+                OR LOWER(p.brand) LIKE $${paramIndex}
+            )`);
+            values.push(pattern);
+            paramIndex++;
+        });
+
+        const query = `
+            SELECT DISTINCT p.*,
+                   u.name as seller_name,
+                   u.avatar_url as seller_avatar,
+                   u.id_oli as seller_oli_id,
+                   s.name as shop_name,
+                   s.is_verified as shop_verified
+            FROM products p
+            JOIN users u ON p.seller_id = u.id
+            LEFT JOIN shops s ON p.shop_id = s.id
+            WHERE p.status = 'active'
+              AND (${conditions.join(' OR ')})
+            ORDER BY p.created_at DESC
+            LIMIT $${paramIndex}
+        `;
+
+        values.push(limit);
+
+        const result = await pool.query(query, values);
+        return result.rows;
     }
 }
 
