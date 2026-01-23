@@ -1,5 +1,5 @@
 const productRepository = require('../repositories/product.repository');
-const { BASE_URL } = require('../config');
+const imageService = require('./image.service');
 const pool = require('../config/db'); // For updating user sales count (should be in UserRepo technically, but keeping consistent for now)
 
 class ProductService {
@@ -11,11 +11,7 @@ class ProductService {
             imgs = images.replace(/[{}"]/g, '').split(',').filter(Boolean);
         }
 
-        return imgs.map(img => {
-            if (!img) return null;
-            if (img.startsWith('http')) return img;
-            return `${BASE_URL}/uploads/${img}`;
-        }).filter(url => url !== null);
+        return imageService.formatImageArray(imgs);
     }
 
     _formatProduct(p) {

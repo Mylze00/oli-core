@@ -7,34 +7,7 @@ const router = express.Router();
 const shopRepo = require('../repositories/shop.repository');
 const { requireAuth, optionalAuth } = require('../middlewares/auth.middleware');
 const { genericUpload } = require('../config/upload');
-const { BASE_URL } = require('../config');
-
-// Helper pour les URLs d'images
-const formatShopUrls = (shop) => {
-    if (!shop) return null;
-
-    const CLOUD_NAME = 'dbfpnxjmm';
-    const CLOUDINARY_BASE = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload`;
-
-    const formatImageUrl = (path) => {
-        if (!path) return null;
-        if (path.startsWith('http')) return path;
-
-        const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-        if (cleanPath.startsWith('uploads/')) {
-            return `${BASE_URL}/${cleanPath}`;
-        }
-
-        return `${CLOUDINARY_BASE}/${cleanPath}`;
-    };
-
-    return {
-        ...shop,
-        logo_url: formatImageUrl(shop.logo_url),
-        banner_url: formatImageUrl(shop.banner_url),
-        owner_avatar: formatImageUrl(shop.owner_avatar),
-    };
-};
+const imageService = require('../services/image.service');
 
 /**
  * GET /shops
@@ -44,7 +17,7 @@ router.get('/', async (req, res) => {
     try {
         const { limit, offset, category, search } = req.query;
         const shops = await shopRepo.findAll(limit, offset, category, search);
-        res.json(shops.map(formatShopUrls));
+        res.json(shops.map(s => imageService.formatShopImages(s)));
     } catch (err) {
         console.error("Erreur GET /shops:", err);
         res.status(500).json({ error: "Erreur serveur" });
@@ -58,7 +31,7 @@ router.get('/', async (req, res) => {
 router.get('/my-shops', requireAuth, async (req, res) => {
     try {
         const shops = await shopRepo.findByOwnerId(req.user.id);
-        res.json(shops.map(formatShopUrls));
+        res.json(shops.map(s => imageService.formatShopImages(s)));
     } catch (err) {
         console.error("Erreur GET /shops/my-shops:", err);
         res.status(500).json({ error: "Erreur serveur" });
@@ -73,7 +46,7 @@ router.get('/verified', async (req, res) => {
     try {
         const { limit } = req.query;
         const shops = await shopRepo.findVerified(limit);
-        res.json(shops.map(formatShopUrls));
+        res.json(shops.map(s => imageService.formatShopImages(s)));
     } catch (err) {
         console.error("Erreur GET /shops/verified:", err);
         res.status(500).json({ error: "Erreur serveur" });
@@ -90,7 +63,7 @@ router.get('/:id', async (req, res) => {
         if (!shop) {
             return res.status(404).json({ error: "Boutique introuvable" });
         }
-        res.json(formatShopUrls(shop));
+        res.json(imageService.formatShopImages(shop));
     } catch (err) {
         console.error("Erreur GET /shops/:id:", err);
         res.status(500).json({ error: "Erreur serveur" });
@@ -125,7 +98,7 @@ router.post('/', requireAuth, genericUpload.fields([
             banner_url: bannerFilename
         });
 
-        res.status(201).json(formatShopUrls(newShop));
+        res.status(201).json(imageService.formatShopImages(newShop));
     } catch (err) {
         console.error("Erreur POST /shops:", err);
         res.status(500).json({ error: "Erreur création boutique" });
@@ -162,7 +135,7 @@ router.patch('/:id', requireAuth, genericUpload.fields([
         }
 
         const updatedShop = await shopRepo.update(id, updates);
-        res.json(formatShopUrls(updatedShop));
+        res.json(imageService.formatShopImages(updatedShop));
 
     } catch (err) {
         console.error("Erreur PATCH /shops/:id:", err);

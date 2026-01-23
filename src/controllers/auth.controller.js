@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const { JWT_SECRET, JWT_EXPIRES_IN } = require("../config");
 const otpService = require("../services/otp.service");
 const pool = require("../config/db");
+const imageService = require("../services/image.service");
 
 /**
  * Envoie un code OTP au numéro de téléphone
@@ -78,17 +79,17 @@ exports.verifyOtp = async (req, res) => {
 
         return res.json({
             message: "Connexion réussie",
-            user: {
+            user: imageService.formatUserImages({
                 id: result.user.id,
                 phone: result.user.phone,
                 name: result.user.name,
                 id_oli: result.user.id_oli,
                 avatar_url: result.user.avatar_url,
                 wallet: parseFloat(result.user.wallet || 0).toFixed(2),
-                is_admin: result.user.is_admin || false, // ✨ AJOUTÉ
+                is_admin: result.user.is_admin || false,
                 is_seller: result.user.is_seller || false,
                 is_deliverer: result.user.is_deliverer || false,
-            },
+            }),
             token
         });
 
@@ -147,11 +148,11 @@ exports.getMe = async (req, res) => {
 
         const user = result.rows[0];
         res.json({
-            user: {
+            user: imageService.formatUserImages({
                 ...user,
                 wallet: parseFloat(user.wallet || 0).toFixed(2),
                 initial: user.name ? user.name[0].toUpperCase() : "?"
-            }
+            })
         });
     } catch (err) {
         console.error("Erreur /auth/me:", err);
