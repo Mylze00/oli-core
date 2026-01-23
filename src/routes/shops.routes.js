@@ -12,17 +12,27 @@ const { BASE_URL } = require('../config');
 // Helper pour les URLs d'images
 const formatShopUrls = (shop) => {
     if (!shop) return null;
+
+    const CLOUD_NAME = 'dbfpnxjmm';
+    const CLOUDINARY_BASE = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload`;
+
+    const formatImageUrl = (path) => {
+        if (!path) return null;
+        if (path.startsWith('http')) return path;
+
+        const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+        if (cleanPath.startsWith('uploads/')) {
+            return `${BASE_URL}/${cleanPath}`;
+        }
+
+        return `${CLOUDINARY_BASE}/${cleanPath}`;
+    };
+
     return {
         ...shop,
-        logo_url: shop.logo_url && !shop.logo_url.startsWith('http')
-            ? `${BASE_URL}/uploads/${shop.logo_url}`
-            : shop.logo_url,
-        banner_url: shop.banner_url && !shop.banner_url.startsWith('http')
-            ? `${BASE_URL}/uploads/${shop.banner_url}`
-            : shop.banner_url,
-        owner_avatar: shop.owner_avatar && !shop.owner_avatar.startsWith('http')
-            ? `${BASE_URL}/uploads/${shop.owner_avatar}`
-            : shop.owner_avatar,
+        logo_url: formatImageUrl(shop.logo_url),
+        banner_url: formatImageUrl(shop.banner_url),
+        owner_avatar: formatImageUrl(shop.owner_avatar),
     };
 };
 
