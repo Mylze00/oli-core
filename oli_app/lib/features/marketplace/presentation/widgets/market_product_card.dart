@@ -20,6 +20,9 @@ class MarketProductCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final favorites = ref.watch(favoritesProvider);
     final isFavorite = favorites.any((p) => p.id == product.id);
+    
+    // Utiliser watch pour que le widget se mette à jour automatiquement
+    final exchangeState = ref.watch(exchangeRateProvider);
     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
     return GestureDetector(
