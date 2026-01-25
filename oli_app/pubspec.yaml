@@ -40,6 +40,14 @@ dependencies:
   shared_preferences: ^2.5.4
   share_plus: ^10.1.0
   geolocator: ^13.0.1
+  geolocator_web: ^4.1.1
+  google_maps_flutter: ^2.5.0
+  url_launcher: ^6.2.0
+  record: ^5.0.0
+  audioplayers: ^5.2.0
+  permission_handler: ^11.0.0
+  flutter_contacts: ^1.1.9
+  path_provider: ^2.1.1
 
 
 dev_dependencies:
@@ -52,4 +60,5 @@ flutter:
   assets:
     - assets/images/logo.png
     - assets/images/chat_bg.png
+    - assets/images/chat_bg_new.png
     - assets/images/ads/

@@ -51,16 +51,28 @@ class VisualSearchNotifier extends StateNotifier<VisualSearchState> {
       state = state.copyWith(isLoading: true, error: null);
 
       print('   - Ouverture du sélecteur d\'images');
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-        withData: true,
-      );
+      
+      FilePickerResult? result;
+      try {
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          allowMultiple: false,
+          withData: true, // Important pour Web
+        );
+      } catch (pickerError) {
+        print('   ❌ Erreur FilePicker: $pickerError');
+        throw Exception('Impossible d\'ouvrir le sélecteur de fichiers. Veuillez réessayer.');
+      }
 
-      if (result == null || result.files.single.bytes == null) {
-        print('   ℹ️ Aucune image sélectionnée');
+      if (result == null) {
+        print('   ℹ️ Aucune image sélectionnée (annulé)');
         state = state.copyWith(isLoading: false);
         return;
+      }
+
+      if (result.files.isEmpty || result.files.single.bytes == null) {
+        print('   ⚠️ Fichier sans données');
+        throw Exception('Fichier invalide. Veuillez sélectionner une image valide.');
       }
 
       final bytes = result.files.single.bytes!;
@@ -118,8 +130,13 @@ class VisualSearchNotifier extends StateNotifier<VisualSearchState> {
       print('   Stack: $st');
 
       String errorMessage = 'Erreur lors de la recherche';
-      if (e is DioException) {
+      
+      if (e.toString().contains('LateInitializationError')) {
+        errorMessage = 'Erreur d\'initialisation. Veuillez rafraîchir la page et réessayer.';
+      } else if (e is DioException) {
         errorMessage = e.response?.data['message'] ?? e.message ?? errorMessage;
+      } else if (e is Exception) {
+        errorMessage = e.toString().replaceAll('Exception: ', '');
       }
 
       state = state.copyWith(

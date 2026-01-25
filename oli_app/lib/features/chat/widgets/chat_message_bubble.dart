@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import '../../../../config/api_config.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
+import 'location_message_bubble.dart';
+import 'audio_message_bubble.dart';
 
 class ChatMessageBubble extends StatelessWidget {
   final Map<String, dynamic> message;
@@ -23,15 +25,21 @@ class ChatMessageBubble extends StatelessWidget {
     // Extraction Metadata
     String? mediaUrl;
     String? mediaType;
+    Map<String, dynamic>? metaMap;
+    
     if (message['metadata'] != null) {
       try {
-        final meta = message['metadata'] is String 
+        metaMap = message['metadata'] is String 
             ? jsonDecode(message['metadata']) 
             : message['metadata'];
-        mediaUrl = meta['mediaUrl'];
-        mediaType = meta['mediaType'];
+        mediaUrl = metaMap?['mediaUrl'];
+        mediaType = metaMap?['mediaType'];
       } catch (e) { /* ignore */ }
     }
+
+    // Check if it's a location message
+    final bool isLocation = message['type'] == 'location' || 
+                            (metaMap != null && metaMap.containsKey('lat') && metaMap.containsKey('lng'));
 
     // Determine timestamp
     String timeString = '';
@@ -60,17 +68,12 @@ class ChatMessageBubble extends StatelessWidget {
           // Bubble
           Flexible(
             child: Container(
-              constraints: BoxConstraints(maxWidth: size.width * 0.7),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              constraints: BoxConstraints(maxWidth: size.width * 0.75),
+              padding: isLocation ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isMe ? theme.primaryColor : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(18),
-                  topRight: const Radius.circular(18),
-                  bottomLeft: isMe ? const Radius.circular(18) : const Radius.circular(4),
-                  bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
-                ),
-                boxShadow: [
+                color: isLocation ? Colors.transparent : (isMe ? theme.primaryColor : Colors.white),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: isLocation ? [] : [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.05),
                     blurRadius: 4,
@@ -78,37 +81,41 @@ class ChatMessageBubble extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   // Image / Media
-                  if (mediaUrl != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6.0),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          mediaUrl.startsWith('http') ? mediaUrl : '${ApiConfig.baseUrl}/$mediaUrl',
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => Container(
-                            height: 150,
-                            color: Colors.grey[300],
-                            child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+              child: isLocation 
+                ? LocationMessageBubble(metadata: metaMap!, isMe: isMe)
+                : (mediaType == 'audio' || (mediaUrl != null && mediaUrl.endsWith('.m4a')))
+                    ? AudioMessageBubble(audioUrl: mediaUrl!, isMe: isMe)
+                    : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                     // Image / Media
+                    if (mediaUrl != null && mediaType != 'audio')
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6.0),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            mediaUrl.startsWith('http') ? mediaUrl : '${ApiConfig.baseUrl}/$mediaUrl',
+                            height: 200,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => Container(
+                              height: 150,
+                              color: Colors.grey[300],
+                              child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                            ),
+                            loadingBuilder: (ctx, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                                return Container(
+                                  height: 200,
+                                  width: double.infinity,
+                                  color: Colors.black12,
+                                  child: const Center(child: CircularProgressIndicator()),
+                                );
+                            },
                           ),
-                          loadingBuilder: (ctx, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                              return Container(
-                                height: 200,
-                                width: double.infinity,
-                                color: Colors.black12,
-                                child: const Center(child: CircularProgressIndicator()),
-                              );
-                          },
                         ),
                       ),
-                    ),
                   
                   // Text Content
                   if (message['content'] != null && message['content'].toString().isNotEmpty && message['content'] != '📷 Image')

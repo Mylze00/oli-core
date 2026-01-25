@@ -68,6 +68,14 @@ class SocketService {
 
     // Ecoute des messages entrants
     _socket!.on('new_message', (data) => _onMessageReceived(data));
+    
+    // Ecoute des changements de statut (online/offline)
+    _socket!.on('user_status', (data) {
+       debugPrint("Statut utilisateur changé: $data");
+       // On peut réutiliser le handler de message pour invalider, ou juste émettre un event
+       // Pour l'instant, on traite ça comme un message pour déclencher le refresh de la liste
+       _onMessageReceived(data); 
+    });
   }
 
   // Système de callback pour le controller
@@ -100,5 +108,11 @@ class SocketService {
   void disconnect() {
     _socket?.disconnect();
     debugPrint("🔌 Socket déconnecté manuellement");
+  }
+
+  void emit(String event, dynamic data) {
+    if (_socket != null && _socket!.connected) {
+      _socket!.emit(event, data);
+    }
   }
 }

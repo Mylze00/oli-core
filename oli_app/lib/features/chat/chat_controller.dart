@@ -24,7 +24,12 @@ class ChatState {
     this.error,
     this.friendshipStatus,
     this.requesterId,
+    this.isOtherUserOnline = false,
+    this.isOtherUserTyping = false,
   });
+
+  final bool isOtherUserOnline;
+  final bool isOtherUserTyping;
 
   ChatState copyWith({
     bool? isLoading, 
@@ -33,6 +38,8 @@ class ChatState {
     String? error,
     String? friendshipStatus,
     int? requesterId,
+    bool? isOtherUserOnline,
+    bool? isOtherUserTyping,
   }) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
@@ -41,6 +48,8 @@ class ChatState {
       error: error,
       friendshipStatus: friendshipStatus ?? this.friendshipStatus,
       requesterId: requesterId ?? this.requesterId,
+      isOtherUserOnline: isOtherUserOnline ?? this.isOtherUserOnline,
+      isOtherUserTyping: isOtherUserTyping ?? this.isOtherUserTyping,
     );
   }
 }
@@ -78,6 +87,12 @@ class ChatController extends StateNotifier<ChatState> {
       
       // Écouter les reçus de lecture
       _socketService.on('messages_read', _handleMessagesRead);
+      
+      // Écouter le statut en ligne (global ou spécifique)
+      _socketService.on('user_online', _handleUserOnline);
+
+      // Écouter le typing
+      _socketService.on('user_typing', _handleUserTyping);
       
       // Charger les messages depuis le backend
       await loadMessages();
@@ -138,6 +153,27 @@ class ChatController extends StateNotifier<ChatState> {
       }).toList();
       
       state = state.copyWith(messages: updatedMessages);
+    }
+  }
+
+  void _handleUserOnline(dynamic data) {
+    if (data is Map && data['userId'].toString() == otherUserId) {
+      state = state.copyWith(isOtherUserOnline: data['online'] == true);
+    }
+  }
+
+  void _handleUserTyping(dynamic data) {
+    if (data is Map && data['userId'].toString() == otherUserId) {
+       state = state.copyWith(isOtherUserTyping: data['isTyping'] == true);
+    }
+  }
+  
+  void sendTyping(bool isTyping) {
+    if (state.conversationId != null) {
+      _socketService.emit('typing', {
+        'conversationId': state.conversationId,
+        'isTyping': isTyping
+      });
     }
   }
 
@@ -225,9 +261,10 @@ class ChatController extends StateNotifier<ChatState> {
     String? productName,
     String? productImage,
     double? productPrice,
+    Map<String, dynamic>? customMetadata,
   }) async {
-    // Si pas de contenu et pas de média, on n'envoie rien
-    if ((content.trim().isEmpty && mediaUrl == null) || myId == null) return;
+    // Si pas de contenu, pas de média, et pas de metadata custom, on n'envoie rien
+    if ((content.trim().isEmpty && mediaUrl == null && customMetadata == null) || myId == null) return;
 
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -235,13 +272,16 @@ class ChatController extends StateNotifier<ChatState> {
     final optimisticMessage = {
       'id': tempId,
       'sender_id': int.parse(myId!),
-      'content': content.isEmpty && mediaUrl != null ? (mediaType == 'image' ? '📷 Image' : '📎 Fichier') : content,
+      'content': content.isEmpty && mediaUrl != null 
+          ? (mediaType == 'image' ? '📷 Image' : '📎 Fichier') 
+          : (type == 'location' ? '📍 Position partagée' : content),
       'type': type,
       'created_at': DateTime.now().toIso8601String(),
-      'metadata': mediaUrl != null ? jsonEncode({
-        'mediaUrl': mediaUrl,
-        'mediaType': mediaType ?? 'file'
-      }) : null
+      'metadata': jsonEncode({
+        if (mediaUrl != null) 'mediaUrl': mediaUrl,
+        if (mediaUrl != null) 'mediaType': mediaType ?? 'file',
+        ...?customMetadata,
+      })
     };
     
     // On ajoute tout de suite
@@ -259,6 +299,7 @@ class ChatController extends StateNotifier<ChatState> {
           if (productPrice != null) 'product_price': productPrice,
           if (mediaUrl != null) 'mediaUrl': mediaUrl,
           if (mediaUrl != null) 'mediaType': mediaType ?? 'file',
+          ...?customMetadata,
       };
 
       if (state.conversationId == null) {

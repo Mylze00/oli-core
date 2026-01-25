@@ -143,9 +143,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   widget.otherName,
                   style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                const Text(
-                  "En ligne", // TODO: Statut réel via Socket
-                  style: TextStyle(color: Colors.green, fontSize: 12),
+                Text(
+                  chatState.isOtherUserTyping 
+                      ? "Écrit..." 
+                      : (chatState.isOtherUserOnline ? "En ligne" : "Hors ligne"),
+                  style: TextStyle(
+                    color: chatState.isOtherUserTyping 
+                        ? theme.primaryColor 
+                        : (chatState.isOtherUserOnline ? Colors.green : Colors.grey),
+                    fontSize: 12,
+                    fontWeight: chatState.isOtherUserTyping ? FontWeight.bold : FontWeight.normal
+                  ),
                 ),
               ],
             ),
@@ -161,7 +169,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage("assets/images/chat_bg.png"),
+            image: AssetImage("assets/images/chat_bg_new.png"),
             fit: BoxFit.cover,
             opacity: 0.1, // Légère transparence pour la lisibilité
           ),
@@ -231,6 +239,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             ChatInputArea(
               onSendMessage: _sendMessage,
               onShowTools: () => _showChatTools(context),
+              onAudioRecorded: (path) => _sendAudioMessage(path),
+              onTyping: (isTyping) {
+                 ref.read(chatControllerProvider(widget.otherId).notifier).sendTyping(isTyping);
+              },
             ),
           ],
         ),
@@ -269,7 +281,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
       final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
       controller.sendMessage(
-        content: "📍 Ma position actuelle:\n$mapsUrl",
+        content: "", // Content empty for location bubble
+        type: 'location',
+        customMetadata: {
+          'lat': position.latitude,
+          'lng': position.longitude,
+        },
         productId: widget.productId,
         productName: widget.productName,
         productImage: widget.productImage,
@@ -348,6 +365,49 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _sendAudioMessage(String path) async {
+    setState(() => _isUploading = true);
+    try {
+      final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
+      
+      String? url;
+      // Sur le Web, path est vide (''). En réalité sur Web on devrait recevoir un Blob ou des bytes.
+      // Le plugin record sur Web ne retourne pas de path.
+      // Il faut adapter ChatInputArea pour passer les bytes ou un XFile valide sur le web.
+      // Pour ce correctif rapide: on vérifie si le path est une "fake string" vide du web.
+      if (path.isEmpty) {
+        // TODO: Sur Web, il faut refactoriser pour passer Uint8List depuis ChatInputArea
+        // Pour l'instant, signalons qu'on ne peut pas upload sans bytes
+        debugPrint("Upload Audio Web non implémenté sans bytes");
+        // Solution temporaire: ne rien faire ou simuler
+        setState(() => _isUploading = false);
+        return;
+      }
+
+      // Cas Mobile/Desktop
+      final xFile = XFile(path);
+      url = await controller.uploadImage(xFile); // Use existing upload logic
+
+      setState(() => _isUploading = false);
+
+      if (url != null) {
+        controller.sendMessage(
+          content: "🎤 Message vocal",
+          mediaUrl: url,
+          mediaType: 'audio',
+          type: 'audio',
+          productId: widget.productId,
+          productName: widget.productName,
+          productImage: widget.productImage,
+          productPrice: widget.productPrice,
+        );
+      }
+    } catch (e) {
+      setState(() => _isUploading = false);
+      debugPrint("Error sending audio: $e");
+    }
   }
 
   void _sendMessage(String msg) {
