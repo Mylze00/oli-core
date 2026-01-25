@@ -147,6 +147,8 @@ async function trackProductView(userId, productId) {
   const query = `
         INSERT INTO user_product_views (user_id, product_id, viewed_at)
         VALUES ($1, $2, NOW())
+        ON CONFLICT (user_id, product_id) 
+        DO UPDATE SET viewed_at = NOW();
     `;
   await pool.query(query, [userId, productId]);
 }

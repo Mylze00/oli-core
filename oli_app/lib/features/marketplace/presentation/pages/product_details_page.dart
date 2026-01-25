@@ -7,6 +7,9 @@ import '../../../../widgets/verification_badge.dart';
 import '../../../chat/chat_page.dart';
 import '../../../../core/user/user_provider.dart';
 import '../../../user/providers/user_activity_provider.dart';
+import '../../../../providers/exchange_rate_provider.dart';
+import '../../../../features/cart/providers/cart_provider.dart';
+import '../../../../features/user/providers/favorites_provider.dart';
 
 class ProductDetailsPage extends ConsumerStatefulWidget {
   final Product product;
@@ -17,12 +20,17 @@ class ProductDetailsPage extends ConsumerStatefulWidget {
 
 class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   int _currentImageIndex = 0;
-  bool _isFollowing = false;
+  // bool _isFollowing = false; // Plus besoin de variable locale
 
   void _shareProduct() {
     debugPrint("📤 [DEBUG] Bouton Partage cliqué");
     final p = widget.product;
-    final String text = "Regarde ce produit sur Oli : ${p.name}\n${p.price}\$\nhttps://oli-app.web.app/product/${p.id}";
+    // Récupérer le formateur de prix
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+    final priceUsd = double.tryParse(p.price) ?? 0.0;
+    final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
+    
+    final String text = "Regarde ce produit sur Oli : ${p.name}\n$formattedPrice\nhttps://oli-app.web.app/product/${p.id}";
     Share.share(text).then((result) {
       debugPrint("📤 [DEBUG] Partage terminé: ${result.status}");
     }).catchError((e) {
@@ -79,11 +87,37 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   }
 
   void _toggleFollow() {
-    setState(() => _isFollowing = !_isFollowing);
+    ref.read(favoritesProvider.notifier).toggleFavorite(widget.product);
+    final isFav = ref.read(favoritesProvider.notifier).isFavorite(widget.product.id);
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(_isFollowing ? "Vous suivez maintenant cet objet" : "Suivi annulé"),
+        content: Text(!isFav ? "Vous suivez maintenant cet objet" : "Suivi annulé"), // Logique inversée car toggle a déjà eu lieu
         duration: const Duration(seconds: 1),
+      )
+    );
+  }
+  
+  void _addToCart() {
+    final p = widget.product;
+    final cartItem = CartItem(
+      productId: p.id,
+      productName: p.name,
+      price: double.tryParse(p.price) ?? 0.0,
+      imageUrl: p.images.isNotEmpty ? p.images.first : null,
+      sellerName: p.seller,
+    );
+    
+    ref.read(cartProvider.notifier).addItem(cartItem);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Produit ajouté au panier"),
+        action: SnackBarAction(
+          label: 'VOIR PANIER', 
+          onPressed: () => Navigator.pop(context) // Retour au dashboard pour aller au panier ou push CartPage
+        ),
+        duration: const Duration(seconds: 2),
       )
     );
   }
@@ -135,10 +169,14 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final p = widget.product;
+    final isFollowing = ref.watch(favoritesProvider.notifier).isFavorite(p.id);
+    // Pour que le bouton se mette à jour, on doit watch la liste
+    ref.watch(favoritesProvider);
+    
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("Détails (INT-V1.1) - ${p.name.substring(0, p.name.length > 10 ? 10 : p.name.length)}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+        title: Text("Détails - ${p.name.substring(0, p.name.length > 10 ? 10 : p.name.length)}", style: const TextStyle(color: Colors.white, fontSize: 16)),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -248,17 +286,42 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
               ),
             ]),
           ),
-          // BANNIÈRE PRIX
+          // BANNIÈRE PRIX (Design amélioré)
           Container(
             width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Mêmes marges que bloc vendeur
             padding: const EdgeInsets.symmetric(vertical: 20),
-            color: const Color(0xFF1E7DBA),
-            child: Center(child: Text("${p.price}\$", style: const TextStyle(color: Colors.white, fontSize: 45, fontWeight: FontWeight.bold))),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E7DBA),
+              borderRadius: BorderRadius.circular(15), // Mêmes arrondis que bloc vendeur
+            ),
+            child: Builder(
+              builder: (context) {
+                final exchangeState = ref.watch(exchangeRateProvider); // Pour la réactivité
+                final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                final priceUsd = double.tryParse(p.price) ?? 0.0;
+                return Center(
+                  child: Text(
+                    exchangeNotifier.formatProductPrice(priceUsd), 
+                    style: const TextStyle(color: Colors.white, fontSize: 45, fontWeight: FontWeight.bold)
+                  )
+                );
+              }
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text("${p.deliveryPrice}\$ de livraison", style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              Builder(
+                builder: (context) {
+                  final exchangeState = ref.watch(exchangeRateProvider); // Pour la réactivité
+                  final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                  return Text(
+                    "${exchangeNotifier.formatProductPrice(p.deliveryPrice)} de livraison", 
+                    style: const TextStyle(color: Colors.white70, fontSize: 14)
+                  );
+                }
+              ),
               Text("Livraison estimée : ${_calculateDeliveryDate(p.deliveryTime)}", style: const TextStyle(color: Colors.white70, fontSize: 14)),
               const Divider(color: Colors.white24, height: 24),
               Text("Etat : ${p.condition}", style: const TextStyle(color: Colors.white, fontSize: 14)),
@@ -277,7 +340,14 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity, height: 50,
-                child: OutlinedButton(onPressed: () {}, style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white70), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), child: const Text("Ajouter au panier", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))),
+                child: OutlinedButton(
+                  onPressed: _addToCart, 
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white70), 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))
+                  ), 
+                  child: const Text("Ajouter au panier", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))
+                ),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -285,12 +355,12 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                 child: OutlinedButton(
                   onPressed: _toggleFollow, 
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: _isFollowing ? Colors.blueAccent : Colors.white70), 
+                    side: BorderSide(color: isFollowing ? Colors.blueAccent : Colors.white70), 
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))
                   ), 
                   child: Text(
-                    _isFollowing ? "OBJET SUIVI" : "Suivre cet objet", 
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _isFollowing ? Colors.blueAccent : Colors.white)
+                    isFollowing ? "OBJET SUIVI" : "Suivre cet objet", 
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isFollowing ? Colors.blueAccent : Colors.white)
                   )
                 ),
               ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/cart_provider.dart';
 import '../../checkout/screens/checkout_page.dart';
+import '../../../providers/exchange_rate_provider.dart';
 
 /// Page Panier
 class CartPage extends ConsumerWidget {
@@ -91,7 +92,16 @@ class CartPage extends ConsumerWidget {
                 if (item.sellerName != null)
                   Text(item.sellerName!, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                 const SizedBox(height: 8),
-                Text('\$${item.price.toStringAsFixed(2)}', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final exchangeState = ref.watch(exchangeRateProvider);
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                    return Text(
+                      exchangeNotifier.formatProductPrice(item.price), 
+                      style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)
+                    );
+                  }
+                ),
               ],
             ),
           ),
@@ -131,7 +141,16 @@ class CartPage extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('${items.fold<int>(0, (sum, item) => sum + item.quantity)} article(s)', style: const TextStyle(color: Colors.grey)),
-                Text('\$${total.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final exchangeState = ref.watch(exchangeRateProvider);
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                    return Text(
+                      exchangeNotifier.formatProductPrice(total), 
+                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)
+                    );
+                  }
+                ),
               ],
             ),
             const SizedBox(height: 16),

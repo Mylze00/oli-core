@@ -112,36 +112,36 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             elevation: 0,
             // Augmenter la hauteur pour accommoder le Header + SearchBar
             expandedHeight: 120, 
-            title: Row(
+            title: Stack(
+              alignment: Alignment.center,
               children: [
                 // Coin Gauche : Avatar + Nom
-                AutoRefreshAvatar(
-                  avatarUrl: authState.userData?['avatar_url'],
-                  size: 32,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    authState.userData?['name'] ?? 'Utilisateur',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AutoRefreshAvatar(
+                        avatarUrl: authState.userData?['avatar_url'],
+                        size: 32,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          authState.userData?['name'] ?? 'Utilisateur',
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 
-                // Centre : Logo Oli
-                Expanded(
-                  flex: 2,
-                  child: Center(
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      height: 30,
-                    ),
-                  ),
+                // Centre : Logo Oli (Agrandie de 30%, 30 -> 40)
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 40,
                 ),
-                
-                // Équilibrer l'espace à droite
-                const Spacer(),
-                const SizedBox(width: 40), // Placeholder pour actions ou vide
               ],
             ),
             bottom: PreferredSize(
@@ -927,14 +927,16 @@ class _DiscoveryCarouselState extends State<_DiscoveryCarousel> {
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        () {
+                      Consumer(
+                        builder: (context, ref, _) {
                           final exchangeState = ref.watch(exchangeRateProvider);
                           final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                           final priceUsd = double.tryParse(product.price) ?? 0.0;
-                          return exchangeNotifier.formatProductPrice(priceUsd);
-                        }(), 
-                        style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 16)
+                          return Text(
+                            exchangeNotifier.formatProductPrice(priceUsd), 
+                            style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 16)
+                          );
+                        }
                       ),
                     ],
                   ),
