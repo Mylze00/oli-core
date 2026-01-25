@@ -98,49 +98,49 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           // 1. APP BAR AVEC HEADER PERSONNALISÉ & RECHERCHE
           SliverAppBar(
             backgroundColor: Colors.transparent,
-            flexibleSpace: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.blue, Colors.black],
-                ),
-              ),
-            ),
-            floating: true,
-            pinned: true,
-            elevation: 0,
-            // Augmenter la hauteur pour accommoder le Header + SearchBar
-            expandedHeight: 120, 
-            title: Stack(
-              alignment: Alignment.center,
+            title: Row(
+              mainAxisSize: MainAxisSize.min, // Important pour laisser la place
               children: [
                 // Coin Gauche : Avatar + Nom
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AutoRefreshAvatar(
-                        avatarUrl: authState.userData?['avatar_url'],
-                        size: 32,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          authState.userData?['name'] ?? 'Utilisateur',
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                AutoRefreshAvatar(
+                  avatarUrl: authState.userData?['avatar_url'],
+                  size: 32,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    authState.userData?['name'] ?? 'Utilisateur',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                
-                // Centre : Logo Oli (Agrandie de 30%, 30 -> 40)
-                Image.asset(
-                  'assets/images/logo.png',
-                  height: 40,
+              ],
+            ),
+            
+            // Centrage Logo Absolu via FlexibleSpace
+            flexibleSpace: Stack(
+              children: [
+                // Fond existant
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.blue, Colors.black],
+                    ),
+                  ),
+                ),
+                // Logo centré verticalement et horizontalement dans l'espace disponible (Tenant compte de SafeArea)
+                SafeArea(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8.0), // Ajustement fin vertical si besoin
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        height: 40,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -585,11 +585,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 ),
                 child: Builder(
                   builder: (context) {
-                    final exchangeState = ref.watch(exchangeRateProvider);
-                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    return Text(formattedPrice, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold));
+                    // Réduction taille 10 -> 6.5
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.white, fontSize: 6.5, fontWeight: FontWeight.bold));
                   },
                 ),
               ),
@@ -639,11 +638,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
               children: [
                 Builder(
                   builder: (context) {
-                    final exchangeState = ref.watch(exchangeRateProvider);
-                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    return Text(formattedPrice, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14));
+                    // Réduction taille 14 -> 9
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 9));
                   },
                 ),
                 Text("Low price", style: TextStyle(color: Colors.grey[500], fontSize: 10)),
@@ -742,11 +740,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 const SizedBox(height: 2),
                 Builder(
                   builder: (context) {
-                    final exchangeState = ref.watch(exchangeRateProvider);
-                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    return Text(formattedPrice, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 14));
+                    // Réduction taille 14 -> 9
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 9));
                   },
                 ),
                 Row(
@@ -818,11 +815,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 const SizedBox(height: 2),
                 Builder(
                   builder: (context) {
-                    final exchangeState = ref.watch(exchangeRateProvider);
-                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    return Text(formattedPrice, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 14));
+                    // Réduction taille 14 -> 9
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 9));
                   },
                 ),
                 if (product.shopName != null)
@@ -934,7 +930,8 @@ class _DiscoveryCarouselState extends State<_DiscoveryCarousel> {
                           final priceUsd = double.tryParse(product.price) ?? 0.0;
                           return Text(
                             exchangeNotifier.formatProductPrice(priceUsd), 
-                            style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 16)
+                            // Réduction taille 16 -> 10.5
+                            style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 10.5)
                           );
                         }
                       ),
