@@ -661,7 +661,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
         image: backgroundImage != null ? DecorationImage(
           image: AssetImage(backgroundImage),
           fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.darken), // Assombrir pour lisibilité
+          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.7), BlendMode.darken), // Assombrir fortement (0.7)
         ) : null,
         borderRadius: BorderRadius.circular(12),
         // Bordure brillante pour les super offres
@@ -1016,6 +1016,54 @@ class _DiscoveryCarouselState extends State<_DiscoveryCarousel> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Widget d'animation de feu (effet de respiration)
+class FireAnimationWidget extends StatefulWidget {
+  const FireAnimationWidget({super.key});
+
+  @override
+  State<FireAnimationWidget> createState() => _FireAnimationWidgetState();
+}
+
+class _FireAnimationWidgetState extends State<FireAnimationWidget> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _opacityAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _opacityAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scaleAnimation.value,
+          child: Opacity(
+            opacity: _opacityAnimation.value,
+            child: const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 28),
+          ),
+        );
+      },
     );
   }
 }
