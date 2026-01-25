@@ -62,5 +62,6 @@ flutter:
     - assets/images/logo.png
     - assets/images/chat_bg.png
     - assets/images/chat_bg_new.png
+    - assets/images/fire_bg.png
     - assets/images/ads/
     - assets/translations/

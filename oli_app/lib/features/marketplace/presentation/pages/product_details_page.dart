@@ -365,6 +365,37 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                 ),
               ),
               const SizedBox(height: 20),
+              const SizedBox(height: 20),
+              
+              // TABLE DE PROVENANCE
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("PROVENANCE & DÉTAILS", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
+                    const SizedBox(height: 12),
+                    Table(
+                      columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(2)},
+                      border: TableBorder(horizontalInside: BorderSide(color: Colors.white.withOpacity(0.05))),
+                      children: [
+                        _buildProvenanceRow("Localisation", p.location ?? "Non spécifié"),
+                        _buildProvenanceRow("Vendeur", p.shopName ?? p.seller),
+                        _buildProvenanceRow("Type Vendeur", p.sellerAccountType.toUpperCase()),
+                        _buildProvenanceRow("Expédition", "Depuis ${p.location ?? 'l\'entrepôt'}"),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 12),
+              
               GestureDetector(onTap: () {}, child: const Text("Afficher la description complète", style: TextStyle(color: Colors.white, decoration: TextDecoration.underline))),
               const SizedBox(height: 8),
               Text("Quantité Disponible : ${p.quantity}", style: const TextStyle(color: Colors.white70)),
@@ -373,6 +404,21 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
           ),
         ]),
       ),
+    );
+  }
+
+  TableRow _buildProvenanceRow(String label, String value) {
+    return TableRow(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+        ),
+      ],
     );
   }
 }

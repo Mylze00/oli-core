@@ -7,7 +7,8 @@ import 'product_details_page.dart';
 import '../widgets/market_product_card.dart';
 
 class MarketView extends ConsumerStatefulWidget {
-  const MarketView({super.key});
+  final String? initialCategoryLabel;
+  const MarketView({super.key, this.initialCategoryLabel});
   @override
   ConsumerState<MarketView> createState() => _MarketViewState();
 }
@@ -16,23 +17,43 @@ class _MarketViewState extends ConsumerState<MarketView> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _selectedCategory = "Tout";
   
-  // Catégories disponibles
+  // Catégories disponibles (Liste enrichie)
   final Map<String, String> _categories = {
     "Tout": "",
-    "Électronique": "electronics",
-    "Mode": "fashion",
+    "Industrie": "industry",
     "Maison": "home",
     "Véhicules": "vehicles",
-    "Industrie": "industry",
-    "Alimentation": "food",
+    "Mode": "fashion",
+    "Électronique": "electronics",
+    "Sports": "sports",
+    "Beauté": "beauty",
+    "Jouets": "toys",
+    "Santé": "health",
+    "Construction": "construction",
+    "Outils": "tools",
+    "Bureau": "office",
+    "Jardin": "garden",
+    "Animaux": "pets",
+    "Bébé": "baby",
+    "Alimentation": "food", 
+    "Sécurité": "security",
     "Autres": "other",
   };
 
   @override
   void initState() {
     super.initState();
-    // Fetch products is called in constructor of the provider, but good to refresh/ensure
-    // ref.read(marketProductsProvider.notifier).fetchProducts();
+    // Si une catégorie initiale est fournie
+    if (widget.initialCategoryLabel != null && _categories.containsKey(widget.initialCategoryLabel)) {
+      _selectedCategory = widget.initialCategoryLabel!;
+      // Utiliser addPostFrameCallback pour lancer le fetch après le build initial du provider si besoin
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final categoryValue = _categories[_selectedCategory] ?? "";
+        if (categoryValue.isNotEmpty) {
+           ref.read(marketProductsProvider.notifier).fetchProducts(category: categoryValue);
+        }
+      });
+    }
   }
 
   void _onSearch(String value) {

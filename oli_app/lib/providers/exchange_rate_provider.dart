@@ -161,11 +161,22 @@ class ExchangeRateNotifier extends StateNotifier<ExchangeRateState> {
   /// Formater un montant avec le symbole de devise
   String formatAmount(double amount, {Currency? currency}) {
     final curr = currency ?? state.selectedCurrency;
-    final formatted = amount.toStringAsFixed(curr == Currency.USD ? 2 : 0);
+    
+    // Formatage avec séparateur de milliers (espace)
+    // RegExp pour insérer un espace tous les 3 chiffres
+    final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    final String Function(Match) mathFunc = (Match match) => '${match[1]} ';
 
+    String formatted;
     if (curr == Currency.USD) {
+      // Pour USD: on garde 2 décimales
+      final parts = amount.toStringAsFixed(2).split('.');
+      parts[0] = parts[0].replaceAllMapped(reg, mathFunc);
+      formatted = parts.join('.');
       return '\$${formatted}';
     } else {
+      // Pour CDF: pas de décimales
+      formatted = amount.toStringAsFixed(0).replaceAllMapped(reg, mathFunc);
       return '${formatted} FC';
     }
   }

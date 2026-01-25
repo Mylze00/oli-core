@@ -132,12 +132,13 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 ),
                 // Logo centré verticalement et horizontalement dans l'espace disponible (Tenant compte de SafeArea)
                 SafeArea(
-                  child: Center(
+                  child: Align(
+                    alignment: Alignment.topCenter, // Remonté vers le haut
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 8.0), // Ajustement fin vertical si besoin
+                      padding: const EdgeInsets.only(top: 10.0), // Marge du haut ajustée
                       child: Image.asset(
                         'assets/images/logo.png',
-                        height: 40,
+                        height: 46, // Agrandissement +15% (40 * 1.15 = 46)
                       ),
                     ),
                   ),
@@ -316,42 +317,23 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
               ),
             ),
 
-          // 5. SECTIONS SPECIALES (Top Deals)
+          // 3. WIDGET: SUPER OFFRES avec background feu animé
           SliverToBoxAdapter(
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 12), // Espacement vertical augmenté
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            child: _buildHorizontalSection(
+              title: "Super Offres",
+              subtitle: "Les plus populaires du moment",
+              products: superOffersList,
+              gradient: [Colors.orange.shade900, Colors.deepOrange.shade800],
+              backgroundImage: "assets/images/fire_bg.png",
+              badgeText: "HOT",
+              badgeColor: Colors.red,
+              titleWidget: Row( // Suppression de const pour éviter l'erreur
                 children: [
-                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Super Offres 🔥", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                      Icon(Icons.arrow_forward, color: Colors.grey[400], size: 18),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 160,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: superOffersList.isEmpty ? 3 : superOffersList.length,
-                      itemBuilder: (context, index) {
-                        if (superOffersList.isEmpty) return _buildPlaceholderCard();
-                        return GestureDetector(
-                          onTap: () => _navigateToProduct(superOffersList[index]),
-                          child: _buildDealCard(superOffersList[index]),
-                        );
-                      },
-                    ),
-                  ),
+                   FireAnimationWidget(),
+                   SizedBox(width: 8),
+                   Text("Super Offres", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18, shadows: [BoxShadow(color: Colors.black, blurRadius: 4)])),
                 ],
-              ),
+              )
             ),
           ),
 
@@ -405,11 +387,11 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text("⭐ Meilleurs Vendeurs", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                      Icon(Icons.trending_up, color: Colors.white.withValues(alpha: 0.8), size: 18),
+                      Icon(Icons.trending_up, color: Colors.white.withOpacity(0.8), size: 18),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text("Les produits les plus populaires", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12)),
+                  Text("Les produits les plus populaires", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 160,
@@ -468,7 +450,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text("Supermarchés et commerces vérifiés", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12)),
+                  Text("Supermarchés et commerces vérifiés", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 160,
@@ -583,8 +565,9 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                   color: Colors.black.withOpacity(0.8),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Builder(
-                  builder: (context) {
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    ref.watch(exchangeRateProvider); // S'abonner aux changements
                     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
@@ -636,8 +619,9 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Builder(
-                  builder: (context) {
+                Consumer(
+                  builder: (context, ref, _) {
+                    ref.watch(exchangeRateProvider); // S'abonner
                     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
@@ -653,7 +637,92 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     );
   }
 
-
+  Widget _buildHorizontalSection({
+    required String title,
+    required String subtitle,
+    required List<Product> products,
+    required List<Color> gradient,
+    required String badgeText,
+    required Color badgeColor,
+    bool showVerifiedBadge = false,
+    String? backgroundImage,
+    Widget? titleWidget, // Pour passer le titre personnalisé avec animation
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: backgroundImage == null ? null : Colors.black, // Fallback color
+        gradient: backgroundImage == null ? LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ) : null,
+        image: backgroundImage != null ? DecorationImage(
+          image: AssetImage(backgroundImage),
+          fit: BoxFit.cover,
+          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.darken), // Assombrir pour lisibilité
+        ) : null,
+        borderRadius: BorderRadius.circular(12),
+        // Bordure brillante pour les super offres
+        border: backgroundImage != null ? Border.all(color: Colors.orangeAccent.withOpacity(0.5), width: 1.5) : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  titleWidget ?? Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  if (backgroundImage == null) // Le sous-titre est souvent illisible sur l'image feu, on le cache ou on le style différemment
+                    Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11))
+                  else
+                    Text(subtitle, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500, shadows: [BoxShadow(color: Colors.black, blurRadius: 4)])),
+                ],
+              ),
+              if (showVerifiedBadge)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.verified, color: Colors.white, size: 12),
+                      SizedBox(width: 2),
+                      Text("Certifié", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                )
+              else
+                Icon(Icons.arrow_forward, color: Colors.grey[400], size: 18),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 160,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: products.isEmpty ? 3 : products.length,
+              itemBuilder: (context, index) {
+                if (products.isEmpty) return _buildPlaceholderCard();
+                return GestureDetector(
+                  onTap: () => _navigateToProduct(products[index]),
+                  child: _buildDealCard(products[index]), // Utilise _buildDealCard pour les super offres
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildProductGridCard(Product product) {
     return MarketProductCard(product: product);
@@ -738,8 +807,9 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
               children: [
                 Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12)),
                 const SizedBox(height: 2),
-                Builder(
-                  builder: (context) {
+                Consumer(
+                  builder: (context, ref, _) {
+                    ref.watch(exchangeRateProvider); // S'abonner
                     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
@@ -813,8 +883,9 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
               children: [
                 Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12)),
                 const SizedBox(height: 2),
-                Builder(
-                  builder: (context) {
+                Consumer(
+                  builder: (context, ref, _) {
+                    ref.watch(exchangeRateProvider); // S'abonner
                     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);

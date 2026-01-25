@@ -12,25 +12,20 @@ class CurrencySelectorWidget extends ConsumerWidget {
     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2), // Réduit
       decoration: BoxDecoration(
         color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12), // Rayon réduit
         border: Border.all(color: Colors.grey[300]!),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Icône de devise
-          Icon(
-            Icons.attach_money,
-            size: 18,
-            color: Colors.grey[700],
-          ),
-          const SizedBox(width: 4),
-
-          // Sélecteur USD
+          // Icône supprimée pour gain de place
+          
+          // Sélecteur USD -> $
           _CurrencyOption(
+            label: '\$', // Label simplifié
             currency: Currency.USD,
             isSelected: exchangeState.selectedCurrency == Currency.USD,
             onTap: () => exchangeNotifier.setCurrency(Currency.USD),
@@ -47,8 +42,9 @@ class CurrencySelectorWidget extends ConsumerWidget {
 
           const SizedBox(width: 4),
 
-          // Sélecteur CDF
+          // Sélecteur CDF -> FC
           _CurrencyOption(
+            label: 'FC',
             currency: Currency.CDF,
             isSelected: exchangeState.selectedCurrency == Currency.CDF,
             onTap: () => exchangeNotifier.setCurrency(Currency.CDF),
@@ -75,11 +71,13 @@ class CurrencySelectorWidget extends ConsumerWidget {
 /// Option de devise individuelle
 class _CurrencyOption extends StatelessWidget {
   final Currency currency;
+  final String label; // Nouveau paramètre pour texte custom
   final bool isSelected;
   final VoidCallback onTap;
 
   const _CurrencyOption({
     required this.currency,
+    required this.label,
     required this.isSelected,
     required this.onTap,
   });
@@ -89,15 +87,15 @@ class _CurrencyOption extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), // Padding réduit
         decoration: BoxDecoration(
           color: isSelected ? Colors.blue : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8), // Rayon réduit
         ),
         child: Text(
-          currency.code,
+          label, // Utilise le label court
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 10, // Font size réduit (13 -> 10)
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             color: isSelected ? Colors.white : Colors.grey[700],
           ),
