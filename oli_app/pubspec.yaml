@@ -48,6 +48,7 @@ dependencies:
   permission_handler: ^11.0.0
   flutter_contacts: ^1.1.9
   path_provider: ^2.1.1
+  easy_localization: ^3.0.7
 
 
 dev_dependencies:
@@ -62,3 +63,4 @@ flutter:
     - assets/images/chat_bg.png
     - assets/images/chat_bg_new.png
     - assets/images/ads/
+    - assets/translations/

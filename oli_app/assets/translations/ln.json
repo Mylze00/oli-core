@@ -1,0 +1,82 @@
+{
+    "nav": {
+        "home": "Ndako",
+        "chats": "Makelele",
+        "market": "Zando",
+        "profile": "Ngai"
+    },
+    "common": {
+        "search": "Luka",
+        "cancel": "Tika",
+        "confirm": "Ndima",
+        "save": "Bomba",
+        "delete": "Longola",
+        "edit": "Bongisa",
+        "close": "Kanga",
+        "yes": "Iyo",
+        "no": "Te",
+        "loading": "Ezali kokota...",
+        "error": "Libunga",
+        "success": "Elongi"
+    },
+    "product": {
+        "price": "Ntalo",
+        "description": "Ndimbola",
+        "buy_now": "Somba lelo",
+        "add_to_cart": "Tyá na sani",
+        "category": "Lolenge",
+        "condition": "Ezaleli",
+        "new": "Ya sika",
+        "used": "Ya kala",
+        "delivery": "Kokabola",
+        "seller": "Moteki"
+    },
+    "actions": {
+        "category": "Lolenge",
+        "request": "Senga",
+        "service": "Mosala",
+        "miniapp": "Mini-app",
+        "live": "Live"
+    },
+    "sections": {
+        "super_offers": "Mabonza Minene 🔥",
+        "discovery": "Koyeba",
+        "top_sellers": "⭐ Bateki Malamu",
+        "verified_shops": "🏪 Magazini ya Ndingisa",
+        "top_ranking": "Oyo ya Liboso"
+    },
+    "auth": {
+        "login": "Kota",
+        "logout": "Bima",
+        "register": "Komikoma",
+        "phone": "Telefone",
+        "password": "Mot de passe",
+        "forgot_password": "Obosani mot de passe?"
+    },
+    "wallet": {
+        "balance": "Mbongo",
+        "deposit": "Tyá mbongo",
+        "withdraw": "Benda mbongo",
+        "history": "Makambo ya kala"
+    },
+    "chat": {
+        "type_message": "Koma message...",
+        "send": "Tinda",
+        "online": "Azali",
+        "offline": "Azali te",
+        "typing": "Azali kokoma..."
+    },
+    "language": {
+        "select": "Pona lokota",
+        "french": "Français",
+        "english": "English",
+        "lingala": "Lingala",
+        "swahili": "Swahili",
+        "kikongo": "Kikongo",
+        "tshiluba": "Tshiluba"
+    },
+    "currency": {
+        "usd": "Dollar américain",
+        "cdf": "Franc congolais"
+    }
+}

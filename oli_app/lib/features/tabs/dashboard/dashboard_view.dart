@@ -20,6 +20,7 @@ import '../../marketplace/providers/market_provider.dart';
 import 'widgets/dynamic_search_bar.dart';
 import 'widgets/ads_carousel.dart';
 import '../../../widgets/currency_selector_widget.dart';
+import '../../../widgets/language_selector_widget.dart';
 
 
 import '../../marketplace/presentation/pages/all_categories_page.dart';
@@ -155,6 +156,12 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 ),
             ),
             actions: [
+              // Sélecteur de langue
+              const Padding(
+                padding: EdgeInsets.only(right: 8.0),
+                child: LanguageSelectorWidget(),
+              ),
+              
               // Sélecteur de devise (USD/CDF)
               const Padding(
                 padding: EdgeInsets.only(right: 8.0),

@@ -1,0 +1,82 @@
+{
+    "nav": {
+        "home": "Muena",
+        "chats": "Makelele",
+        "market": "Cisalu",
+        "profile": "Meme"
+    },
+    "common": {
+        "search": "Kulonda",
+        "cancel": "Kuleka",
+        "confirm": "Kudikisha",
+        "save": "Kubomba",
+        "delete": "Kudisula",
+        "edit": "Kubongisha",
+        "close": "Kukanga",
+        "yes": "Eeyo",
+        "no": "Ayi",
+        "loading": "Dikutela...",
+        "error": "Cilema",
+        "success": "Mwenende"
+    },
+    "product": {
+        "price": "Ntalu",
+        "description": "Ndimbula",
+        "buy_now": "Kusumba buabu",
+        "add_to_cart": "Kutya mu nkanda",
+        "category": "Mukanda",
+        "condition": "Ciimo",
+        "new": "Cisha",
+        "used": "Cikale",
+        "delivery": "Kunata",
+        "seller": "Musumbi"
+    },
+    "actions": {
+        "category": "Mukanda",
+        "request": "Kulomba",
+        "service": "Musalu",
+        "miniapp": "Mini-app",
+        "live": "Live"
+    },
+    "sections": {
+        "super_offers": "Mabonza Mankaka 🔥",
+        "discovery": "Kumanya",
+        "top_sellers": "⭐ Basumbi Bampangi",
+        "verified_shops": "🏪 Magazini ya Ndukisa",
+        "top_ranking": "Oyo ya Ntete"
+    },
+    "auth": {
+        "login": "Kukota",
+        "logout": "Kubwaka",
+        "register": "Kusonikina",
+        "phone": "Telefone",
+        "password": "Nkua ya kukota",
+        "forgot_password": "Wilukilanga nkua?"
+    },
+    "wallet": {
+        "balance": "Mbongo",
+        "deposit": "Kutya mbongo",
+        "withdraw": "Kubenda mbongo",
+        "history": "Makambu ma kala"
+    },
+    "chat": {
+        "type_message": "Kusona message...",
+        "send": "Kutuma",
+        "online": "Kuna",
+        "offline": "Kadi kuna",
+        "typing": "Diketi kusona..."
+    },
+    "language": {
+        "select": "Kusobula ndinga",
+        "french": "Français",
+        "english": "English",
+        "lingala": "Lingala",
+        "swahili": "Swahili",
+        "kikongo": "Kikongo",
+        "tshiluba": "Tshiluba"
+    },
+    "currency": {
+        "usd": "Dollar américain",
+        "cdf": "Franc congolais"
+    }
+}

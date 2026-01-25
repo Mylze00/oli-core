@@ -1,0 +1,82 @@
+{
+    "nav": {
+        "home": "Home",
+        "chats": "Chats",
+        "market": "Market",
+        "profile": "Me"
+    },
+    "common": {
+        "search": "Search",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "save": "Save",
+        "delete": "Delete",
+        "edit": "Edit",
+        "close": "Close",
+        "yes": "Yes",
+        "no": "No",
+        "loading": "Loading...",
+        "error": "Error",
+        "success": "Success"
+    },
+    "product": {
+        "price": "Price",
+        "description": "Description",
+        "buy_now": "Buy now",
+        "add_to_cart": "Add to cart",
+        "category": "Category",
+        "condition": "Condition",
+        "new": "New",
+        "used": "Used",
+        "delivery": "Delivery",
+        "seller": "Seller"
+    },
+    "actions": {
+        "category": "Category",
+        "request": "Request",
+        "service": "Service",
+        "miniapp": "Mini-app",
+        "live": "Live"
+    },
+    "sections": {
+        "super_offers": "Super Deals 🔥",
+        "discovery": "Discovery",
+        "top_sellers": "⭐ Top Sellers",
+        "verified_shops": "🏪 Verified Stores",
+        "top_ranking": "Top Ranking"
+    },
+    "auth": {
+        "login": "Login",
+        "logout": "Logout",
+        "register": "Register",
+        "phone": "Phone",
+        "password": "Password",
+        "forgot_password": "Forgot password?"
+    },
+    "wallet": {
+        "balance": "Balance",
+        "deposit": "Deposit",
+        "withdraw": "Withdraw",
+        "history": "History"
+    },
+    "chat": {
+        "type_message": "Type a message...",
+        "send": "Send",
+        "online": "Online",
+        "offline": "Offline",
+        "typing": "Typing..."
+    },
+    "language": {
+        "select": "Select language",
+        "french": "Français",
+        "english": "English",
+        "lingala": "Lingala",
+        "swahili": "Swahili",
+        "kikongo": "Kikongo",
+        "tshiluba": "Tshiluba"
+    },
+    "currency": {
+        "usd": "US Dollar",
+        "cdf": "Congolese Franc"
+    }
+}

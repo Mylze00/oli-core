@@ -1,0 +1,82 @@
+{
+    "nav": {
+        "home": "Accueil",
+        "chats": "Discussions",
+        "market": "Marché",
+        "profile": "Moi"
+    },
+    "common": {
+        "search": "Rechercher",
+        "cancel": "Annuler",
+        "confirm": "Confirmer",
+        "save": "Enregistrer",
+        "delete": "Supprimer",
+        "edit": "Modifier",
+        "close": "Fermer",
+        "yes": "Oui",
+        "no": "Non",
+        "loading": "Chargement...",
+        "error": "Erreur",
+        "success": "Succès"
+    },
+    "product": {
+        "price": "Prix",
+        "description": "Description",
+        "buy_now": "Acheter maintenant",
+        "add_to_cart": "Ajouter au panier",
+        "category": "Catégorie",
+        "condition": "État",
+        "new": "Neuf",
+        "used": "Occasion",
+        "delivery": "Livraison",
+        "seller": "Vendeur"
+    },
+    "actions": {
+        "category": "Catégorie",
+        "request": "Demande",
+        "service": "Service",
+        "miniapp": "Mini-app",
+        "live": "Live"
+    },
+    "sections": {
+        "super_offers": "Super Offres 🔥",
+        "discovery": "Découverte",
+        "top_sellers": "⭐ Meilleurs Vendeurs",
+        "verified_shops": "🏪 Grands Magasins",
+        "top_ranking": "Top Classement"
+    },
+    "auth": {
+        "login": "Connexion",
+        "logout": "Déconnexion",
+        "register": "Inscription",
+        "phone": "Téléphone",
+        "password": "Mot de passe",
+        "forgot_password": "Mot de passe oublié ?"
+    },
+    "wallet": {
+        "balance": "Solde",
+        "deposit": "Dépôt",
+        "withdraw": "Retrait",
+        "history": "Historique"
+    },
+    "chat": {
+        "type_message": "Tapez un message...",
+        "send": "Envoyer",
+        "online": "En ligne",
+        "offline": "Hors ligne",
+        "typing": "En train d'écrire..."
+    },
+    "language": {
+        "select": "Choisir la langue",
+        "french": "Français",
+        "english": "English",
+        "lingala": "Lingala",
+        "swahili": "Swahili",
+        "kikongo": "Kikongo",
+        "tshiluba": "Tshiluba"
+    },
+    "currency": {
+        "usd": "Dollar américain",
+        "cdf": "Franc congolais"
+    }
+}

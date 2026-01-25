@@ -1,11 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'features/auth/screens/login_page.dart';
 import 'features/home/home_page.dart';
 import 'features/auth/providers/auth_controller.dart';
 
-void main() {
-  runApp(const ProviderScope(child: OliApp()));
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await EasyLocalization.ensureInitialized();
+
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [
+        Locale('fr'), // Français
+        Locale('en'), // English
+        Locale('ln'), // Lingala
+        Locale('sw'), // Swahili
+        Locale('kg'), // Kikongo
+        Locale('lu'), // Tshiluba
+      ],
+      path: 'assets/translations',
+      fallbackLocale: const Locale('fr'),
+      child: const ProviderScope(child: OliApp()),
+    ),
+  );
 }
 
 class OliApp extends ConsumerWidget {
@@ -18,6 +36,9 @@ class OliApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Oli App',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: context.localizationDelegates,
+      supportedLocales: context.supportedLocales,
+      locale: context.locale,
       theme: ThemeData(
         fontFamily: 'Inter',
         useMaterial3: true,

@@ -1,0 +1,82 @@
+{
+    "nav": {
+        "home": "Nyumbani",
+        "chats": "Mazungumzo",
+        "market": "Soko",
+        "profile": "Mimi"
+    },
+    "common": {
+        "search": "Tafuta",
+        "cancel": "Ghairi",
+        "confirm": "Thibitisha",
+        "save": "Hifadhi",
+        "delete": "Futa",
+        "edit": "Hariri",
+        "close": "Funga",
+        "yes": "Ndiyo",
+        "no": "Hapana",
+        "loading": "Inapakia...",
+        "error": "Kosa",
+        "success": "Mafanikio"
+    },
+    "product": {
+        "price": "Bei",
+        "description": "Maelezo",
+        "buy_now": "Nunua sasa",
+        "add_to_cart": "Weka kwenye kikapu",
+        "category": "Kategoria",
+        "condition": "Hali",
+        "new": "Mpya",
+        "used": "Iliyotumika",
+        "delivery": "Utoaji",
+        "seller": "Muuzaji"
+    },
+    "actions": {
+        "category": "Kategoria",
+        "request": "Ombi",
+        "service": "Huduma",
+        "miniapp": "Mini-app",
+        "live": "Moja kwa moja"
+    },
+    "sections": {
+        "super_offers": "Ofa Kubwa 🔥",
+        "discovery": "Ugunduzi",
+        "top_sellers": "⭐ Wauzaji Bora",
+        "verified_shops": "🏪 Maduka Yaliyothibitishwa",
+        "top_ranking": "Orodha ya Juu"
+    },
+    "auth": {
+        "login": "Ingia",
+        "logout": "Toka",
+        "register": "Jisajili",
+        "phone": "Simu",
+        "password": "Nenosiri",
+        "forgot_password": "Umesahau nenosiri?"
+    },
+    "wallet": {
+        "balance": "Salio",
+        "deposit": "Weka pesa",
+        "withdraw": "Toa pesa",
+        "history": "Historia"
+    },
+    "chat": {
+        "type_message": "Andika ujumbe...",
+        "send": "Tuma",
+        "online": "Mtandaoni",
+        "offline": "Nje ya mtandao",
+        "typing": "Anaandika..."
+    },
+    "language": {
+        "select": "Chagua lugha",
+        "french": "Français",
+        "english": "English",
+        "lingala": "Lingala",
+        "swahili": "Swahili",
+        "kikongo": "Kikongo",
+        "tshiluba": "Tshiluba"
+    },
+    "currency": {
+        "usd": "Dola ya Marekani",
+        "cdf": "Faranga ya Kongo"
+    }
+}
