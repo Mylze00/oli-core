@@ -164,6 +164,7 @@ app.use("/api/identity", require('./routes/identity.routes'));
 app.use("/api/verification", require('./routes/verification.routes'));
 app.use("/api/behavior", require('./routes/behavior.routes'));
 app.use("/api/trust-score", require('./routes/trust-score.routes'));
+app.use("/api/exchange-rate", require('./routes/exchange-rate.routes')); // 💱 Taux de change
 
 app.use("/admin", adminRoutes); // ✨ Routes admin (protection dans admin.routes.js)
 app.use("/admin/ads", adminRoutes); // Mounting admin ads handled inside admin.routes?? No, I created src/routes/admin/ads.routes.js
@@ -201,9 +202,24 @@ app.use((err, req, res, next) => {
     });
 });
 
+// --- CRON JOB: Mise à jour quotidienne des taux de change ---
+const exchangeRateService = require('./services/exchange-rate.service');
+const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000; // 24 heures en millisecondes
+
+// Mise à jour initiale au démarrage
+exchangeRateService.fetchLiveRate('USD').catch(err => {
+    console.error('❌ Erreur lors de la mise à jour initiale des taux:', err.message);
+});
+
+// Mise à jour quotidienne
+setInterval(() => {
+    exchangeRateService.updateRatesDaily();
+}, TWENTY_FOUR_HOURS);
+
 // --- DÉMARRAGE DU SERVEUR ---
 server.listen(config.PORT, "0.0.0.0", () => {
     console.log(`🚀 OLI SERVER v1.0 - Port ${config.PORT} (${config.NODE_ENV})`);
     console.log(`📡 WebSocket ready`);
     console.log(`🌐 Base URL: ${config.BASE_URL}`);
+    console.log(`💱 Exchange rate auto-update: every 24h`);
 });
