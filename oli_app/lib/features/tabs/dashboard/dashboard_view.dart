@@ -585,10 +585,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 ),
                 child: Builder(
                   builder: (context) {
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    // Réduction taille 10 -> 6.5
-                    return Text(formattedPrice, style: const TextStyle(color: Colors.white, fontSize: 6.5, fontWeight: FontWeight.bold));
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold));
                   },
                 ),
               ),
@@ -638,10 +638,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
               children: [
                 Builder(
                   builder: (context) {
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    // Réduction taille 14 -> 9
-                    return Text(formattedPrice, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 9));
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14));
                   },
                 ),
                 Text("Low price", style: TextStyle(color: Colors.grey[500], fontSize: 10)),
@@ -740,10 +740,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 const SizedBox(height: 2),
                 Builder(
                   builder: (context) {
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    // Réduction taille 14 -> 9
-                    return Text(formattedPrice, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 9));
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 14));
                   },
                 ),
                 Row(
@@ -815,10 +815,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 const SizedBox(height: 2),
                 Builder(
                   builder: (context) {
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    // Réduction taille 14 -> 9
-                    return Text(formattedPrice, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 9));
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 14));
                   },
                 ),
                 if (product.shopName != null)
@@ -930,8 +930,7 @@ class _DiscoveryCarouselState extends State<_DiscoveryCarousel> {
                           final priceUsd = double.tryParse(product.price) ?? 0.0;
                           return Text(
                             exchangeNotifier.formatProductPrice(priceUsd), 
-                            // Réduction taille 16 -> 10.5
-                            style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 10.5)
+                            style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 16)
                           );
                         }
                       ),
