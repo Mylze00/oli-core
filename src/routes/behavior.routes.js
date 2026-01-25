@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const behaviorController = require('../controllers/behavior.controller');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireRole } = require('../middlewares/auth.middleware');
 
 /**
  * Routes pour le tracking comportemental
@@ -13,6 +13,6 @@ router.get('/my-history', requireAuth, behaviorController.getMyHistory);
 router.get('/my-analysis', requireAuth, behaviorController.getMyAnalysis);
 
 // Routes admin
-router.get('/statistics', requireAuth, requireAdmin, behaviorController.getStatistics);
+router.get('/statistics', requireAuth, requireRole('admin'), behaviorController.getStatistics);
 
 module.exports = router;
