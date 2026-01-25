@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../tabs/dashboard/dashboard_view.dart';
 import '../chat/conversations_page.dart';
@@ -31,7 +32,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    // Décalage d’index après le bouton +
+    // Décalage d'index après le bouton +
     final adjustedIndex = index > 2 ? index - 1 : index;
 
     setState(() => _currentIndex = adjustedIndex);
@@ -59,26 +60,26 @@ class _HomePageState extends State<HomePage> {
         currentIndex: _currentIndex >= 2 ? _currentIndex + 1 : _currentIndex,
         type: BottomNavigationBarType.fixed,
         onTap: _onTabSelected,
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled),
-            label: 'Accueil',
+            icon: const Icon(Icons.home_filled),
+            label: 'nav.home'.tr(),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_outlined),
-            label: 'Chats',
+            icon: const Icon(Icons.chat_outlined),
+            label: 'nav.chats'.tr(),
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.add_circle, size: 30),
             label: '+',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.store_outlined),
-            label: 'Marché',
+            icon: const Icon(Icons.store_outlined),
+            label: 'nav.market'.tr(),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Moi',
+            icon: const Icon(Icons.person_outline),
+            label: 'nav.profile'.tr(),
           ),
         ],
       ),
