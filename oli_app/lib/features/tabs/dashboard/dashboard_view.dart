@@ -20,6 +20,7 @@ import '../../marketplace/providers/market_provider.dart';
 import 'widgets/dynamic_search_bar.dart';
 import 'widgets/ads_carousel.dart';
 import '../../../widgets/currency_selector_widget.dart';
+import '../../../providers/exchange_rate_provider.dart';
 
 
 import '../../marketplace/presentation/pages/all_categories_page.dart';
@@ -582,7 +583,15 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                   color: Colors.black.withOpacity(0.8),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Text("\$${product.price}", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                child: Builder(
+                  builder: (context) {
+                    final exchangeState = ref.watch(exchangeRateProvider);
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                    final priceUsd = double.tryParse(product.price) ?? 0.0;
+                    final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold));
+                  },
+                ),
               ),
             ),
           ),
@@ -628,7 +637,15 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("\$${product.price}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14)),
+                Builder(
+                  builder: (context) {
+                    final exchangeState = ref.watch(exchangeRateProvider);
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                    final priceUsd = double.tryParse(product.price) ?? 0.0;
+                    final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14));
+                  },
+                ),
                 Text("Low price", style: TextStyle(color: Colors.grey[500], fontSize: 10)),
               ],
             ),
@@ -723,7 +740,15 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
               children: [
                 Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12)),
                 const SizedBox(height: 2),
-                Text("\$${product.price}", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 14)),
+                Builder(
+                  builder: (context) {
+                    final exchangeState = ref.watch(exchangeRateProvider);
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                    final priceUsd = double.tryParse(product.price) ?? 0.0;
+                    final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 14));
+                  },
+                ),
                 Row(
                   children: [
                     const Icon(Icons.visibility, size: 10, color: Colors.grey),
@@ -791,7 +816,15 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
               children: [
                 Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12)),
                 const SizedBox(height: 2),
-                Text("\$${product.price}", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 14)),
+                Builder(
+                  builder: (context) {
+                    final exchangeState = ref.watch(exchangeRateProvider);
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                    final priceUsd = double.tryParse(product.price) ?? 0.0;
+                    final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
+                    return Text(formattedPrice, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 14));
+                  },
+                ),
                 if (product.shopName != null)
                   Text(product.shopName!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[500], fontSize: 10)),
               ],
@@ -895,7 +928,12 @@ class _DiscoveryCarouselState extends State<_DiscoveryCarousel> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "\$${product.price}", 
+                        () {
+                          final exchangeState = ref.watch(exchangeRateProvider);
+                          final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                          final priceUsd = double.tryParse(product.price) ?? 0.0;
+                          return exchangeNotifier.formatProductPrice(priceUsd);
+                        }(), 
                         style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 16)
                       ),
                     ],
