@@ -4,6 +4,7 @@ import '../../../../models/product_model.dart';
 import '../../../../widgets/verification_badge.dart';
 import '../../../user/providers/favorites_provider.dart';
 import '../pages/product_details_page.dart';
+import '../../../../providers/exchange_rate_provider.dart';
 
 class MarketProductCard extends ConsumerWidget {
   final Product product;
@@ -19,6 +20,7 @@ class MarketProductCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final favorites = ref.watch(favoritesProvider);
     final isFavorite = favorites.any((p) => p.id == product.id);
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
     return GestureDetector(
       onTap: () {
@@ -148,7 +150,10 @@ class MarketProductCard extends ConsumerWidget {
                 children: [
                   Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
                   const SizedBox(height: 2),
-                  Text("\$${product.price}", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                  Text(
+                    exchangeNotifier.formatProductPrice(product.price),
+                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)
+                  ),
                 ],
               ),
             ),
