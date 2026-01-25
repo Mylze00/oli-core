@@ -65,13 +65,19 @@ router.get('/migrate-exchange-rates', async (req, res) => {
                     target_currency VARCHAR(3) NOT NULL,
                     rate NUMERIC(12, 6) NOT NULL,
                     fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    source VARCHAR(50) DEFAULT 'exchangerate-api',
-                    CONSTRAINT unique_rate_per_day UNIQUE (base_currency, target_currency, DATE(fetched_at))
+                    source VARCHAR(50) DEFAULT 'exchangerate-api'
                 );
             `);
             console.log('✅ Table "exchange_rates" créée.');
 
-            // Créer les index
+            // Créer un index unique sur la date (sans heure) pour éviter les doublons par jour
+            await client.query(`
+                CREATE UNIQUE INDEX IF NOT EXISTS unique_rate_per_day 
+                ON exchange_rates (base_currency, target_currency, CAST(fetched_at AS DATE));
+            `);
+            console.log('✅ Index unique créé.');
+
+            // Créer les autres index
             await client.query(`
                 CREATE INDEX IF NOT EXISTS idx_exchange_rates_currencies 
                     ON exchange_rates(base_currency, target_currency);
@@ -85,9 +91,7 @@ router.get('/migrate-exchange-rates', async (req, res) => {
             // Insérer un taux par défaut
             await client.query(`
                 INSERT INTO exchange_rates (base_currency, target_currency, rate, source)
-                VALUES ('USD', 'CDF', 2800.00, 'default')
-                ON CONFLICT (base_currency, target_currency, DATE(fetched_at)) 
-                DO NOTHING;
+                VALUES ('USD', 'CDF', 2800.00, 'default');
             `);
             console.log('✅ Taux par défaut inséré.');
 
