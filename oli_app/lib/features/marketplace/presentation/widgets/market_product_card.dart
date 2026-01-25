@@ -151,7 +151,7 @@ class MarketProductCard extends ConsumerWidget {
                   Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
                   const SizedBox(height: 2),
                   Text(
-                    exchangeNotifier.formatProductPrice(product.price),
+                    exchangeNotifier.formatProductPrice(double.tryParse(product.price) ?? 0.0),
                     style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)
                   ),
                 ],
