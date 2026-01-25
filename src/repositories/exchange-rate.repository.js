@@ -2,7 +2,7 @@
  * Repository pour la gestion des taux de change
  * Gère les opérations CRUD sur la table exchange_rates
  */
-const db = require('../db');
+const db = require('../config/db');
 
 class ExchangeRateRepository {
     /**
