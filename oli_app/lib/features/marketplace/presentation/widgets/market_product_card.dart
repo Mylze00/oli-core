@@ -153,9 +153,20 @@ class MarketProductCard extends ConsumerWidget {
                 children: [
                   Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
                   const SizedBox(height: 2),
-                  Text(
-                    exchangeNotifier.formatProductPrice(double.tryParse(product.price) ?? 0.0),
-                    style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)
+                  // Formater le prix en fonction de la devise sélectionnée
+                  Builder(
+                    builder: (context) {
+                      final priceUsd = double.tryParse(product.price) ?? 0.0;
+                      final displayPrice = exchangeState.selectedCurrency == Currency.USD
+                          ? priceUsd
+                          : exchangeNotifier.convertAmount(priceUsd, from: Currency.USD);
+                      final formattedPrice = exchangeNotifier.formatAmount(displayPrice, currency: exchangeState.selectedCurrency);
+                      
+                      return Text(
+                        formattedPrice,
+                        style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)
+                      );
+                    },
                   ),
                 ],
               ),
