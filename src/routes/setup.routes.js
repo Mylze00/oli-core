@@ -47,4 +47,69 @@ router.get('/ads-db', async (req, res) => {
     }
 });
 
+/**
+ * GET /setup/migrate-exchange-rates
+ * Route utilitaire pour créer la table 'exchange_rates'
+ */
+router.get('/migrate-exchange-rates', async (req, res) => {
+    try {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Création de la table exchange_rates
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS exchange_rates (
+                    id SERIAL PRIMARY KEY,
+                    base_currency VARCHAR(3) DEFAULT 'USD',
+                    target_currency VARCHAR(3) NOT NULL,
+                    rate NUMERIC(12, 6) NOT NULL,
+                    fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    source VARCHAR(50) DEFAULT 'exchangerate-api',
+                    CONSTRAINT unique_rate_per_day UNIQUE (base_currency, target_currency, DATE(fetched_at))
+                );
+            `);
+            console.log('✅ Table "exchange_rates" créée.');
+
+            // Créer les index
+            await client.query(`
+                CREATE INDEX IF NOT EXISTS idx_exchange_rates_currencies 
+                    ON exchange_rates(base_currency, target_currency);
+            `);
+            await client.query(`
+                CREATE INDEX IF NOT EXISTS idx_exchange_rates_fetched_at 
+                    ON exchange_rates(fetched_at DESC);
+            `);
+            console.log('✅ Index créés.');
+
+            // Insérer un taux par défaut
+            await client.query(`
+                INSERT INTO exchange_rates (base_currency, target_currency, rate, source)
+                VALUES ('USD', 'CDF', 2800.00, 'default')
+                ON CONFLICT (base_currency, target_currency, DATE(fetched_at)) 
+                DO NOTHING;
+            `);
+            console.log('✅ Taux par défaut inséré.');
+
+            await client.query('COMMIT');
+            res.json({
+                success: true,
+                message: 'Table exchange_rates créée avec succès ! 🎉',
+                next_step: 'Le système de taux de change est maintenant opérationnel.'
+            });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error('Erreur Migration Exchange Rates:', err);
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
 module.exports = router;
