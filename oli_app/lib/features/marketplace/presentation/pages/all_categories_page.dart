@@ -4,32 +4,32 @@ import 'market_view.dart';
 class AllCategoriesPage extends StatelessWidget {
   const AllCategoriesPage({super.key});
 
-  // Liste alignée avec MarketView
+  // Liste alignée avec MarketView - Design Premium 3D Icons
   final List<Map<String, dynamic>> categories = const [
-    {"label": "Industrie", "icon": Icons.factory, "color": Color(0xFFE3F2FD)}, // Blue 50
-    {"label": "Maison", "icon": Icons.chair, "color": Color(0xFFF3E5F5)}, // Purple 50
-    {"label": "Véhicules", "icon": Icons.directions_car, "color": Color(0xFFE8F5E9)}, // Green 50
-    {"label": "Mode", "icon": Icons.checkroom, "color": Color(0xFFFCE4EC)}, // Pink 50
-    {"label": "Électronique", "icon": Icons.phone_android, "color": Color(0xFFE0F7FA)}, // Cyan 50
-    {"label": "Sports", "icon": Icons.sports_soccer, "color": Color(0xFFFFF3E0)}, // Orange 50
-    {"label": "Beauté", "icon": Icons.face, "color": Color(0xFFFAEFE6)}, 
-    {"label": "Jouets", "icon": Icons.toys, "color": Color(0xFFFFFDE7)}, // Yellow 50
-    {"label": "Santé", "icon": Icons.medical_services, "color": Color(0xFFE0F2F1)}, // Teal 50
-    {"label": "Construction", "icon": Icons.construction, "color": Color(0xFFECEFF1)}, // BlueGrey 50
-    {"label": "Outils", "icon": Icons.build, "color": Color(0xFFEFEBE9)}, // Brown 50
-    {"label": "Bureau", "icon": Icons.desk, "color": Color(0xFFFAFAFA)},
-    {"label": "Jardin", "icon": Icons.grass, "color": Color(0xFFF1F8E9)}, // LightGreen 50
-    {"label": "Animaux", "icon": Icons.pets, "color": Color(0xFFFFF8E1)}, // Amber 50
-    {"label": "Bébé", "icon": Icons.child_friendly, "color": Color(0xFFF3E5F5)}, 
-    {"label": "Alimentation", "icon": Icons.restaurant, "color": Color(0xFFFFEBEE)}, // Red 50
-    {"label": "Sécurité", "icon": Icons.security, "color": Color(0xFFE8EAF6)}, // Indigo 50
-    {"label": "Autres", "icon": Icons.category, "color": Color(0xFFEEEEEE)},
+    {"label": "Industrie", "icon": Icons.factory, "image": "assets/images/categories/industry.png"},
+    {"label": "Maison", "icon": Icons.chair, "image": "assets/images/categories/home.png"},
+    {"label": "Véhicules", "icon": Icons.directions_car, "image": "assets/images/categories/vehicles.png"},
+    {"label": "Mode", "icon": Icons.checkroom, "image": "assets/images/categories/fashion.png"},
+    {"label": "Électronique", "icon": Icons.phone_android, "image": "assets/images/categories/electronics.png"},
+    {"label": "Sports", "icon": Icons.sports_soccer, "image": "assets/images/categories/sports.png"},
+    {"label": "Beauté", "icon": Icons.face, "image": "assets/images/categories/beauty.png"}, 
+    {"label": "Jouets", "icon": Icons.toys, "image": "assets/images/categories/toys.png"},
+    {"label": "Santé", "icon": Icons.medical_services, "image": "assets/images/categories/health.png"},
+    {"label": "Construction", "icon": Icons.construction, "image": "assets/images/categories/construction.png"},
+    {"label": "Outils", "icon": Icons.build, "image": "assets/images/categories/tools.png"},
+    {"label": "Bureau", "icon": Icons.desk, "image": "assets/images/categories/office.png"},
+    {"label": "Jardin", "icon": Icons.grass, "image": "assets/images/categories/garden.png"},
+    {"label": "Animaux", "icon": Icons.pets, "image": "assets/images/categories/pets.png"},
+    {"label": "Bébé", "icon": Icons.child_friendly, "image": "assets/images/categories/baby.png"}, 
+    {"label": "Alimentation", "icon": Icons.restaurant, "image": null}, // Pas d'image générée
+    {"label": "Sécurité", "icon": Icons.security, "image": null}, // Pas d'image générée
+    {"label": "Autres", "icon": Icons.category, "image": null},
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.white, // Fond blanc premium
       appBar: AppBar(
         title: const Text("Nos Catégories", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         centerTitle: true,
@@ -41,19 +41,20 @@ class AllCategoriesPage extends StatelessWidget {
         ),
       ),
       body: GridView.builder(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24), // Padding généreux
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3, 
-          crossAxisSpacing: 15,
-          mainAxisSpacing: 20,
-          childAspectRatio: 0.85, // Plus haut pour le texte
+          crossAxisSpacing: 20, // Espacement aéré
+          mainAxisSpacing: 24,
+          childAspectRatio: 0.8, // Plus vertical pour l'image et texte
         ),
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final cat = categories[index];
+          final hasImage = cat['image'] != null;
+          
           return InkWell(
             onTap: () {
-              // Navigation vers MarketView avec le filtre pré-activé
               Navigator.push(
                 context, 
                 MaterialPageRoute(
@@ -61,37 +62,35 @@ class AllCategoriesPage extends StatelessWidget {
                 )
               );
             },
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(20),
             child: Column(
               children: [
                 Expanded(
                   child: Container(
-                    width: double.infinity,
                     decoration: BoxDecoration(
-                      color: cat['color'],
-                      borderRadius: BorderRadius.circular(20),
-                      // Petite ombre douce
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+                      color: hasImage ? Colors.transparent : const Color(0xFFF5F5F5), // Pas de fond si image (fond blanc de l'image)
+                      borderRadius: BorderRadius.circular(24),
+                      // Ombre subtile si pas d'image, ou aucune si image (effet flat 3D)
+                    ),
+                    child: hasImage
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: Image.asset(cat['image'], fit: BoxFit.contain)
+                        )
+                      : Center(
+                          child: Icon(cat['icon'], size: 35, color: Colors.grey[700]),
                         ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Icon(cat['icon'], size: 35, color: Colors.black87),
-                    ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Text(
                   cat['label'],
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 12, 
+                    fontSize: 13, 
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87
+                    color: Colors.black87,
+                    letterSpacing: 0.3
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

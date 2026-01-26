@@ -178,9 +178,9 @@ class ProductRepository {
             INSERT INTO products (
                 seller_id, shop_id, name, description, price, category, 
                 images, delivery_price, delivery_time, condition, 
-                quantity, color, location, is_negotiable, b2b_pricing,
+                quantity, color, location, is_negotiable,
                 unit, brand, weight, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'active') 
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'active') 
             RETURNING id
         `;
 
@@ -199,7 +199,7 @@ class ProductRepository {
             color || '',
             location || '',
             is_negotiable,
-            JSON.stringify(productData.b2b_pricing || []),
+            // b2b_pricing removed
             productData.unit || 'Pièce',
             productData.brand || '',
             productData.weight || ''
@@ -228,7 +228,7 @@ class ProductRepository {
     async update(id, updates) {
         const fields = ['name', 'description', 'price', 'category', 'condition',
             'quantity', 'color', 'location', 'status', 'delivery_price', 'delivery_time',
-            'is_good_deal', 'promo_price', 'b2b_pricing', 'unit', 'brand', 'weight'];
+            'is_good_deal', 'promo_price', 'unit', 'brand', 'weight'];
         const setClauses = [];
         const values = [];
         let i = 1;

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -29,14 +30,26 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
   final _formKey = GlobalKey<FormState>();
 
   // Liste des catégories disponibles
-  final List<String> _categories = [
-    'Électronique',
-    'Mode',
-    'Maison',
-    'Véhicules',
-    'Industrie',
-    'Alimentation',
-    'Autres',
+  // Liste complète des catégories avec assets
+  final List<Map<String, dynamic>> _categoriesData = [
+    {"label": "Électronique", "icon": Icons.phone_android, "image": "assets/images/categories/electronics.png"},
+    {"label": "Mode", "icon": Icons.checkroom, "image": "assets/images/categories/fashion.png"},
+    {"label": "Maison", "icon": Icons.chair, "image": "assets/images/categories/home.png"},
+    {"label": "Véhicules", "icon": Icons.directions_car, "image": "assets/images/categories/vehicles.png"},
+    {"label": "Industrie", "icon": Icons.factory, "image": "assets/images/categories/industry.png"},
+    {"label": "Sports", "icon": Icons.sports_soccer, "image": "assets/images/categories/sports.png"},
+    {"label": "Beauté", "icon": Icons.face, "image": "assets/images/categories/beauty.png"},
+    {"label": "Jouets", "icon": Icons.toys, "image": "assets/images/categories/toys.png"},
+    {"label": "Santé", "icon": Icons.medical_services, "image": "assets/images/categories/health.png"},
+    {"label": "Construction", "icon": Icons.construction, "image": "assets/images/categories/construction.png"},
+    {"label": "Outils", "icon": Icons.build, "image": "assets/images/categories/tools.png"},
+    {"label": "Bureau", "icon": Icons.desk, "image": "assets/images/categories/office.png"},
+    {"label": "Jardin", "icon": Icons.grass, "image": "assets/images/categories/garden.png"},
+    {"label": "Animaux", "icon": Icons.pets, "image": "assets/images/categories/pets.png"},
+    {"label": "Bébé", "icon": Icons.child_friendly, "image": "assets/images/categories/baby.png"},
+    {"label": "Alimentation", "icon": Icons.restaurant, "image": null},
+    {"label": "Sécurité", "icon": Icons.security, "image": null},
+    {"label": "Autres", "icon": Icons.category, "image": null},
   ];
 
   String? _location;
@@ -185,21 +198,71 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
             TextFormField(controller: _price, keyboardType: TextInputType.number, validator: (v) => v == null || v.trim().isEmpty ? 'Prix requis' : null, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Prix (\$)", filled: true, fillColor: Colors.white10, border: OutlineInputBorder())),
             const SizedBox(height: 15),
             // NOUVELLE CATÉGORIE DROPDOWN
-            DropdownButtonFormField<String>(
-              value: _category,
-              dropdownColor: Colors.grey[900],
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: "Catégorie",
-                filled: true,
-                fillColor: Colors.white10,
-                border: OutlineInputBorder(),
+            // NOUVEAU SÉLECTEUR DE CATÉGORIE (Glassmorphism + 3D)
+            const Text("Catégorie", style: TextStyle(color: Colors.white70, fontSize: 13)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100, // Hauteur suffisante pour icon + texte
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _categoriesData.length,
+                separatorBuilder: (c, i) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final cat = _categoriesData[index];
+                  final label = cat['label'];
+                  final isSelected = _category == label;
+                  final hasImage = cat['image'] != null;
+
+                  return GestureDetector(
+                    onTap: () => setState(() => _category = label),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // WIDGET GLASSMORPHISM
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), // Intensité du flou
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: isSelected ? Colors.blueAccent.withOpacity(0.4) : Colors.white.withOpacity(0.1), // Teinte vitreuse
+                                borderRadius: BorderRadius.circular(15),
+                                border: Border.all(
+                                  color: isSelected ? Colors.blueAccent : Colors.white.withOpacity(0.3), // Bordure fine pour le relief (Bleu si sélectionné)
+                                  width: isSelected ? 2 : 1.5,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0), // Padding pour l'image
+                                child: hasImage
+                                  ? Image.asset(cat['image'], fit: BoxFit.contain)
+                                  : Icon(
+                                      cat['icon'],
+                                      color: Colors.white.withOpacity(0.9),
+                                      size: 30,
+                                    ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        // Label en dessous
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: isSelected ? Colors.blueAccent : Colors.white70,
+                            fontSize: 10,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
-              items: _categories.map((cat) => DropdownMenuItem(
-                value: cat,
-                child: Text(cat, style: const TextStyle(color: Colors.white)),
-              )).toList(),
-              onChanged: (v) => setState(() => _category = v!),
             ),
             const SizedBox(height: 15),
             TextFormField(controller: _deliveryPrice, keyboardType: TextInputType.number, validator: (v) => v == null || v.trim().isEmpty ? 'Coût de livraison requis' : null, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Coût de livraison (\$)", filled: true, fillColor: Colors.white10, border: OutlineInputBorder())),
