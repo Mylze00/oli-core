@@ -1,0 +1,18 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "oli_admin/package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "oli_admin/dist"
+            }
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "/oli_admin/$1"
+        }
+    ]
+}
