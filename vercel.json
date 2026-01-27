@@ -1,6 +1,5 @@
 {
-    "buildCommand": "npm run build",
-    "outputDirectory": "dist",
-    "installCommand": "npm install",
-    "rootDirectory": "oli_admin"
+    "buildCommand": "cd oli_admin && npm install && npm run build",
+    "outputDirectory": "oli_admin/dist",
+    "installCommand": "cd oli_admin && npm install"
 }
