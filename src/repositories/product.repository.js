@@ -133,6 +133,14 @@ class ProductRepository {
             query += ` AND p.shop_id = $${paramIndex++}`;
             params.push(filters.shopId);
         }
+        if (filters.seller_id) {
+            query += ` AND p.seller_id = $${paramIndex++}`;
+            params.push(filters.seller_id);
+        }
+        if (filters.is_active !== undefined) {
+            query += ` AND p.is_active = $${paramIndex++}`;
+            params.push(filters.is_active);
+        }
 
         query += ` ORDER BY p.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
         params.push(parseInt(limit), parseInt(offset));
