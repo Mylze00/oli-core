@@ -171,8 +171,8 @@ app.use("/admin/ads", adminRoutes); // Mounting admin ads handled inside admin.r
 // Let's mount explicit paths
 app.use("/ads", require("./routes/ads.routes"));
 app.use('/search', require('./routes/search.routes')); // Recherche visuelle
-app.use("/admin/ads", requireAuth, require("./routes/admin/ads.routes")); // Protect with requireAuth or admin middleware if available
 app.use("/setup", require("./routes/setup.routes")); // Utility route for migration
+app.use("/services", require("./routes/services.routes")); // ✨ Services dynamiques (Public)
 
 // Health check
 app.get("/health", (req, res) => {

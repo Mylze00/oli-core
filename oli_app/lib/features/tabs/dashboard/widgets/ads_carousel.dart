@@ -24,14 +24,15 @@ class _AdsCarouselState extends State<AdsCarousel> {
   List<Map<String, dynamic>> get _effectiveAds {
     if (widget.ads.isNotEmpty) return widget.ads;
     return [
-      {'image_url': 'https://i.ibb.co/W881chq/Dmf-BLn-TW4-AA4l-Ri.jpg', 'title': 'Super Promo'},
+      {'image_url': 'https://i.ibb.co/8LpR9qhh/57321680-650635498739924-7874656008449032192-n.jpg', 'title': 'Publicité'},
+      {'image_url': 'https://i.ibb.co/yBqF4BjX/486150569-1082236427267170-6353656641332678854-n.jpg', 'title': 'Publicité'},
       {'image_url': 'https://i.ibb.co/QvqSTNJ9/Fally-Ipupa-Sd-F-879x555-Fiche-e-ve-nement-concert-supp-jpg.webp', 'title': 'Concert Fally Ipupa'},
       {'image_url': 'https://i.ibb.co/svk6yQzZ/Screenshot-2-thumbnail.jpg', 'title': 'Kin Marché'},
     ];
   }
 
   void _startAutoScroll() {
-    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 6), (timer) {
       if (!mounted) return;
       if (_effectiveAds.isEmpty) return;
 
@@ -66,14 +67,14 @@ class _AdsCarouselState extends State<AdsCarousel> {
 
     if (adsList.isEmpty) {
       return Container(
-        height: 150,
+        height: 172, // +15%
         color: Colors.grey[900],
         child: const Center(child: Text("Publicité", style: TextStyle(color: Colors.white54))),
       );
     }
 
     return SizedBox(
-      height: 150,
+      height: 172, // +15%
       child: Stack(
         children: [
           PageView.builder(

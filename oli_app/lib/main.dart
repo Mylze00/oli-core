@@ -20,6 +20,7 @@ void main() async {
         Locale('lu'), // Tshiluba
       ],
       path: 'assets/translations',
+      startLocale: const Locale('fr'),
       fallbackLocale: const Locale('fr'),
       child: const ProviderScope(child: OliApp()),
     ),

@@ -83,10 +83,10 @@ class _CategoryGlassSectionState extends State<CategoryGlassSection> {
                 border: Border.all(color: Colors.black, width: 1), // Bordure Noir Intérieure
               ),
               child: Padding(
-                padding: const EdgeInsets.all(12.0),
+                padding: const EdgeInsets.all(10.0), // Padding augmenté à 10.0 pour éviter que l'image ne touche les bords
                 child: imagePath != null
                   ? Image.asset(imagePath, fit: BoxFit.contain)
-                  : Icon(Icons.category, color: Colors.black54, size: 24),
+                  : Icon(Icons.category, color: Colors.black54, size: 26.0),
               ),
             ),
           ),

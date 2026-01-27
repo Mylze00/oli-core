@@ -5,6 +5,8 @@ import '../../../services/services_page.dart';
 import '../../../services/miniapps_page.dart';
 import '../../../services/live_shopping_page.dart';
 
+import 'service_glass_panel.dart'; // Import
+
 class QuickActionsRow extends StatelessWidget {
   final VoidCallback? onCategoryTap;
 
@@ -23,11 +25,14 @@ class QuickActionsRow extends StatelessWidget {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const AllCategoriesPage()));
               }
           }),
-          _buildQuickActionCard(context, "Demande", Icons.campaign, Colors.blue, () {
+          _buildImageActionCard(context, "Demande", "assets/images/megaphone_icon.png", () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestProductPage()));
-          }),
-          _buildQuickActionCard(context, "Service", Icons.public, Colors.green, () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ServicesPage()));
+          }, size: 31.2),
+          _buildQuickActionCard(context, "Service", Icons.public, Colors.blue, () {
+            showDialog(
+              context: context, 
+              builder: (_) => const ServiceGlassPanel(),
+            );
           }),
           _buildQuickActionCard(context, "Mini-app", Icons.apps, Colors.purple, () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const MiniAppsPage()));
@@ -62,6 +67,40 @@ class QuickActionsRow extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.normal)
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageActionCard(BuildContext context, String title, String imagePath, VoidCallback? onTap, {double size = 24.0}) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap ?? () {},
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                shape: BoxShape.circle,
+              ),
+              child: Image.asset(
+                imagePath,
+                width: size,
+                height: size,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.normal),
             ),
           ],
         ),

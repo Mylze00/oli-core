@@ -9,7 +9,8 @@ import {
     TruckIcon,
     ShieldCheckIcon,
     ClipboardDocumentListIcon,
-    MegaphoneIcon
+    MegaphoneIcon,
+    BoltIcon // ✨ Icone pour Services
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -23,6 +24,7 @@ const navigation = [
     { name: 'Finances', href: '/finances', icon: CreditCardIcon },
     { name: 'Modération', href: '/disputes', icon: ShieldCheckIcon },
     { name: 'Publicités', href: '/ads', icon: MegaphoneIcon },
+    { name: 'Services', href: '/services', icon: BoltIcon }, // ✨
 ];
 
 function classNames(...classes) {

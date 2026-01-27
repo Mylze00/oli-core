@@ -19,6 +19,7 @@ const ordersRoutes = require('./admin/orders.routes');
 const disputesRoutes = require('./admin/disputes.routes');
 const shopsRoutes = require('./admin/shops.routes');
 const requestsRoutes = require('./admin/requests.routes');
+const servicesRoutes = require('./admin/services.routes'); // ✨ Services dynamiques
 
 // Montage des routes
 router.use('/stats', statsRoutes);
@@ -28,6 +29,8 @@ router.use('/orders', ordersRoutes);
 router.use('/disputes', disputesRoutes);
 router.use('/shops', shopsRoutes);
 router.use('/requests', requestsRoutes);
+router.use('/services', servicesRoutes); // ✨
+
 
 // Route de test
 router.get('/ping', (req, res) => {

@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../../models/product_model.dart';
@@ -28,8 +29,11 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   String _selectedCategory = "Tout";
   bool _showCategories = false;
 
+  Timer? _hideCategoriesTimer;
+
   @override
   void dispose() {
+    _hideCategoriesTimer?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -41,6 +45,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   }
 
   void _onCategorySelected(String label) {
+    _hideCategoriesTimer?.cancel();
     // Navigate to MarketView with selected category
     Navigator.push(
       context,
@@ -53,6 +58,23 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   void _toggleCategories() {
     setState(() {
       _showCategories = !_showCategories;
+    });
+
+    if (_showCategories) {
+      _startCategoryTimer();
+    } else {
+      _hideCategoriesTimer?.cancel();
+    }
+  }
+
+  void _startCategoryTimer() {
+    _hideCategoriesTimer?.cancel();
+    _hideCategoriesTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted && _showCategories) {
+        setState(() {
+          _showCategories = false;
+        });
+      }
     });
   }
 
@@ -73,7 +95,9 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     final superOffersList = allProducts.take(5).toList();
     final discoveryList = allProducts.length > 5 ? allProducts.skip(5).take(5).toList() : <Product>[];
     final rankingList = allProducts.length > 10 ? allProducts.skip(10).toList() : <Product>[];
-    final effectiveRankingList = rankingList.isEmpty && discoveryList.isEmpty ? superOffersList : rankingList;
+    final effectiveRankingList = rankingList.isNotEmpty 
+        ? rankingList 
+        : (discoveryList.isNotEmpty ? discoveryList : superOffersList);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -123,10 +147,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           SliverToBoxAdapter(
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              height: 160,
+              height: 221, // +15%
               child: SizedBox(
                 width: double.infinity,
-                height: 160,
+                height: 221, // +15%
                 child: AdsCarousel(ads: ref.watch(adsProvider)),
               ),
             ),
