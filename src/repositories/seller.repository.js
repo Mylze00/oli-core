@@ -3,7 +3,7 @@
  * Gestion des statistiques et données vendeur
  */
 
-const db = require('../config/database');
+const db = require('../config/db');
 
 /**
  * Récupère les statistiques du tableau de bord vendeur
