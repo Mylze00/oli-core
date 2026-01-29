@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const sellerRepo = require('../repositories/seller.repository');
 const productRepo = require('../repositories/product.repository');
+const certificationService = require('../services/seller-certification.service');
 const { requireAuth } = require('../middlewares/auth.middleware');
 
 /**
@@ -150,6 +151,83 @@ router.get('/stats/sales', requireAuth, requireSeller, async (req, res) => {
         res.json(salesData);
     } catch (error) {
         console.error('Error GET /seller/stats/sales:', error);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * GET /seller/certification
+ * Détails de certification du vendeur connecté
+ */
+router.get('/certification', requireAuth, requireSeller, async (req, res) => {
+    try {
+        const details = await certificationService.getCertificationDetails(req.user.id);
+        if (!details) {
+            return res.status(404).json({ error: 'Certification non trouvée' });
+        }
+
+        const benefits = certificationService.getBenefits(details.account_type);
+        const levelLabel = certificationService.getLevelLabel(details.account_type);
+
+        res.json({
+            ...details,
+            benefits,
+            level_label: levelLabel
+        });
+    } catch (error) {
+        console.error('Error GET /seller/certification:', error);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * POST /seller/certification/recalculate
+ * Forcer le recalcul de la certification
+ */
+router.post('/certification/recalculate', requireAuth, requireSeller, async (req, res) => {
+    try {
+        const newType = await certificationService.recalculateCertification(req.user.id);
+        res.json({
+            success: true,
+            new_account_type: newType,
+            message: 'Certification recalculée avec succès'
+        });
+    } catch (error) {
+        console.error('Error POST /seller/certification/recalculate:', error);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * POST /seller/certification/business-documents
+ * Soumettre documents entreprise pour vérification
+ */
+router.post('/certification/business-documents', requireAuth, requireSeller, async (req, res) => {
+    try {
+        const { registration_number, tax_id, document_url } = req.body;
+
+        if (!registration_number || !document_url) {
+            return res.status(400).json({
+                error: 'Numéro d\'enregistrement et document requis'
+            });
+        }
+
+        const documents = {
+            registrationNumber: registration_number,
+            taxId: tax_id,
+            documentUrls: {
+                front: document_url
+            }
+        };
+
+        const result = await certificationService.submitBusinessDocuments(
+            req.user.id,
+            documents
+        );
+
+        res.json(result);
+    } catch (error) {
+        console.error('Error POST /seller/certification/business-documents:', error);
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });

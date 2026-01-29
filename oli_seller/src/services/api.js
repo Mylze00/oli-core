@@ -82,6 +82,12 @@ export const sellerAPI = {
     getSalesChart: async (period = '7d') => {
         const response = await api.get(`/seller/stats/sales?period=${period}`);
         return response.data;
+    },
+
+    // Certification
+    getCertification: async () => {
+        const response = await api.get('/seller/certification');
+        return response.data;
     }
 };
 

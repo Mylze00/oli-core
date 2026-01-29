@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { sellerAPI } from '../services/api';
 import { TrendingUp, Package, ShoppingCart, DollarSign } from 'lucide-react';
+import CertificationStatus from '../components/CertificationStatus';
 
 export default function SellerDashboard() {
     const [stats, setStats] = useState(null);
+    const [certification, setCertification] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -14,8 +16,12 @@ export default function SellerDashboard() {
     const loadDashboard = async () => {
         try {
             setLoading(true);
-            const data = await sellerAPI.getDashboard();
-            setStats(data);
+            const [dashboardData, certData] = await Promise.all([
+                sellerAPI.getDashboard(),
+                sellerAPI.getCertification().catch(() => null) // Ignore errors for certification
+            ]);
+            setStats(dashboardData);
+            setCertification(certData);
         } catch (err) {
             console.error('Error loading dashboard:', err);
             setError('Erreur de chargement des statistiques');
@@ -106,6 +112,13 @@ export default function SellerDashboard() {
                     );
                 })}
             </div>
+
+            {/* Certification Section */}
+            {certification && (
+                <div className="mb-8">
+                    <CertificationStatus certification={certification} />
+                </div>
+            )}
 
             {/* Quick Actions */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

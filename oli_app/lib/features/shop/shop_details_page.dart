@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/shop_model.dart';
 import '../../models/product_model.dart';
+import '../../widgets/verification_badge.dart';
 import 'providers/shop_products_provider.dart';
 import '../marketplace/presentation/widgets/market_product_card.dart';
 import '../marketplace/presentation/pages/product_details_page.dart';
@@ -70,15 +71,38 @@ class ShopDetailsPage extends ConsumerWidget {
                                 shop.name,
                                 style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                               ),
-                              if (shop.isVerified)
+                              if (shop.accountType != 'ordinaire' || shop.isVerified)
                                 Container(
                                   margin: const EdgeInsets.only(top: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: Colors.blueAccent,
-                                    borderRadius: BorderRadius.circular(4),
+                                    color: _getCertificationColor(shop.accountType),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Text("VÉRIFIÉ", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      VerificationBadge(
+                                        type: VerificationBadge.fromSellerData(
+                                          isVerified: shop.isVerified,
+                                          accountType: shop.accountType,
+                                          hasCertifiedShop: shop.hasCertifiedShop,
+                                        ),
+                                        size: 14,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        shop.certificationLabel.isNotEmpty 
+                                          ? shop.certificationLabel 
+                                          : 'VÉRIFIÉ',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                             ],
                           ),
@@ -153,5 +177,18 @@ class ShopDetailsPage extends ConsumerWidget {
         ],
       ),
     );
+  }
+  
+  Color _getCertificationColor(String accountType) {
+    switch (accountType) {
+      case 'premium':
+        return const Color(0xFF00BA7C); // Green
+      case 'entreprise':
+        return const Color(0xFFD4A500); // Gold
+      case 'certifie':
+        return const Color(0xFF1DA1F2); // Blue
+      default:
+        return Colors.blueAccent;
+    }
   }
 }
