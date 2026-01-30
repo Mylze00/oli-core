@@ -128,7 +128,7 @@ class ProductService {
 
         const productData = {
             seller_id: userId,
-            shop_id: shopId,
+            shop_id: (shopId && !isNaN(shopId)) ? shopId : null,
             name: data.name,
             description: data.description,
             price: parseFloat(data.price) || 0,
@@ -137,11 +137,18 @@ class ProductService {
             delivery_price: parseFloat(data.delivery_price || 0),
             delivery_time: data.delivery_time,
             condition: data.condition,
-            quantity: parseInt(data.quantity || 1),
+            quantity: parseInt(data.quantity || 1) || 1,
             color: data.color,
             location: data.location,
             is_negotiable: data.is_negotiable === 'true' || data.is_negotiable === true,
-            b2b_pricing: data.b2b_pricing ? JSON.parse(data.b2b_pricing) : [],
+            b2b_pricing: (() => {
+                try {
+                    return data.b2b_pricing ? JSON.parse(data.b2b_pricing) : [];
+                } catch (e) {
+                    console.warn("Erreur parsing B2B pricing:", e.message);
+                    return [];
+                }
+            })(),
             unit: data.unit || 'Pièce',
             brand: data.brand || '',
             weight: data.weight || ''
