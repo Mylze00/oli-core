@@ -159,8 +159,15 @@ class ProductRepository {
         query += ` ORDER BY p.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
         params.push(parseInt(limit), parseInt(offset));
 
-        const result = await pool.query(query, params);
-        return result.rows;
+        try {
+            const result = await pool.query(query, params);
+            return result.rows;
+        } catch (err) {
+            console.error("❌ SQL Error in findAll:", err.message);
+            console.error("Query:", query);
+            console.error("Params:", params);
+            throw err;
+        }
     }
 
     async findById(id) {
