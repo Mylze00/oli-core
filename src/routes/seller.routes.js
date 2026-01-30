@@ -30,7 +30,12 @@ router.get('/dashboard', requireAuth, requireSeller, async (req, res) => {
         res.json(stats);
     } catch (error) {
         console.error('Error GET /seller/dashboard:', error);
-        res.status(500).json({ error: 'Erreur serveur' });
+        // RETOURNER L'ERREUR DÉTAILLÉE POUR LE DÉBOGAGE
+        res.status(500).json({
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            details: 'Erreur détaillée dashboard'
+        });
     }
 });
 
@@ -176,7 +181,10 @@ router.get('/certification', requireAuth, requireSeller, async (req, res) => {
         });
     } catch (error) {
         console.error('Error GET /seller/certification:', error);
-        res.status(500).json({ error: 'Erreur serveur' });
+        res.status(500).json({
+            error: error.message,
+            details: 'Erreur détaillée certification'
+        });
     }
 });
 
