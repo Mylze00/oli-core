@@ -252,7 +252,8 @@ class ProductRepository {
     async update(id, updates) {
         const fields = ['name', 'description', 'price', 'category', 'condition',
             'quantity', 'color', 'location', 'status', 'delivery_price', 'delivery_time',
-            'is_good_deal', 'promo_price', 'unit', 'brand', 'weight', 'b2b_pricing'];
+            'is_good_deal', 'unit', 'brand', 'weight', 'b2b_pricing',
+            'discount_price', 'discount_start_date', 'discount_end_date'];
         const setClauses = [];
         const values = [];
         let i = 1;
@@ -279,6 +280,39 @@ class ProductRepository {
             "UPDATE products SET status = 'deleted', updated_at = NOW() WHERE id = $1 AND seller_id = $2 RETURNING id",
             [id, sellerId]
         );
+        return result.rows;
+    }
+
+    /**
+     * Récupère les produits en promotion active pour une boutique
+     * @param {string} shopId - ID de la boutique
+     * @param {number} limit - Nombre maximum de résultats
+     */
+    async findActivePromotions(shopId, limit = 12) {
+        const query = `
+            SELECT p.*, 
+                   u.name as seller_name, 
+                   u.avatar_url as seller_avatar, 
+                   u.id_oli as seller_oli_id,
+                   u.is_verified as seller_is_verified,
+                   u.account_type as seller_account_type,
+                   u.has_certified_shop as seller_has_certified_shop,
+                   s.name as shop_name, 
+                   s.is_verified as shop_verified
+            FROM products p 
+            JOIN users u ON p.seller_id = u.id
+            LEFT JOIN shops s ON p.shop_id = s.id
+            WHERE p.shop_id = $1
+              AND p.status = 'active'
+              AND p.discount_price IS NOT NULL
+              AND p.discount_start_date IS NOT NULL
+              AND p.discount_end_date IS NOT NULL
+              AND p.discount_start_date <= NOW()
+              AND p.discount_end_date >= NOW()
+            ORDER BY p.discount_end_date ASC
+            LIMIT $2
+        `;
+        const result = await pool.query(query, [shopId, limit]);
         return result.rows;
     }
 
