@@ -54,6 +54,31 @@ router.get('/verified', async (req, res) => {
 });
 
 /**
+ * GET /shops/:id/promotions
+ * Récupère les produits en promotion active pour une boutique (Mobile Widget)
+ */
+router.get('/:id/promotions', async (req, res) => {
+    try {
+        const { limit } = req.query;
+        // Default 12 as requested by user, or override with query
+        const max = parseInt(limit) || 12;
+
+        const productRepo = require('../repositories/product.repository');
+        // Note: Using imageService inside formatProductImages would be ideal if we had a list formatter
+        // here we map manually or let the mobile handle URLs if they are raw.
+        // But shops.routes.js imports imageService at top, let's use it.
+
+        const promotions = await productRepo.findActivePromotions(req.params.id, max);
+
+        const formatted = promotions.map(p => imageService.formatProductImages(p));
+        res.json(formatted);
+    } catch (err) {
+        console.error("Erreur GET /shops/:id/promotions:", err);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+/**
  * GET /shops/:id
  * Détails d'une boutique
  */
