@@ -103,14 +103,15 @@ class ProductService {
 
     async createProduct(userId, data, files) {
         // Validation
-        if (!data.name || !data.price) {
+        const price = data.price || data.basePrice; // Support legacy/frontend alias
+        if (!data.name || !price) {
             throw new Error('Nom et prix requis');
         }
 
         const images = files ? files.map(f => f.path || f.filename) : [];
 
         // 1. Déterminer le shop_id
-        let shopId = (data.shop_id && data.shop_id !== "" && data.shop_id !== "null") ? parseInt(data.shop_id) : null;
+        let shopId = (data.shop_id && !isNaN(data.shop_id)) ? parseInt(data.shop_id) : null;
 
         // Si aucun shop_id n'est fourni, on cherche si le vendeur a une boutique
         if (!shopId) {
@@ -131,7 +132,7 @@ class ProductService {
             shop_id: (shopId && !isNaN(shopId)) ? shopId : null,
             name: data.name,
             description: data.description,
-            price: parseFloat(data.price) || 0,
+            price: parseFloat(price) || 0, // Use aliased price
             category: data.category,
             images,
             delivery_price: parseFloat(data.delivery_price || 0),
