@@ -29,7 +29,23 @@ async function create(shopData) {
  */
 async function findById(id) {
   const query = `
-        SELECT s.*, u.name as owner_name, u.avatar_url as owner_avatar, u.phone as owner_phone
+        SELECT 
+            s.id, s.owner_id, s.description, s.category, s.location, s.created_at, s.updated_at, 
+            s.banner_url, s.is_verified, s.rating,
+            -- Priorité au nom/avatar utilisateur pour les comptes certifiés/entreprise
+            CASE 
+                WHEN u.account_type IN ('entreprise', 'premium', 'certifie') THEN u.name 
+                ELSE s.name 
+            END as name,
+            CASE 
+                 WHEN u.account_type IN ('entreprise', 'premium', 'certifie') THEN COALESCE(u.avatar_url, s.logo_url)
+                 ELSE s.logo_url 
+            END as logo_url,
+            u.name as owner_name, 
+            u.avatar_url as owner_avatar, 
+            u.phone as owner_phone,
+            u.account_type,
+            u.has_certified_shop
         FROM shops s
         JOIN users u ON s.owner_id = u.id
         WHERE s.id = $1
@@ -52,11 +68,29 @@ async function findByOwnerId(ownerId) {
  */
 async function findVerified(limit = 10) {
   const query = `
-      SELECT s.*, u.name as owner_name, u.avatar_url as owner_avatar
+      SELECT 
+          s.id, s.owner_id, s.description, s.category, s.location, s.created_at, s.updated_at, 
+          s.banner_url, s.is_verified, s.rating,
+          -- Priorité au nom/avatar utilisateur pour les comptes certifiés/entreprise
+          CASE 
+              WHEN u.account_type IN ('entreprise', 'premium', 'certifie') THEN u.name 
+              ELSE s.name 
+          END as name,
+          CASE 
+               WHEN u.account_type IN ('entreprise', 'premium', 'certifie') THEN COALESCE(u.avatar_url, s.logo_url)
+               ELSE s.logo_url 
+          END as logo_url,
+          u.name as owner_name, 
+          u.avatar_url as owner_avatar,
+          u.account_type,
+          u.has_certified_shop
       FROM shops s
       JOIN users u ON s.owner_id = u.id
-      WHERE s.is_verified = TRUE OR u.account_type = 'entreprise'
-      ORDER BY s.is_verified DESC, s.created_at DESC
+      WHERE s.is_verified = TRUE OR u.account_type IN ('entreprise', 'premium', 'certifie')
+      ORDER BY 
+        CASE WHEN u.account_type = 'entreprise' THEN 1 ELSE 0 END DESC,
+        s.is_verified DESC, 
+        s.created_at DESC
       LIMIT $1
   `;
   const { rows } = await pool.query(query, [limit]);
@@ -68,7 +102,22 @@ async function findVerified(limit = 10) {
  */
 async function findAll(limit = 20, offset = 0, category = null, search = null) {
   let query = `
-        SELECT s.*, u.name as owner_name, u.avatar_url as owner_avatar
+        SELECT 
+            s.id, s.owner_id, s.description, s.category, s.location, s.created_at, s.updated_at, 
+            s.banner_url, s.is_verified, s.rating,
+            -- Priorité au nom/avatar utilisateur pour les comptes certifiés/entreprise
+            CASE 
+                WHEN u.account_type IN ('entreprise', 'premium', 'certifie') THEN u.name 
+                ELSE s.name 
+            END as name,
+            CASE 
+                 WHEN u.account_type IN ('entreprise', 'premium', 'certifie') THEN COALESCE(u.avatar_url, s.logo_url)
+                 ELSE s.logo_url 
+            END as logo_url,
+            u.name as owner_name, 
+            u.avatar_url as owner_avatar,
+            u.account_type,
+            u.has_certified_shop
         FROM shops s
         JOIN users u ON s.owner_id = u.id
         WHERE 1=1
