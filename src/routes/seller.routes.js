@@ -58,7 +58,11 @@ router.get('/products', requireAuth, requireSeller, async (req, res) => {
         res.json(products);
     } catch (error) {
         console.error('Error GET /seller/products:', error);
-        res.status(500).json({ error: 'Erreur serveur' });
+        res.status(500).json({
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            details: 'Erreur détaillée produits'
+        });
     }
 });
 

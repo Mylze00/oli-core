@@ -102,7 +102,7 @@ class ProductRepository {
             FROM products p 
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
-            WHERE p.status = 'active'
+            WHERE p.status != 'deleted'
         `;
 
         const params = [];
@@ -137,9 +137,23 @@ class ProductRepository {
             query += ` AND p.seller_id = $${paramIndex++}`;
             params.push(filters.seller_id);
         }
+
+        // Gestion correcte du statut (active/inactive)
         if (filters.is_active !== undefined) {
-            query += ` AND p.is_active = $${paramIndex++}`;
-            params.push(filters.is_active);
+            // Si le filtre demande les actifs
+            if (filters.is_active === true) {
+                query += ` AND p.status = 'active'`;
+            }
+            // Si le filtre demande les inactifs
+            else if (filters.is_active === false) {
+                query += ` AND p.status = 'inactive'`;
+            }
+        } else {
+            // Par défaut pour le public (non vendeur), on ne montre que les actifs
+            // Mais si seller_id est présent (dashboard vendeur), on montre tout par défaut
+            if (!filters.seller_id) {
+                query += ` AND p.status = 'active'`;
+            }
         }
 
         query += ` ORDER BY p.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
