@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
 export default function ProductEditor() {
     const navigate = useNavigate();
