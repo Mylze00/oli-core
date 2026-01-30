@@ -193,7 +193,7 @@ class TopRankingGrid extends StatelessWidget {
   }
 }
 
-/// New widget: Displays exactly 3 products in a horizontal row
+/// Simple widget: Displays 3 products in a horizontal scroll (like other sections)
 class FeaturedProductsRow extends StatelessWidget {
   final List<Product> products;
 
@@ -206,8 +206,8 @@ class FeaturedProductsRow extends StatelessWidget {
     
     if (displayProducts.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -220,11 +220,14 @@ class FeaturedProductsRow extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: displayProducts.asMap().entries.map((entry) {
-              final product = entry.value;
-              return Expanded(
-                child: GestureDetector(
+          SizedBox(
+            height: 200,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: displayProducts.length,
+              itemBuilder: (context, index) {
+                final product = displayProducts[index];
+                return GestureDetector(
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -232,14 +235,13 @@ class FeaturedProductsRow extends StatelessWidget {
                     ),
                   ),
                   child: Container(
-                    margin: EdgeInsets.only(
-                      right: entry.key < 2 ? 8 : 0,
-                    ),
+                    width: 150,
+                    margin: const EdgeInsets.only(right: 12),
                     child: MarketProductCard(product: product),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              },
+            ),
           ),
         ],
       ),
