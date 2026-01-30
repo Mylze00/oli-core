@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/market_provider.dart';
 import 'product_details_page.dart';
 import '../widgets/market_product_card.dart';
+import '../../../../models/product_model.dart';
 
 class MarketView extends ConsumerStatefulWidget {
   final String? initialCategoryLabel;

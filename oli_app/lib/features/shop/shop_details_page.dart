@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import '../../models/shop_model.dart';
 import '../../models/product_model.dart';
 import '../../widgets/verification_badge.dart';
 import 'providers/shop_products_provider.dart';
 import '../marketplace/presentation/widgets/market_product_card.dart';
-import '../marketplace/presentation/widgets/market_product_card.dart';
 import '../marketplace/presentation/pages/product_details_page.dart';
-import 'widgets/promo_carousel_widget.dart'; // Import Promo Widget
-import '../../tabs/dashboard/widgets/category_glass_section.dart'; // Import CategoryGlassSection
+import 'widgets/promo_carousel_widget.dart';
+import '../tabs/dashboard/widgets/category_glass_section.dart';
+// Based on file location: features/shop/shop_details_page.dart
+// Target: features/tabs/dashboard/widgets/category_glass_section.dart
+// import '../tabs/dashboard/widgets/category_glass_section.dart'; // This would be features/shop/../tabs -> features/tabs. Correct.
+
+import '../../config/api_config.dart';
+import '../auth/providers/auth_controller.dart';
+import '../../core/storage/secure_storage_service.dart';
 
 class ShopDetailsPage extends ConsumerWidget {
   final Shop shop;
@@ -34,13 +42,6 @@ class ShopDetailsPage extends ConsumerWidget {
     return _ShopDetailsPageContent(shop: shop, discoveryProducts: discoveryProducts);
   }
 }
-
-import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
-import '../../config/api_config.dart';
-import '../auth/providers/auth_controller.dart';
-import '../../core/storage/secure_storage_service.dart';
 
 class _ShopDetailsPageContent extends ConsumerStatefulWidget {
   final Shop shop;
@@ -89,27 +90,31 @@ class _ShopDetailsPageContentState extends ConsumerState<_ShopDetailsPageContent
       final token = await SecureStorageService().getToken();
       if (token == null) return;
 
-      final uri = Uri.parse('${ApiConfig.auth}/avatar-upload'); // Using new endpoint
+      // Read image as bytes for web compatibility
+      final bytes = await picked.readAsBytes();
+      final fileName = picked.name;
+
+      final uri = Uri.parse('${ApiConfig.auth}/avatar-upload');
       var request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] = 'Bearer $token'
-        ..files.add(await http.MultipartFile.fromPath('avatar', picked.path));
+        ..files.add(http.MultipartFile.fromBytes('avatar', bytes, filename: fileName));
 
       final response = await request.send();
       final respStr = await response.stream.bytesToString();
       
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Success
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar mis à jour !')));
-        ref.read(authControllerProvider.notifier).fetchUserProfile(); // Refresh profile
-        // Force refresh shop details if possible effectively by invalidating provider
-        // ref.refresh(shopProductsProvider(widget.shop.id)); // Might not be enough for header
+        ref.read(authControllerProvider.notifier).fetchUserProfile();
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $respStr')));
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
     } finally {
-      setState(() => _isUploading = false);
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 
@@ -123,24 +128,30 @@ class _ShopDetailsPageContentState extends ConsumerState<_ShopDetailsPageContent
       final token = await SecureStorageService().getToken();
       if (token == null) return;
 
+      // Read image as bytes for web compatibility
+      final bytes = await picked.readAsBytes();
+      final fileName = picked.name;
+
       final uri = Uri.parse('${ApiConfig.shops}/${widget.shop.id}');
-      var request = http.MultipartRequest('PATCH', uri) // PATCH for shop update
+      var request = http.MultipartRequest('PATCH', uri)
         ..headers['Authorization'] = 'Bearer $token'
-        ..files.add(await http.MultipartFile.fromPath('banner', picked.path));
+        ..files.add(http.MultipartFile.fromBytes('banner', bytes, filename: fileName));
 
       final response = await request.send();
       final respStr = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bannière mise à jour !')));
-        // Refresh would be key here, ideally we should update local state or refetch shop
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $respStr')));
       }
     } catch (e) {
+       if (!mounted) return;
        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
     } finally {
-       setState(() => _isUploading = false);
+       if (mounted) setState(() => _isUploading = false);
     }
   }
 
@@ -352,12 +363,9 @@ class _ShopDetailsPageContentState extends ConsumerState<_ShopDetailsPageContent
           if (_showCategories)
              SliverToBoxAdapter(
               child: CategoryGlassSection(
-                 categories: widget._categories, // Passing the map
-                 // We don't have selected logic inside GlassSection, it handles it internally or we pass callback?
-                 // Checking CategoryGlassSection: it manages its own state usually or takes callback?
-                 // Previously viewed: it takes no callback for selection in init state, but maybe it pushes navigation.
-                 // Actually the refactored one takes `categories` map. 
-                 // Let's assume it works visually for now, logic TODO.
+                 categories: _categories, 
+                 selectedCategory: _selectedCategory,
+                 onCategorySelected: _onCategorySelected,
               ),
             ),
 

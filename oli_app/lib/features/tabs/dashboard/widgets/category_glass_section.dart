@@ -4,6 +4,8 @@ import 'dart:ui'; // Pour BackdropFilter
 
 class CategoryGlassSection extends StatefulWidget {
   final Map<String, String> categories;
+  final Function(String) onCategorySelected;
+  final String selectedCategory;
 
   const CategoryGlassSection({
     super.key,
