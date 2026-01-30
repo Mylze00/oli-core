@@ -58,7 +58,28 @@ async function findById(id) {
  * Trouver les boutiques d'un utilisateur
  */
 async function findByOwnerId(ownerId) {
-  const query = `SELECT * FROM shops WHERE owner_id = $1 ORDER BY created_at DESC`;
+  const query = `
+      SELECT 
+          s.id, s.owner_id, s.description, s.category, s.location, s.created_at, s.updated_at, 
+          s.banner_url, s.is_verified, s.rating,
+          -- Priorité au nom/avatar utilisateur pour les comptes certifiés/entreprise
+          CASE 
+              WHEN u.account_type IN ('entreprise', 'premium', 'certifie') THEN u.name 
+              ELSE s.name 
+          END as name,
+          CASE 
+               WHEN u.account_type IN ('entreprise', 'premium', 'certifie') THEN COALESCE(u.avatar_url, s.logo_url)
+               ELSE s.logo_url 
+          END as logo_url,
+          u.name as owner_name, 
+          u.avatar_url as owner_avatar,
+          u.account_type,
+          u.has_certified_shop
+      FROM shops s
+      JOIN users u ON s.owner_id = u.id
+      WHERE s.owner_id = $1 
+      ORDER BY s.created_at DESC
+  `;
   const { rows } = await pool.query(query, [ownerId]);
   return rows;
 }
