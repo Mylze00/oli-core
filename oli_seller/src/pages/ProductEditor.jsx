@@ -14,7 +14,6 @@ export default function ProductEditor() {
         moq: 1,
         brand: '',
         unit: 'Pièce',
-        unit: 'Pièce',
         weight: ''
     });
     const [images, setImages] = useState([]); // State pour les images

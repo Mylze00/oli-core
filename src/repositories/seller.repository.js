@@ -73,16 +73,7 @@ async function getSellerDashboard(sellerId) {
         };
     }
 }
-total_sales: 0
-            };
-        }
 
-return result.rows[0];
-    } catch (error) {
-    console.error('Error in getSellerDashboard:', error);
-    throw error;
-}
-}
 
 /**
  * Récupère les données pour le graphique des ventes
