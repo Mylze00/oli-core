@@ -10,63 +10,78 @@ const db = require('../config/db');
  */
 async function getSellerDashboard(sellerId) {
     try {
+        // Requête simplifiée sans GROUP BY problématique
         const query = `
+            WITH seller_products AS (
+                SELECT id, is_active 
+                FROM products 
+                WHERE seller_id = $1
+            ),
+            seller_orders AS (
+                SELECT o.id, o.status, o.created_at, oi.quantity, oi.price
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN seller_products sp ON sp.id = oi.product_id
+            )
             SELECT 
                 -- Produits
-                COUNT(DISTINCT p.id) as total_products,
-                COUNT(DISTINCT CASE WHEN p.is_active = true THEN p.id END) as active_products,
+                (SELECT COUNT(*) FROM seller_products) as total_products,
+                (SELECT COUNT(*) FROM seller_products WHERE is_active = true) as active_products,
                 
                 -- Commandes du mois en cours
-                COUNT(DISTINCT CASE 
-                    WHEN o.created_at >= date_trunc('month', CURRENT_DATE) 
-                    THEN o.id 
-                END) as orders_this_month,
+                (SELECT COUNT(DISTINCT id) FROM seller_orders 
+                 WHERE created_at >= date_trunc('month', CURRENT_DATE)) as orders_this_month,
                 
                 -- Commandes en attente
-                COUNT(DISTINCT CASE 
-                    WHEN o.status IN ('pending', 'confirmed') 
-                    THEN o.id 
-                END) as pending_orders,
+                (SELECT COUNT(DISTINCT id) FROM seller_orders 
+                 WHERE status IN ('pending', 'confirmed')) as pending_orders,
                 
                 -- Revenu du mois
-                COALESCE(SUM(CASE 
-                    WHEN o.created_at >= date_trunc('month', CURRENT_DATE) 
-                    THEN oi.quantity * oi.price 
-                END), 0) as revenue_this_month,
+                (SELECT COALESCE(SUM(quantity * price), 0) FROM seller_orders 
+                 WHERE created_at >= date_trunc('month', CURRENT_DATE)) as revenue_this_month,
                 
                 -- Revenu total
-                COALESCE(SUM(oi.quantity * oi.price), 0) as total_revenue,
+                (SELECT COALESCE(SUM(quantity * price), 0) FROM seller_orders) as total_revenue,
                 
                 -- Nombre total de ventes
-                COALESCE(SUM(oi.quantity), 0) as total_sales
-                
-            FROM products p
-            LEFT JOIN order_items oi ON oi.product_id = p.id
-            LEFT JOIN orders o ON o.id = oi.order_id
-            WHERE p.seller_id = $1
-            GROUP BY p.seller_id
+                (SELECT COALESCE(SUM(quantity), 0) FROM seller_orders) as total_sales
         `;
 
         const result = await db.query(query, [sellerId]);
 
-        if (result.rows.length === 0) {
-            // Vendeur sans produits
-            return {
-                total_products: 0,
-                active_products: 0,
-                orders_this_month: 0,
-                pending_orders: 0,
-                revenue_this_month: 0,
-                total_revenue: 0,
-                total_sales: 0
+        // Toujours retourner des données, même si vides
+        return result.rows[0] || {
+            total_products: 0,
+            active_products: 0,
+            orders_this_month: 0,
+            pending_orders: 0,
+            revenue_this_month: 0,
+            total_revenue: 0,
+            total_sales: 0
+        };
+    } catch (error) {
+        console.error('Error in getSellerDashboard:', error);
+        // Retourner des données par défaut en cas d'erreur
+        return {
+            total_products: 0,
+            active_products: 0,
+            orders_this_month: 0,
+            pending_orders: 0,
+            revenue_this_month: 0,
+            total_revenue: 0,
+            total_sales: 0
+        };
+    }
+}
+total_sales: 0
             };
         }
 
-        return result.rows[0];
+return result.rows[0];
     } catch (error) {
-        console.error('Error in getSellerDashboard:', error);
-        throw error;
-    }
+    console.error('Error in getSellerDashboard:', error);
+    throw error;
+}
 }
 
 /**
