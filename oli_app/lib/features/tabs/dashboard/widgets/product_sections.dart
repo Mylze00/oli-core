@@ -192,3 +192,58 @@ class TopRankingGrid extends StatelessWidget {
     );
   }
 }
+
+/// New widget: Displays exactly 3 products in a horizontal row
+class FeaturedProductsRow extends StatelessWidget {
+  final List<Product> products;
+
+  const FeaturedProductsRow({super.key, required this.products});
+
+  @override
+  Widget build(BuildContext context) {
+    // Take only first 3 products
+    final displayProducts = products.take(3).toList();
+    
+    if (displayProducts.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "✨ Produits en vedette",
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: displayProducts.asMap().entries.map((entry) {
+              final product = entry.value;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProductDetailsPage(product: product),
+                    ),
+                  ),
+                  child: Container(
+                    margin: EdgeInsets.only(
+                      right: entry.key < 2 ? 8 : 0,
+                    ),
+                    child: MarketProductCard(product: product),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

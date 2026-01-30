@@ -167,7 +167,16 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             ),
           ),
 
-          // 6. DISCOVERY
+          // 6. FEATURED PRODUCTS ROW (3 products)
+          SliverToBoxAdapter(
+            child: FeaturedProductsRow(
+              products: allProducts.length > 10 
+                ? allProducts.skip(10).take(3).toList()
+                : allProducts.take(3).toList(),
+            ),
+          ),
+
+          // 7. DISCOVERY
           const SliverPadding(
              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
              sliver: SliverToBoxAdapter(
@@ -183,10 +192,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                 ),
           ),
 
-          // 7. BEST SELLERS
-          SliverToBoxAdapter(
-            child: TopSellersSection(products: topSellers),
-          ),
+          // 7. BEST SELLERS (HIDDEN TEMPORARILY)
+          // SliverToBoxAdapter(
+          //   child: TopSellersSection(products: topSellers),
+          // ),
 
           // 8. VERIFIED SHOP PRODUCTS
           SliverToBoxAdapter(
