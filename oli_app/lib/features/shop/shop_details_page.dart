@@ -5,7 +5,9 @@ import '../../models/product_model.dart';
 import '../../widgets/verification_badge.dart';
 import 'providers/shop_products_provider.dart';
 import '../marketplace/presentation/widgets/market_product_card.dart';
+import '../marketplace/presentation/widgets/market_product_card.dart';
 import '../marketplace/presentation/pages/product_details_page.dart';
+import 'widgets/promo_carousel_widget.dart'; // Import Promo Widget
 
 class ShopDetailsPage extends ConsumerWidget {
   final Shop shop;
@@ -126,6 +128,11 @@ class ShopDetailsPage extends ConsumerWidget {
                 ),
               ),
             ),
+          
+          // 2.5 PROMO WIDGET
+          SliverToBoxAdapter(
+            child: PromoCarouselWidget(shopId: shop.id),
+          ),
 
           SliverToBoxAdapter(
             child: Padding(

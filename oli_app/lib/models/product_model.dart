@@ -34,7 +34,9 @@ class Product {
   final List<String> images;
   final DateTime? createdAt;
   final bool isGoodDeal;
-  final double? promoPrice;
+  final double? discountPrice; // Replaces promoPrice
+  final DateTime? discountStartDate;
+  final DateTime? discountEndDate;
 
   Product({
     required this.id,
@@ -63,8 +65,11 @@ class Product {
     this.shopVerified = false,
     this.images = const [],
     this.createdAt,
+    this.createdAt,
     this.isGoodDeal = false,
-    this.promoPrice,
+    this.discountPrice,
+    this.discountStartDate,
+    this.discountEndDate,
   });
 
   /// Factory pour parser la réponse API (supporte camelCase ET snake_case)
@@ -118,7 +123,14 @@ class Product {
           ? DateTime.tryParse(json['createdAt']) 
           : (json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null),
       isGoodDeal: json['isGoodDeal'] ?? json['is_good_deal'] ?? false,
-      promoPrice: double.tryParse((json['promoPrice'] ?? json['promo_price'])?.toString() ?? ''),
+      // Map backend 'discount_price' to discountPrice
+      discountPrice: double.tryParse((json['discountPrice'] ?? json['discount_price'])?.toString() ?? ''),
+      discountStartDate: json['discountStartDate'] != null 
+          ? DateTime.tryParse(json['discountStartDate']) 
+          : (json['discount_start_date'] != null ? DateTime.tryParse(json['discount_start_date']) : null),
+      discountEndDate: json['discountEndDate'] != null 
+          ? DateTime.tryParse(json['discountEndDate']) 
+          : (json['discount_end_date'] != null ? DateTime.tryParse(json['discount_end_date']) : null),
     );
   }
 

@@ -13,5 +13,6 @@ class ApiConfig {
   static const String chat = '$baseUrl/chat';
   static const String chatConversations = '$baseUrl/chat/conversations';
   static const String chatMessages = '$baseUrl/chat/messages';
+  static const String shops = '$baseUrl/shops';
 }
 
