@@ -1,5 +1,9 @@
+const db = require('../config/db');
+const pool = db; // Alias for consistency if used as pool
 const shopRepository = require('../repositories/shop.repository');
-const userRepo = require('../repositories/user.repository'); // Import pour mise à jour count
+const userRepo = require('../repositories/user.repository');
+const productRepository = require('../repositories/product.repository');
+const imageService = require('./image.service');
 
 class ProductService {
     // ... (méthodes existantes: _formatImages, _formatProduct, getFeaturedProducts, getTopSellers, getVerifiedShopsProducts)
