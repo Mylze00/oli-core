@@ -203,6 +203,48 @@ export default function ProductEditor() {
                     )}
                 </div>
 
+                {/* Promotions Section */}
+                <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-bold text-orange-600 flex items-center gap-2">
+                            <span className="text-xl">🏷️</span> Promotion & Offre Spéciale
+                        </h2>
+                        {/* Toggle switch could go here if we want to enable/disable the whole section visual */}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Prix Promotionnel ($)</label>
+                            <input
+                                type="number"
+                                className="w-full border p-2 rounded focus:ring-2 focus:ring-orange-500 outline-none"
+                                placeholder="ex: 15"
+                                value={product.discount_price || ''}
+                                onChange={e => setProduct({ ...product, discount_price: e.target.value })}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Laisser vide pour aucune promo.</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Date de début</label>
+                            <input
+                                type="datetime-local"
+                                className="w-full border p-2 rounded"
+                                value={product.discount_start_date || ''}
+                                onChange={e => setProduct({ ...product, discount_start_date: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Date de fin</label>
+                            <input
+                                type="datetime-local"
+                                className="w-full border p-2 rounded"
+                                value={product.discount_end_date || ''}
+                                onChange={e => setProduct({ ...product, discount_end_date: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 {/* B2B Pricing Section */}
                 <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
                     <div className="flex justify-between items-center mb-4">

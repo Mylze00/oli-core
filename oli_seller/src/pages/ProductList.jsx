@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Power, PowerOff, Trash2, Search } from 'lucide-react';
+import { Plus, Edit2, Eye, EyeOff, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { sellerAPI } from '../services/api';
 
@@ -7,19 +7,16 @@ export default function ProductList() {
     const navigate = useNavigate();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('all'); // all, active, inactive
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         loadProducts();
-    }, [filter]);
+    }, []);
 
     const loadProducts = async () => {
         try {
             setLoading(true);
             const filters = {};
-            if (filter === 'active') filters.status = 'active';
-            if (filter === 'inactive') filters.status = 'inactive';
             if (searchTerm) filters.search = searchTerm;
 
             const data = await sellerAPI.getProducts(filters);
@@ -31,14 +28,13 @@ export default function ProductList() {
         }
     };
 
-    const handleToggleStatus = async (productId) => {
+    const handleToggleStatus = async (product) => {
         try {
-            await sellerAPI.toggleProduct(productId);
-            // Reload products to reflect changes
-            loadProducts();
+            await sellerAPI.toggleProduct(product.id);
+            loadProducts(); // Reload to see change
         } catch (err) {
             console.error('Error toggling product:', err);
-            alert('Erreur lors de la modification du statut');
+            alert('Erreur: Impossible de modifier le statut');
         }
     };
 
@@ -179,11 +175,22 @@ export default function ProductList() {
                                     <td className="px-6 py-4">
                                         <div className="flex items-center justify-end gap-2">
                                             <button
+                                                onClick={() => handleToggleStatus(product)}
+                                                className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${product.is_active
+                                                    ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                                                    : 'text-orange-600 bg-orange-50 hover:bg-orange-100'}`}
+                                                title={product.is_active ? "Cliquez pour masquer" : "Cliquez pour afficher"}
+                                            >
+                                                {product.is_active ? <Eye size={16} /> : <EyeOff size={16} />}
+                                                <span className="text-sm hidden md:inline">{product.is_active ? 'Masquer' : 'Afficher'}</span>
+                                            </button>
+
+                                            <button
                                                 onClick={() => navigate(`/products/${product.id}/edit`)}
                                                 className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1"
                                                 title="Modifier"
                                             >
-                                                <Edit2 size={16} /> <span className="text-sm">Modifier</span>
+                                                <Edit2 size={16} /> <span className="text-sm hidden md:inline">Modifier</span>
                                             </button>
                                         </div>
                                     </td>
