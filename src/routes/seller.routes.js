@@ -54,7 +54,7 @@ router.get('/products', requireAuth, requireSeller, async (req, res) => {
             search: search || undefined
         };
 
-        const products = await productRepo.findAll(limit, offset, filters);
+        const products = await productRepo.findAll(filters, limit, offset);
         res.json(products);
     } catch (error) {
         console.error('Error GET /seller/products:', error);
