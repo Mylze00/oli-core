@@ -151,7 +151,7 @@ app.use("/auth", authRoutes);
 
 
 app.use("/products", optionalAuth, productsRoutes);
-app.use("/shops", optionalAuth, shopsRoutes);
+app.use("/api/shops", optionalAuth, shopsRoutes);
 app.use("/orders", requireAuth, ordersRoutes);
 app.use("/wallet", requireAuth, walletRoutes);
 app.use("/delivery", requireAuth, deliveryRoutes);
@@ -168,7 +168,7 @@ app.use("/api/trust-score", require('./routes/trust-score.routes'));
 app.use("/api/exchange-rate", require('./routes/exchange-rate.routes')); // 💱 Taux de change
 
 app.use("/admin", adminRoutes); // ✨ Routes admin (protection dans admin.routes.js)
-app.use("/seller", sellerRoutes); // ✨ Routes vendeur (protection dans seller.routes.js)
+app.use("/api/seller", sellerRoutes); // ✨ Routes vendeur (protection dans seller.routes.js)
 app.use("/admin/ads", adminRoutes); // Mounting admin ads handled inside admin.routes?? No, I created src/routes/admin/ads.routes.js
 // Let's mount explicit paths
 app.use("/ads", require("./routes/ads.routes"));
