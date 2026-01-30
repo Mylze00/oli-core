@@ -196,46 +196,41 @@ class ProductRepository {
         await pool.query("UPDATE products SET view_count = COALESCE(view_count, 0) + 1 WHERE id = $1", [id]);
     }
 
-    async create(productData) {
+    async create(product) {
         const {
-            seller_id, shop_id, name, description, price, category,
-            images, delivery_price, delivery_time, condition,
-            quantity, color, location, is_negotiable
-        } = productData;
+            seller_id, shop_id, name, description, price, category, images,
+            delivery_price, delivery_time, condition, quantity, color, location,
+            is_negotiable, b2b_pricing, unit, brand, weight,
+            discount_price, discount_start_date, discount_end_date // New fields
+        } = product;
 
         const query = `
             INSERT INTO products (
-                seller_id, shop_id, name, description, price, category, 
-                images, delivery_price, delivery_time, condition, 
-                quantity, color, location, is_negotiable,
-                unit, brand, weight, b2b_pricing, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'active') 
-            RETURNING id
+                seller_id, shop_id, name, description, price, category, images,
+                delivery_price, delivery_time, condition, quantity, color, location,
+                is_negotiable, b2b_pricing, unit, brand, weight,
+                discount_price, discount_start_date, discount_end_date,
+                status, created_at, updated_at
+            )
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, 
+                $8, $9, $10, $11, $12, $13, 
+                $14, $15, $16, $17, $18,
+                $19, $20, $21,
+                'active', NOW(), NOW()
+            )
+            RETURNING *
         `;
 
         const values = [
-            seller_id,
-            shop_id,
-            name,
-            description || '',
-            price,
-            category || 'Général',
-            images,
-            delivery_price,
-            delivery_time,
-            condition || 'Neuf',
-            quantity,
-            color || '',
-            location || '',
-            is_negotiable,
-            productData.unit || 'Pièce',
-            productData.brand || '',
-            productData.weight || '',
-            JSON.stringify(productData.b2b_pricing || [])
+            seller_id, shop_id, name, description, price, category, images,
+            delivery_price, delivery_time, condition, quantity, color, location,
+            is_negotiable, JSON.stringify(b2b_pricing || []), unit || 'Pièce', brand || '', weight || '',
+            discount_price || null, discount_start_date || null, discount_end_date || null
         ];
 
-        const result = await pool.query(query, values);
-        return result.rows[0];
+        const { rows } = await pool.query(query, values);
+        return rows[0];
     }
 
     async findBySeller(sellerId) {

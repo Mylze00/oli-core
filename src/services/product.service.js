@@ -152,7 +152,10 @@ class ProductService {
             })(),
             unit: data.unit || 'Pièce',
             brand: data.brand || '',
-            weight: data.weight || ''
+            weight: data.weight || '',
+            discount_price: (data.discount_price && !isNaN(data.discount_price)) ? parseFloat(data.discount_price) : null,
+            discount_start_date: data.discount_start_date || null,
+            discount_end_date: data.discount_end_date || null
         };
 
         const createdProduct = await productRepository.create(productData); // Assuming create method takes object
