@@ -10,6 +10,9 @@ const db = require('../config/db');
  */
 async function getSellerDashboard(sellerId) {
     try {
+        // Convert to integer to avoid type mismatch errors
+        const sellerIdInt = parseInt(sellerId);
+
         // Requête simplifiée sans GROUP BY problématique
         const query = `
             WITH seller_products AS (
@@ -47,7 +50,7 @@ async function getSellerDashboard(sellerId) {
                 (SELECT COALESCE(SUM(quantity), 0) FROM seller_orders) as total_sales
         `;
 
-        const result = await db.query(query, [sellerId]);
+        const result = await db.query(query, [sellerIdInt]);
 
         // Toujours retourner des données, même si vides
         return result.rows[0] || {
@@ -80,6 +83,7 @@ async function getSellerDashboard(sellerId) {
  */
 async function getSalesChart(sellerId, period = '7d') {
     try {
+        const sellerIdInt = parseInt(sellerId);
         let interval, dateFormat;
 
         switch (period) {
@@ -115,7 +119,7 @@ async function getSalesChart(sellerId, period = '7d') {
             ORDER BY date ASC
         `;
 
-        const result = await db.query(query, [sellerId, interval, dateFormat]);
+        const result = await db.query(query, [sellerIdInt, interval, dateFormat]);
         return result.rows;
     } catch (error) {
         console.error('Error in getSalesChart:', error);
@@ -128,6 +132,7 @@ async function getSalesChart(sellerId, period = '7d') {
  */
 async function getSellerOrders(sellerId, status = null, limit = 50, offset = 0) {
     try {
+        const sellerIdInt = parseInt(sellerId);
         let query = `
             SELECT DISTINCT
                 o.id,
@@ -146,7 +151,7 @@ async function getSellerOrders(sellerId, status = null, limit = 50, offset = 0) 
             WHERE p.seller_id = $1
         `;
 
-        const params = [sellerId];
+        const params = [sellerIdInt];
 
         if (status) {
             query += ` AND o.status = $${params.length + 1}`;
@@ -174,6 +179,7 @@ async function getSellerOrders(sellerId, status = null, limit = 50, offset = 0) 
  */
 async function getSellerOrderDetails(sellerId, orderId) {
     try {
+        const sellerIdInt = parseInt(sellerId);
         const query = `
             SELECT 
                 o.*,
@@ -200,7 +206,7 @@ async function getSellerOrderDetails(sellerId, orderId) {
             GROUP BY o.id, u.name, u.phone, u.avatar_url
         `;
 
-        const result = await db.query(query, [orderId, sellerId]);
+        const result = await db.query(query, [orderId, sellerIdInt]);
         return result.rows[0] || null;
     } catch (error) {
         console.error('Error in getSellerOrderDetails:', error);
