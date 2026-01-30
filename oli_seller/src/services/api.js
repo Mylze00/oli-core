@@ -43,6 +43,16 @@ export const authAPI = {
     login: async (phone, password) => {
         const response = await axios.post(`${API_URL}/auth/login`, { phone, password });
         return response.data;
+    },
+
+    uploadAvatar: async (file) => {
+        const formData = new FormData();
+        formData.append('avatar', file);
+
+        const response = await api.post('/auth/avatar-upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
     }
 };
 

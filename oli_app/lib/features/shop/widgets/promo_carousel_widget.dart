@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
 import '../providers/shop_promotions_provider.dart';
-import '../../../marketplace/presentation/pages/product_details_page.dart';
+import '../../marketplace/presentation/pages/product_details_page.dart';
 
 class PromoCarouselWidget extends ConsumerStatefulWidget {
   final String shopId;
@@ -15,7 +15,7 @@ class PromoCarouselWidget extends ConsumerStatefulWidget {
 }
 
 class _PromoCarouselWidgetState extends ConsumerState<PromoCarouselWidget> {
-  final PageController _pageController = PageController(viewportFraction: 0.92);
+  final PageController _pageController = PageController(viewportFraction: 0.4);
   Timer? _timer;
   Duration _timeLeft = Duration.zero;
   int _currentPage = 0;
@@ -130,11 +130,12 @@ class _PromoCarouselWidgetState extends ConsumerState<PromoCarouselWidget> {
                       margin: const EdgeInsets.symmetric(horizontal: 6),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        image: DecorationImage(
-                          image: NetworkImage(product.images.isNotEmpty ? product.images.first : 'https://via.placeholder.com/300'),
-                          fit: BoxFit.cover,
-                          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.darken),
-                        ),
+                          image: DecorationImage(
+                            image: NetworkImage(product.images.isNotEmpty ? product.images.first : 'https://via.placeholder.com/300'),
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.darken),
+                          ),
                       ),
                       child: Stack(
                         children: [

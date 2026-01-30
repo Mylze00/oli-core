@@ -65,7 +65,6 @@ class Product {
     this.shopVerified = false,
     this.images = const [],
     this.createdAt,
-    this.createdAt,
     this.isGoodDeal = false,
     this.discountPrice,
     this.discountStartDate,

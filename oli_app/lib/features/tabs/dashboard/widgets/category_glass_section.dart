@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'dart:ui'; // Pour BackdropFilter
 
 class CategoryGlassSection extends StatefulWidget {
-  final Function(String) onCategorySelected;
-  final String selectedCategory;
+  final Map<String, String> categories;
 
   const CategoryGlassSection({
     super.key,
     required this.onCategorySelected,
     required this.selectedCategory,
+    required this.categories,
   });
 
   @override
@@ -17,17 +17,6 @@ class CategoryGlassSection extends StatefulWidget {
 }
 
 class _CategoryGlassSectionState extends State<CategoryGlassSection> {
-  final Map<String, String> _categories = {
-    "Tout": "",
-    "Industrie": "industry",
-    "Maison": "home",
-    "Véhicules": "vehicles",
-    "Mode": "fashion",
-    "Électronique": "electronics",
-    "Beauté": "beauty",
-    "Enfants": "kids",
-  };
-
   final Map<String, String> _categoryImages = {
     "Industrie": "assets/images/categories/industry.png",
     "Maison": "assets/images/categories/home.png",
@@ -45,9 +34,9 @@ class _CategoryGlassSectionState extends State<CategoryGlassSection> {
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _categories.keys.length,
+        itemCount: widget.categories.keys.length,
         itemBuilder: (context, index) {
-          final label = _categories.keys.elementAt(index);
+          final label = widget.categories.keys.elementAt(index);
           return GestureDetector(
             onTap: () => widget.onCategorySelected(label),
             child: _buildCategoryChip(label, widget.selectedCategory == label),

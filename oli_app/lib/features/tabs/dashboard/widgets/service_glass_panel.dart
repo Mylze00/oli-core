@@ -1,7 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../services/providers/services_provider.dart';
+import '../../../services/providers/services_provider.dart';
+import '../../../../models/service_model.dart';
 
 class ServiceGlassPanel extends ConsumerWidget {
   const ServiceGlassPanel({super.key});

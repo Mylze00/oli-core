@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../models/product_model.dart'; 
-import '../../../../widgets/verification_badge.dart';
 import '../../providers/market_provider.dart';
 import 'product_details_page.dart';
 import '../widgets/market_product_card.dart';
@@ -16,7 +14,6 @@ class MarketView extends ConsumerStatefulWidget {
 class _MarketViewState extends ConsumerState<MarketView> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _selectedCategory = "Tout";
-  
   // Catégories disponibles (Liste enrichie)
   final Map<String, String> _categories = {
     "Tout": "",

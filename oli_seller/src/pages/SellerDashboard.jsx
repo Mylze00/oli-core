@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { sellerAPI } from '../services/api';
+import { sellerAPI, shopAPI } from '../services/api'; // user shopAPI
 import { TrendingUp, Package, ShoppingCart, DollarSign } from 'lucide-react';
 import CertificationStatus from '../components/CertificationStatus';
+import ProfileSettings from '../components/ProfileSettings';
 
 export default function SellerDashboard() {
     const [stats, setStats] = useState(null);
     const [certification, setCertification] = useState(null);
+    const [shop, setShop] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -16,12 +18,16 @@ export default function SellerDashboard() {
     const loadDashboard = async () => {
         try {
             setLoading(true);
-            const [dashboardData, certData] = await Promise.all([
+            const [dashboardData, certData, shopsData] = await Promise.all([
                 sellerAPI.getDashboard(),
-                sellerAPI.getCertification().catch(() => null) // Ignore errors for certification
+                sellerAPI.getCertification().catch(() => null), // Ignore errors for certification
+                shopAPI.getMyShops().catch(() => [])
             ]);
             setStats(dashboardData);
             setCertification(certData);
+            if (shopsData && shopsData.length > 0) {
+                setShop(shopsData[0]); // Assume first shop for now
+            }
         } catch (err) {
             console.error('Error loading dashboard:', err);
             setError('Erreur de chargement des statistiques');
@@ -112,6 +118,16 @@ export default function SellerDashboard() {
                     );
                 })}
             </div>
+
+            {/* Profile & Shop Appearance using the new component */}
+            {shop && (
+                <ProfileSettings
+                    shopId={shop.id}
+                    currentAvatar={shop.owner_avatar} // Or logo_url
+                    currentBanner={shop.banner_url}
+                    onUpdate={loadDashboard}
+                />
+            )}
 
             {/* Certification Section */}
             {certification && (

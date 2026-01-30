@@ -165,107 +165,59 @@ exports.getMe = async (req, res) => {
  */
 exports.uploadAvatar = async (req, res) => {
     console.log("=".repeat(60));
-    console.log("🔍 AVATAR UPLOAD DEBUG - START");
+    console.log("🔍 AVATAR UPLOAD (v2 with History & Sync) - START");
     console.log("=".repeat(60));
 
     // STEP 1: Vérifier la réception du fichier
-    console.log("📥 STEP 1: Vérification du fichier reçu");
     if (!req.file) {
-        console.error("❌ ERREUR: Aucun fichier reçu dans req.file");
-        console.log("   req.body:", JSON.stringify(req.body, null, 2));
         return res.status(400).json({ error: "Pas de fichier" });
     }
-    console.log("✅ Fichier reçu:");
-    console.log("   - filename:", req.file.filename);
-    console.log("   - originalname:", req.file.originalname);
-    console.log("   - mimetype:", req.file.mimetype);
-    console.log("   - size:", req.file.size, "bytes");
-    console.log("   - path (Cloudinary):", req.file.path);
 
-    // STEP 2: Extraire les informations
-    const avatarUrl = req.file.path; // URL Cloudinary
-    const userPhone = req.user ? req.user.phone : 'UNKNOWN';
-    const userId = req.user ? req.user.id : 'UNKNOWN';
+    const avatarUrl = req.file.path; // URL Cloudinary ou Path local
+    const userId = req.user ? req.user.id : null;
+    const userPhone = req.user ? req.user.phone : null;
 
-    console.log("\n📋 STEP 2: Informations extraites");
+    if (!userId) {
+        return res.status(401).json({ error: "Utilisateur non authentifié" });
+    }
+
     console.log("   - User ID:", userId);
-    console.log("   - User Phone:", userPhone);
-    console.log("   - Avatar URL (brut):", avatarUrl);
-    console.log("   - Type de path:",
-        avatarUrl.startsWith('http') ? 'URL complète' :
-            avatarUrl.startsWith('v') ? 'Cloudinary path relatif' :
-                'Format inconnu'
-    );
+    console.log("   - Avatar URL:", avatarUrl);
 
     try {
-        // STEP 3: Sauvegarder dans la base de données
-        console.log("\n💾 STEP 3: Sauvegarde dans la base de données");
-        console.log("   - SQL: UPDATE users SET avatar_url = $1 WHERE phone = $2");
-        console.log("   - Paramètre 1 (avatar_url):", avatarUrl);
-        console.log("   - Paramètre 2 (phone):", userPhone);
+        const avatarHistoryService = require('../services/avatar-history.service');
 
-        const userService = require('../services/user.service');
-        const success = await userService.uploadAvatar(userPhone, avatarUrl);
+        // STEP 2: Utiliser le service d'historique (qui gère la limite de 30 et la sync boutique)
+        // On passe les métadonnées du fichier
+        const metadata = {
+            storageProvider: req.file.path.includes('cloudinary') ? 'cloudinary' : 'local',
+            fileSizeBytes: req.file.size,
+            mimeType: req.file.mimetype
+        };
 
-        console.log("   - Résultat DB:", success ? "✅ SUCCESS" : "❌ FAILED");
+        const result = await avatarHistoryService.saveAvatar(userId, avatarUrl, metadata);
 
-        if (success) {
-            // STEP 4: Vérifier la valeur sauvegardée
-            console.log("\n🔎 STEP 4: Vérification de la valeur en base");
-            const checkResult = await pool.query(
-                "SELECT avatar_url FROM users WHERE phone = $1",
-                [userPhone]
-            );
+        // STEP 3: Formatter et répondre
+        const formattedUrl = imageService.formatImageUrl(result.avatar_url);
 
-            if (checkResult.rows.length > 0) {
-                const savedAvatarUrl = checkResult.rows[0].avatar_url;
-                console.log("   - Valeur en DB:", savedAvatarUrl);
-                console.log("   - Match avec uploaded?", savedAvatarUrl === avatarUrl ? "✅ OUI" : "❌ NON");
+        console.log("✅ AVATAR UPLOAD SUCCESS");
 
-                // STEP 5: Formatter avec imageService
-                console.log("\n🎨 STEP 5: Formatage avec imageService");
-                console.log("   - Input (DB value):", savedAvatarUrl);
-                const formattedUrl = imageService.formatImageUrl(savedAvatarUrl);
-                console.log("   - Output (formatted):", formattedUrl);
-                console.log("   - Est une URL complète?", formattedUrl?.startsWith('http') ? "✅ OUI" : "❌ NON");
+        res.json({
+            success: true,
+            avatar_url: formattedUrl,
+            message: "Avatar mis à jour avec succès (Boutique synchronisée)",
+            changes_count: await avatarHistoryService.checkAvatarChangeLimit(userId) ? "OK" : "Limit Reached" // Info debug
+        });
 
-                // STEP 6: Retourner au client
-                console.log("\n📤 STEP 6: Réponse au client");
-                console.log("   - avatar_url retourné:", formattedUrl);
-
-                console.log("\n" + "=".repeat(60));
-                console.log("✅ AVATAR UPLOAD DEBUG - SUCCESS");
-                console.log("=".repeat(60));
-
-                res.json({
-                    avatar_url: formattedUrl,
-                    debug: {
-                        raw_path: avatarUrl,
-                        saved_in_db: savedAvatarUrl,
-                        formatted_url: formattedUrl
-                    }
-                });
-            } else {
-                console.error("⚠️ ERREUR: Utilisateur non trouvé après update!");
-                res.status(404).json({ error: "Utilisateur introuvable après update" });
-            }
-        } else {
-            console.error("\n❌ ERREUR: Update DB a échoué");
-            console.error("   - Aucune ligne modifiée pour phone:", userPhone);
-            console.error("   - Vérifiez que ce numéro existe en base");
-            console.log("\n" + "=".repeat(60));
-            console.log("❌ AVATAR UPLOAD DEBUG - FAILED");
-            console.log("=".repeat(60));
-            res.status(404).json({ error: "Utilisateur non trouvé ou update échoué" });
-        }
     } catch (err) {
-        console.error("\n💥 STEP ERROR: Exception capturée");
-        console.error("   - Message:", err.message);
-        console.error("   - Stack:", err.stack);
-        console.log("\n" + "=".repeat(60));
-        console.log("❌ AVATAR UPLOAD DEBUG - EXCEPTION");
-        console.log("=".repeat(60));
-        res.status(500).json({ error: "Erreur lors de la sauvegarde" });
+        console.error("❌ ERREUR AVATAR UPLOAD:", err.message);
+
+        // Gestion spécifique erreur limite
+        if (err.message.includes("limite de 30 changements")) {
+            return res.status(403).json({ error: err.message, code: "LIMIT_REACHED" });
+        }
+
+        res.status(500).json({ error: "Erreur lors de la sauvegarde de l'avatar" });
     }
 };
 

@@ -25,6 +25,21 @@ class MarketProductCard extends ConsumerWidget {
     final exchangeState = ref.watch(exchangeRateProvider);
     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
+    // Calculer si le produit est en promotion
+    final bool hasDiscount = product.discountPrice != null && product.discountPrice! > 0;
+    
+    // Calculer le pourcentage de rÃ©duction pour le badge
+    String? discountBadgeText;
+    if (hasDiscount) {
+      final originalPrice = double.tryParse(product.price) ?? 0;
+      if (originalPrice > 0) {
+        final discount = ((originalPrice - product.discountPrice!) / originalPrice) * 100;
+        if (discount > 0) {
+          discountBadgeText = "-${discount.round()}%";
+        }
+      }
+    }
+
     return GestureDetector(
       onTap: () {
         Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product)));
@@ -49,7 +64,7 @@ class MarketProductCard extends ConsumerWidget {
                       : Image.network(
                           product.images[0],
                           width: double.infinity,
-                          fit: BoxFit.fill, // Etirer l'image comme demandé
+                          fit: BoxFit.fill, // Etirer l'image comme demandÃ©
                           errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 30, color: Colors.grey),
                         ),
                     
@@ -132,7 +147,7 @@ class MarketProductCard extends ConsumerWidget {
                       ),
                     ),
 
-                    // Badge Certifié (Top Right, shifted left if fav exists)
+                    // Badge CertifiÃ© (Top Right, shifted left if fav exists)
                     if (product.shopVerified)
                       Positioned(
                         top: 2, right: 28, // Shifted to not overlap heart
@@ -140,6 +155,23 @@ class MarketProductCard extends ConsumerWidget {
                           padding: const EdgeInsets.all(2),
                           decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
                           child: const Icon(Icons.verified, size: 10, color: Colors.white),
+                        ),
+                      ),
+                      
+                    // Badge Promo (Top Left)
+                    if (hasDiscount)
+                      Positioned(
+                        top: 4, left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF3B30), // Red apple style
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            discountBadgeText ?? "PROMO",
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
                   ],
@@ -153,14 +185,45 @@ class MarketProductCard extends ConsumerWidget {
                 children: [
                   Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
                   const SizedBox(height: 2),
-                  // Formater le prix en fonction de la devise sélectionnée
+                  // Formater le prix en fonction de la devise sÃ©lectionnÃ©e
                   Builder(
                     builder: (context) {
                       final priceUsd = double.tryParse(product.price) ?? 0.0;
+                      final discountPriceUsd = product.discountPrice;
+                      
+                      // Calculate displayed prices
                       final displayPrice = exchangeState.selectedCurrency == Currency.USD
                           ? priceUsd
                           : exchangeNotifier.convertAmount(priceUsd, from: Currency.USD);
+                          
                       final formattedPrice = exchangeNotifier.formatAmount(displayPrice, currency: exchangeState.selectedCurrency);
+                      
+                      // Handle Discount Display
+                      if (hasDiscount && discountPriceUsd != null) {
+                         final displayDiscount = exchangeState.selectedCurrency == Currency.USD
+                            ? discountPriceUsd
+                            : exchangeNotifier.convertAmount(discountPriceUsd, from: Currency.USD);
+                         final formattedDiscount = exchangeNotifier.formatAmount(displayDiscount, currency: exchangeState.selectedCurrency);
+                         
+                         return Wrap(
+                           crossAxisAlignment: WrapCrossAlignment.center,
+                           children: [
+                             Text(
+                               formattedDiscount,
+                               style: const TextStyle(color: Color(0xFFFF9500), fontWeight: FontWeight.bold, fontSize: 11) // Orange/Gold for discount
+                             ),
+                             const SizedBox(width: 4),
+                             Text(
+                               formattedPrice,
+                               style: const TextStyle(
+                                 color: Colors.grey, 
+                                 fontSize: 9, 
+                                 decoration: TextDecoration.lineThrough
+                               )
+                             ),
+                           ],
+                         );
+                      }
                       
                       return Text(
                         formattedPrice,

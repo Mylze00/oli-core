@@ -1,5 +1,6 @@
 const avatarHistoryRepository = require('../repositories/avatar-history.repository');
 const behaviorRepository = require('../repositories/behavior.repository');
+const shopRepository = require('../repositories/shop.repository'); // Import ShopRepo
 const pool = require('../config/db');
 
 /**
@@ -15,7 +16,13 @@ async function saveAvatar(userId, avatarUrl, metadata = {}) {
         throw new Error('URL de l\'avatar requise');
     }
 
-    // Créer l'enregistrement dans l'historique
+    // 1. Vérifier la limite de 30 changements
+    const canUpdate = await checkAvatarChangeLimit(userId);
+    if (!canUpdate) {
+        throw new Error("Vous avez atteint la limite de 30 changements d'avatar.");
+    }
+
+    // 2. Créer l'enregistrement dans l'historique
     const avatarRecord = await avatarHistoryRepository.createAvatarRecord({
         userId,
         avatarUrl,
@@ -24,13 +31,30 @@ async function saveAvatar(userId, avatarUrl, metadata = {}) {
         mimeType: metadata.mimeType
     });
 
-    // Mettre à jour l'avatar dans la table users
+    // 3. Mettre à jour l'avatar dans la table users
     await pool.query(
         'UPDATE users SET avatar_url = $1 WHERE id = $2',
         [avatarUrl, userId]
     );
 
-    // Tracker l'événement
+    // 4. Synchroniser avec les boutiques de l'utilisateur (logo_url = user avatar)
+    // "l'avatar de la boutique seras le même que l'utilisateur va pouvoir utiliser pour sa page de profil"
+    try {
+        const userShops = await shopRepository.findByOwnerId(userId);
+        if (userShops && userShops.length > 0) {
+            for (const shop of userShops) {
+                // On met à jour le logo_url de la boutique pour qu'il corresponde à l'avatar utilisateur
+                // Note: Si on voulait uniquement utiliser l'avatar utilisateur sans dupliquer, 
+                // on modifierait juste la requête GET shop, mais ici on assure la persistance.
+                await pool.query('UPDATE shops SET logo_url = $1 WHERE id = $2', [avatarUrl, shop.id]);
+            }
+        }
+    } catch (err) {
+        console.error("Erreur sync avatar shops:", err);
+        // On ne bloque pas tout pour ça
+    }
+
+    // 5. Tracker l'événement
     await behaviorRepository.trackEvent({
         userId,
         eventType: 'avatar_updated',
@@ -42,6 +66,18 @@ async function saveAvatar(userId, avatarUrl, metadata = {}) {
     });
 
     return avatarRecord;
+}
+
+/**
+ * Vérifier si l'utilisateur peut changer d'avatar (Max 30)
+ */
+async function checkAvatarChangeLimit(userId) {
+    const history = await avatarHistoryRepository.getAvatarHistory(userId, 100); // Check enough history
+    // "limiter à 30 fois"
+    if (history.length >= 30) {
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -68,7 +104,23 @@ async function getAvatarHistory(userId, limit = 10) {
  * Restaurer un avatar précédent
  */
 async function restorePreviousAvatar(userId, avatarId) {
+    // Check limit also applies to restore? usually yes as it is a change
+    const canUpdate = await checkAvatarChangeLimit(userId);
+    if (!canUpdate) {
+        throw new Error("Vous avez atteint la limite de 30 changements d'avatar.");
+    }
+
     const restored = await avatarHistoryRepository.restoreAvatar(userId, avatarId);
+
+    // Sync shops also on restore
+    try {
+        const userShops = await shopRepository.findByOwnerId(userId);
+        if (userShops && userShops.length > 0) {
+            for (const shop of userShops) {
+                await pool.query('UPDATE shops SET logo_url = $1 WHERE id = $2', [restored.avatar_url, shop.id]);
+            }
+        }
+    } catch (e) { console.error("Sync error restore", e); }
 
     // Tracker l'événement
     await behaviorRepository.trackEvent({
@@ -111,7 +163,9 @@ async function getStorageStats(userId) {
         totalAvatars: history.length,
         totalSizeBytes: totalSize,
         totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
-        byProvider
+        byProvider,
+        limitReached: history.length >= 30,
+        changesLeft: Math.max(0, 30 - history.length)
     };
 }
 
@@ -121,5 +175,6 @@ module.exports = {
     getAvatarHistory,
     restorePreviousAvatar,
     deleteAvatarFromHistory,
-    getStorageStats
+    getStorageStats,
+    checkAvatarChangeLimit
 };

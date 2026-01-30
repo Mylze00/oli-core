@@ -26,6 +26,16 @@ class MainDashboardView extends ConsumerStatefulWidget {
 
 class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   final TextEditingController _searchCtrl = TextEditingController();
+  final Map<String, String> _categories = {
+    "Tout": "",
+    "Industrie": "industry",
+    "Maison": "home",
+    "Véhicules": "vehicles",
+    "Mode": "fashion",
+    "Électronique": "electronics",
+    "Beauté": "beauty",
+    "Enfants": "kids",
+  };
   String _selectedCategory = "Tout";
   bool _showCategories = false;
 
@@ -127,6 +137,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                       child: CategoryGlassSection(
                         selectedCategory: _selectedCategory,
                         onCategorySelected: _onCategorySelected,
+                        categories: _categories,
                       ),
                     )
                   : const SizedBox(width: double.infinity, height: 0),
