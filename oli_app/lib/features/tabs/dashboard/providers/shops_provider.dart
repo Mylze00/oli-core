@@ -19,7 +19,7 @@ class VerifiedShopsNotifier extends StateNotifier<AsyncValue<List<Shop>>> {
     state = const AsyncValue.loading();
 
     try {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/shops/verified?limit=10');
+      final uri = Uri.parse('${ApiConfig.shops}/verified?limit=10');
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {
