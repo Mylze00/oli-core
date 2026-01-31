@@ -57,6 +57,23 @@ class VerificationBadge extends StatelessWidget {
       return BadgeType.gray;
     }
   }
+
+  /// Helper to determine badge from User model
+  static BadgeType? fromUser(dynamic user) {
+     // Support dynamic map (from backend JSON) or strong typed User
+     final accountType = user is Map ? user['account_type'] : user.accountType;
+     final isVerified = user is Map ? user['is_verified'] : user.isVerified;
+     final subPlan = user is Map ? user['subscription_plan'] : user.subscriptionPlan;
+     final hasCertifiedShop = user is Map ? user['has_certified_shop'] : false; // Optional
+
+     if (accountType == 'entreprise' || subPlan == 'enterprise' || hasCertifiedShop == true) {
+       return BadgeType.gold;
+     }
+     if (accountType == 'certifie' || subPlan == 'certified' || isVerified == true) {
+       return BadgeType.blue;
+     }
+     return null; // No badge for ordinary
+  }
 }
 
 class _VerificationBadgePainter extends CustomPainter {

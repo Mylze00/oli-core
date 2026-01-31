@@ -30,6 +30,7 @@ router.use('/disputes', disputesRoutes);
 router.use('/shops', shopsRoutes);
 router.use('/requests', requestsRoutes);
 router.use('/services', servicesRoutes); // ✨
+router.use('/verifications', require('./admin/verifications.routes')); // 🆕 Verification Requests
 
 
 // Route de test

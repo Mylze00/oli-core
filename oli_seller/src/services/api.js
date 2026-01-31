@@ -94,9 +94,20 @@ export const sellerAPI = {
         return response.data;
     },
 
-    // Certification
+    // Certification & Subscription
     getCertification: async () => {
         const response = await api.get('/seller/certification');
+        return response.data;
+    },
+
+    upgradeSubscription: async (plan, paymentMethod) => {
+        // Uses the centralized subscription API
+        const response = await api.post('/subscription/upgrade', { plan, paymentMethod });
+        return response.data;
+    },
+
+    checkSubscriptionStatus: async () => {
+        const response = await api.get('/subscription/status');
         return response.data;
     }
 };

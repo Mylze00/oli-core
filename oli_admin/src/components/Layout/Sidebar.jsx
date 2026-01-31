@@ -10,7 +10,8 @@ import {
     ShieldCheckIcon,
     ClipboardDocumentListIcon,
     MegaphoneIcon,
-    BoltIcon // ✨ Icone pour Services
+    BoltIcon, // ✨ Icone pour Services
+    CheckBadgeIcon // 🆕 Icone pour Certifications
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -25,6 +26,7 @@ const navigation = [
     { name: 'Modération', href: '/disputes', icon: ShieldCheckIcon },
     { name: 'Publicités', href: '/ads', icon: MegaphoneIcon },
     { name: 'Services', href: '/services', icon: BoltIcon }, // ✨
+    { name: 'Certifications', href: '/verifications', icon: CheckBadgeIcon }, // 🆕
 ];
 
 function classNames(...classes) {

@@ -7,6 +7,7 @@ import '../../../user/widgets/edit_name_dialog.dart';
 import '../../../user/providers/address_provider.dart';
 import '../../../settings/screens/settings_page.dart';
 import '../../../../config/api_config.dart';
+import 'package:oli_app/features/tabs/profile/screens/verification_landing_page.dart';
 import 'avatar_preview_dialog.dart';
 
 class ProfileHeader extends ConsumerWidget {
@@ -96,22 +97,26 @@ class ProfileHeader extends ConsumerWidget {
   }
 
   Widget _buildVerificationBadge() {
-    final bool isEligible = user['is_verified'] == true || 
-                            user['account_type'] != 'ordinaire' || 
-                            user['has_certified_shop'] == true;
+    final badgeType = VerificationBadge.fromUser(user);
 
-    if (!isEligible) return const SizedBox.shrink();
+    if (badgeType == null) return const SizedBox.shrink();
 
     return Positioned(
-      bottom: -5,
-      right: -2,
-      child: VerificationBadge(
-        type: VerificationBadge.fromSellerData(
-          isVerified: user['is_verified'] == true,
-          accountType: user['account_type'] ?? 'ordinaire',
-          hasCertifiedShop: user['has_certified_shop'] == true,
+      bottom: -6,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2), // White border for visibility
+            color: Colors.white,
+          ),
+          child: VerificationBadge(
+            type: badgeType,
+            size: 22,
+          ),
         ),
-        size: 24,
       ),
     );
   }
@@ -159,6 +164,31 @@ class ProfileHeader extends ConsumerWidget {
           _buildBadgesRow(),
           const SizedBox(height: 8),
           _buildAddressDisplay(),
+          if (user['is_verified'] != true && user['account_type'] == 'ordinaire') ...[
+             const SizedBox(height: 12),
+             GestureDetector(
+               onTap: () => Navigator.push(
+                 context, 
+                 MaterialPageRoute(builder: (_) => const VerificationLandingPage()) 
+               ),
+               child: Container(
+                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                 decoration: BoxDecoration(
+                   color: Colors.blueAccent.withOpacity(0.2),
+                   borderRadius: BorderRadius.circular(20),
+                   border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
+                 ),
+                 child: Row(
+                   mainAxisSize: MainAxisSize.min,
+                   children: const [
+                     Icon(Icons.verified, size: 14, color: Colors.blueAccent),
+                     SizedBox(width: 6),
+                     Text("Obtenir la certification", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                   ],
+                 ),
+               ),
+             ),
+          ]
         ],
       ),
     );

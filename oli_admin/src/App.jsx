@@ -12,6 +12,7 @@ import Shops from './pages/Shops';
 import Requests from './pages/Requests';
 import AdsManager from './pages/AdsManager';
 import ServicesManager from './pages/ServicesManager'; // ✨ Services
+import Verifications from './pages/Verifications'; // 🆕 Certifications
 
 function App() {
   return (
@@ -30,7 +31,8 @@ function App() {
             <Route path="/orders" element={<Orders />} />
             <Route path="/disputes" element={<Disputes />} />
             <Route path="/ads" element={<AdsManager />} />
-            <Route path="/services" element={<ServicesManager />} /> {/* ✨ */}
+            <Route path="/services" element={<ServicesManager />} />
+            <Route path="/verifications" element={<Verifications />} /> {/* 🆕 */}
           </Route>
         </Route>
 

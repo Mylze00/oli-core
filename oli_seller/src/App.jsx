@@ -4,6 +4,7 @@ import SellerDashboard from './pages/SellerDashboard';
 import ProductEditor from './pages/ProductEditor';
 import ProductList from './pages/ProductList';
 import Login from './pages/Login';
+import SubscriptionPage from './pages/SubscriptionPage';
 
 // Composant pour protéger les routes
 const ProtectedRoute = ({ children }) => {
@@ -70,6 +71,7 @@ const SellerLayout = ({ children }) => {
                         <a href="/products" className="block p-3 rounded hover:bg-slate-800">Produits</a>
                         <a href="/orders" className="block p-3 rounded hover:bg-slate-800">Commandes</a>
                         <a href="/messages" className="block p-3 rounded hover:bg-slate-800">Messages B2B</a>
+                        <a href="/subscription" className="block p-3 rounded hover:bg-slate-800 text-amber-400">Certification</a>
                     </nav>
                 </div>
                 <div className="mt-auto p-4 border-t border-slate-800">
@@ -110,6 +112,12 @@ function App() {
                 <Route path="/products/new" element={
                     <ProtectedRoute>
                         <SellerLayout><ProductEditor /></SellerLayout>
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/subscription" element={
+                    <ProtectedRoute>
+                        <SellerLayout><SubscriptionPage /></SellerLayout>
                     </ProtectedRoute>
                 } />
 
