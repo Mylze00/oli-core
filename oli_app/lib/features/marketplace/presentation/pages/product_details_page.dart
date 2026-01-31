@@ -228,7 +228,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
           ]),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(p.name.toUpperCase(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+            child: Text(p.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
           ),
           // BLOC VENDEUR OU BOUTIQUE
           Container(

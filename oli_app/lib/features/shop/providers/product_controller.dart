@@ -25,6 +25,7 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
     required int quantity,
     required String color,
     required List<XFile> images,
+    double? expressPrice, // Nouveau paramètre pour la livraison express
     String? category, // Nouvelle catégorie optionnelle
     String? location,
   }) async {
