@@ -60,9 +60,14 @@ class ProductRepository {
                    s.logo_url as shop_logo
             FROM products p 
             JOIN users u ON p.seller_id = u.id
-            JOIN shops s ON p.shop_id = s.id
+            LEFT JOIN shops s ON p.shop_id = s.id
             WHERE p.status = 'active'
-              AND s.is_verified = TRUE
+              AND (
+                  s.is_verified = TRUE 
+                  OR u.is_verified = TRUE 
+                  OR u.account_type = 'entreprise'
+                  OR u.has_certified_shop = TRUE
+              )
             ORDER BY p.created_at DESC
             LIMIT $1
         `;
