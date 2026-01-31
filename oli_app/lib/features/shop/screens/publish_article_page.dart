@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geocoding/geocoding.dart'; // Import Geocoding
 import 'package:geolocator/geolocator.dart';
 import '../../marketplace/providers/market_provider.dart';
 import '../providers/product_controller.dart';
@@ -61,7 +62,30 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)
       ).timeout(const Duration(seconds: 8));
 
-      setState(() => _location = "${position.latitude},${position.longitude}");
+      // Reverse Geocoding
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+        if (placemarks.isNotEmpty) {
+          Placemark place = placemarks[0];
+          // Ex: "Kinshasa, CD" ou "Commune de Gombe, Kinshasa"
+          String city = place.locality ?? place.subAdministrativeArea ?? "";
+          String country = place.isoCountryCode ?? "";
+          
+          if (city.isNotEmpty) {
+             setState(() => _location = "$city${country.isNotEmpty ? ', $country' : ''}");
+          } else {
+             // Fallback si pas de nom de ville trouvé
+             setState(() => _location = "${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}");
+          }
+        } else {
+           setState(() => _location = "${position.latitude}, ${position.longitude}");
+        }
+      } catch (e) {
+        debugPrint("Erreur Geocoding: $e");
+        // Fallback en cas d'erreur de geocoding (ex: pas de connexion, web non supporté sans config)
+        setState(() => _location = "${position.latitude}, ${position.longitude}");
+      }
+      
       return true;
     } catch (e) {
       debugPrint("Erreur localisation: $e");
