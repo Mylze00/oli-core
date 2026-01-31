@@ -40,6 +40,7 @@ class Product {
   // Nouveau champs stats
   final int viewCount;
   final int sellerSalesCount;
+  final double? expressDeliveryPrice;
 
   Product({
     required this.id,
@@ -74,6 +75,7 @@ class Product {
     this.discountEndDate,
     this.viewCount = 0,
     this.sellerSalesCount = 0,
+    this.expressDeliveryPrice,
   });
 
   /// Factory pour parser la réponse API (supporte camelCase ET snake_case)
@@ -138,6 +140,7 @@ class Product {
       // Stats
       viewCount: int.tryParse(json['viewCount']?.toString() ?? '0') ?? 0,
       sellerSalesCount: int.tryParse(json['sellerSalesCount']?.toString() ?? '0') ?? 0,
+      expressDeliveryPrice: double.tryParse((json['expressDeliveryPrice'] ?? json['express_delivery_price'])?.toString() ?? ''),
     );
   }
 

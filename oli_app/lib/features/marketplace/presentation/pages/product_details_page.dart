@@ -21,6 +21,8 @@ class ProductDetailsPage extends ConsumerStatefulWidget {
 
 class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   int _currentImageIndex = 0;
+  String _selectedDeliveryMethod = 'Standard';
+  double _selectedDeliveryPrice = 0.0;
   // bool _isFollowing = false; // Plus besoin de variable locale
 
   void _shareProduct() {
@@ -107,6 +109,8 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       price: double.tryParse(p.price) ?? 0.0,
       imageUrl: p.images.isNotEmpty ? p.images.first : null,
       sellerName: p.seller,
+      deliveryPrice: _selectedDeliveryPrice == 0.0 ? p.deliveryPrice : _selectedDeliveryPrice,
+      deliveryMethod: _selectedDeliveryMethod,
     );
     
     ref.read(cartProvider.notifier).addItem(cartItem);
@@ -419,18 +423,35 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Builder(
-                builder: (context) {
-                  final exchangeState = ref.watch(exchangeRateProvider); // Pour la réactivité
-                  final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
-                  return Text(
-                    "${exchangeNotifier.formatProductPrice(p.deliveryPrice)} de livraison", 
-                    style: const TextStyle(color: Colors.white70, fontSize: 14)
-                  );
-                }
-              ),
-              Text("Livraison estimée : ${_calculateDeliveryDate(p.deliveryTime)}", style: const TextStyle(color: Colors.white70, fontSize: 14)),
-              const Divider(color: Colors.white24, height: 24),
+              // LOGIQUE CHOIX LIVRAISON
+              if (p.expressDeliveryPrice != null) ...[
+                 _DeliveryMethodSelector(
+                   standardPrice: p.deliveryPrice,
+                   expressPrice: p.expressDeliveryPrice!,
+                   deliveryTime: p.deliveryTime,
+                   onMethodChanged: (method, price) {
+                     setState(() {
+                       _selectedDeliveryMethod = method;
+                       _selectedDeliveryPrice = price;
+                     });
+                   },
+                 ),
+                 const SizedBox(height: 16),
+              ] else ...[
+                // Affichage simple si pas de choix
+                Builder(
+                  builder: (context) {
+                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                    return Text(
+                      "${exchangeNotifier.formatProductPrice(p.deliveryPrice)} de livraison", 
+                      style: const TextStyle(color: Colors.white70, fontSize: 14)
+                    );
+                  }
+                ),
+                Text("Livraison estimée : ${_calculateDeliveryDate(p.deliveryTime)}", style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                const Divider(color: Colors.white24, height: 24),
+              ],
+              
               Text("Etat : ${p.condition}", style: const TextStyle(color: Colors.white, fontSize: 14)),
               const SizedBox(height: 16),
               // BOUTONS D'ACTION
@@ -471,7 +492,6 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                   )
                 ),
               ),
-              const SizedBox(height: 20),
               const SizedBox(height: 20),
               
               // TABLE DE PROVENANCE
@@ -514,6 +534,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     );
   }
 
+
   TableRow _buildProvenanceRow(String label, String value) {
     return TableRow(
       children: [
@@ -526,6 +547,123 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
           child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
         ),
       ],
+    );
+  }
+}
+
+class _DeliveryMethodSelector extends StatefulWidget {
+  final double standardPrice;
+  final double expressPrice;
+  final String deliveryTime;
+  final Function(String method, double price) onMethodChanged;
+
+  const _DeliveryMethodSelector({
+    required this.standardPrice,
+    required this.expressPrice,
+    required this.deliveryTime,
+    required this.onMethodChanged,
+  });
+
+  @override
+  State<_DeliveryMethodSelector> createState() => _DeliveryMethodSelectorState();
+}
+
+class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
+  String _selectedEvent = 'Standard';
+
+  @override
+  void initState() {
+    super.initState();
+    // Default selection
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onMethodChanged('Standard', widget.standardPrice);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white10,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Column(
+        children: [
+          _buildOption(
+            title: "Standard",
+            subtitle: "Livraison estimée : ${_calculateDate(widget.deliveryTime)}",
+            price: widget.standardPrice,
+            isSelected: _selectedEvent == 'Standard',
+            onTap: () {
+              setState(() => _selectedEvent = 'Standard');
+              widget.onMethodChanged('Standard', widget.standardPrice);
+            },
+          ),
+          const Divider(height: 1, color: Colors.white24),
+          _buildOption(
+            title: "Express (24h)",
+            subtitle: "Livraison ultra-rapide",
+            price: widget.expressPrice,
+            color: Colors.orangeAccent,
+            isSelected: _selectedEvent == 'Express',
+            onTap: () {
+              setState(() => _selectedEvent = 'Express');
+              widget.onMethodChanged('Express', widget.expressPrice);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  
+  String _calculateDate(String deliveryTime) {
+      // Simple date calc helper reuse logic or pass from parent
+       // ... simplified for widget scope
+       return deliveryTime; 
+  }
+
+  Widget _buildOption({
+    required String title,
+    required String subtitle,
+    required double price,
+    required bool isSelected,
+    required VoidCallback onTap,
+    Color color = Colors.blueAccent,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: isSelected ? color : Colors.white54,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(color: isSelected ? color : Colors.white, fontWeight: FontWeight.bold)),
+                  Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                ],
+              ),
+            ),
+            Consumer(
+              builder: (context, ref, _) {
+                 final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                 return Text(
+                   exchangeNotifier.formatProductPrice(price),
+                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                 );
+              }
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

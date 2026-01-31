@@ -9,6 +9,8 @@ class CartItem {
   int quantity;
   final String? imageUrl;
   final String? sellerName;
+  final double deliveryPrice;
+  final String deliveryMethod; // "Standard" ou "Express"
 
   CartItem({
     required this.productId,
@@ -17,9 +19,14 @@ class CartItem {
     this.quantity = 1,
     this.imageUrl,
     this.sellerName,
+    this.deliveryPrice = 0.0,
+    this.deliveryMethod = 'Standard',
   });
 
-  double get total => price * quantity;
+  // Le total prend en compte le prix du produit * quantite + livraison (une fois par article ou par quantité ?)
+  // Généralement livraison = une fois par commande vendeur, mais ici simplifions : 
+  // Si oli-logistic : souvent par poids/article. Disons par article pour l'instant.
+  double get total => (price * quantity) + deliveryPrice; 
 
   OrderItem toOrderItem() => OrderItem(
     productId: productId,
@@ -28,6 +35,7 @@ class CartItem {
     quantity: quantity,
     imageUrl: imageUrl,
     sellerName: sellerName,
+    // Note: OrderItem devra aussi être mis à jour si on veut persister le mode de livraison
   );
 }
 
@@ -37,20 +45,26 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   /// Ajouter un produit au panier
   void addItem(CartItem item) {
+    // On différencie aussi par mode de livraison pour éviter les conflits ? 
+    // Non, si on change le mode, on met à jour l'item.
     final existingIndex = state.indexWhere((e) => e.productId == item.productId);
     
     if (existingIndex >= 0) {
-      // Produit déjà présent, augmenter la quantité
+      // Produit déjà présent, on remplace (pour mettre à jour le mode de livraison et quantité si besoin)
+      // Ou on incrémente juste la quantité ?
+      // Si l'utilisateur change le mode de livraison, on doit mettre à jour l'item existant.
       state = [
         for (int i = 0; i < state.length; i++)
           if (i == existingIndex)
-            CartItem(
+             CartItem(
               productId: state[i].productId,
               productName: state[i].productName,
               price: state[i].price,
               quantity: state[i].quantity + item.quantity,
               imageUrl: state[i].imageUrl,
               sellerName: state[i].sellerName,
+              deliveryPrice: item.deliveryPrice, // Mise à jour du prix livraison
+              deliveryMethod: item.deliveryMethod, // Mise à jour du mode
             )
           else
             state[i]
@@ -82,6 +96,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
             quantity: quantity,
             imageUrl: item.imageUrl,
             sellerName: item.sellerName,
+            deliveryPrice: item.deliveryPrice,
+            deliveryMethod: item.deliveryMethod,
           )
         else
           item

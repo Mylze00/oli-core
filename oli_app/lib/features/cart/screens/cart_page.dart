@@ -92,13 +92,19 @@ class CartPage extends ConsumerWidget {
                 if (item.sellerName != null)
                   Text(item.sellerName!, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                 const SizedBox(height: 8),
-                Consumer(
-                  builder: (context, ref, _) {
-                    final exchangeState = ref.watch(exchangeRateProvider);
-                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
-                    return Text(
-                      exchangeNotifier.formatProductPrice(item.price), 
-                      style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                         Text(
+                          exchangeNotifier.formatProductPrice(item.price), 
+                          style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Livraison ${item.deliveryMethod} : ${exchangeNotifier.formatProductPrice(item.deliveryPrice)}",
+                          style: const TextStyle(color: Colors.white54, fontSize: 10),
+                        ),
+                      ],
                     );
                   }
                 ),

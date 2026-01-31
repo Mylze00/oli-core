@@ -51,6 +51,7 @@ class ProductService {
             createdAt: p.created_at,
             viewCount: p.view_count || 0,
             sellerSalesCount: p.seller_total_sales || 0, // Nouveau champ
+            expressDeliveryPrice: parseFloat(p.express_delivery_price) || null, // Nouveau champ
             isFeatured: p.isFeatured // For featured query
         };
     }

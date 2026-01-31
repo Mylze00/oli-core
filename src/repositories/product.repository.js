@@ -57,7 +57,8 @@ class ProductRepository {
                    u.has_certified_shop as seller_has_certified_shop,
                    s.name as shop_name, 
                    s.is_verified as shop_verified,
-                   s.logo_url as shop_logo
+                   s.logo_url as shop_logo,
+                   p.express_delivery_price
             FROM products p 
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
@@ -188,7 +189,8 @@ class ProductRepository {
                    u.has_certified_shop as seller_has_certified_shop,
                    u.total_sales as seller_total_sales,
                    s.name as shop_name, 
-                   s.is_verified as shop_verified
+                   s.is_verified as shop_verified,
+                   p.express_delivery_price
             FROM products p 
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
@@ -207,7 +209,8 @@ class ProductRepository {
             seller_id, shop_id, name, description, price, category, images,
             delivery_price, delivery_time, condition, quantity, color, location,
             is_negotiable, b2b_pricing, unit, brand, weight,
-            discount_price, discount_start_date, discount_end_date // New fields
+            discount_price, discount_start_date, discount_end_date,
+            express_delivery_price // New fields
         } = product;
 
         const query = `
@@ -216,6 +219,7 @@ class ProductRepository {
                 delivery_price, delivery_time, condition, quantity, color, location,
                 is_negotiable, b2b_pricing, unit, brand, weight,
                 discount_price, discount_start_date, discount_end_date,
+                express_delivery_price,
                 status, created_at, updated_at
             )
             VALUES (
@@ -223,6 +227,7 @@ class ProductRepository {
                 $8, $9, $10, $11, $12, $13, 
                 $14, $15, $16, $17, $18,
                 $19, $20, $21,
+                $22,
                 'active', NOW(), NOW()
             )
             RETURNING *
@@ -232,7 +237,8 @@ class ProductRepository {
             seller_id, shop_id, name, description, price, category, images,
             delivery_price, delivery_time, condition, quantity, color, location,
             is_negotiable, JSON.stringify(b2b_pricing || []), unit || 'Pièce', brand || '', weight || '',
-            discount_price || null, discount_start_date || null, discount_end_date || null
+            discount_price || null, discount_start_date || null, discount_end_date || null,
+            express_delivery_price || null
         ];
 
         const { rows } = await pool.query(query, values);
