@@ -184,9 +184,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           ),
 
           // 7. BEST SELLERS
-          SliverToBoxAdapter(
-            child: TopSellersSection(products: topSellers),
-          ),
+          // 7. BEST SELLERS (Masqué temporairement)
+          // SliverToBoxAdapter(
+          //   child: TopSellersSection(products: topSellers),
+          // ),
 
           // 8. VERIFIED SHOP PRODUCTS
           SliverToBoxAdapter(
