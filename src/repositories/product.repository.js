@@ -190,7 +190,8 @@ class ProductRepository {
                    u.total_sales as seller_total_sales,
                    s.name as shop_name, 
                    s.is_verified as shop_verified,
-                   p.express_delivery_price
+                   p.express_delivery_price,
+                   p.shipping_options
             FROM products p 
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
@@ -210,7 +211,7 @@ class ProductRepository {
             delivery_price, delivery_time, condition, quantity, color, location,
             is_negotiable, b2b_pricing, unit, brand, weight,
             discount_price, discount_start_date, discount_end_date,
-            express_delivery_price // New fields
+            express_delivery_price, shipping_options
         } = product;
 
         const query = `
@@ -219,7 +220,7 @@ class ProductRepository {
                 delivery_price, delivery_time, condition, quantity, color, location,
                 is_negotiable, b2b_pricing, unit, brand, weight,
                 discount_price, discount_start_date, discount_end_date,
-                express_delivery_price,
+                express_delivery_price, shipping_options,
                 status, created_at, updated_at
             )
             VALUES (
@@ -227,7 +228,7 @@ class ProductRepository {
                 $8, $9, $10, $11, $12, $13, 
                 $14, $15, $16, $17, $18,
                 $19, $20, $21,
-                $22,
+                $22, $23,
                 'active', NOW(), NOW()
             )
             RETURNING *
@@ -238,7 +239,8 @@ class ProductRepository {
             delivery_price, delivery_time, condition, quantity, color, location,
             is_negotiable, JSON.stringify(b2b_pricing || []), unit || 'Pièce', brand || '', weight || '',
             discount_price || null, discount_start_date || null, discount_end_date || null,
-            express_delivery_price || null
+            express_delivery_price || null,
+            JSON.stringify(shipping_options || [])
         ];
 
         const { rows } = await pool.query(query, values);
@@ -265,7 +267,7 @@ class ProductRepository {
         const fields = ['name', 'description', 'price', 'category', 'condition',
             'quantity', 'color', 'location', 'status', 'delivery_price', 'delivery_time',
             'is_good_deal', 'unit', 'brand', 'weight', 'b2b_pricing',
-            'discount_price', 'discount_start_date', 'discount_end_date'];
+            'discount_price', 'discount_start_date', 'discount_end_date', 'shipping_options'];
         const setClauses = [];
         const values = [];
         let i = 1;

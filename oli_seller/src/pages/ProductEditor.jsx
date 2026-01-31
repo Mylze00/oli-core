@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash, ArrowLeft } from 'lucide-react';
+import { Plus, Trash, ArrowLeft, Truck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
@@ -8,6 +8,40 @@ export default function ProductEditor() {
     const [b2bPricing, setB2bPricing] = useState([
         { min: 1, max: 50, price: '' }
     ]);
+
+    // --- Modes de livraison disponibles ---
+    const availableMethods = [
+        { id: 'oli_standard', label: 'Livraison Oli (Standard)', time: '5-7 jours' },
+        { id: 'oli_express', label: 'Express Oli', time: '24-48h' },
+        { id: 'custom', label: 'Mon propre mode de livraison', time: 'Variable' },
+        { id: 'free', label: 'Livraison Gratuite', time: '7-10 jours' },
+        { id: 'pickup', label: 'Remise en main propre', time: 'Immédiat' }
+    ];
+
+    // --- État pour les options de livraison multiples ---
+    const [shippingOptions, setShippingOptions] = useState([
+        { methodId: 'oli_standard', cost: '' }
+    ]);
+
+    const addShippingOption = () => {
+        setShippingOptions([...shippingOptions, { methodId: '', cost: '' }]);
+    };
+
+    const updateShippingOption = (index, field, value) => {
+        const newOptions = [...shippingOptions];
+
+        // Si c'est gratuit ou remise en main propre, le coût est forcément 0
+        if (field === 'methodId' && (value === 'free' || value === 'pickup')) {
+            newOptions[index].cost = 0;
+        }
+
+        newOptions[index][field] = value;
+        setShippingOptions(newOptions);
+    };
+
+    const removeShippingOption = (index) => {
+        setShippingOptions(shippingOptions.filter((_, i) => i !== index));
+    };
     const [product, setProduct] = useState({
         name: '',
         category: '',
@@ -72,6 +106,9 @@ export default function ProductEditor() {
 
             // Append B2B pricing as JSON string
             formData.append('b2b_pricing', JSON.stringify(b2bPricing));
+
+            // Append Shipping options as JSON string
+            formData.append('shipping_options', JSON.stringify(shippingOptions));
 
             console.log("Saving Product via FormData...");
             await api.post('/products/upload', formData, {
@@ -159,6 +196,70 @@ export default function ProductEditor() {
                                 onChange={e => setProduct({ ...product, weight: e.target.value })}
                             />
                         </div>
+                    </div>
+                </div>
+
+                {/* --- SECTION : MODES DE LIVRAISON MULTIPLES --- */}
+                <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-bold text-blue-700 flex items-center gap-2">
+                            <Truck size={20} /> Modes de livraison proposés
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={addShippingOption}
+                            className="text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-100 flex items-center gap-1 font-medium transition-colors"
+                        >
+                            <Plus size={14} /> Ajouter un mode
+                        </button>
+                    </div>
+
+                    <p className="text-sm text-gray-500 mb-4 italic">
+                        L'acheteur pourra choisir l'option qui convient le mieux à son budget et à son urgence.
+                    </p>
+
+                    <div className="space-y-3">
+                        {shippingOptions.map((option, index) => (
+                            <div key={index} className="flex gap-4 items-end bg-gray-50 p-4 rounded-lg border border-gray-100 relative group">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Mode de transport</label>
+                                    <select
+                                        className="w-full border p-2 rounded-md bg-white shadow-sm"
+                                        value={option.methodId}
+                                        onChange={(e) => updateShippingOption(index, 'methodId', e.target.value)}
+                                        required
+                                    >
+                                        <option value="">Sélectionner...</option>
+                                        {availableMethods.map(m => (
+                                            <option key={m.id} value={m.id}>{m.label} ({m.time})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="w-32">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Coût ($)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        className={`w-full border p-2 rounded-md bg-white shadow-sm ${(option.methodId === 'free' || option.methodId === 'pickup') ? 'bg-gray-200' : ''}`}
+                                        value={option.cost}
+                                        onChange={(e) => updateShippingOption(index, 'cost', e.target.value)}
+                                        disabled={option.methodId === 'free' || option.methodId === 'pickup'}
+                                        required
+                                    />
+                                </div>
+                                {shippingOptions.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => removeShippingOption(index)}
+                                        className="p-2 text-red-400 hover:text-red-600 transition-colors"
+                                    >
+                                        <Trash size={18} />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 </div>
 

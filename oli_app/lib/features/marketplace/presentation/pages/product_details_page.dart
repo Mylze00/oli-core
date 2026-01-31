@@ -21,8 +21,8 @@ class ProductDetailsPage extends ConsumerStatefulWidget {
 
 class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   int _currentImageIndex = 0;
-  String _selectedDeliveryMethod = 'Standard';
-  double _selectedDeliveryPrice = 0.0;
+  int _currentImageIndex = 0;
+  ShippingOption? _selectedShipping; 
   // bool _isFollowing = false; // Plus besoin de variable locale
 
   void _shareProduct() {
@@ -44,6 +44,19 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   @override
   void initState() {
     super.initState();
+    // 🚀 Init dynamic options
+    if (widget.product.shippingOptions.isNotEmpty) {
+      _selectedShipping = widget.product.shippingOptions.first;
+    } else {
+        // Fallback for old products (create simulated "Standard" option)
+        _selectedShipping = ShippingOption(
+            methodId: 'standard', 
+            label: 'Standard', 
+            time: widget.product.deliveryTime, 
+            cost: widget.product.deliveryPrice
+        );
+    }
+    
     // 🔍 Tracking "Produits Consultés"
     Future.microtask(() {
       ref.read(userActivityProvider.notifier).addToVisited(widget.product);
@@ -109,8 +122,9 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       price: double.tryParse(p.price) ?? 0.0,
       imageUrl: p.images.isNotEmpty ? p.images.first : null,
       sellerName: p.seller,
-      deliveryPrice: _selectedDeliveryPrice == 0.0 ? p.deliveryPrice : _selectedDeliveryPrice,
-      deliveryMethod: _selectedDeliveryMethod,
+      sellerName: p.seller,
+      deliveryPrice: _selectedShipping?.cost ?? 0.0,
+      deliveryMethod: _selectedShipping?.label ?? 'Standard',
     );
     
     ref.read(cartProvider.notifier).addItem(cartItem);
@@ -426,21 +440,36 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               // LOGIQUE CHOIX LIVRAISON
-              if (p.expressDeliveryPrice != null) ...[
+              if (p.shippingOptions.isNotEmpty) ...[
+                  _DynamicDeliverySelector(
+                    options: p.shippingOptions,
+                    selectedOption: _selectedShipping,
+                    onChanged: (option) {
+                      setState(() => _selectedShipping = option);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+              ] else if (p.expressDeliveryPrice != null) ...[
+                 // FALLBACK LEGACY : Si pas de shippingOptions mais expressPrice existe (vieux produits)
                  _DeliveryMethodSelector(
                    standardPrice: p.deliveryPrice,
                    expressPrice: p.expressDeliveryPrice!,
                    deliveryTime: p.deliveryTime,
                    onMethodChanged: (method, price) {
+                     // On simule une shipping option pour la compatibilité panier
                      setState(() {
-                       _selectedDeliveryMethod = method;
-                       _selectedDeliveryPrice = price;
+                         _selectedShipping = ShippingOption(
+                             methodId: method.toLowerCase(),
+                             label: method,
+                             time: method == 'Standard' ? p.deliveryTime : '24h',
+                             cost: price
+                         );
                      });
                    },
                  ),
                  const SizedBox(height: 16),
               ] else ...[
-                // Affichage simple si pas de choix
+                // Affichage simple si rien du tout (super vieux produits)
                 Builder(
                   builder: (context) {
                     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
@@ -731,6 +760,86 @@ class _DiscountTimerState extends State<_DiscountTimer> {
             style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DynamicDeliverySelector extends StatelessWidget {
+  final List<ShippingOption> options;
+  final ShippingOption? selectedOption;
+  final ValueChanged<ShippingOption> onChanged;
+
+  const _DynamicDeliverySelector({
+    required this.options,
+    required this.selectedOption,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text("CHOISISSEZ VOTRE LIVRAISON", 
+              style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+          ),
+          ...options.map((opt) => _buildOption(context, opt)).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOption(BuildContext context, ShippingOption opt) {
+    final bool isSelected = selectedOption?.methodId == opt.methodId;
+
+    return InkWell(
+      onTap: () => onChanged(opt),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+          color: isSelected ? Colors.blueAccent.withOpacity(0.1) : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: isSelected ? Colors.blueAccent : Colors.white54,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(opt.label, 
+                    style: TextStyle(color: isSelected ? Colors.white : Colors.white70, fontWeight: FontWeight.bold)),
+                  Text("Arrivée estimée : ${opt.time}", 
+                    style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                ],
+              ),
+            ),
+            // Utilisation du Consumer pour le prix formaté selon la devise
+            Consumer(builder: (context, ref, _) {
+              final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+              return Text(
+                opt.cost == 0 ? "GRATUIT" : exchangeNotifier.formatProductPrice(opt.cost),
+                style: TextStyle(
+                  color: opt.cost == 0 ? Colors.greenAccent : Colors.white,
+                  fontWeight: FontWeight.bold
+                ),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }

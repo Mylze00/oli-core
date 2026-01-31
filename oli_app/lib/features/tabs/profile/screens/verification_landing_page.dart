@@ -32,7 +32,6 @@ class VerificationLandingPage extends ConsumerWidget {
                 "Support prioritaire 24/7",
               ],
               badgeType: BadgeType.blue,
-              badgeType: BadgeType.blue,
               onTap: () async {
                  // Simulation simple flow
                  final success = await ref.read(verificationControllerProvider.notifier)

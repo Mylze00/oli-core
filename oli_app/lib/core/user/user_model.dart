@@ -4,6 +4,7 @@ class User {
   final String name;
   final String initial;
   final String? avatarUrl;
+  final double wallet;
   final String? subscriptionPlan; // 'none', 'certified', 'enterprise'
   final bool isAdmin;
   final bool isVerified; // Basic verification

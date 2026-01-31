@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../../config/api_config.dart';
 import '../../../../main.dart'; // Pour acceder au provider global si besoin ou Dio
 import '../../../auth/providers/auth_controller.dart';
+import '../../../../core/storage/secure_storage_service.dart';
 
 final verificationControllerProvider = StateNotifierProvider<VerificationController, AsyncValue<void>>((ref) {
   return VerificationController(ref);
@@ -17,7 +18,8 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       final dio = Dio(); // Ou utiliser une instance Dio configurée globalement avec intercepteurs token
-      final token = await ref.read(secureStorageProvider).read(key: 'auth_token');
+      final storage = SecureStorageService();
+      final token = await storage.getToken();
       
       dio.options.headers['Authorization'] = 'Bearer $token';
 
@@ -31,7 +33,7 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
 
       if (response.statusCode == 200) {
         // Rafraichir le profil utilisateur pour voir le badge immédiatement
-        await ref.read(authControllerProvider.notifier).refreshUser();
+        await ref.read(authControllerProvider.notifier).fetchUserProfile();
         state = const AsyncValue.data(null);
         return true;
       } else {

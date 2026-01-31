@@ -5,6 +5,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
+class ShippingOption {
+  final String methodId;
+  final String label;
+  final String time;
+  final double cost;
+
+  ShippingOption({required this.methodId, required this.label, required this.time, required this.cost});
+
+  factory ShippingOption.fromJson(Map<String, dynamic> json) {
+    return ShippingOption(
+      methodId: json['methodId'] ?? json['id'] ?? '',
+      label: json['label'] ?? '',
+      time: json['time'] ?? '',
+      cost: double.tryParse(json['cost']?.toString() ?? '0') ?? 0.0,
+    );
+  }
+}
+
+
 /// Modèle Product aligné avec l'API Backend Oli
 class Product {
   final String id;
@@ -40,7 +59,8 @@ class Product {
   // Nouveau champs stats
   final int viewCount;
   final int sellerSalesCount;
-  final double? expressDeliveryPrice;
+  final double? expressDeliveryPrice; // Deprecated by shippingOptions but kept for backward compatibility
+  final List<ShippingOption> shippingOptions;
 
   Product({
     required this.id,
@@ -76,6 +96,7 @@ class Product {
     this.viewCount = 0,
     this.sellerSalesCount = 0,
     this.expressDeliveryPrice,
+    this.shippingOptions = const [],
   });
 
   /// Factory pour parser la réponse API (supporte camelCase ET snake_case)
@@ -141,6 +162,11 @@ class Product {
       viewCount: int.tryParse(json['viewCount']?.toString() ?? '0') ?? 0,
       sellerSalesCount: int.tryParse(json['sellerSalesCount']?.toString() ?? '0') ?? 0,
       expressDeliveryPrice: double.tryParse((json['expressDeliveryPrice'] ?? json['express_delivery_price'])?.toString() ?? ''),
+      shippingOptions: (json['shippingOptions'] != null || json['shipping_options'] != null)
+          ? ((json['shippingOptions'] ?? json['shipping_options']) as List)
+              .map((e) => ShippingOption.fromJson(e))
+              .toList()
+          : [],
     );
   }
 

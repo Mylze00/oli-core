@@ -50,8 +50,9 @@ class ProductService {
             status: p.status,
             createdAt: p.created_at,
             viewCount: p.view_count || 0,
-            sellerSalesCount: p.seller_total_sales || 0, // Nouveau champ
-            expressDeliveryPrice: parseFloat(p.express_delivery_price) || null, // Nouveau champ
+            sellerSalesCount: p.seller_total_sales || 0,
+            expressDeliveryPrice: parseFloat(p.express_delivery_price) || null,
+            shippingOptions: p.shipping_options || [],
             isFeatured: p.isFeatured // For featured query
         };
     }
@@ -149,6 +150,14 @@ class ProductService {
                     return data.b2b_pricing ? JSON.parse(data.b2b_pricing) : [];
                 } catch (e) {
                     console.warn("Erreur parsing B2B pricing:", e.message);
+                    return [];
+                }
+            })(),
+            shipping_options: (() => {
+                try {
+                    return data.shipping_options ? JSON.parse(data.shipping_options) : [];
+                } catch (e) {
+                    console.warn("Erreur parsing Shipping Options:", e.message);
                     return [];
                 }
             })(),
