@@ -24,7 +24,7 @@ class ShopController extends StateNotifier<AsyncValue<List<Shop>>> {
     try {
       final token = await _storage.getToken();
       final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/shops/my-shops'),
+        Uri.parse('${ApiConfig.shops}/my-shops'),
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -52,7 +52,7 @@ class ShopController extends StateNotifier<AsyncValue<List<Shop>>> {
   }) async {
     try {
       final token = await _storage.getToken();
-      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/shops'));
+      var request = http.MultipartRequest('POST', Uri.parse(ApiConfig.shops));
       
       request.headers['Authorization'] = 'Bearer $token';
       request.fields['name'] = name;
