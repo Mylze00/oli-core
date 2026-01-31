@@ -37,6 +37,9 @@ class Product {
   final double? discountPrice; // Replaces promoPrice
   final DateTime? discountStartDate;
   final DateTime? discountEndDate;
+  // Nouveau champs stats
+  final int viewCount;
+  final int sellerSalesCount;
 
   Product({
     required this.id,
@@ -69,6 +72,8 @@ class Product {
     this.discountPrice,
     this.discountStartDate,
     this.discountEndDate,
+    this.viewCount = 0,
+    this.sellerSalesCount = 0,
   });
 
   /// Factory pour parser la réponse API (supporte camelCase ET snake_case)
@@ -130,6 +135,9 @@ class Product {
       discountEndDate: json['discountEndDate'] != null 
           ? DateTime.tryParse(json['discountEndDate']) 
           : (json['discount_end_date'] != null ? DateTime.tryParse(json['discount_end_date']) : null),
+      // Stats
+      viewCount: int.tryParse(json['viewCount']?.toString() ?? '0') ?? 0,
+      sellerSalesCount: int.tryParse(json['sellerSalesCount']?.toString() ?? '0') ?? 0,
     );
   }
 

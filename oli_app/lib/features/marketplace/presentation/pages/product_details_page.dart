@@ -226,9 +226,41 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(p.images.length, (i) => Container(width: 8, height: 8, margin: const EdgeInsets.symmetric(horizontal: 4), decoration: BoxDecoration(shape: BoxShape.circle, color: i == _currentImageIndex ? Colors.blueAccent : Colors.grey.withOpacity(0.5))))),
               ),
           ]),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(p.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        p.name, 
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.visibility, color: Colors.white54, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            "${p.viewCount}", 
+                            style: const TextStyle(color: Colors.white70, fontSize: 12)
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           // BLOC VENDEUR OU BOUTIQUE
           Container(
@@ -278,7 +310,15 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                   ),
                   if (p.shopName != null)
                    const Text('CONFIANCE GARANTIE', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
-                  Text('${p.totalBuyerRatings}% d\'évaluation positive', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  
+                  // Stats vendeur
+                  Row(
+                    children: [
+                       Text('${p.totalBuyerRatings}% positif', style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                       const SizedBox(width: 8),
+                       Text('• ${p.sellerSalesCount} ventes', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                    ],
+                  ),
                 ]),
               ),
               IconButton(

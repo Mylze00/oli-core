@@ -50,6 +50,7 @@ class ProductService {
             status: p.status,
             createdAt: p.created_at,
             viewCount: p.view_count || 0,
+            sellerSalesCount: p.seller_total_sales || 0, // Nouveau champ
             isFeatured: p.isFeatured // For featured query
         };
     }

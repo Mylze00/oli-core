@@ -186,6 +186,7 @@ class ProductRepository {
                    u.is_verified as seller_is_verified,
                    u.account_type as seller_account_type,
                    u.has_certified_shop as seller_has_certified_shop,
+                   u.total_sales as seller_total_sales,
                    s.name as shop_name, 
                    s.is_verified as shop_verified
             FROM products p 
