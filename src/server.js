@@ -156,6 +156,11 @@ app.use("/orders", requireAuth, ordersRoutes);
 app.use("/wallet", requireAuth, walletRoutes);
 app.use("/delivery", requireAuth, deliveryRoutes);
 app.use("/chat", requireAuth, chatRoutes);
+
+// 🆕 Route publique pour le profil vendeur (pas besoin d'auth)
+app.get("/user/public-profile/:id", require('./controllers/user.controller').getPublicProfile);
+
+// Autres routes user (protégées)
 app.use("/user", requireAuth, userRoutes);
 app.use("/addresses", requireAuth, require('./routes/address.routes'));
 app.use("/notifications", require('./routes/notifications.routes')); // Notifications
