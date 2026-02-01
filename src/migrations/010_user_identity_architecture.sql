@@ -63,6 +63,13 @@ CREATE TABLE IF NOT EXISTS user_product_views (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Ensure columns exist for user_product_views
+ALTER TABLE user_product_views ADD COLUMN IF NOT EXISTS session_id VARCHAR(100);
+ALTER TABLE user_product_views ADD COLUMN IF NOT EXISTS view_duration_seconds INTEGER;
+ALTER TABLE user_product_views ADD COLUMN IF NOT EXISTS source VARCHAR(50);
+ALTER TABLE user_product_views ADD COLUMN IF NOT EXISTS device_type VARCHAR(20);
+ALTER TABLE user_product_views ADD COLUMN IF NOT EXISTS interactions JSONB;
+
 CREATE INDEX IF NOT EXISTS idx_user_product_views_user_date ON user_product_views(user_id, viewed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_product_views_unique ON user_product_views(user_id, product_id);
 CREATE INDEX IF NOT EXISTS idx_user_product_views_product ON user_product_views(product_id, viewed_at DESC);
