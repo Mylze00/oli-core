@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../../models/product_model.dart';
+import '../../../../providers/exchange_rate_provider.dart';
 import '../../marketplace/presentation/pages/product_details_page.dart'; // For navigation if needed
 import '../dashboard/providers/shops_provider.dart';
 import '../../marketplace/providers/market_provider.dart';
@@ -16,6 +17,7 @@ import 'widgets/verified_shops_carousel.dart';
 import 'widgets/super_offers_section.dart';
 import 'widgets/discovery_carousel.dart';
 import 'widgets/product_sections.dart';
+import '../../../../app/theme/theme_provider.dart';
 
 class MainDashboardView extends ConsumerStatefulWidget {
   const MainDashboardView({super.key});
@@ -40,6 +42,13 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   bool _showCategories = false;
 
   Timer? _hideCategoriesTimer;
+  final List<String> _stopWords = ['Paire', 'Lot', 'Set', 'Kit', 'Nouveau', 'Promo', 'Super', 'Pack', 'Mini', 'La', 'Le', 'Les'];
+
+  @override
+  void initState() {
+    super.initState();
+    // Logic for selection is now handled in build to ensure we have products to check against
+  }
 
   @override
   void dispose() {
@@ -49,8 +58,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   }
 
   void _onSearch(String value) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Les produits mis en avant ne sont pas filtrables"))
+    if (value.trim().isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => MarketView(initialSearchQuery: value.trim())),
     );
   }
 
@@ -78,12 +89,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   }
 
   void _startCategoryTimer() {
-    _hideCategoriesTimer?.cancel();
+    _hideCategoriesTimer?.cancel(); // Toujours annuler avant de recréer
     _hideCategoriesTimer = Timer(const Duration(seconds: 6), () {
       if (mounted && _showCategories) {
-        setState(() {
-          _showCategories = false;
-        });
+        setState(() => _showCategories = false);
       }
     });
   }
@@ -94,6 +103,12 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
 
   @override
   Widget build(BuildContext context) {
+    // 0. Theme
+    final isDark = ref.watch(themeProvider);
+    final backgroundColor = isDark ? Colors.black : Colors.grey[400];
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subTextColor = isDark ? Colors.white.withOpacity(0.7) : Colors.black87;
+
     // 1. Data Providers
     final allProducts = ref.watch(featuredProductsProvider);
     final topSellers = ref.watch(topSellersProvider);
@@ -102,16 +117,77 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     final verifiedShops = verifiedShopsAsync.valueOrNull ?? [];
     
     // 2. Logic for lists
-    final superOffersList = allProducts.take(5).toList();
-    final discoveryList = allProducts.length > 5 ? allProducts.skip(5).take(5).toList() : <Product>[];
-    final rankingList = allProducts.length > 10 ? allProducts.skip(10).toList() : <Product>[];
+    // A. Dynamic Grouping Algorithm - Scan all products to find valid groups (>= 5 items)
+    String selectedKeyword = "";
+    List<Product> selectionProducts = [];
+
+    // 1. Group products by their "Focus Keyword"
+    final Map<String, List<Product>> groupedProducts = {};
+    
+    for (var product in allProducts) {
+      final words = product.name.split(' ');
+      String focusKW = words.isNotEmpty ? words.first : "";
+      
+      if (words.length > 1 && (focusKW.length <= 2 || _stopWords.contains(focusKW))) {
+        focusKW = words[1];
+      }
+      
+      // Clean up punctuation (e.g. "Robe," -> "Robe")
+      focusKW = focusKW.replaceAll(RegExp(r'[^\w\s]+'), '');
+
+      if (focusKW.length > 2) {
+         // Title case for consistency
+         focusKW = focusKW[0].toUpperCase() + focusKW.substring(1).toLowerCase();
+         
+         if (!groupedProducts.containsKey(focusKW)) {
+           groupedProducts[focusKW] = [];
+         }
+         groupedProducts[focusKW]!.add(product);
+      }
+    }
+
+    // 2. Filter groups with enough items (>= 5)
+    final validKeys = groupedProducts.keys.where((k) => groupedProducts[k]!.length >= 5).toList();
+
+    // 3. Pick a random group
+    if (validKeys.isNotEmpty) {
+      validKeys.shuffle();
+      selectedKeyword = validKeys.first;
+      selectionProducts = groupedProducts[selectedKeyword]!.take(15).toList();
+    }
+
+    // B. Deduplicate: Remove selected items from the pool for other sections
+    final remainingProducts = allProducts.where((p) => !selectionProducts.contains(p)).toList();
+
+    // C. Distribute remaining products
+    final superOffersList = remainingProducts.take(5).toList();
+    
+    final discoveryList = remainingProducts.length > 5 
+        ? remainingProducts.skip(5).take(5).toList() 
+        : <Product>[];
+    
+    final rankingList = remainingProducts.length > 10 ? remainingProducts.skip(10).toList() : <Product>[];
+    
+    // Sort ranking list by name to cluster similar items for coherence
+    rankingList.sort((a, b) => a.name.compareTo(b.name));
+
     final effectiveRankingList = rankingList.isNotEmpty 
         ? rankingList 
         : (discoveryList.isNotEmpty ? discoveryList : superOffersList);
+    
+    // Fallback if no specific keyword matched 3 items
+    final effectiveSelectionIds = selectionProducts.map((e) => e.id).toSet();
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: CustomScrollView(
+      backgroundColor: backgroundColor,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          // Recharger les produits
+          await ref.read(featuredProductsProvider.notifier).fetchFeaturedProducts();
+          // On peut aussi recharger les autres si besoin :
+          // ref.read(verifiedShopsProductsProvider.notifier).fetchVerifiedShopsProducts();
+        },
+        child: CustomScrollView(
         slivers: [
           // 1. APP BAR
           HomeAppBar(
@@ -167,11 +243,27 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
             ),
           ),
 
-          // 6. DISCOVERY
-          const SliverPadding(
-             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          // 6. RANDOM CATEGORY SECTION (STRICT KEYWORD)
+          if (selectionProducts.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: _buildHorizontalSection(
+                  title: "Sélection : $selectedKeyword",
+                  subtitle: "Inspiration pour vous",
+                  products: selectionProducts,
+                  gradient: null, // Transparent background
+                  badgeText: "NEW",
+                  badgeColor: Colors.tealAccent.shade700,
+                ),
+              ),
+            ),
+
+          // 7. DISCOVERY
+          SliverPadding(
+             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
              sliver: SliverToBoxAdapter(
-               child: Text("Découverte", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+               child: Text("Découverte", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
              ),
           ),
           SliverToBoxAdapter(
@@ -195,18 +287,248 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           ),
 
           // 9. TOP RANKING
-          const SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+
+          
+          // 9. TOP RANKING (Patron répétitif : 6 produits (3 cols) -> 2 produits (2 cols))
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             sliver: SliverToBoxAdapter(
-               child: Text("Top Classement", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+               child: Text("Top Classement", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 18)),
             ),
           ),
           
-          TopRankingGrid(products: effectiveRankingList),
+          ..._buildPatternedRankingGrid(effectiveRankingList, textColor),
           
           const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
         ],
       ),
+      ),
+    );
+  }
+
+  /// Construit la liste de Slivers pour le Top Ranking avec le motif 3-3-2
+  List<Widget> _buildPatternedRankingGrid(List<Product> allProducts, Color textColor) {
+    List<Widget> slivers = [];
+    int index = 0;
+    
+    // Boucle tant qu'il reste des produits
+    while (index < allProducts.length) {
+      // 1. Prendre 6 produits pour la grille 3 colonnes
+      int take3Cols = 6;
+      final chunk3Cols = allProducts.skip(index).take(take3Cols).toList();
+      if (chunk3Cols.isNotEmpty) {
+        slivers.add(
+          TopRankingGrid(
+            products: chunk3Cols,
+            crossAxisCount: 3,
+            childAspectRatio: 0.75,
+          )
+        );
+        index += chunk3Cols.length;
+      }
+
+      // 2. Prendre 2 produits pour la grille 2 colonnes (si dispo)
+      if (index < allProducts.length) {
+        int take2Cols = 2;
+        final chunk2Cols = allProducts.skip(index).take(take2Cols).toList();
+        if (chunk2Cols.isNotEmpty) {
+                    
+          // Generate a context title based on the first product's name (first word)
+          if (chunk2Cols.isNotEmpty) {
+             final firstProduct = chunk2Cols.first;
+             final words = firstProduct.name.split(' ');
+             String focusWord = words.isNotEmpty ? words.first : "";
+
+             // Stop words logic reusing the class field or local list (using class field now ideally but context is tricky if static, let's redefine valid list for grid)
+             // Ideally we refactor this extraction logic to a method.
+             const stopWordsLocal = ['Paire', 'Lot', 'Set', 'Kit', 'Nouveau', 'Promo', 'Super', 'Pack', 'Mini', 'La', 'Le', 'Les'];
+             if (words.length > 1 && (focusWord.length <= 2 || stopWordsLocal.contains(focusWord))) {
+                focusWord = words[1];
+             }
+
+             if (focusWord.length > 2) {
+                slivers.add(
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    sliver: SliverToBoxAdapter(
+                      child: Row(
+                        children: [
+                          Container(width: 4, height: 16, color: Colors.blueAccent),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Focus : $focusWord", 
+                            style: TextStyle(
+                              color: textColor.withOpacity(0.9), 
+                              fontWeight: FontWeight.bold, 
+                              fontSize: 14
+                            )
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+             }
+          }
+
+          slivers.add(
+             // Un peu d'espace entre les sections de grille
+             const SliverPadding(padding: EdgeInsets.only(top: 8))
+          );
+          slivers.add(
+            TopRankingGrid(
+              products: chunk2Cols,
+              crossAxisCount: 2,
+              childAspectRatio: 0.85, // Plus haut (+25%) pour 2 colonnes
+            )
+          );
+          slivers.add(
+             const SliverPadding(padding: EdgeInsets.only(top: 8))
+          );
+          index += chunk2Cols.length;
+        }
+      }
+    }
+    return slivers;
+  }
+
+  /// Section horizontale réutilisable (copiée de MarketView pour usage local)
+  Widget _buildHorizontalSection({
+    required String title,
+    required String subtitle,
+    required List<Product> products,
+    List<Color>? gradient,
+    required String badgeText,
+    required Color badgeColor,
+  }) {
+    // Local theme logic (since this method is inside the class)
+    // Ideally pass it as param or check theme here too, but let's check provider again or assume dark for cards if not passed?
+    // Actually we need to make sure the TITLE of the section adapts. 
+    // BUT the section logic inside uses "Colors.white" for titles.
+    // We should fix this method to respect the background. Use Consumer or pass color.
+    // The easiest is to use a Consumer here or just access the values if passed.
+    // Let's assume we want to use the method as is but change the text color.
+    // However, this method is inside the State class so we can access ref if we change to ConsumerState logic properly
+    // Check if we can access 'textColor' from the build context logic? No, it's a helper method.
+    // Let's refactor the helper to take textColor or use a default.
+    // For now, I'll modify the usages to pass it or just use a hack since I closed the build method signature.
+    // Wait, I can't change signature easily without changing all callers.
+    // Callers: 
+    // 1. Random Section (line 214) -> does not pass color
+    // 2. Others commented out?
+    // Let's change signature to accept textColor, optional.
+
+    return Consumer(
+      builder: (context, ref, _) {
+       final isDark = ref.watch(themeProvider);
+       final sectionTitleColor = isDark ? Colors.white : Colors.black;
+       final sectionSubtitleColor = isDark ? Colors.white.withOpacity(0.7) : Colors.black54;
+
+       return Container(
+        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          gradient: gradient != null ? LinearGradient(
+            colors: gradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ) : null,
+          color: gradient == null ? Colors.transparent : null,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(color: sectionTitleColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: TextStyle(color: sectionSubtitleColor, fontSize: 11)),
+                  ],
+                ),
+                Icon(Icons.arrow_forward_ios, color: sectionTitleColor, size: 14),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 140,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: products.length,
+                itemBuilder: (context, index) {
+                  final product = products[index];
+                  return GestureDetector(
+                    onTap: () => _navigateToProduct(product),
+                    child: Container(
+                      width: 110,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C2C2C), // Cards always dark for now
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                                  child: product.images.isNotEmpty 
+                                    ? Image.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
+                                    : const Center(child: Icon(Icons.image, color: Colors.grey)),
+                                ),
+                                Positioned(
+                                  top: 0, left: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: badgeColor,
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(8),
+                                        bottomRight: Radius.circular(8),
+                                      ),
+                                    ),
+                                    child: Text(badgeText, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(6.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
+                                Consumer(
+                                  builder: (context, ref, _) {
+                                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                                    ref.watch(exchangeRateProvider); // React to currency changes
+                                    return Text(
+                                      exchangeNotifier.formatProductPrice(double.tryParse(product.price) ?? 0.0), 
+                                      style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12)
+                                    );
+                                  }
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+     }
     );
   }
 }

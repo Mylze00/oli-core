@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../config/api_config.dart';
 import 'market_view.dart';
-import 'seller_profile_page.dart'; // Import profile page
-import '../../../../shared/widgets/oli_button.dart';
+import 'seller_profile_page.dart'; // Importer la page de profil
+
 import '../../../../models/product_model.dart'; 
 import '../../../../widgets/verification_badge.dart';
 import '../../../chat/chat_page.dart';
@@ -24,7 +24,109 @@ class ProductDetailsPage extends ConsumerStatefulWidget {
 
 class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   int _currentImageIndex = 0;
+  
+  Widget _buildPaymentLogo(String path) {
+    return Container(
+      // margin: const EdgeInsets.only(right: 6), // Removed to let Wrap handle spacing
+      width: 42,
+      height: 27,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(2),
+      ),
+      padding: const EdgeInsets.all(2),
+      child: Image.asset(
+        path,
+        fit: BoxFit.contain,
+        errorBuilder: (c, e, s) => const Icon(Icons.error, size: 10, color: Colors.red),
+      ),
+    );
+  }
+
+  Widget _buildProtectionWidget() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Protection des commandes OLI",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Paiements sécurisés
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.verified_user_outlined, color: Colors.greenAccent, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Paiements sécurisés", style: TextStyle(color: Colors.white, fontSize: 14)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _buildPaymentLogo('assets/images/operators/orange_money.png'),
+                        _buildPaymentLogo('assets/images/operators/mpesa.png'),
+                        _buildPaymentLogo('assets/images/operators/airtel_money.png'),
+                        _buildPaymentLogo('assets/images/operators/afrimoney.png'),
+                        _buildPaymentLogo('assets/images/operators/visa.png'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Livraison
+          Row(
+            children: [
+              const Icon(Icons.local_shipping_outlined, color: Colors.greenAccent, size: 20),
+              const SizedBox(width: 12),
+              const Text("Livraison via OLI Logistics", style: TextStyle(color: Colors.white, fontSize: 14)),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Remboursement
+          Row(
+            children: [
+              const Icon(Icons.currency_exchange, color: Colors.greenAccent, size: 20),
+              const SizedBox(width: 12),
+              const Text("Protection de remboursement", style: TextStyle(color: Colors.white, fontSize: 14)),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Footer
+          const Text(
+            "Seules les commandes passées et payées via OLI sont protégées gratuitement par OLI Assurance",
+            style: TextStyle(color: Colors.white54, fontSize: 12, fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
+    );
+  }
   ShippingOption? _selectedShipping; 
+  bool _showFullDescription = false; 
   // bool _isFollowing = false; // Plus besoin de variable locale
 
   void _shareProduct() {
@@ -46,11 +148,11 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   @override
   void initState() {
     super.initState();
-    // 🚀 Init dynamic options
+    // 🚀 Initialisation des options dynamiques
     if (widget.product.shippingOptions.isNotEmpty) {
       _selectedShipping = widget.product.shippingOptions.first;
     } else {
-        // Fallback for old products (create simulated "Standard" option)
+        // Repli pour les anciens produits (création d'une option "Standard" simulée)
         _selectedShipping = ShippingOption(
             methodId: 'standard', 
             label: 'Standard', 
@@ -286,67 +388,87 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
           // BLOC VENDEUR OU BOUTIQUE
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-            child: Row(children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                   CircleAvatar(
-                     radius: 25, 
-                     backgroundColor: Colors.blueAccent, 
-                     backgroundImage: p.shopName != null && p.shopVerified 
-                        ? null // TODO: Add Shop Logo if available in model
-                        : p.sellerAvatar != null 
-                            ? NetworkImage(p.sellerAvatar!) 
-                            : null,
-                     child: (p.shopName == null && p.sellerAvatar == null)
-                        ? Text(p.seller.isNotEmpty ? p.seller[0] : '?', style: const TextStyle(color: Colors.white, fontSize: 20))
-                        : null,
-                   ),
-                   // Verification Badge Overlay
-                   if (p.sellerIsVerified || p.sellerAccountType != 'ordinaire' || p.sellerHasCertifiedShop || p.shopVerified)
-                     Positioned(
-                       bottom: -4, 
-                       right: -4, 
-                       child: VerificationBadge(
-                         type: p.shopVerified 
-                           ? BadgeType.gold
-                           : VerificationBadge.fromSellerData(
-                               isVerified: p.sellerIsVerified,
-                               accountType: p.sellerAccountType,
-                               hasCertifiedShop: p.sellerHasCertifiedShop,
+            decoration: BoxDecoration(
+              color: Colors.white, 
+              borderRadius: BorderRadius.circular(15)
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(15),
+                onTap: () {
+                   debugPrint("👉 [DEBUG] Clic Profil Vendeur. SellerID: '${p.sellerId}'");
+                   if (p.sellerId.isNotEmpty) {
+                     Navigator.push(context, MaterialPageRoute(builder: (_) => SellerProfilePage(sellerId: p.sellerId.trim())));
+                   } else {
+                     debugPrint("❌ [DEBUG] Seller ID est vide !");
+                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profil vendeur indisponible")));
+                   }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                         CircleAvatar(
+                           radius: 25, 
+                           backgroundColor: Colors.blueAccent, 
+                           backgroundImage: p.shopName != null && p.shopVerified 
+                              ? null // TODO : Ajouter le logo de la boutique s'il est disponible dans le modèle
+                              : p.sellerAvatar != null 
+                                  ? NetworkImage(p.sellerAvatar!) 
+                                  : null,
+                           child: (p.shopName == null && p.sellerAvatar == null)
+                              ? Text(p.seller.isNotEmpty ? p.seller[0] : '?', style: const TextStyle(color: Colors.white, fontSize: 20))
+                              : null,
+                         ),
+                         // Badge de vérification superposé
+                         if (p.sellerIsVerified || p.sellerAccountType != 'ordinaire' || p.sellerHasCertifiedShop || p.shopVerified)
+                           Positioned(
+                             bottom: -4, 
+                             right: -4, 
+                             child: VerificationBadge(
+                               type: p.shopVerified 
+                                 ? BadgeType.gold
+                                 : VerificationBadge.fromSellerData(
+                                     isVerified: p.sellerIsVerified,
+                                     accountType: p.sellerAccountType,
+                                     hasCertifiedShop: p.sellerHasCertifiedShop,
+                                   ),
+                               size: 20,
                              ),
-                         size: 20,
-                       ),
-                     ),
-                ],
+                           ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(
+                          (p.shopName ?? p.seller).toUpperCase(), 
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16)
+                        ),
+                        if (p.shopName != null)
+                         const Text('CONFIANCE GARANTIE', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
+                        
+                        // Stats vendeur
+                        Row(
+                          children: [
+                             Text('${p.totalBuyerRatings}% positif', style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                             const SizedBox(width: 8),
+                             Text('• ${p.sellerSalesCount} ventes', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                          ],
+                        ),
+                      ]),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chat_bubble_outline, color: Colors.black, size: 30),
+                      onPressed: _openChat,
+                    ),
+                  ]),
+                ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(
-                    (p.shopName ?? p.seller).toUpperCase(), 
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16)
-                  ),
-                  if (p.shopName != null)
-                   const Text('CONFIANCE GARANTIE', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
-                  
-                  // Stats vendeur
-                  Row(
-                    children: [
-                       Text('${p.totalBuyerRatings}% positif', style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
-                       const SizedBox(width: 8),
-                       Text('• ${p.sellerSalesCount} ventes', style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                    ],
-                  ),
-                ]),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chat_bubble_outline, color: Colors.black, size: 30),
-                onPressed: _openChat,
-              ),
-            ]),
+            ),
           ),
           // BANNIÈRE PRIX (Design amélioré)
           Container(
@@ -525,6 +647,11 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                 ),
               ),
               const SizedBox(height: 20),
+
+              // WIDGET PROTECTION OLI
+              _buildProtectionWidget(),
+
+              const SizedBox(height: 20),
               
               // TABLE DE PROVENANCE
               Container(
@@ -550,7 +677,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                           isLink: true,
                           onTap: () {
                              if (p.sellerId.isNotEmpty) {
-                               Navigator.push(context, MaterialPageRoute(builder: (_) => SellerProfilePage(sellerId: p.sellerId)));
+                               Navigator.push(context, MaterialPageRoute(builder: (_) => SellerProfilePage(sellerId: p.sellerId.trim())));
                              }
                           }
                         ),
@@ -635,7 +762,7 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
   @override
   void initState() {
     super.initState();
-    // Default selection
+    // Sélection par défaut
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onMethodChanged('Standard', widget.standardPrice);
     });
@@ -892,6 +1019,7 @@ class _DynamicDeliverySelector extends StatelessWidget {
       ),
     );
   }
+
 
 
   String _formatDate(String deliveryTime) {

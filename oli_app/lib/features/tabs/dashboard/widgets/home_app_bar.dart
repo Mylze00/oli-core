@@ -8,6 +8,7 @@ import '../../../notifications/providers/notification_provider.dart';
 import '../../../notifications/screens/notifications_view.dart';
 import '../../../../models/product_model.dart';
 import '../providers/shops_provider.dart';
+import '../../../../app/theme/theme_provider.dart';
 
 class HomeAppBar extends ConsumerWidget {
   final TextEditingController searchCtrl;
@@ -86,6 +87,15 @@ class HomeAppBar extends ConsumerWidget {
         const Padding(
           padding: EdgeInsets.only(right: 8.0),
           child: CurrencySelectorWidget(),
+        ),
+        IconButton(
+          icon: Icon(
+            ref.watch(themeProvider) ? Icons.light_mode : Icons.dark_mode,
+            color: Colors.white,
+          ),
+          onPressed: () {
+            ref.read(themeProvider.notifier).toggleTheme();
+          },
         ),
         Consumer(
           builder: (context, ref, child) {

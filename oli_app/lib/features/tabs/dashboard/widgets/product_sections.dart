@@ -163,17 +163,24 @@ class VerifiedShopProductsSection extends StatelessWidget {
 
 class TopRankingGrid extends StatelessWidget {
   final List<Product> products;
+  final int crossAxisCount;
+  final double childAspectRatio;
 
-  const TopRankingGrid({super.key, required this.products});
+  const TopRankingGrid({
+    super.key, 
+    required this.products,
+    this.crossAxisCount = 3,
+    this.childAspectRatio = 0.75,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          childAspectRatio: 0.75,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          childAspectRatio: childAspectRatio,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),

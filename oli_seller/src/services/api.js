@@ -5,7 +5,7 @@
 
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://oli-api.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://oli-core.onrender.com';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -60,54 +60,54 @@ export const authAPI = {
 export const sellerAPI = {
     // Dashboard
     getDashboard: async () => {
-        const response = await api.get('/seller/dashboard');
+        const response = await api.get('/api/seller/dashboard');
         return response.data;
     },
 
     // Products
     getProducts: async (filters = {}) => {
         const params = new URLSearchParams(filters).toString();
-        const response = await api.get(`/seller/products?${params}`);
+        const response = await api.get(`/api/seller/products?${params}`);
         return response.data;
     },
 
     toggleProduct: async (productId) => {
-        const response = await api.patch(`/seller/products/${productId}/toggle`);
+        const response = await api.patch(`/api/seller/products/${productId}/toggle`);
         return response.data;
     },
 
     // Orders
     getOrders: async (status = null) => {
         const params = status ? `?status=${status}` : '';
-        const response = await api.get(`/seller/orders${params}`);
+        const response = await api.get(`/api/seller/orders${params}`);
         return response.data;
     },
 
     getOrderDetails: async (orderId) => {
-        const response = await api.get(`/seller/orders/${orderId}`);
+        const response = await api.get(`/api/seller/orders/${orderId}`);
         return response.data;
     },
 
     // Sales Stats
     getSalesChart: async (period = '7d') => {
-        const response = await api.get(`/seller/stats/sales?period=${period}`);
+        const response = await api.get(`/api/seller/stats/sales?period=${period}`);
         return response.data;
     },
 
     // Certification & Subscription
     getCertification: async () => {
-        const response = await api.get('/seller/certification');
+        const response = await api.get('/api/seller/certification');
         return response.data;
     },
 
     upgradeSubscription: async (plan, paymentMethod) => {
         // Uses the centralized subscription API
-        const response = await api.post('/subscription/upgrade', { plan, paymentMethod });
+        const response = await api.post('/api/subscription/upgrade', { plan, paymentMethod });
         return response.data;
     },
 
     checkSubscriptionStatus: async () => {
-        const response = await api.get('/subscription/status');
+        const response = await api.get('/api/subscription/status');
         return response.data;
     }
 };
@@ -148,12 +148,12 @@ export const productAPI = {
 // Shop APIs
 export const shopAPI = {
     getMyShops: async () => {
-        const response = await api.get('/shops/my-shops');
+        const response = await api.get('/api/shops/my-shops');
         return response.data;
     },
 
     update: async (shopId, formData) => {
-        const response = await api.patch(`/shops/${shopId}`, formData, {
+        const response = await api.patch(`/api/shops/${shopId}`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
         return response.data;

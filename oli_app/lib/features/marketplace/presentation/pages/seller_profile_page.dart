@@ -38,7 +38,7 @@ class _SellerProfilePageState extends ConsumerState<SellerProfilePage> {
       ),
       body: sellerAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text("Erreur: $err", style: const TextStyle(color: Colors.red))),
+        error: (err, _) => Center(child: Text("Erreur: $err\n(ID: ${widget.sellerId})", textAlign: TextAlign.center, style: const TextStyle(color: Colors.red))),
         data: (profile) {
           final products = productsAsync.valueOrNull ?? [];
           

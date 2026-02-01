@@ -80,7 +80,7 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
     _error = null;
 
     try {
-      final featuredUrl = ApiConfig.products.replaceAll('/products', '/products/featured');
+      final featuredUrl = ApiConfig.products.replaceAll('/products', '/products/featured?limit=100');
       final uri = Uri.parse(featuredUrl);
       final response = await http.get(uri);
       
