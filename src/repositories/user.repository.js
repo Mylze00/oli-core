@@ -171,6 +171,7 @@ async function updateName(userId, name) {
  * Récupérer le profil public (sécurisé)
  */
 async function findPublicProfile(userId) {
+  // Simple query without shops join (shops table may not exist in all environments)
   const query = `
     SELECT 
       u.id, 
@@ -181,11 +182,8 @@ async function findPublicProfile(userId) {
       u.account_type, 
       u.has_certified_shop,
       u.total_sales,
-      u.rating,
-      s.name as shop_name,
-      s.is_verified as shop_verified
+      u.rating
     FROM users u
-    LEFT JOIN shops s ON s.owner_id = u.id
     WHERE u.id = $1
   `;
   const { rows } = await pool.query(query, [userId]);
