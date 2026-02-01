@@ -32,6 +32,13 @@ CREATE TABLE IF NOT EXISTS addresses (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Ensure columns exist even if table was already present
+ALTER TABLE addresses ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,8);
+ALTER TABLE addresses ADD COLUMN IF NOT EXISTS longitude DECIMAL(11,8);
+ALTER TABLE addresses ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE addresses ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;
+ALTER TABLE addresses ADD COLUMN IF NOT EXISTS verification_method VARCHAR(50);
+
 CREATE INDEX IF NOT EXISTS idx_addresses_user_id ON addresses(user_id);
 
 COMMENT ON TABLE addresses IS 'Adresses de livraison des utilisateurs avec GPS et vérification';
