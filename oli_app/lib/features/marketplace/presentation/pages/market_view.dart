@@ -18,24 +18,24 @@ class _MarketViewState extends ConsumerState<MarketView> {
   // Catégories disponibles (Liste enrichie)
   final Map<String, String> _categories = {
     "Tout": "",
-    "Industrie": "industry",
-    "Maison": "home",
-    "Véhicules": "vehicles",
-    "Mode": "fashion",
-    "Électronique": "electronics",
-    "Sports": "sports",
-    "Beauté": "beauty",
-    "Jouets": "toys",
-    "Santé": "health",
-    "Construction": "construction",
-    "Outils": "tools",
-    "Bureau": "office",
-    "Jardin": "garden",
-    "Animaux": "pets",
-    "Bébé": "baby",
-    "Alimentation": "food", 
-    "Sécurité": "security",
-    "Autres": "other",
+    "Industrie": "Industrie",
+    "Maison": "Maison",
+    "Véhicules": "Véhicules",
+    "Mode": "Mode",
+    "Électronique": "Électronique",
+    "Sports": "Sports",
+    "Beauté": "Beauté",
+    "Jouets": "Jouets",
+    "Santé": "Santé",
+    "Construction": "Construction",
+    "Outils": "Outils",
+    "Bureau": "Bureau",
+    "Jardin": "Jardin",
+    "Animaux": "Animaux",
+    "Bébé": "Bébé",
+    "Alimentation": "Alimentation", 
+    "Sécurité": "Sécurité",
+    "Autres": "Autres",
   };
 
   @override
@@ -54,7 +54,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
     }
   }
 
+  bool _isSearching = false;
+
   void _onSearch(String value) {
+    setState(() {
+      _isSearching = value.trim().isNotEmpty;
+    });
     if (value.trim().isEmpty) {
       ref.read(marketProductsProvider.notifier).fetchProducts();
     } else {
@@ -117,7 +122,9 @@ class _MarketViewState extends ConsumerState<MarketView> {
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
                           _searchCtrl.clear();
+                          _searchCtrl.clear();
                           _onSearch("");
+                          setState(() => _isSearching = false);
                         },
                       )
                     : null,
@@ -135,77 +142,81 @@ class _MarketViewState extends ConsumerState<MarketView> {
           ),
 
           // 2. CATÉGORIES TABS
-          SliverToBoxAdapter(
-            child: Container(
-              height: 50,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: _categories.keys.map((label) {
-                  final isSelected = _selectedCategory == label;
-                  return GestureDetector(
-                    onTap: () => _onCategorySelected(label),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? Colors.blueAccent : Colors.grey[900],
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Center(
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.grey[400],
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            fontSize: 13,
+          if (!_isSearching)
+            SliverToBoxAdapter(
+              child: Container(
+                height: 50,
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: _categories.keys.map((label) {
+                    final isSelected = _selectedCategory == label;
+                    return GestureDetector(
+                      onTap: () => _onCategorySelected(label),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.blueAccent : Colors.grey[900],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Center(
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : Colors.grey[400],
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
-          ),
 
           // 3. WIDGET: MEILLEURS VENDEURS
-          SliverToBoxAdapter(
-            child: _buildHorizontalSection(
-              title: "⭐ Meilleurs Vendeurs",
-              subtitle: "Les plus populaires",
-              products: topSellers,
-              gradient: [Colors.orange.shade900, Colors.orange.shade700],
-              badgeText: "TOP",
-              badgeColor: Colors.orange,
+          if (!_isSearching)
+            SliverToBoxAdapter(
+              child: _buildHorizontalSection(
+                title: "⭐ Meilleurs Vendeurs",
+                subtitle: "Les plus populaires",
+                products: topSellers,
+                gradient: [Colors.orange.shade900, Colors.orange.shade700],
+                badgeText: "TOP",
+                badgeColor: Colors.orange,
+              ),
             ),
-          ),
 
           // 4. WIDGET: PRODUITS SPONSORISÉS
-          SliverToBoxAdapter(
-            child: _buildHorizontalSection(
-              title: "🎯 Produits Sponsorisés",
-              subtitle: "Sélection premium",
-              products: featuredProducts,
-              gradient: [Colors.purple.shade900, Colors.purple.shade600],
-              badgeText: "PROMO",
-              badgeColor: Colors.purple,
+          if (!_isSearching)
+            SliverToBoxAdapter(
+              child: _buildHorizontalSection(
+                title: "🎯 Produits Sponsorisés",
+                subtitle: "Sélection premium",
+                products: featuredProducts,
+                gradient: [Colors.purple.shade900, Colors.purple.shade600],
+                badgeText: "PROMO",
+                badgeColor: Colors.purple,
+              ),
             ),
-          ),
 
           // 5. WIDGET: MAGASINS CERTIFIÉS
-          SliverToBoxAdapter(
-            child: _buildHorizontalSection(
-              title: "🏪 Magasins Certifiés",
-              subtitle: "Boutiques vérifiées",
-              products: verifiedShopsProducts,
-              gradient: [Colors.blue.shade900, Colors.blue.shade600],
-              badgeText: "VÉRIFIÉ",
-              badgeColor: Colors.green,
-              showVerifiedBadge: true,
+          if (!_isSearching)
+            SliverToBoxAdapter(
+              child: _buildHorizontalSection(
+                title: "🏪 Magasins Certifiés",
+                subtitle: "Boutiques vérifiées",
+                products: verifiedShopsProducts,
+                gradient: [Colors.blue.shade900, Colors.blue.shade600],
+                badgeText: "VÉRIFIÉ",
+                badgeColor: Colors.green,
+                showVerifiedBadge: true,
+              ),
             ),
-          ),
 
           // 6. HEADER INFO - Tous les produits
           SliverToBoxAdapter(
@@ -242,7 +253,10 @@ class _MarketViewState extends ConsumerState<MarketView> {
                         TextButton(
                           onPressed: () {
                             _searchCtrl.clear();
-                            setState(() => _selectedCategory = "Tout");
+                            setState(() {
+                              _selectedCategory = "Tout";
+                              _isSearching = false;
+                            });
                             ref.read(marketProductsProvider.notifier).fetchProducts();
                           },
                           child: const Text("Réinitialiser"),

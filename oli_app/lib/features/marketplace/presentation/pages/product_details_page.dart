@@ -21,7 +21,6 @@ class ProductDetailsPage extends ConsumerStatefulWidget {
 
 class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   int _currentImageIndex = 0;
-  int _currentImageIndex = 0;
   ShippingOption? _selectedShipping; 
   // bool _isFollowing = false; // Plus besoin de variable locale
 
@@ -121,7 +120,6 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       productName: p.name,
       price: double.tryParse(p.price) ?? 0.0,
       imageUrl: p.images.isNotEmpty ? p.images.first : null,
-      sellerName: p.seller,
       sellerName: p.seller,
       deliveryPrice: _selectedShipping?.cost ?? 0.0,
       deliveryMethod: _selectedShipping?.label ?? 'Standard',
@@ -543,9 +541,9 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                       border: TableBorder(horizontalInside: BorderSide(color: Colors.white.withOpacity(0.05))),
                       children: [
                         _buildProvenanceRow("Localisation", p.location ?? "Non spécifié"),
-                        _buildProvenanceRow("Vendeur", p.shopName ?? p.seller),
+                        _buildProvenanceRow("Vendeur", p.seller),
                         _buildProvenanceRow("Type Vendeur", p.sellerAccountType.toUpperCase()),
-                        _buildProvenanceRow("Expédition", "Depuis ${p.location ?? 'l\'entrepôt'}"),
+                        _buildProvenanceRow("Mise en ligne", _getTimeSinceUpload(p.createdAt)),
                       ],
                     ),
                   ],
@@ -565,6 +563,15 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     );
   }
 
+
+  String _getTimeSinceUpload(DateTime? createdAt) {
+    if (createdAt == null) return "Récemment";
+    final diff = DateTime.now().difference(createdAt);
+    if (diff.inDays > 1) return "Il y a ${diff.inDays} jours";
+    if (diff.inDays == 1) return "Hier";
+    if (diff.inHours > 0) return "Il y a ${diff.inHours} heures";
+    return "Il y a quelques minutes";
+  }
 
   TableRow _buildProvenanceRow(String label, String value) {
     return TableRow(
@@ -649,10 +656,29 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
   }
   
   String _calculateDate(String deliveryTime) {
-      // Simple date calc helper reuse logic or pass from parent
-       // ... simplified for widget scope
-       return deliveryTime; 
+      if (deliveryTime.isEmpty) return "Inconnue";
+      
+      // Essayer de parser si c'est un nombre (nouveau format)
+      final int? days = int.tryParse(deliveryTime);
+      if (days != null) {
+        final date = DateTime.now().add(Duration(days: days));
+        return "${_getDayName(date.weekday)} ${date.day} ${_getMonthName(date.month)}";
+      }
+      
+      // Sinon retourner le texte original (ancien format ex: "24-48h")
+      return deliveryTime; 
   }
+
+  String _getDayName(int weekday) {
+    const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    return days[weekday - 1];
+  }
+
+  String _getMonthName(int month) {
+    const months = ['Jan', 'Fév', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+    return months[month - 1];
+  }
+
 
   Widget _buildOption({
     required String title,
@@ -822,7 +848,7 @@ class _DynamicDeliverySelector extends StatelessWidget {
                 children: [
                   Text(opt.label, 
                     style: TextStyle(color: isSelected ? Colors.white : Colors.white70, fontWeight: FontWeight.bold)),
-                  Text("Arrivée estimée : ${opt.time}", 
+                  Text("Arrivée estimée : ${_formatDate(opt.time)}", 
                     style: const TextStyle(color: Colors.white54, fontSize: 12)),
                 ],
               ),
@@ -842,5 +868,26 @@ class _DynamicDeliverySelector extends StatelessWidget {
         ),
       ),
     );
+  }
+
+
+  String _formatDate(String deliveryTime) {
+      if (deliveryTime.isEmpty) return "Inconnue";
+      final int? days = int.tryParse(deliveryTime);
+      if (days != null) {
+        final date = DateTime.now().add(Duration(days: days));
+        return "${_getDayName(date.weekday)} ${date.day} ${_getMonthName(date.month)}";
+      }
+      return deliveryTime; 
+  }
+
+  String _getDayName(int weekday) {
+    const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    return days[weekday - 1];
+  }
+
+  String _getMonthName(int month) {
+    const months = ['Jan', 'Fév', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+    return months[month - 1];
   }
 }

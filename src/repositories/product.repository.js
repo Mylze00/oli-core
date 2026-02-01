@@ -65,7 +65,6 @@ class ProductRepository {
             WHERE p.status = 'active'
               AND (
                   s.is_verified = TRUE 
-                  OR u.is_verified = TRUE 
                   OR u.account_type = 'entreprise'
                   OR u.has_certified_shop = TRUE
               )

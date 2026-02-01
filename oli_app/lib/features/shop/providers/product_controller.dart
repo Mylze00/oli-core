@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../config/api_config.dart';
 import '../../../core/storage/secure_storage_service.dart';
+import '../../../models/product_model.dart';
 
 final productControllerProvider = StateNotifierProvider<ProductController, AsyncValue<void>>((ref) {
   return ProductController();
@@ -25,9 +27,11 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
     required int quantity,
     required String color,
     required List<XFile> images,
-    double? expressPrice, // Nouveau paramètre pour la livraison express
-    String? category, // Nouvelle catégorie optionnelle
+    double? expressPrice,
+    String? category,
     String? location,
+    bool isNegotiable = false,
+    List<ShippingOption>? shippingOptions, // New dynamic options
   }) async {
     state = const AsyncValue.loading();
 
@@ -58,8 +62,15 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
         'condition': condition,
         'quantity': quantity,
         'color': color,
-        'category': category ?? 'Autres', // Catégorie avec valeur par défaut
+        'category': category ?? 'Autres',
         'location': location,
+        'is_negotiable': isNegotiable,
+        'shipping_options': shippingOptions != null ? jsonEncode(shippingOptions.map((e) => {
+          'methodId': e.methodId,
+          'label': e.label,
+          'time': e.time,
+          'cost': e.cost
+        }).toList()) : null,
         'images': multipartFiles,
       });
 
