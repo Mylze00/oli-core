@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../config/api_config.dart';
+import 'market_view.dart';
+import 'seller_profile_page.dart'; // Import profile page
+import '../../../../shared/widgets/oli_button.dart';
 import '../../../../models/product_model.dart'; 
 import '../../../../widgets/verification_badge.dart';
 import '../../../chat/chat_page.dart';
@@ -541,7 +544,16 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                       border: TableBorder(horizontalInside: BorderSide(color: Colors.white.withOpacity(0.05))),
                       children: [
                         _buildProvenanceRow("Localisation", p.location ?? "Non spécifié"),
-                        _buildProvenanceRow("Vendeur", p.seller),
+                        _buildProvenanceRow(
+                          "Vendeur", 
+                          p.seller, 
+                          isLink: true,
+                          onTap: () {
+                             if (p.sellerId.isNotEmpty) {
+                               Navigator.push(context, MaterialPageRoute(builder: (_) => SellerProfilePage(sellerId: p.sellerId)));
+                             }
+                          }
+                        ),
                         _buildProvenanceRow("Type Vendeur", p.sellerAccountType.toUpperCase()),
                         _buildProvenanceRow("Mise en ligne", _getTimeSinceUpload(p.createdAt)),
                       ],
@@ -573,16 +585,27 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     return "Il y a quelques minutes";
   }
 
-  TableRow _buildProvenanceRow(String label, String value) {
+  TableRow _buildProvenanceRow(String label, String value, {bool isLink = false, VoidCallback? onTap}) {
     return TableRow(
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 13)),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+        GestureDetector(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              value, 
+              style: TextStyle(
+                color: isLink ? Colors.blueAccent : Colors.white, 
+                fontSize: 13, 
+                fontWeight: isLink ? FontWeight.bold : FontWeight.w500,
+                decoration: isLink ? TextDecoration.underline : null,
+              )
+            ),
+          ),
         ),
       ],
     );

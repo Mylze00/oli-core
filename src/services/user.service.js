@@ -98,12 +98,39 @@ async function updateUserName(userId, newName) {
     }
 }
 
+/**
+ * Récupère le profil public d'un vendeur
+ * @param {number} userId 
+ */
+async function getPublicProfile(userId) {
+    try {
+        const profile = await userRepository.findPublicProfile(userId);
+        if (!profile) return null;
+
+        // Formatting
+        let avatar = profile.avatar_url;
+        if (avatar && !avatar.startsWith('http')) {
+            avatar = `${BASE_URL}/uploads/${avatar}`;
+        }
+
+        return {
+            ...profile,
+            avatar_url: avatar,
+            joined_at: profile.created_at // Already a date object or string from DB
+        };
+    } catch (e) {
+        console.error("Erreur getPublicProfile:", e);
+        throw e;
+    }
+}
+
 module.exports = {
     getVisitedProducts,
     trackProductView,
     updateUserName,
     updateProfile,
-    uploadAvatar
+    uploadAvatar,
+    getPublicProfile
 };
 
 /**

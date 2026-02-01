@@ -167,6 +167,31 @@ async function updateName(userId, name) {
   return rows[0];
 }
 
+/**
+ * Récupérer le profil public (sécurisé)
+ */
+async function findPublicProfile(userId) {
+  const query = `
+    SELECT 
+      u.id, 
+      u.name, 
+      u.avatar_url, 
+      u.created_at, 
+      u.is_verified, 
+      u.account_type, 
+      u.has_certified_shop,
+      u.total_sales,
+      u.rating,
+      s.name as shop_name,
+      s.is_verified as shop_verified
+    FROM users u
+    LEFT JOIN shops s ON s.owner_id = u.id
+    WHERE u.id = $1
+  `;
+  const { rows } = await pool.query(query, [userId]);
+  return rows[0];
+}
+
 module.exports = {
   findByPhone,
   findById,
@@ -176,5 +201,7 @@ module.exports = {
   clearOtp,
   findVisitedProducts,
   trackProductView,
-  updateName
+  trackProductView,
+  updateName,
+  findPublicProfile
 };

@@ -47,3 +47,22 @@ exports.updateName = async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 };
+
+exports.getPublicProfile = async (req, res) => {
+    try {
+        const userId = parseInt(req.params.id);
+        if (!userId || isNaN(userId)) {
+            return res.status(400).json({ error: 'ID utilisateur invalide' });
+        }
+
+        const profile = await userService.getPublicProfile(userId);
+        if (!profile) {
+            return res.status(404).json({ error: 'Utilisateur introuvable' });
+        }
+
+        res.json(profile);
+    } catch (error) {
+        console.error('Erreur /user/public-profile:', error);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+};

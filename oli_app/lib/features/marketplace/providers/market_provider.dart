@@ -22,12 +22,13 @@ class MarketProductsNotifier extends StateNotifier<AsyncValue<List<Product>>> {
     fetchProducts();
   }
 
-  Future<void> fetchProducts({String? search, String? category}) async {
+  Future<void> fetchProducts({String? search, String? category, String? sellerId}) async {
     state = const AsyncValue.loading();
     try {
       final queryParams = <String, String>{};
       if (search != null && search.isNotEmpty) queryParams['search'] = search;
       if (category != null && category.isNotEmpty) queryParams['category'] = category;
+      if (sellerId != null && sellerId.isNotEmpty) queryParams['seller_id'] = sellerId;
 
       final uri = Uri.parse('${ApiConfig.baseUrl}/products').replace(queryParameters: queryParams);
       

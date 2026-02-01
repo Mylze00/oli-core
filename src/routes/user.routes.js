@@ -23,4 +23,10 @@ router.post('/track-view/:productId', userController.trackProductView);
  */
 router.put('/update-name', userController.updateName);
 
+/**
+ * GET /user/public-profile/:id
+ * Récupère le profil public d'un vendeur
+ */
+router.get('/public-profile/:id', userController.getPublicProfile);
+
 module.exports = router;
