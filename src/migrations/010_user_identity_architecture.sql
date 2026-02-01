@@ -1,11 +1,11 @@
 -- =====================================================
 -- MIGRATION: Architecture Unifiée de l'Identité Utilisateur (CORRIGÉE)
--- Version: 1.1
+-- Version: 1.2
 -- Date: 2026-01-25
 -- Description: Création des tables pour la gestion complète
 --              du cycle de vie utilisateur (certification,
 --              comportement, trust score)
--- IMPORTANT: users.id est de type UUID
+-- IMPORTANT: users.id est de type INTEGER (Legacy)
 -- =====================================================
 
 -- =====================================================
@@ -15,7 +15,7 @@
 -- 1. Table des adresses de livraison
 CREATE TABLE IF NOT EXISTS addresses (
     id SERIAL PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     label VARCHAR(50),
     address TEXT NOT NULL,
     city VARCHAR(100),
@@ -49,7 +49,7 @@ COMMENT ON COLUMN addresses.verification_method IS 'Méthode: gps, manual, deliv
 -- 2. Table pour tracking des produits visités
 CREATE TABLE IF NOT EXISTS user_product_views (
     id SERIAL PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     viewed_at TIMESTAMP DEFAULT NOW(),
     
@@ -84,7 +84,7 @@ COMMENT ON COLUMN user_product_views.source IS 'Source: search, category, recomm
 -- 1. Table pour les pièces d'identité
 CREATE TABLE IF NOT EXISTS user_identity_documents (
     id SERIAL PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     
     document_type VARCHAR(50) NOT NULL,
     document_number VARCHAR(100),
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS user_identity_documents (
     selfie_url TEXT,
     
     verification_status VARCHAR(20) DEFAULT 'pending',
-    verified_by UUID REFERENCES users(id),
+    verified_by INTEGER REFERENCES users(id),
     verified_at TIMESTAMP,
     rejection_reason TEXT,
     
@@ -118,7 +118,7 @@ COMMENT ON TABLE user_identity_documents IS 'Stockage sécurisé des pièces d''
 -- 2. Table pour les niveaux de vérification
 CREATE TABLE IF NOT EXISTS user_verification_levels (
     id SERIAL PRIMARY KEY,
-    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     
     phone_verified BOOLEAN DEFAULT FALSE,
     email_verified BOOLEAN DEFAULT FALSE,
@@ -147,7 +147,7 @@ COMMENT ON TABLE user_verification_levels IS 'Niveaux de vérification et trust 
 -- 3. Table pour les événements comportementaux
 CREATE TABLE IF NOT EXISTS user_behavior_events (
     id SERIAL PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     
     event_type VARCHAR(50) NOT NULL,
     event_category VARCHAR(30),
@@ -182,7 +182,7 @@ COMMENT ON TABLE user_behavior_events IS 'Tracking de tous les événements util
 CREATE TABLE IF NOT EXISTS user_sessions (
     id SERIAL PRIMARY KEY,
     session_id VARCHAR(100) UNIQUE NOT NULL,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     
     device_type VARCHAR(20),
     platform VARCHAR(20),
@@ -213,7 +213,7 @@ COMMENT ON TABLE user_sessions IS 'Tracking des sessions utilisateur avec durée
 -- 5. Table pour les scores de confiance
 CREATE TABLE IF NOT EXISTS user_trust_scores (
     id SERIAL PRIMARY KEY,
-    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     
     identity_score INTEGER DEFAULT 0,
     transaction_score INTEGER DEFAULT 50,
@@ -242,7 +242,7 @@ COMMENT ON TABLE user_trust_scores IS 'Scores de confiance et détection de frau
 -- 6. Table pour l'historique des avatars
 CREATE TABLE IF NOT EXISTS user_avatar_history (
     id SERIAL PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     avatar_url TEXT NOT NULL,
     storage_provider VARCHAR(20) DEFAULT 'cloudinary',
     file_size_bytes INTEGER,
@@ -319,7 +319,7 @@ WHERE avatar_url IS NOT NULL AND avatar_url != '';
 -- =====================================================
 
 -- Fonction pour calculer le niveau de vérification
-CREATE OR REPLACE FUNCTION calculate_verification_level(p_user_id UUID)
+CREATE OR REPLACE FUNCTION calculate_verification_level(p_user_id INTEGER)
 RETURNS VARCHAR AS $$
 DECLARE
     v_phone_verified BOOLEAN;
@@ -354,7 +354,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Fonction pour calculer le trust score global
-CREATE OR REPLACE FUNCTION calculate_overall_trust_score(p_user_id UUID)
+CREATE OR REPLACE FUNCTION calculate_overall_trust_score(p_user_id INTEGER)
 RETURNS INTEGER AS $$
 DECLARE
     v_identity_score INTEGER;
