@@ -49,7 +49,7 @@ export const authAPI = {
         const formData = new FormData();
         formData.append('avatar', file);
 
-        const response = await api.post('/auth/avatar-upload', formData, {
+        const response = await api.post('/auth/upload-avatar', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
         return response.data;
