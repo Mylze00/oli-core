@@ -110,8 +110,9 @@ router.post('/', requireAuth, genericUpload.fields([
             return res.status(400).json({ error: "Le nom de la boutique est requis" });
         }
 
-        const logoFilename = req.files['logo'] ? req.files['logo'][0].filename : null;
-        const bannerFilename = req.files['banner'] ? req.files['banner'][0].filename : null;
+        // Cloudinary retourne l'URL complète dans .path, pas .filename
+        const logoUrl = req.files['logo'] ? (req.files['logo'][0].path || req.files['logo'][0].filename) : null;
+        const bannerUrl = req.files['banner'] ? (req.files['banner'][0].path || req.files['banner'][0].filename) : null;
 
         const newShop = await shopRepo.create({
             owner_id: req.user.id,
@@ -119,8 +120,8 @@ router.post('/', requireAuth, genericUpload.fields([
             description,
             category,
             location,
-            logo_url: logoFilename,
-            banner_url: bannerFilename
+            logo_url: logoUrl,
+            banner_url: bannerUrl
         });
 
         res.status(201).json(imageService.formatShopImages(newShop));
@@ -153,10 +154,11 @@ router.patch('/:id', requireAuth, genericUpload.fields([
         const updates = { ...req.body };
 
         if (req.files['logo']) {
-            updates.logo_url = req.files['logo'][0].filename;
+            // Cloudinary retourne l'URL complète dans .path, pas .filename
+            updates.logo_url = req.files['logo'][0].path || req.files['logo'][0].filename;
         }
         if (req.files['banner']) {
-            updates.banner_url = req.files['banner'][0].filename;
+            updates.banner_url = req.files['banner'][0].path || req.files['banner'][0].filename;
         }
 
         const updatedShop = await shopRepo.update(id, updates);
