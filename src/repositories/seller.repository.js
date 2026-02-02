@@ -14,6 +14,7 @@ async function getSellerDashboard(sellerId) {
         const sellerIdInt = parseInt(sellerId);
 
         // Requête simplifiée sans GROUP BY problématique
+        // Note: order_items.product_id est VARCHAR, products.id est INTEGER
         const query = `
             WITH seller_products AS (
                 SELECT id, is_active 
@@ -24,7 +25,7 @@ async function getSellerDashboard(sellerId) {
                 SELECT o.id, o.status, o.created_at, oi.quantity, oi.price
                 FROM orders o
                 JOIN order_items oi ON oi.order_id = o.id
-                JOIN seller_products sp ON sp.id = oi.product_id
+                JOIN seller_products sp ON sp.id = CAST(oi.product_id AS INTEGER)
             )
             SELECT 
                 -- Produits
@@ -112,7 +113,7 @@ async function getSalesChart(sellerId, period = '7d') {
                 COALESCE(SUM(oi.quantity), 0) as items_sold
             FROM orders o
             JOIN order_items oi ON oi.order_id = o.id
-            JOIN products p ON p.id = oi.product_id
+            JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
             WHERE p.seller_id = $1
               AND o.created_at >= CURRENT_DATE - INTERVAL $2
             GROUP BY to_char(o.created_at, $3)
@@ -146,7 +147,7 @@ async function getSellerOrders(sellerId, status = null, limit = 50, offset = 0) 
                 COUNT(oi.id) as items_count
             FROM orders o
             JOIN order_items oi ON oi.order_id = o.id
-            JOIN products p ON p.id = oi.product_id
+            JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
             LEFT JOIN users u ON u.id = o.user_id
             WHERE p.seller_id = $1
         `;
@@ -199,7 +200,7 @@ async function getSellerOrderDetails(sellerId, orderId) {
                 ) as items
             FROM orders o
             JOIN order_items oi ON oi.order_id = o.id
-            JOIN products p ON p.id = oi.product_id
+            JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
             LEFT JOIN users u ON u.id = o.user_id
             WHERE o.id = $1
               AND p.seller_id = $2
