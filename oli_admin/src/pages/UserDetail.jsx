@@ -108,7 +108,6 @@ export default function UserDetail() {
             if (userData.is_deliverer) roles.push('deliverer');
             // Mock pour verified/premium tant que pas dans DB
             if (userData.is_verified || userData.verified_at) roles.push('verified');
-            if (userData.is_premium) roles.push('premium');
 
             setUser({
                 ...userData,
@@ -177,7 +176,7 @@ export default function UserDetail() {
                             }}
                         />
                         {/* Twitter-style Scalloped Verification Badge */}
-                        {(user.is_verified || user.account_type === 'certifie' || user.account_type === 'premium' || user.account_type === 'entreprise' || user.has_certified_shop) && (
+                        {(user.is_verified || user.account_type === 'certifie' || user.account_type === 'entreprise' || user.has_certified_shop) && (
                             <div className="absolute bottom-0 right-0">
                                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path
@@ -185,8 +184,7 @@ export default function UserDetail() {
                                         fill={
                                             user.has_certified_shop ? '#D4A500' :
                                                 user.account_type === 'entreprise' ? '#D4A500' :
-                                                    user.account_type === 'premium' ? '#00BA7C' :
-                                                        '#1DA1F2'
+                                                    '#1DA1F2'
                                         }
                                     />
                                     <path d="M9.5 16.5L5.5 12.5l1.41-1.41L9.5 13.67l7.09-7.09L18 8l-8.5 8.5z" fill="white" />
@@ -264,8 +262,7 @@ export default function UserDetail() {
                             {[
                                 { value: 'ordinaire', label: 'Ordinaire', color: 'gray' },
                                 { value: 'certifie', label: 'Certifié ✓', color: 'blue' },
-                                { value: 'premium', label: 'Premium ⭐', color: 'yellow' },
-                                { value: 'entreprise', label: 'Entreprise 🏢', color: 'purple' }
+                                { value: 'entreprise', label: 'Entreprise 🏢', color: 'yellow' }
                             ].map(type => (
                                 <button
                                     key={type.value}
