@@ -24,14 +24,28 @@ class ImageService {
         // Nettoyer le path (enlever le slash initial si présent)
         const cleanPath = path.startsWith('/') ? path.slice(1) : path;
 
+        // Si le path est vide après nettoyage, retourner null
+        if (!cleanPath || cleanPath.trim() === '') {
+            return null;
+        }
+
         // Si c'est un fichier local (uploads/)
         if (cleanPath.startsWith('uploads/')) {
             return `${BASE_URL}/${cleanPath}`;
         }
 
+        // Valider le path Cloudinary - doit contenir un dossier et un fichier
+        // Ignorer les paths qui ressemblent à des UUIDs seuls ou des paths invalides
+        const hasValidFormat = cleanPath.includes('/') || cleanPath.includes('.');
+        if (!hasValidFormat) {
+            console.warn(`⚠️ Image path invalide ignoré: ${cleanPath}`);
+            return null;
+        }
+
         // Sinon, c'est un path Cloudinary
         return `${CLOUDINARY_BASE}/${cleanPath}`;
     }
+
 
     /**
      * Formate un tableau d'URLs d'images
