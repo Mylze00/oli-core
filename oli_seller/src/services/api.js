@@ -109,6 +109,32 @@ export const sellerAPI = {
     checkSubscriptionStatus: async () => {
         const response = await api.get('/api/subscription/status');
         return response.data;
+    },
+
+    // 📊 Analytics Avancés
+    getAnalyticsOverview: async () => {
+        const response = await api.get('/api/analytics/overview');
+        return response.data;
+    },
+
+    getTopProducts: async (limit = 10) => {
+        const response = await api.get(`/api/analytics/top-products?limit=${limit}`);
+        return response.data;
+    },
+
+    getProductsWithoutSales: async (days = 30) => {
+        const response = await api.get(`/api/analytics/products-without-sales?days=${days}`);
+        return response.data;
+    },
+
+    getRecentOrders: async (limit = 5) => {
+        const response = await api.get(`/api/analytics/recent-orders?limit=${limit}`);
+        return response.data;
+    },
+
+    getAnalyticsSalesChart: async (period = '7d') => {
+        const response = await api.get(`/api/analytics/sales-chart?period=${period}`);
+        return response.data;
     }
 };
 

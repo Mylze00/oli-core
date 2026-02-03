@@ -215,9 +215,179 @@ async function getSellerOrderDetails(sellerId, orderId) {
     }
 }
 
+/**
+ * Récupère les analytics avancés du vendeur
+ * KPIs: taux de conversion, panier moyen, vues totales
+ */
+async function getAdvancedAnalytics(sellerId) {
+    try {
+        const sellerIdInt = parseInt(sellerId);
+        
+        const query = `
+            WITH seller_products AS (
+                SELECT id, COALESCE(view_count, 0) as views
+                FROM products 
+                WHERE seller_id = $1
+            ),
+            seller_orders AS (
+                SELECT DISTINCT o.id, o.total_amount
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN seller_products sp ON sp.id = CAST(oi.product_id AS INTEGER)
+                WHERE o.status NOT IN ('cancelled', 'refunded')
+            )
+            SELECT 
+                -- Total vues
+                COALESCE((SELECT SUM(views) FROM seller_products), 0)::integer as total_views,
+                
+                -- Panier moyen
+                COALESCE((SELECT AVG(total_amount) FROM seller_orders), 0)::numeric(10,2) as average_cart,
+                
+                -- Nombre de commandes (pour calcul conversion)
+                (SELECT COUNT(*) FROM seller_orders)::integer as completed_orders,
+                
+                -- Taux de conversion approximatif (commandes / vues * 100)
+                CASE 
+                    WHEN (SELECT SUM(views) FROM seller_products) > 0 
+                    THEN ROUND(
+                        (SELECT COUNT(*) FROM seller_orders)::numeric 
+                        / NULLIF((SELECT SUM(views) FROM seller_products), 0) * 100, 2
+                    )
+                    ELSE 0 
+                END as conversion_rate
+        `;
+        
+        const result = await db.query(query, [sellerIdInt]);
+        return result.rows[0] || {
+            total_views: 0,
+            average_cart: 0,
+            completed_orders: 0,
+            conversion_rate: 0
+        };
+    } catch (error) {
+        console.error('Error in getAdvancedAnalytics:', error);
+        return {
+            total_views: 0,
+            average_cart: 0,
+            completed_orders: 0,
+            conversion_rate: 0
+        };
+    }
+}
+
+/**
+ * Récupère les Top N produits les plus vendus
+ */
+async function getTopProducts(sellerId, limit = 10) {
+    try {
+        const sellerIdInt = parseInt(sellerId);
+        
+        const query = `
+            SELECT 
+                p.id,
+                p.name,
+                p.images,
+                p.price,
+                COALESCE(p.view_count, 0) as views,
+                COALESCE(SUM(oi.quantity), 0)::integer as units_sold,
+                COALESCE(SUM(oi.quantity * oi.price), 0)::numeric(10,2) as revenue
+            FROM products p
+            LEFT JOIN order_items oi ON CAST(oi.product_id AS INTEGER) = p.id
+            LEFT JOIN orders o ON o.id = oi.order_id AND o.status NOT IN ('cancelled', 'refunded')
+            WHERE p.seller_id = $1 AND p.is_active = true
+            GROUP BY p.id, p.name, p.images, p.price, p.view_count
+            ORDER BY units_sold DESC, revenue DESC
+            LIMIT $2
+        `;
+        
+        const result = await db.query(query, [sellerIdInt, limit]);
+        return result.rows;
+    } catch (error) {
+        console.error('Error in getTopProducts:', error);
+        return [];
+    }
+}
+
+/**
+ * Récupère les produits sans ventes récentes (à optimiser)
+ */
+async function getProductsWithoutSales(sellerId, days = 30) {
+    try {
+        const sellerIdInt = parseInt(sellerId);
+        
+        const query = `
+            SELECT 
+                p.id,
+                p.name,
+                p.images,
+                p.price,
+                p.created_at,
+                COALESCE(p.view_count, 0) as views
+            FROM products p
+            WHERE p.seller_id = $1
+              AND p.is_active = true
+              AND NOT EXISTS (
+                SELECT 1 FROM order_items oi
+                JOIN orders o ON o.id = oi.order_id
+                WHERE CAST(oi.product_id AS INTEGER) = p.id
+                  AND o.created_at >= CURRENT_DATE - INTERVAL '1 day' * $2
+                  AND o.status NOT IN ('cancelled', 'refunded')
+              )
+            ORDER BY p.view_count DESC, p.created_at DESC
+            LIMIT 10
+        `;
+        
+        const result = await db.query(query, [sellerIdInt, days]);
+        return result.rows;
+    } catch (error) {
+        console.error('Error in getProductsWithoutSales:', error);
+        return [];
+    }
+}
+
+/**
+ * Récupère les dernières commandes du vendeur (widget dashboard)
+ */
+async function getRecentOrders(sellerId, limit = 5) {
+    try {
+        const sellerIdInt = parseInt(sellerId);
+        
+        const query = `
+            SELECT DISTINCT
+                o.id,
+                o.status,
+                o.total_amount,
+                o.created_at,
+                u.name as customer_name,
+                (SELECT COUNT(*) FROM order_items oi2 
+                 JOIN products p2 ON p2.id = CAST(oi2.product_id AS INTEGER)
+                 WHERE oi2.order_id = o.id AND p2.seller_id = $1
+                ) as items_count
+            FROM orders o
+            JOIN order_items oi ON oi.order_id = o.id
+            JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
+            LEFT JOIN users u ON u.id = o.user_id
+            WHERE p.seller_id = $1
+            ORDER BY o.created_at DESC
+            LIMIT $2
+        `;
+        
+        const result = await db.query(query, [sellerIdInt, limit]);
+        return result.rows;
+    } catch (error) {
+        console.error('Error in getRecentOrders:', error);
+        return [];
+    }
+}
+
 module.exports = {
     getSellerDashboard,
     getSalesChart,
     getSellerOrders,
-    getSellerOrderDetails
+    getSellerOrderDetails,
+    // 🆕 Analytics avancés
+    getAdvancedAnalytics,
+    getTopProducts,
+    getProductsWithoutSales,
+    getRecentOrders
 };
