@@ -135,6 +135,60 @@ export const sellerAPI = {
     getAnalyticsSalesChart: async (period = '7d') => {
         const response = await api.get(`/api/analytics/sales-chart?period=${period}`);
         return response.data;
+    },
+
+    // 📥 Import/Export CSV
+    getImportTemplate: () => {
+        return `${api.defaults.baseURL}/api/import-export/template`;
+    },
+
+    importProducts: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post('/api/import-export/import', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+
+    exportProducts: () => {
+        return `${api.defaults.baseURL}/api/import-export/export`;
+    },
+
+    getImportHistory: async () => {
+        const response = await api.get('/api/import-export/history');
+        return response.data;
+    },
+
+    // 🎨 Variantes produits
+    getVariants: async (productId) => {
+        const response = await api.get(`/api/variants/${productId}`);
+        return response.data;
+    },
+
+    addVariant: async (productId, variant) => {
+        const response = await api.post(`/api/variants/${productId}`, variant);
+        return response.data;
+    },
+
+    addVariantsBulk: async (productId, variants) => {
+        const response = await api.post(`/api/variants/${productId}/bulk`, { variants });
+        return response.data;
+    },
+
+    updateVariant: async (variantId, data) => {
+        const response = await api.put(`/api/variants/${variantId}`, data);
+        return response.data;
+    },
+
+    deleteVariant: async (variantId) => {
+        const response = await api.delete(`/api/variants/${variantId}`);
+        return response.data;
+    },
+
+    getVariantSuggestions: async () => {
+        const response = await api.get('/api/variants/types/suggestions');
+        return response.data;
     }
 };
 

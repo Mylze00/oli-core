@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Eye, EyeOff, Search } from 'lucide-react';
+import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { sellerAPI } from '../services/api';
 
@@ -68,12 +68,20 @@ export default function ProductList() {
                     <h1 className="text-2xl font-bold text-gray-900">Mes Produits</h1>
                     <p className="text-gray-500 mt-1">{products.length} produit(s)</p>
                 </div>
-                <button
-                    onClick={() => navigate('/products/new')}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors"
-                >
-                    <Plus size={20} /> Nouveau Produit
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => navigate('/import-export')}
+                        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-200 transition-colors"
+                    >
+                        <Download size={18} /> Import/Export
+                    </button>
+                    <button
+                        onClick={() => navigate('/products/new')}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors"
+                    >
+                        <Plus size={20} /> Nouveau Produit
+                    </button>
+                </div>
             </div>
 
             {/* Simple Search */}
@@ -183,6 +191,14 @@ export default function ProductList() {
                                             >
                                                 {product.is_active ? <Eye size={16} /> : <EyeOff size={16} />}
                                                 <span className="text-sm hidden md:inline">{product.is_active ? 'Masquer' : 'Afficher'}</span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => navigate(`/products/${product.id}/variants`)}
+                                                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1"
+                                                title="Gérer les variantes"
+                                            >
+                                                <Layers size={16} /> <span className="text-sm hidden md:inline">Variantes</span>
                                             </button>
 
                                             <button

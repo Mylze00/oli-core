@@ -5,6 +5,8 @@ import ProductEditor from './pages/ProductEditor';
 import ProductList from './pages/ProductList';
 import Login from './pages/Login';
 import SubscriptionPage from './pages/SubscriptionPage';
+import ImportExportPage from './pages/ImportExportPage';
+import VariantsEditor from './pages/VariantsEditor';
 
 // Composant pour protéger les routes
 const ProtectedRoute = ({ children }) => {
@@ -21,6 +23,7 @@ const ProtectedRoute = ({ children }) => {
 
 const SellerLayout = ({ children }) => {
     const user = JSON.parse(localStorage.getItem('seller_user') || '{}');
+    const location = useLocation();
 
     const handleLogout = () => {
         localStorage.removeItem('seller_token');
@@ -42,6 +45,8 @@ const SellerLayout = ({ children }) => {
 
         return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${cleanPath}`;
     };
+
+    const isActive = (path) => location.pathname.startsWith(path);
 
     return (
         <div className="flex h-screen bg-gray-50">
@@ -66,12 +71,49 @@ const SellerLayout = ({ children }) => {
                         </div>
                     </div>
 
-                    <nav className="space-y-2">
-                        <a href="/dashboard" className="block p-3 rounded hover:bg-slate-800">Tableau de bord</a>
-                        <a href="/products" className="block p-3 rounded hover:bg-slate-800">Produits</a>
-                        <a href="/orders" className="block p-3 rounded hover:bg-slate-800">Commandes</a>
-                        <a href="/messages" className="block p-3 rounded hover:bg-slate-800">Messages B2B</a>
-                        <a href="/subscription" className="block p-3 rounded hover:bg-slate-800 text-amber-400">Certification</a>
+                    <nav className="space-y-1">
+                        <a
+                            href="/dashboard"
+                            className={`block p-3 rounded transition-colors ${isActive('/dashboard') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
+                                }`}
+                        >
+                            📊 Tableau de bord
+                        </a>
+                        <a
+                            href="/products"
+                            className={`block p-3 rounded transition-colors ${isActive('/products') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
+                                }`}
+                        >
+                            📦 Produits
+                        </a>
+                        <a
+                            href="/import-export"
+                            className={`block p-3 rounded transition-colors ${isActive('/import-export') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
+                                }`}
+                        >
+                            📥 Import / Export
+                        </a>
+                        <a
+                            href="/orders"
+                            className={`block p-3 rounded transition-colors ${isActive('/orders') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
+                                }`}
+                        >
+                            🛒 Commandes
+                        </a>
+                        <a
+                            href="/messages"
+                            className={`block p-3 rounded transition-colors ${isActive('/messages') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
+                                }`}
+                        >
+                            💬 Messages B2B
+                        </a>
+                        <a
+                            href="/subscription"
+                            className={`block p-3 rounded transition-colors text-amber-400 ${isActive('/subscription') ? 'bg-amber-600 text-white' : 'hover:bg-slate-800'
+                                }`}
+                        >
+                            ⭐ Certification
+                        </a>
                     </nav>
                 </div>
                 <div className="mt-auto p-4 border-t border-slate-800">
@@ -115,6 +157,18 @@ function App() {
                     </ProtectedRoute>
                 } />
 
+                <Route path="/products/:productId/variants" element={
+                    <ProtectedRoute>
+                        <SellerLayout><VariantsEditor /></SellerLayout>
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/import-export" element={
+                    <ProtectedRoute>
+                        <SellerLayout><ImportExportPage /></SellerLayout>
+                    </ProtectedRoute>
+                } />
+
                 <Route path="/subscription" element={
                     <ProtectedRoute>
                         <SellerLayout><SubscriptionPage /></SellerLayout>
@@ -129,3 +183,4 @@ function App() {
 }
 
 export default App
+
