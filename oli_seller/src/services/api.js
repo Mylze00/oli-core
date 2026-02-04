@@ -246,6 +246,56 @@ export const sellerAPI = {
             responseType: 'text'
         });
         return response.data;
+    },
+
+    // 💬 Chat / Messages B2B
+    getConversations: async () => {
+        const response = await api.get('/chat/conversations');
+        return response.data;
+    },
+
+    getMessages: async (otherUserId, productId = null) => {
+        let url = `/chat/messages/${otherUserId}`;
+        if (productId) url += `?productId=${productId}`;
+        const response = await api.get(url);
+        return response.data;
+    },
+
+    sendChatMessage: async ({ conversationId, content, recipientId, type = 'text', mediaUrl, mediaType, metadata }) => {
+        const response = await api.post('/chat/messages', {
+            conversationId,
+            content,
+            recipientId,
+            type,
+            mediaUrl,
+            mediaType,
+            metadata
+        });
+        return response.data;
+    },
+
+    sendInitialMessage: async ({ recipientId, content, productId, type = 'text' }) => {
+        const response = await api.post('/chat/send', {
+            recipientId,
+            content,
+            productId,
+            type
+        });
+        return response.data;
+    },
+
+    uploadChatFile: async (file) => {
+        const formData = new FormData();
+        formData.append('chat_file', file);
+        const response = await api.post('/chat/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+
+    searchChatUsers: async (query) => {
+        const response = await api.get(`/chat/users?q=${encodeURIComponent(query)}`);
+        return response.data;
     }
 };
 

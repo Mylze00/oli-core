@@ -9,6 +9,7 @@ import ImportExportPage from './pages/ImportExportPage';
 import VariantsEditor from './pages/VariantsEditor';
 import OrderManagement from './pages/OrderManagement';
 import ReportsPage from './pages/ReportsPage';
+import MessagesPage from './pages/MessagesPage';
 
 // Composant pour protéger les routes
 const ProtectedRoute = ({ children }) => {
@@ -187,6 +188,12 @@ function App() {
                 <Route path="/reports" element={
                     <ProtectedRoute>
                         <SellerLayout><ReportsPage /></SellerLayout>
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/messages" element={
+                    <ProtectedRoute>
+                        <MessagesPage />
                     </ProtectedRoute>
                 } />
 
