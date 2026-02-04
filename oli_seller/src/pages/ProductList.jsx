@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Upload, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { sellerAPI } from '../services/api';
+import { sellerAPI, shopAPI } from '../services/api';
 
 export default function ProductList() {
     const navigate = useNavigate();
@@ -79,8 +79,21 @@ export default function ProductList() {
                         onClick={async () => {
                             if (products.length === 0) return alert("Aucun produit à mettre à jour");
 
-                            const shopId = products[0].shopId;
-                            if (!shopId) return alert("Impossible de déterminer la boutique");
+                            console.log("Premier produit:", products[0]);
+                            let shopId = products[0].shopId || products[0].shop_id;
+
+                            if (!shopId) {
+                                try {
+                                    const myShops = await shopAPI.getMyShops();
+                                    if (myShops && myShops.length > 0) {
+                                        shopId = myShops[0].id;
+                                    }
+                                } catch (e) {
+                                    console.error("Erreur fetch shops:", e);
+                                }
+                            }
+
+                            if (!shopId) return alert("Impossible de déterminer la boutique. Vérifiez que vous avez une boutique active.");
 
                             // Confirmation explicite
                             const confirm = window.confirm(
