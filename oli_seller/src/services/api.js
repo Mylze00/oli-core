@@ -189,6 +189,40 @@ export const sellerAPI = {
     getVariantSuggestions: async () => {
         const response = await api.get('/api/variants/types/suggestions');
         return response.data;
+    },
+
+    // 📦 Commandes Vendeur
+    getOrders: async (filters = {}) => {
+        const params = new URLSearchParams();
+        if (filters.status) params.append('status', filters.status);
+        if (filters.limit) params.append('limit', filters.limit);
+        const response = await api.get(`/api/seller/orders?${params.toString()}`);
+        return response.data;
+    },
+
+    getOrderDetails: async (orderId) => {
+        const response = await api.get(`/api/seller/orders/${orderId}`);
+        return response.data;
+    },
+
+    updateOrderStatus: async (orderId, data) => {
+        const response = await api.patch(`/api/seller/orders/${orderId}/status`, data);
+        return response.data;
+    },
+
+    getOrderStats: async () => {
+        const response = await api.get('/api/seller/orders/stats/summary');
+        return response.data;
+    },
+
+    getNotifications: async (unreadOnly = false) => {
+        const response = await api.get(`/api/seller/orders/notifications?unread_only=${unreadOnly}`);
+        return response.data;
+    },
+
+    markNotificationRead: async (notificationId) => {
+        const response = await api.patch(`/api/seller/orders/notifications/${notificationId}/read`);
+        return response.data;
     }
 };
 
