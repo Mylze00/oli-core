@@ -41,14 +41,22 @@ exports.getAll = async (req, res) => {
             maxPrice: req.query.maxPrice,
             location: req.query.location,
             search: req.query.search,
-            shopId: req.query.shopId
+            shopId: req.query.shopId,
+            filterType: req.query.filterType // new, popular, promotions
         };
-        // Limite raisonnable : 200 produits par page pour éviter surcharge data/performance
-        const limit = parseInt(req.query.limit) || 200;
+        // Limite raisonnable : 100 produits par page (réduit de 200 pour optimiser data)
+        const limit = parseInt(req.query.limit) || 100;
         const offset = parseInt(req.query.offset) || 0;
 
         const products = await productService.getAllProducts(filters, limit, offset);
-        res.json(products);
+
+        // Retourner avec métadonnées pour pagination
+        res.json({
+            products,
+            hasMore: products.length === limit,
+            limit,
+            offset
+        });
     } catch (err) {
         console.error("Erreur GET /products:", err);
         res.status(500).json({ error: "Erreur serveur" });

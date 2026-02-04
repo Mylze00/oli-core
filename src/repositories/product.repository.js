@@ -143,6 +143,23 @@ class ProductRepository {
             params.push(filters.seller_id);
         }
 
+        // Filtrage par type (new, popular, promotions)
+        if (filters.filterType) {
+            switch (filters.filterType) {
+                case 'new':
+                    // Produits créés dans les 30 derniers jours
+                    query += ` AND p.created_at >= NOW() - INTERVAL '30 days'`;
+                    break;
+                case 'promotions':
+                    // Produits avec discount actif
+                    query += ` AND p.discount_price IS NOT NULL AND p.discount_price > 0`;
+                    break;
+                case 'popular':
+                    // Sera trié par view_count plus bas
+                    break;
+            }
+        }
+
         // Gestion correcte du statut (active/inactive)
         if (filters.is_active !== undefined) {
             // Si le filtre demande les actifs
@@ -161,7 +178,14 @@ class ProductRepository {
             }
         }
 
-        query += ` ORDER BY p.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
+        // Tri selon le type de filtre
+        if (filters.filterType === 'popular') {
+            query += ` ORDER BY COALESCE(p.view_count, 0) DESC, p.created_at DESC`;
+        } else {
+            query += ` ORDER BY p.created_at DESC`;
+        }
+
+        query += ` LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
         params.push(parseInt(limit), parseInt(offset));
 
         try {
