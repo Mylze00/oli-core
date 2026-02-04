@@ -45,7 +45,7 @@ router.get('/dashboard', requireAuth, requireSeller, async (req, res) => {
  */
 router.get('/products', requireAuth, requireSeller, async (req, res) => {
     try {
-        const { status, category, search, limit = 50, offset = 0 } = req.query;
+        const { status, category, search, limit = 5000, offset = 0 } = req.query;
 
         const filters = {
             seller_id: req.user.id,
