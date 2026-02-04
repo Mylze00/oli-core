@@ -43,8 +43,35 @@ function parseCSV(csvString) {
     const lines = csvString.split('\n').filter(line => line.trim());
     if (lines.length < 2) return [];
 
-    // Première ligne = headers
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+    // Auto-détecter le séparateur (virgule ou point-virgule)
+    const headerLine = lines[0];
+    const separator = headerLine.includes(';') ? ';' : ',';
+
+    console.log(`📄 CSV Separator detected: "${separator}"`);
+
+    // Première ligne = headers (normaliser les noms français)
+    const rawHeaders = headerLine.split(separator).map(h => h.trim().replace(/^"|"$/g, ''));
+    const headers = rawHeaders.map(h => {
+        const normalized = h.toLowerCase();
+        // Mapper les en-têtes français vers les noms attendus
+        const mapping = {
+            'nom': 'name',
+            'prix': 'price',
+            'stock': 'quantity',
+            'quantite': 'quantity',
+            'quantité': 'quantity',
+            'catégorie': 'category',
+            'categorie': 'category',
+            'marque': 'brand',
+            'unité': 'unit',
+            'unite': 'unit',
+            'poids': 'weight',
+            'actif': 'is_active'
+        };
+        return mapping[normalized] || normalized;
+    });
+
+    console.log(`📋 Headers mapped:`, headers);
 
     const results = [];
     for (let i = 1; i < lines.length; i++) {
@@ -55,7 +82,7 @@ function parseCSV(csvString) {
         for (const char of lines[i]) {
             if (char === '"') {
                 inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
+            } else if (char === separator && !inQuotes) {
                 // Nettoyer la valeur : enlever les guillemets au début/fin et trim
                 const cleanValue = current.trim().replace(/^"|"$/g, '');
                 values.push(cleanValue);
