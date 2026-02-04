@@ -11,6 +11,7 @@ const multer = require('multer');
 const { Readable } = require('stream');
 const { requireAuth } = require('../middlewares/auth.middleware');
 const db = require('../config/db');
+const exchangeRateService = require('../services/exchange-rate.service');
 
 // Configuration multer pour fichiers CSV en mémoire
 const upload = multer({
@@ -166,13 +167,24 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                 // Mapper les colonnes (support français et anglais)
                 const name = row.name || row.nom || '';
                 const description = row.description || '';
-                const price = parseFloat(row.price || row.prix || 0);
+                let price = parseFloat(row.price || row.prix || 0);
                 const quantity = parseInt(row.quantity || row.stock || row.quantite || 0);
                 const category = row.category || row.categorie || '';
                 const brand = row.brand || row.marque || '';
                 const unit = row.unit || row.unite || 'Pièce';
                 const weight = row.weight || row.poids || '';
                 const images = row.images ? row.images.split(';').map(i => i.trim()) : [];
+
+                // 💱 Conversion automatique en FC (Francs Congolais)
+                // Si le prix semble être en USD (< 100), le convertir en CDF
+                if (price > 0 && price < 100) {
+                    const convertedPrice = await exchangeRateService.convertAmount(price, 'USD', 'CDF');
+                    console.log(`💱 Prix converti: ${price} USD → ${convertedPrice} CDF`);
+                    price = convertedPrice;
+                } else if (price >= 100) {
+                    // Prix déjà en CDF (probablement)
+                    console.log(`💰 Prix déjà en CDF: ${price}`);
+                }
 
                 // Validation
                 if (!name) {
