@@ -6,7 +6,7 @@
 -- 1. Table des coupons vendeur
 CREATE TABLE IF NOT EXISTS coupons (
     id SERIAL PRIMARY KEY,
-    seller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    seller_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     code VARCHAR(50) NOT NULL,
     type VARCHAR(20) NOT NULL DEFAULT 'percentage', -- percentage, fixed_amount, free_shipping
     value DECIMAL(10, 2) NOT NULL, -- % ou montant
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS coupons (
 CREATE TABLE IF NOT EXISTS coupon_usages (
     id SERIAL PRIMARY KEY,
     coupon_id INTEGER NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
     discount_applied DECIMAL(10, 2) NOT NULL,
     used_at TIMESTAMP DEFAULT NOW()
@@ -39,8 +39,8 @@ CREATE TABLE IF NOT EXISTS coupon_usages (
 -- 3. Points de fidélité par vendeur-client
 CREATE TABLE IF NOT EXISTS loyalty_points (
     id SERIAL PRIMARY KEY,
-    seller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    seller_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     points_balance INTEGER DEFAULT 0,
     total_points_earned INTEGER DEFAULT 0,
     total_points_spent INTEGER DEFAULT 0,
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS loyalty_transactions (
 -- 5. Configuration fidélité par vendeur
 CREATE TABLE IF NOT EXISTS loyalty_settings (
     id SERIAL PRIMARY KEY,
-    seller_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    seller_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     is_enabled BOOLEAN DEFAULT true,
     points_per_dollar DECIMAL(5, 2) DEFAULT 1.00, -- Points gagnés par $ dépensé
     points_value DECIMAL(5, 4) DEFAULT 0.01, -- Valeur $ d'un point
