@@ -45,7 +45,8 @@ router.get('/dashboard', requireAuth, requireSeller, async (req, res) => {
  */
 router.get('/products', requireAuth, requireSeller, async (req, res) => {
     try {
-        const { status, category, search, limit = 5000, offset = 0 } = req.query;
+        // Limite plus élevée pour le Seller Center (500) car interface de gestion
+        const { status, category, search, limit = 500, offset = 0 } = req.query;
 
         const filters = {
             seller_id: req.user.id,

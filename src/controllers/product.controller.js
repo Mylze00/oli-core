@@ -43,7 +43,8 @@ exports.getAll = async (req, res) => {
             search: req.query.search,
             shopId: req.query.shopId
         };
-        const limit = parseInt(req.query.limit) || 5000;
+        // Limite raisonnable : 200 produits par page pour éviter surcharge data/performance
+        const limit = parseInt(req.query.limit) || 200;
         const offset = parseInt(req.query.offset) || 0;
 
         const products = await productService.getAllProducts(filters, limit, offset);
