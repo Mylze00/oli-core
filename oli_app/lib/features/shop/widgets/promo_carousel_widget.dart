@@ -15,7 +15,7 @@ class PromoCarouselWidget extends ConsumerStatefulWidget {
 }
 
 class _PromoCarouselWidgetState extends ConsumerState<PromoCarouselWidget> {
-  final PageController _pageController = PageController(viewportFraction: 0.4);
+  final PageController _pageController = PageController(viewportFraction: 0.35);
   Timer? _timer;
   Duration _timeLeft = Duration.zero;
   int _currentPage = 0;
@@ -111,7 +111,7 @@ class _PromoCarouselWidgetState extends ConsumerState<PromoCarouselWidget> {
 
             // Carousel
             SizedBox(
-              height: 180,
+              height: 145, // Reduced by ~20%
               child: PageView.builder(
                 controller: _pageController,
                 itemCount: products.length,
@@ -123,73 +123,107 @@ class _PromoCarouselWidgetState extends ConsumerState<PromoCarouselWidget> {
                 },
                 itemBuilder: (context, index) {
                   final product = products[index];
-                  // Calculate discount percentage logic if needed, or rely on display
                   return GestureDetector(
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product))),
                     child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 6),
+                      margin: const EdgeInsets.symmetric(horizontal: 5),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                          image: DecorationImage(
-                            image: NetworkImage(product.images.isNotEmpty ? product.images.first : 'https://via.placeholder.com/300'),
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                            colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.darken),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
                           ),
+                        ],
+                        image: DecorationImage(
+                          image: NetworkImage(product.images.isNotEmpty ? product.images.first : 'https://via.placeholder.com/300'),
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.35), BlendMode.darken),
+                        ),
                       ),
                       child: Stack(
                         children: [
                           // Badge Promo
                           Positioned(
-                            top: 10,
-                            left: 10,
+                            top: 8,
+                            left: 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(4),
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFE53935), Color(0xFFFF5722)],
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.red.withOpacity(0.4),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
                               child: const Text(
                                 "PROMO",
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
                               ),
                             ),
                           ),
-                          // Content
+                          // Product Name
                           Positioned(
-                            bottom: 10,
-                            left: 10,
-                            right: 10,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  product.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Text(
-                                      "\$${product.discountPrice ?? product.price}",
-                                      style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w900, fontSize: 18),
+                            bottom: 42,
+                            left: 8,
+                            right: 8,
+                            child: Text(
+                              product.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white, 
+                                fontWeight: FontWeight.bold, 
+                                fontSize: 13,
+                                shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                              ),
+                            ),
+                          ),
+                          // Price Container with rounded corners
+                          Positioned(
+                            bottom: 8,
+                            left: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.orange.withOpacity(0.5), width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    "\$${product.discountPrice ?? product.price}",
+                                    style: const TextStyle(
+                                      color: Colors.orange, 
+                                      fontWeight: FontWeight.w900, 
+                                      fontSize: 14,
                                     ),
-                                    if (product.discountPrice != null) ...[
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        "\$${product.price}",
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 14,
-                                          decoration: TextDecoration.lineThrough,
-                                        ),
+                                  ),
+                                  if (product.discountPrice != null) ...[
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "\$${product.price}",
+                                      style: const TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 11,
+                                        decoration: TextDecoration.lineThrough,
+                                        decorationColor: Colors.white54,
                                       ),
-                                    ]
-                                  ],
-                                ),
-                              ],
+                                    ),
+                                  ]
+                                ],
+                              ),
                             ),
                           ),
                         ],

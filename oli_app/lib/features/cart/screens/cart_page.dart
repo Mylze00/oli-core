@@ -60,6 +60,9 @@ class CartPage extends ConsumerWidget {
   }
 
   Widget _buildCartItem(BuildContext context, WidgetRef ref, CartItem item) {
+    // Access the exchange notifier to format prices
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -92,21 +95,19 @@ class CartPage extends ConsumerWidget {
                 if (item.sellerName != null)
                   Text(item.sellerName!, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                 const SizedBox(height: 8),
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                         Text(
-                          exchangeNotifier.formatProductPrice(item.price), 
-                          style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Livraison ${item.deliveryMethod} : ${exchangeNotifier.formatProductPrice(item.deliveryPrice)}",
-                          style: const TextStyle(color: Colors.white54, fontSize: 10),
-                        ),
-                      ],
-                    );
-                  }
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      exchangeNotifier.formatProductPrice(item.price), 
+                      style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Livraison ${item.deliveryMethod} : ${exchangeNotifier.formatProductPrice(item.deliveryPrice)}",
+                      style: const TextStyle(color: Colors.white54, fontSize: 10),
+                    ),
+                  ],
                 ),
               ],
             ),

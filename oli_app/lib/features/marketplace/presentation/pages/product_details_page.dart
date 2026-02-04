@@ -14,6 +14,7 @@ import '../../../user/providers/user_activity_provider.dart';
 import '../../../../providers/exchange_rate_provider.dart';
 import '../../../../features/cart/providers/cart_provider.dart';
 import '../../../../features/user/providers/favorites_provider.dart';
+import '../../../../features/checkout/screens/checkout_page.dart';
 
 class ProductDetailsPage extends ConsumerStatefulWidget {
   final Product product;
@@ -234,13 +235,47 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text("Produit ajouté au panier"),
-        action: SnackBarAction(
-          label: 'VOIR PANIER', 
-          onPressed: () => Navigator.pop(context) // Retour au dashboard pour aller au panier ou push CartPage
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text('${p.name} ajouté au panier')),
+          ],
         ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 2),
       )
+    );
+  }
+
+  /// Achat immédiat - Navigue directement vers le checkout avec ce produit
+  void _buyNow(Product p) {
+    // Calculer le prix effectif (avec réduction si applicable)
+    final basePrice = double.tryParse(p.price) ?? 0.0;
+    // Utiliser discountPrice si disponible, sinon le prix de base
+    final effectivePrice = (p.discountPrice != null && p.discountPrice! > 0)
+        ? p.discountPrice!
+        : basePrice;
+    
+    final directItem = CartItem(
+      productId: p.id,
+      productName: p.name,
+      price: effectivePrice,
+      quantity: 1,
+      imageUrl: p.images.isNotEmpty ? p.images.first : null,
+      sellerName: p.seller,
+      deliveryPrice: _selectedShipping?.cost ?? p.deliveryPrice,
+      deliveryMethod: _selectedShipping?.label ?? 'Standard',
+    );
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CheckoutPage(directPurchaseItem: directItem),
+      ),
     );
   }
 
@@ -338,7 +373,42 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                   )
                 ),
                 const SizedBox(width: 10),
-                CircleAvatar(backgroundColor: Colors.white.withOpacity(0.9), child: const Icon(Icons.shopping_cart_outlined, color: Colors.black, size: 18)),
+                CircleAvatar(
+                  backgroundColor: Colors.white.withOpacity(0.9), 
+                  child: IconButton(
+                    icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black, size: 18),
+                    onPressed: () {
+                      final p = widget.product;
+                      ref.read(cartProvider.notifier).addItem(
+                        CartItem(
+                          productId: p.id.toString(),
+                          productName: p.name,
+                          price: double.tryParse(p.price) ?? 0.0,
+                          quantity: 1,
+                          imageUrl: p.images.isNotEmpty ? p.images.first : null,
+                          sellerName: p.seller,
+                        ),
+                      );
+                      final count = ref.read(cartItemCountProvider);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              const Icon(Icons.check_circle, color: Colors.white),
+                              const SizedBox(width: 8),
+                              const Text('Produit ajouté au panier'),
+                            ],
+                          ),
+                          backgroundColor: Colors.green,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          margin: const EdgeInsets.all(16),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ]),
             ),
             if (p.images.length > 1)
@@ -423,19 +493,19 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                               ? Text(p.seller.isNotEmpty ? p.seller[0] : '?', style: const TextStyle(color: Colors.white, fontSize: 20))
                               : null,
                          ),
-                         // Badge de vérification superposé
-                         if (p.sellerIsVerified || p.sellerAccountType != 'ordinaire' || p.sellerHasCertifiedShop || p.shopVerified)
+                         // Badge de vérification superposé - only for certified
+                         if (p.sellerHasCertifiedShop || 
+                             p.sellerAccountType == 'entreprise' ||
+                             p.sellerAccountType == 'certifie' ||
+                             p.sellerIsVerified ||
+                             p.shopVerified)
                            Positioned(
                              bottom: -4, 
                              right: -4, 
                              child: VerificationBadge(
-                               type: p.shopVerified 
-                                 ? BadgeType.gold
-                                 : VerificationBadge.fromSellerData(
-                                     isVerified: p.sellerIsVerified,
-                                     accountType: p.sellerAccountType,
-                                     hasCertifiedShop: p.sellerHasCertifiedShop,
-                                   ),
+                               type: (p.shopVerified || p.sellerHasCertifiedShop || p.sellerAccountType == 'entreprise')
+                                   ? BadgeType.gold
+                                   : BadgeType.blue,
                                size: 20,
                              ),
                            ),
@@ -612,9 +682,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
               SizedBox(
                 width: double.infinity, height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Achat immédiat bientôt disponible")));
-                  }, 
+                  onPressed: () => _buyNow(p), 
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E7DBA), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), 
                   child: const Text("Achat immédiat", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))
                 ),

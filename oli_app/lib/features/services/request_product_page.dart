@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../auth/providers/auth_controller.dart';
+import '../../config/api_config.dart';
 
-class RequestProductPage extends StatefulWidget {
+class RequestProductPage extends ConsumerStatefulWidget {
   const RequestProductPage({super.key});
 
   @override
-  State<RequestProductPage> createState() => _RequestProductPageState();
+  ConsumerState<RequestProductPage> createState() => _RequestProductPageState();
 }
 
-class _RequestProductPageState extends State<RequestProductPage> {
+class _RequestProductPageState extends ConsumerState<RequestProductPage> {
   final TextEditingController _descriptionController = TextEditingController();
   String? _uploadedFileName;
+  String? _uploadedFilePath;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -21,12 +28,72 @@ class _RequestProductPageState extends State<RequestProductPage> {
   Future<void> _pickFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.image,
+      withData: true, // Pour récupérer les bytes sur web
     );
 
     if (result != null) {
       setState(() {
         _uploadedFileName = result.files.single.name;
+        _uploadedFilePath = result.files.single.path;
       });
+    }
+  }
+
+  Future<void> _submitRequest() async {
+    if (_descriptionController.text.isEmpty && _uploadedFileName == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez décrire votre besoin ou importer un fichier'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final authState = ref.read(authControllerProvider);
+      
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/product-requests'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'description': _descriptionController.text,
+          'user_id': authState.userData?['id'],
+          'user_name': authState.userData?['name'] ?? 'Utilisateur',
+          'user_phone': authState.userData?['phone'],
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Demande envoyée avec succès ! L\'équipe OLI vous contactera bientôt.'),
+              backgroundColor: Color(0xFF00BA7C),
+              duration: Duration(seconds: 3),
+            ),
+          );
+          
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) Navigator.pop(context);
+          });
+        }
+      } else {
+        throw Exception('Erreur lors de l\'envoi');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -347,30 +414,7 @@ class _RequestProductPageState extends State<RequestProductPage> {
                     ),
                     const SizedBox(width: 16),
                     ElevatedButton(
-                      onPressed: () {
-                        // Action d'envoi de demande
-                        if (_descriptionController.text.isEmpty && _uploadedFileName == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Veuillez décrire votre besoin ou importer un fichier'),
-                              backgroundColor: Colors.orange,
-                            ),
-                          );
-                          return;
-                        }
-                        
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Demande envoyée avec succès !'),
-                            backgroundColor: Color(0xFF00BA7C),
-                          ),
-                        );
-                        
-                        // Retour à l'accueil après un court délai pour laisser lire le message
-                        Future.delayed(const Duration(seconds: 1), () {
-                          if (mounted) Navigator.pop(context);
-                        });
-                      },
+                      onPressed: _isSubmitting ? null : _submitRequest,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         foregroundColor: Colors.white,
@@ -382,13 +426,22 @@ class _RequestProductPageState extends State<RequestProductPage> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                       ),
-                      child: const Text(
-                        'Envoyer ma demande',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Envoyer ma demande',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                     ),
                   ],
                 ),

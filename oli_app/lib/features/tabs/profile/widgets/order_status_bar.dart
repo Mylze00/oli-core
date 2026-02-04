@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../orders/screens/purchases_page.dart';
+import '../../../orders/screens/chat_products_page.dart';
+import '../../../cart/screens/cart_page.dart';
 
 class OrderStatusBar extends StatelessWidget {
   final Color cardColor;
@@ -30,7 +32,7 @@ class OrderStatusBar extends StatelessWidget {
             children: [
               Text("Mes Commandes", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
               GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchasesPage())),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatProductsPage())),
                 child: Row(
                   children: [
                     Text("Tout voir", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
@@ -44,9 +46,14 @@ class OrderStatusBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildOrderIcon(Icons.payment, "Non Payé", textColor),
-              _buildOrderIcon(Icons.inventory_2_outlined, "À expédier", textColor),
-              _buildOrderIcon(Icons.local_shipping_outlined, "À recevoir", textColor),
+              _buildOrderIcon(
+                  Icons.shopping_cart_outlined,
+                  "Panier",
+                  textColor,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage()))
+              ),
+              _buildOrderIcon(Icons.local_shipping_outlined, "En cours", textColor),
+              _buildOrderIcon(Icons.location_on_outlined, "Suivi colis", textColor),
               _buildOrderIcon(Icons.rate_review_outlined, "À noter", textColor),
             ],
           ),
@@ -55,13 +62,23 @@ class OrderStatusBar extends StatelessWidget {
     );
   }
 
-  Widget _buildOrderIcon(IconData icon, String label, Color color) {
-    return Column(
-      children: [
-        Icon(icon, size: 28, color: color.withOpacity(0.7)),
-        const SizedBox(height: 6),
-        Text(label, style: TextStyle(fontSize: 12, color: color.withOpacity(0.7))),
-      ],
+  Widget _buildOrderIcon(IconData icon, String label, Color color, {VoidCallback? onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            children: [
+              Icon(icon, size: 28, color: color.withOpacity(0.7)),
+              const SizedBox(height: 6),
+              Text(label, style: TextStyle(fontSize: 12, color: color.withOpacity(0.7))),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

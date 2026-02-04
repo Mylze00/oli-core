@@ -13,6 +13,7 @@ import Requests from './pages/Requests';
 import AdsManager from './pages/AdsManager';
 import ServicesManager from './pages/ServicesManager'; // ✨ Services
 import Verifications from './pages/Verifications'; // 🆕 Certifications
+import ProductRequests from './pages/ProductRequests'; // 📦 Demandes produit
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="/products" element={<Products />} />
             <Route path="/shops" element={<Shops />} />
             <Route path="/requests" element={<Requests />} />
+            <Route path="/product-requests" element={<ProductRequests />} /> {/* 📦 */}
             <Route path="/orders" element={<Orders />} />
             <Route path="/disputes" element={<Disputes />} />
             <Route path="/ads" element={<AdsManager />} />

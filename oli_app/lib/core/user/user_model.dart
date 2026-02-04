@@ -2,6 +2,7 @@ class User {
   final int id; // Backend ID (Primary Key)
   final String? idOli;
   final String name;
+  final String? phone; // Numéro de téléphone
   final String initial;
   final String? avatarUrl;
   final double wallet;
@@ -14,6 +15,7 @@ class User {
     required this.id,
     this.idOli,
     required this.name,
+    this.phone,
     required this.initial,
     this.avatarUrl,
     required this.wallet,
@@ -28,6 +30,7 @@ class User {
       id: json['id'],
       idOli: json['id_oli'],
       name: json['name'],
+      phone: json['phone'],
       initial: json['initial'] ?? (json['name'] != null ? json['name'][0].toUpperCase() : '?'),
       avatarUrl: json['avatar_url'],
       wallet: double.tryParse(json['wallet']?.toString() ?? '0') ?? 0.0,

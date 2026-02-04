@@ -1,21 +1,95 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../../config/api_config.dart';
+import '../../../core/user/user_provider.dart';
+import '../../../core/storage/secure_storage_service.dart';
+import '../../../core/storage/biometric_service.dart';
+import '../../../providers/exchange_rate_provider.dart';
 
 /// Page "Paramètres"
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _notificationsEnabled = true;
   bool _emailNotifications = true;
   bool _smsNotifications = false;
-  String _selectedLanguage = 'Français';
+  bool _biometricEnabled = false;
+  bool _biometricAvailable = false;
+  final BiometricService _biometricService = BiometricService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricSettings();
+  }
+
+  Future<void> _loadBiometricSettings() async {
+    final isEnabled = await _biometricService.isBiometricEnabled();
+    final isAvailable = await _biometricService.canCheckBiometrics();
+    if (mounted) {
+      setState(() {
+        _biometricEnabled = isEnabled;
+        _biometricAvailable = isAvailable;
+      });
+    }
+  }
+
+  Future<void> _toggleBiometric(bool enable) async {
+    if (enable) {
+      // Si on active, vérifier d'abord que l'appareil supporte la biométrie
+      final isSupported = await _biometricService.isDeviceSupported();
+      if (!isSupported) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('La biométrie n\'est pas disponible sur cet appareil'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Authentifier pour confirmer l'activation
+      final authenticated = await _biometricService.authenticate(
+        reason: 'Confirmez votre identité pour activer la biométrie',
+      );
+      
+      if (!authenticated) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Authentification échouée'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+    }
+
+    // Sauvegarder le choix
+    await _biometricService.setBiometricEnabled(enable);
+    setState(() => _biometricEnabled = enable);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(enable ? 'Biométrie activée' : 'Biométrie désactivée'),
+        backgroundColor: enable ? Colors.green : Colors.orange,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final userAsync = ref.watch(userProvider);
+    final exchangeState = ref.watch(exchangeRateProvider);
+    final String selectedCurrency = exchangeState.selectedCurrency.code;
+    final String selectedLanguage = 'Français'; // TODO: Make dynamic later
+    
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -23,99 +97,125 @@ class _SettingsPageState extends State<SettingsPage> {
         elevation: 0,
         title: const Text('Paramètres'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // --- COMPTE ---
-          _buildSectionTitle('Compte'),
-          _buildCard([
-            _buildListTile(
-              icon: Icons.person_outline,
-              title: 'Modifier le profil',
-              subtitle: 'Nom, photo, informations',
-              onTap: () => _showEditProfileDialog(),
-            ),
-            _buildDivider(),
-            _buildListTile(
-              icon: Icons.lock_outline,
-              title: 'Changer le mot de passe',
-              onTap: () => _showChangePasswordDialog(),
-            ),
-            _buildDivider(),
-            _buildListTile(
-              icon: Icons.email_outlined,
-              title: 'Changer l\'email',
-              subtitle: 'user@email.com',
-              onTap: () => _showChangeEmailDialog(),
-            ),
-          ]),
+      body: userAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Erreur: $e', style: const TextStyle(color: Colors.white))),
+        data: (user) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // --- COMPTE ---
+            _buildSectionTitle('Compte'),
+            _buildCard([
+              _buildListTile(
+                icon: Icons.person_outline,
+                title: 'Modifier le profil',
+                subtitle: user.name,
+                onTap: () => _showEditProfileDialog(user.name),
+              ),
+              _buildDivider(),
+              _buildListTile(
+                icon: Icons.lock_outline,
+                title: 'Changer le mot de passe',
+                onTap: () => _showChangePasswordDialog(),
+              ),
+              _buildDivider(),
+              _buildListTile(
+                icon: Icons.phone_android,
+                title: 'Numéro de téléphone',
+                subtitle: user.phone ?? 'Non défini',
+                onTap: () {},
+              ),
+            ]),
 
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-          // --- NOTIFICATIONS ---
-          _buildSectionTitle('Notifications'),
-          _buildCard([
-            SwitchListTile(
-              secondary: const Icon(Icons.notifications_outlined, color: Colors.blueAccent),
-              title: const Text('Notifications push', style: TextStyle(color: Colors.white)),
-              value: _notificationsEnabled,
-              onChanged: (v) => setState(() => _notificationsEnabled = v),
-              activeColor: Colors.blueAccent,
-            ),
-            _buildDivider(),
-            SwitchListTile(
-              secondary: const Icon(Icons.mail_outline, color: Colors.orange),
-              title: const Text('Notifications email', style: TextStyle(color: Colors.white)),
-              value: _emailNotifications,
-              onChanged: (v) => setState(() => _emailNotifications = v),
-              activeColor: Colors.blueAccent,
-            ),
-            _buildDivider(),
-            SwitchListTile(
-              secondary: const Icon(Icons.sms_outlined, color: Colors.green),
-              title: const Text('Notifications SMS', style: TextStyle(color: Colors.white)),
-              value: _smsNotifications,
-              onChanged: (v) => setState(() => _smsNotifications = v),
-              activeColor: Colors.blueAccent,
-            ),
-          ]),
+            // --- SÉCURITÉ BIOMÉTRIQUE ---
+            _buildSectionTitle('Sécurité'),
+            _buildCard([
+              SwitchListTile(
+                secondary: const Icon(Icons.fingerprint, color: Colors.green),
+                title: const Text('Connexion biométrique', style: TextStyle(color: Colors.white)),
+                subtitle: Text(
+                  _biometricAvailable 
+                    ? 'Face ID / Empreinte digitale' 
+                    : 'Non disponible sur cet appareil',
+                  style: TextStyle(
+                    color: _biometricAvailable ? Colors.grey : Colors.orange,
+                    fontSize: 12,
+                  ),
+                ),
+                value: _biometricEnabled,
+                onChanged: _biometricAvailable ? _toggleBiometric : null,
+                activeColor: Colors.green,
+              ),
+            ]),
 
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-          // --- PRÉFÉRENCES ---
-          _buildSectionTitle('Préférences'),
-          _buildCard([
-            _buildListTile(
-              icon: Icons.language,
-              title: 'Langue',
-              trailing: Text(_selectedLanguage, style: const TextStyle(color: Colors.grey)),
-              onTap: () => _showLanguageDialog(),
-            ),
-            _buildDivider(),
-            _buildListTile(
-              icon: Icons.attach_money,
-              title: 'Devise',
-              trailing: const Text('USD (\$)', style: TextStyle(color: Colors.grey)),
-              onTap: () {},
-            ),
-          ]),
+            // --- NOTIFICATIONS ---
+            _buildSectionTitle('Notifications'),
+            _buildCard([
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_outlined, color: Colors.blueAccent),
+                title: const Text('Notifications push', style: TextStyle(color: Colors.white)),
+                value: _notificationsEnabled,
+                onChanged: (v) => setState(() => _notificationsEnabled = v),
+                activeColor: Colors.blueAccent,
+              ),
+              _buildDivider(),
+              SwitchListTile(
+                secondary: const Icon(Icons.mail_outline, color: Colors.orange),
+                title: const Text('Notifications email', style: TextStyle(color: Colors.white)),
+                value: _emailNotifications,
+                onChanged: (v) => setState(() => _emailNotifications = v),
+                activeColor: Colors.blueAccent,
+              ),
+              _buildDivider(),
+              SwitchListTile(
+                secondary: const Icon(Icons.sms_outlined, color: Colors.green),
+                title: const Text('Notifications SMS', style: TextStyle(color: Colors.white)),
+                value: _smsNotifications,
+                onChanged: (v) => setState(() => _smsNotifications = v),
+                activeColor: Colors.blueAccent,
+              ),
+            ]),
 
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-          // --- CONFIDENTIALITÉ ---
-          _buildSectionTitle('Confidentialité et Sécurité'),
-          _buildCard([
-            _buildListTile(
-              icon: Icons.privacy_tip_outlined,
-              title: 'Politique de confidentialité',
-              onTap: () => _showPrivacyPolicy(),
-            ),
-            _buildDivider(),
-            _buildListTile(
-              icon: Icons.description_outlined,
-              title: 'Conditions d\'utilisation',
-              onTap: () => _showTerms(),
-            ),
+            // --- PRÉFÉRENCES ---
+            _buildSectionTitle('Préférences'),
+            _buildCard([
+              _buildListTile(
+                icon: Icons.language,
+                title: 'Langue',
+                trailing: Text(selectedLanguage, style: const TextStyle(color: Colors.grey)),
+                onTap: () => _showLanguageDialog(),
+              ),
+              _buildDivider(),
+              _buildListTile(
+                icon: Icons.attach_money,
+                title: 'Devise',
+                trailing: Text(selectedCurrency, style: const TextStyle(color: Colors.grey)),
+                onTap: () => _showCurrencyDialog(),
+              ),
+            ]),
+
+            const SizedBox(height: 24),
+
+            // --- CONFIDENTIALITÉ ---
+            _buildSectionTitle('Confidentialité et Sécurité'),
+            _buildCard([
+              _buildListTile(
+                icon: Icons.privacy_tip_outlined,
+                title: 'Politique de confidentialité',
+                onTap: () => _showPrivacyPolicy(),
+              ),
+              _buildDivider(),
+              _buildListTile(
+                icon: Icons.description_outlined,
+                title: 'Conditions d\'utilisation',
+                onTap: () => _showTerms(),
+              ),
             _buildDivider(),
             _buildListTile(
               icon: Icons.delete_outline,
@@ -150,8 +250,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
           const SizedBox(height: 40),
         ],
-      ),
-    );
+      ), // end ListView
+      ), // end data callback
+    ); // end Scaffold
   }
 
   Widget _buildSectionTitle(String title) {
@@ -192,34 +293,82 @@ class _SettingsPageState extends State<SettingsPage> {
     return const Divider(height: 1, color: Colors.white10, indent: 56);
   }
 
-  void _showEditProfileDialog() {
-    final nameController = TextEditingController(text: 'Utilisateur');
+  void _showEditProfileDialog(String currentName) {
+    final nameController = TextEditingController(text: currentName);
+    bool isLoading = false;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Modifier le profil', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: nameController,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            labelText: 'Nom',
-            labelStyle: const TextStyle(color: Colors.grey),
-            filled: true,
-            fillColor: Colors.white10,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text('Modifier le profil', style: TextStyle(color: Colors.white)),
+          content: TextField(
+            controller: nameController,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              labelText: 'Nom',
+              labelStyle: const TextStyle(color: Colors.grey),
+              filled: true,
+              fillColor: Colors.white10,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(dialogContext), 
+              child: const Text('Annuler')
+            ),
+            ElevatedButton(
+              onPressed: isLoading ? null : () async {
+                final newName = nameController.text.trim();
+                if (newName.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Le nom ne peut pas être vide'), backgroundColor: Colors.red),
+                  );
+                  return;
+                }
+                
+                setDialogState(() => isLoading = true);
+                
+                try {
+                  final token = await SecureStorageService().getToken();
+                  final response = await http.post(
+                    Uri.parse('${ApiConfig.baseUrl}/auth/update-profile'),
+                    headers: {
+                      'Content-Type': 'application/json',
+                      if (token != null) 'Authorization': 'Bearer $token',
+                    },
+                    body: jsonEncode({'name': newName}),
+                  );
+                  
+                  if (response.statusCode == 200) {
+                    Navigator.pop(dialogContext);
+                    // Rafraîchir les données utilisateur
+                    ref.invalidate(userProvider);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Profil mis à jour !'), backgroundColor: Colors.green),
+                    );
+                  } else {
+                    final error = jsonDecode(response.body)['error'] ?? 'Erreur inconnue';
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erreur: $error'), backgroundColor: Colors.red),
+                    );
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erreur réseau: $e'), backgroundColor: Colors.red),
+                  );
+                } finally {
+                  setDialogState(() => isLoading = false);
+                }
+              },
+              child: isLoading 
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Enregistrer'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil mis à jour')));
-            },
-            child: const Text('Enregistrer'),
-          ),
-        ],
       ),
     );
   }
@@ -229,59 +378,48 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Changer le mot de passe', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildPasswordField('Mot de passe actuel'),
-            const SizedBox(height: 12),
-            _buildPasswordField('Nouveau mot de passe'),
-            const SizedBox(height: 12),
-            _buildPasswordField('Confirmer'),
-          ],
+        title: const Text('Mot de passe', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'La connexion OLI utilise uniquement la vérification par SMS (OTP).\n\nVotre compte est sécurisé par votre numéro de téléphone.',
+          style: TextStyle(color: Colors.white70, height: 1.5),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Changer')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context), 
+            child: const Text('Compris')
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildPasswordField(String label) {
-    return TextField(
-      obscureText: true,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.grey),
-        filled: true,
-        fillColor: Colors.white10,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-
-  void _showChangeEmailDialog() {
+  void _showCurrencyDialog() {
+    // Import Currency from exchange_rate_provider.dart
+    final currencies = [Currency.USD, Currency.CDF];
+    final currentCurrency = ref.read(exchangeRateProvider).selectedCurrency;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => SimpleDialog(
         backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Changer l\'email', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            labelText: 'Nouvel email',
-            labelStyle: const TextStyle(color: Colors.grey),
-            filled: true,
-            fillColor: Colors.white10,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Enregistrer')),
-        ],
+        title: const Text('Choisir la devise', style: TextStyle(color: Colors.white)),
+        children: currencies.map((currency) {
+          final isSelected = currency == currentCurrency;
+          return SimpleDialogOption(
+            onPressed: () {
+              ref.read(exchangeRateProvider.notifier).setCurrency(currency);
+              Navigator.pop(context);
+            },
+            child: Row(
+              children: [
+                if (isSelected) const Icon(Icons.check, color: Colors.blueAccent, size: 18),
+                if (!isSelected) const SizedBox(width: 18),
+                const SizedBox(width: 12),
+                Text('${currency.name} (${currency.symbol})', style: const TextStyle(color: Colors.white)),
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -291,23 +429,28 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => SimpleDialog(
         backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Choisir la langue', style: TextStyle(color: Colors.white)),
-        children: ['Français', 'English', 'Español', 'العربية', 'Lingala'].map((lang) {
-          return SimpleDialogOption(
-            onPressed: () {
-              setState(() => _selectedLanguage = lang);
-              Navigator.pop(context);
-            },
-            child: Row(
+        title: const Text('Langue', style: TextStyle(color: Colors.white)),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context),
+            child: const Row(
               children: [
-                if (lang == _selectedLanguage) const Icon(Icons.check, color: Colors.blueAccent, size: 18),
-                if (lang != _selectedLanguage) const SizedBox(width: 18),
-                const SizedBox(width: 12),
-                Text(lang, style: const TextStyle(color: Colors.white)),
+                Icon(Icons.check, color: Colors.blueAccent, size: 18),
+                SizedBox(width: 12),
+                Text('Français', style: TextStyle(color: Colors.white)),
               ],
             ),
-          );
-        }).toList(),
+          ),
+          const SimpleDialogOption(
+            child: Row(
+              children: [
+                SizedBox(width: 18),
+                SizedBox(width: 12),
+                Text('English (Bientôt)', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

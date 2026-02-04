@@ -402,6 +402,26 @@ class ProductRepository {
         const result = await pool.query(query, values);
         return result.rows;
     }
+
+    /**
+     * Mise à jour en masse du prix des produits d'une boutique (division)
+     * @param {string} shopId - ID de la boutique
+     * @param {number} divisor - Diviseur à appliquer (ex: 2700)
+     */
+    async bulkUpdatePriceByShopId(shopId, divisor) {
+        if (!divisor || divisor === 0) throw new Error("Diviseur invalide");
+
+        const query = `
+            UPDATE products 
+            SET price = price / $1, 
+                updated_at = NOW()
+            WHERE shop_id = $2 AND status != 'deleted'
+            RETURNING id, price
+        `;
+
+        const result = await pool.query(query, [divisor, shopId]);
+        return result.rows;
+    }
 }
 
 module.exports = new ProductRepository();

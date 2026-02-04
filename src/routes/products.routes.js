@@ -88,4 +88,10 @@ router.patch('/:id', productController.update);
  */
 router.delete('/:id', productController.delete);
 
+/**
+ * POST /products/bulk-update-price
+ * Mise à jour en masse (ex: correction devise)
+ */
+router.post('/bulk-update-price', productController.bulkUpdate);
+
 module.exports = router;

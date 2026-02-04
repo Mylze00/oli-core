@@ -6,8 +6,6 @@ import 'dart:math' as math;
 enum BadgeType {
   blue,    // Certifié / Verified
   gold,    // Shop certifié / Entreprise
-  green,   // Premium
-  gray     // Standard/Ordinaire
 }
 
 class VerificationBadge extends StatelessWidget {
@@ -26,10 +24,6 @@ class VerificationBadge extends StatelessWidget {
         return const Color(0xFF1DA1F2); // Twitter blue
       case BadgeType.gold:
         return const Color(0xFFD4A500); // Gold
-      case BadgeType.green:
-        return const Color(0xFF00BA7C); // Green
-      case BadgeType.gray:
-        return const Color(0xFF71767B); // Gray
     }
   }
 
@@ -42,20 +36,22 @@ class VerificationBadge extends StatelessWidget {
   }
 
   /// Helper to determine badge type from product seller data
-  static BadgeType fromSellerData({
+  /// Returns null if user is ordinary (no badge)
+  static BadgeType? fromSellerData({
     required bool isVerified,
     required String accountType,
     required bool hasCertifiedShop,
   }) {
+    // Gold for entreprise or certified shop
     if (hasCertifiedShop || accountType == 'entreprise') {
       return BadgeType.gold;
-    } else if (accountType == 'premium') {
-      return BadgeType.green;
-    } else if (accountType == 'certifie' || isVerified) {
-      return BadgeType.blue;
-    } else {
-      return BadgeType.gray;
     }
+    // Blue for certified users
+    if (accountType == 'certifie' || isVerified) {
+      return BadgeType.blue;
+    }
+    // No badge for ordinary users
+    return null;
   }
 
   /// Helper to determine badge from User model

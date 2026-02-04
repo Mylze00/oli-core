@@ -155,3 +155,31 @@ exports.delete = async (req, res) => {
         res.status(500).json({ error: "Erreur serveur" });
     }
 };
+
+exports.bulkUpdate = async (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ error: "Non authentifié" });
+    }
+
+    try {
+        const { shopId, divisor } = req.body;
+
+        if (!shopId || !divisor) {
+            return res.status(400).json({ error: "shopId et divisor requis" });
+        }
+
+        const result = await productService.bulkUpdateShopPrices(req.user.id, shopId, parseFloat(divisor));
+
+        res.json({
+            success: true,
+            message: `${result.count} produits mis à jour`,
+            data: result
+        });
+    } catch (err) {
+        console.error("Erreur POST /products/bulk-update-price:", err);
+        if (err.message.startsWith('Non autorisé')) {
+            return res.status(403).json({ error: err.message });
+        }
+        res.status(500).json({ error: "Erreur serveur", details: err.message });
+    }
+};

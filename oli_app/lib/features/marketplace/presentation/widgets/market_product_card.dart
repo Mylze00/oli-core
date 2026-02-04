@@ -94,17 +94,18 @@ class MarketProductCard extends ConsumerWidget {
                                       ? const Icon(Icons.person, size: 8, color: Colors.white) 
                                       : null,
                                 ),
-                                // Verification badge
-                                if (product.sellerIsVerified || product.sellerAccountType != 'ordinaire' || product.sellerHasCertifiedShop)
+                                // Verification badge - only show for certified users
+                                if (product.sellerHasCertifiedShop || 
+                                    product.sellerAccountType == 'entreprise' ||
+                                    product.sellerAccountType == 'certifie' ||
+                                    product.sellerIsVerified)
                                   Positioned(
                                     bottom: -2, left: 0, right: 0,
                                     child: Center(
                                       child: VerificationBadge(
-                                        type: VerificationBadge.fromSellerData(
-                                          isVerified: product.sellerIsVerified,
-                                          accountType: product.sellerAccountType,
-                                          hasCertifiedShop: product.sellerHasCertifiedShop,
-                                        ),
+                                        type: (product.sellerHasCertifiedShop || product.sellerAccountType == 'entreprise')
+                                            ? BadgeType.gold
+                                            : BadgeType.blue,
                                         size: 10,
                                       ),
                                     ),
@@ -171,6 +172,64 @@ class MarketProductCard extends ConsumerWidget {
                           child: Text(
                             discountBadgeText ?? "PROMO",
                             style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    
+                    // Badge NEW (Top Left, shifted down if promo exists)
+                    if (product.createdAt != null && DateTime.now().difference(product.createdAt!).inDays < 7)
+                      Positioned(
+                        top: hasDiscount ? 28 : 4, left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4ECDC4), // Teal
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            "NEW",
+                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    
+                    // Badge STOCK BAS (Bottom Left)
+                    if (product.quantity < 5 && product.quantity > 0)
+                      Positioned(
+                        bottom: 24, left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFBE0B), // Yellow/Gold
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            "Stock: ${product.quantity}",
+                            style: const TextStyle(color: Colors.black87, fontSize: 8, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    
+                    // Badge BEST SELLER (Top Right, shifted left from heart)
+                    if (product.viewCount > 100)
+                      Positioned(
+                        top: 28, right: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6B6B).withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.local_fire_department, size: 10, color: Colors.white),
+                              SizedBox(width: 2),
+                              Text(
+                                "HOT",
+                                style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                              ),
+                            ],
                           ),
                         ),
                       ),

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Upload } from 'lucide-react';
+import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Upload, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { sellerAPI } from '../services/api';
 
@@ -74,6 +74,43 @@ export default function ProductList() {
                         className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-200 transition-colors"
                     >
                         <Download size={18} /> Import/Export
+                    </button>
+                    <button
+                        onClick={async () => {
+                            if (products.length === 0) return alert("Aucun produit à mettre à jour");
+
+                            const shopId = products[0].shopId;
+                            if (!shopId) return alert("Impossible de déterminer la boutique");
+
+                            // Confirmation explicite
+                            const confirm = window.confirm(
+                                "⚠️ ATTENTION : Cette action va diviser le prix de TOUS vos produits.\n\n" +
+                                "Utilisez cette option si vous avez importé des prix en Francs Congolais (CDF) et voulez les convertir en USD.\n\n" +
+                                "Voulez-vous continuer ?"
+                            );
+
+                            if (confirm) {
+                                const divisorStr = window.prompt("Entrez le diviseur (ex: 2700 pour CDF -> USD):", "2700");
+                                const divisor = parseFloat(divisorStr);
+
+                                if (divisor && !isNaN(divisor)) {
+                                    try {
+                                        setLoading(true);
+                                        const res = await sellerAPI.bulkUpdatePrice(shopId, divisor);
+                                        alert(`Succès! ${res.message}`);
+                                        loadProducts();
+                                    } catch (err) {
+                                        console.error(err);
+                                        alert("Erreur lors de la mise à jour: " + (err.response?.data?.error || err.message));
+                                        setLoading(false);
+                                    }
+                                }
+                            }
+                        }}
+                        className="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-orange-200 transition-colors"
+                        title="Correction prix en masse"
+                    >
+                        <Settings size={18} /> Correction Prix
                     </button>
                     <button
                         onClick={() => navigate('/products/new')}

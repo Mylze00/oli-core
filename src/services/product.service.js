@@ -206,6 +206,29 @@ class ProductService {
         }
         return true;
     }
+
+    async bulkUpdateShopPrices(userId, shopId, divisor) {
+        // 1. Vérifier que l'utilisateur est propriétaire de la boutique
+        const shop = await shopRepository.findById(shopId);
+
+        if (!shop) {
+            throw new Error('Boutique non trouvée');
+        }
+
+        // Vérification stricte : le userId doit correspondre au owner_id de la boutique
+        // Note: shop.owner_id peut être un int ou string selon le driver DB, on normalise en string
+        if (shop.owner_id.toString() !== userId.toString()) {
+            throw new Error('Non autorisé : Vous n\'êtes pas le propriétaire de cette boutique');
+        }
+
+        // 2. Appliquer la mise à jour
+        const updatedProducts = await productRepository.bulkUpdatePriceByShopId(shopId, divisor);
+
+        return {
+            count: updatedProducts.length,
+            sample: updatedProducts.slice(0, 5) // Renvoie un échantillon pour vérification
+        };
+    }
 }
 
 module.exports = new ProductService();

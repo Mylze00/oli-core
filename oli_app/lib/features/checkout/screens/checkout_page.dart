@@ -4,8 +4,12 @@ import '../../cart/providers/cart_provider.dart';
 import '../../orders/providers/orders_provider.dart';
 
 /// Page de Checkout / Validation de commande
+/// Peut être utilisée avec le panier (défaut) ou avec un achat direct (directPurchaseItem)
 class CheckoutPage extends ConsumerStatefulWidget {
-  const CheckoutPage({super.key});
+  /// Si fourni, utilise cet item au lieu du panier (Achat immédiat)
+  final CartItem? directPurchaseItem;
+  
+  const CheckoutPage({super.key, this.directPurchaseItem});
 
   @override
   ConsumerState<CheckoutPage> createState() => _CheckoutPageState();
@@ -18,11 +22,33 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   bool _isLoading = false;
   double _deliveryFee = 5.00;
 
+  /// Retourne les items à checkout (achat direct ou panier)
+  List<CartItem> get _checkoutItems {
+    if (widget.directPurchaseItem != null) {
+      return [widget.directPurchaseItem!];
+    }
+    return ref.watch(cartProvider);
+  }
+
+  /// Calcule le sous-total
+  double get _subtotal {
+    return _checkoutItems.fold(0, (sum, item) => sum + item.total);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Si achat direct, utiliser le frais de livraison du produit
+    if (widget.directPurchaseItem != null) {
+      _deliveryFee = widget.directPurchaseItem!.deliveryPrice;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final cartItems = ref.watch(cartProvider);
-    final subtotal = ref.watch(cartTotalProvider);
-    final total = subtotal + _deliveryFee;
+    final cartItems = _checkoutItems;
+    final subtotal = _subtotal;
+    final total = subtotal + (widget.directPurchaseItem == null ? _deliveryFee : 0); // Livraison déjà incluse dans directPurchaseItem
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -184,19 +210,23 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     setState(() => _isLoading = true);
 
     try {
-      final cartNotifier = ref.read(cartProvider.notifier);
       final orderService = ref.read(orderServiceProvider);
       
+      // Convertir les items (panier ou achat direct) en OrderItems
+      final orderItems = _checkoutItems.map((item) => item.toOrderItem()).toList();
+      
       final order = await orderService.createOrder(
-        items: cartNotifier.toOrderItems(),
+        items: orderItems,
         deliveryAddress: _deliveryAddress,
         paymentMethod: _paymentMethod,
         deliveryFee: _deliveryFee,
       );
 
       if (order != null) {
-        // Vider le panier
-        cartNotifier.clearCart();
+        // Vider le panier SEULEMENT si ce n'était pas un achat direct
+        if (widget.directPurchaseItem == null) {
+          ref.read(cartProvider.notifier).clearCart();
+        }
         
         // Rafraîchir la liste des commandes
         ref.invalidate(ordersProvider);
@@ -223,17 +253,37 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 Text('Commande #${order.id}', style: const TextStyle(color: Colors.grey)),
                 const SizedBox(height: 8),
                 Text('Total: \$${order.totalAmount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange, size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Paiement en attente. Le vendeur sera notifié.',
+                          style: TextStyle(color: Colors.orange, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
             actions: [
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context); // Fermer dialog
-                  Navigator.pop(context); // Retour au panier
-                  Navigator.pop(context); // Retour à la page précédente
+                  // Retourner à l'accueil
+                  Navigator.of(context).popUntil((route) => route.isFirst);
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                child: const Text('Voir mes commandes'),
+                child: const Text('OK'),
               ),
             ],
           ),
