@@ -296,6 +296,60 @@ export const sellerAPI = {
     searchChatUsers: async (query) => {
         const response = await api.get(`/chat/users?q=${encodeURIComponent(query)}`);
         return response.data;
+    },
+
+    // 🎫 Coupons
+    getCoupons: async () => {
+        const response = await api.get('/api/coupons');
+        return response.data;
+    },
+
+    createCoupon: async (data) => {
+        const response = await api.post('/api/coupons', data);
+        return response.data;
+    },
+
+    updateCoupon: async (id, data) => {
+        const response = await api.put(`/api/coupons/${id}`, data);
+        return response.data;
+    },
+
+    deleteCoupon: async (id) => {
+        const response = await api.delete(`/api/coupons/${id}`);
+        return response.data;
+    },
+
+    getCouponStats: async () => {
+        const response = await api.get('/api/coupons/stats');
+        return response.data;
+    },
+
+    // ⭐ Fidélité
+    getLoyaltySettings: async () => {
+        const response = await api.get('/api/loyalty/settings');
+        return response.data;
+    },
+
+    updateLoyaltySettings: async (data) => {
+        const response = await api.put('/api/loyalty/settings', data);
+        return response.data;
+    },
+
+    getLoyaltyStats: async () => {
+        const response = await api.get('/api/loyalty/stats');
+        return response.data;
+    },
+
+    getLoyaltyCustomers: async (tier = null) => {
+        let url = '/api/loyalty/customers';
+        if (tier) url += `?tier=${tier}`;
+        const response = await api.get(url);
+        return response.data;
+    },
+
+    awardLoyaltyPoints: async (userId, points, description) => {
+        const response = await api.post('/api/loyalty/award', { user_id: userId, points, description });
+        return response.data;
     }
 };
 

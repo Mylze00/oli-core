@@ -10,6 +10,7 @@ import VariantsEditor from './pages/VariantsEditor';
 import OrderManagement from './pages/OrderManagement';
 import ReportsPage from './pages/ReportsPage';
 import MessagesPage from './pages/MessagesPage';
+import PromotionsPage from './pages/PromotionsPage';
 
 // Composant pour protéger les routes
 const ProtectedRoute = ({ children }) => {
@@ -118,6 +119,13 @@ const SellerLayout = ({ children }) => {
                             💬 Messages B2B
                         </a>
                         <a
+                            href="/promotions"
+                            className={`block p-3 rounded transition-colors ${isActive('/promotions') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
+                                }`}
+                        >
+                            🎁 Promotions
+                        </a>
+                        <a
                             href="/subscription"
                             className={`block p-3 rounded transition-colors text-amber-400 ${isActive('/subscription') ? 'bg-amber-600 text-white' : 'hover:bg-slate-800'
                                 }`}
@@ -194,6 +202,12 @@ function App() {
                 <Route path="/messages" element={
                     <ProtectedRoute>
                         <MessagesPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/promotions" element={
+                    <ProtectedRoute>
+                        <SellerLayout><PromotionsPage /></SellerLayout>
                     </ProtectedRoute>
                 } />
 
