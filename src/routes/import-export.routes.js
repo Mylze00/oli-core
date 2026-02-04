@@ -44,7 +44,7 @@ function parseCSV(csvString) {
     if (lines.length < 2) return [];
 
     // Première ligne = headers
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '').toLowerCase());
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
 
     const results = [];
     for (let i = 1; i < lines.length; i++) {
@@ -56,13 +56,17 @@ function parseCSV(csvString) {
             if (char === '"') {
                 inQuotes = !inQuotes;
             } else if (char === ',' && !inQuotes) {
-                values.push(current.trim());
+                // Nettoyer la valeur : enlever les guillemets au début/fin et trim
+                const cleanValue = current.trim().replace(/^"|"$/g, '');
+                values.push(cleanValue);
                 current = '';
             } else {
                 current += char;
             }
         }
-        values.push(current.trim());
+        // Dernière valeur de la ligne
+        const cleanValue = current.trim().replace(/^"|"$/g, '');
+        values.push(cleanValue);
 
         const row = {};
         headers.forEach((header, index) => {
