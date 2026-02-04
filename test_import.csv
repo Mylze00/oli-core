@@ -1,0 +1,4 @@
+name,description,price,quantity,category,brand,unit,weight,images
+"Test iPhone 14","Smartphone Apple reconditionné",599.99,10,"Électronique",""Apple"",Pièce,200g,https://example.com/iphone.jpg
+"Sac à dos","Sac à dos pour ordinateur portable",45.50,25,"Accessoires > Sacs","",Pièce,800g,
+"T-shirt Coton","T-shirt 100% coton bio",15.00,50,"Vêtements","Nike",Pièce,150g,https://example.com/tshirt.jpg
