@@ -181,6 +181,7 @@ app.use("/api/analytics", require('./routes/analytics.routes')); // 📊 Analyti
 app.use("/api/import-export", require('./routes/import-export.routes')); // 📥 Import/Export CSV
 app.use("/api/variants", require('./routes/variants.routes')); // 🎨 Variantes produits
 app.use("/api/seller/orders", require('./routes/seller-orders.routes')); // 📦 Commandes vendeur
+app.use("/api/reports", require('./routes/reports.routes')); // 📊 Rapports avancés
 app.use("/admin/ads", adminRoutes); // Mounting admin ads handled inside admin.routes?? No, I created src/routes/admin/ads.routes.js
 // Let's mount explicit paths
 app.use("/ads", require("./routes/ads.routes"));

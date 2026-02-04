@@ -8,6 +8,7 @@ import SubscriptionPage from './pages/SubscriptionPage';
 import ImportExportPage from './pages/ImportExportPage';
 import VariantsEditor from './pages/VariantsEditor';
 import OrderManagement from './pages/OrderManagement';
+import ReportsPage from './pages/ReportsPage';
 
 // Composant pour protéger les routes
 const ProtectedRoute = ({ children }) => {
@@ -102,6 +103,13 @@ const SellerLayout = ({ children }) => {
                             🛒 Commandes
                         </a>
                         <a
+                            href="/reports"
+                            className={`block p-3 rounded transition-colors ${isActive('/reports') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
+                                }`}
+                        >
+                            📈 Rapports
+                        </a>
+                        <a
                             href="/messages"
                             className={`block p-3 rounded transition-colors ${isActive('/messages') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
                                 }`}
@@ -173,6 +181,12 @@ function App() {
                 <Route path="/orders" element={
                     <ProtectedRoute>
                         <SellerLayout><OrderManagement /></SellerLayout>
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/reports" element={
+                    <ProtectedRoute>
+                        <SellerLayout><ReportsPage /></SellerLayout>
                     </ProtectedRoute>
                 } />
 

@@ -223,6 +223,29 @@ export const sellerAPI = {
     markNotificationRead: async (notificationId) => {
         const response = await api.patch(`/api/seller/orders/notifications/${notificationId}/read`);
         return response.data;
+    },
+
+    // 📊 Rapports Avancés
+    getSalesReport: async (period = '30d') => {
+        const response = await api.get(`/api/reports/sales?period=${period}`);
+        return response.data;
+    },
+
+    getProductsReport: async (period = '30d') => {
+        const response = await api.get(`/api/reports/products?period=${period}`);
+        return response.data;
+    },
+
+    getCustomersReport: async (period = '30d') => {
+        const response = await api.get(`/api/reports/customers?period=${period}`);
+        return response.data;
+    },
+
+    exportReportPDF: async (period = '30d', type = 'all') => {
+        const response = await api.get(`/api/reports/export/pdf?period=${period}&type=${type}`, {
+            responseType: 'text'
+        });
+        return response.data;
     }
 };
 
