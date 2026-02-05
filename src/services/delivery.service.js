@@ -52,7 +52,35 @@ class DeliveryService {
      */
     async getMyDeliveries(user) {
         if (!user.is_deliverer) return [];
-        return await deliveryRepo.findByDeliverer(user.id);
+        const deliveries = await deliveryRepo.findByDeliverer(user.id);
+
+        // Enrichir avec indication si le code est requis
+        return deliveries.map(d => ({
+            ...d,
+            qr_required: d.status === 'in_transit'
+        }));
+    }
+
+    /**
+     * Vérifier un code de livraison (QR Code)
+     */
+    async verifyDelivery(user, deliveryId, code) {
+        if (!user.is_deliverer) throw new Error("Accès réservé aux livreurs");
+
+        const delivery = await pool.query('SELECT * FROM delivery_orders WHERE id = $1', [deliveryId]);
+        if (delivery.rows.length === 0) throw new Error("Livraison non trouvée");
+
+        const order = delivery.rows[0];
+        if (order.deliverer_id !== user.id) throw new Error("Cette livraison ne vous est pas assignée");
+        if (order.status !== 'in_transit') throw new Error("La livraison n'est pas en cours");
+
+        // Comparaison du code (insensible à la casse)
+        if (!order.delivery_code || order.delivery_code.toUpperCase() !== code.toUpperCase()) {
+            throw new Error("Code de livraison incorrect");
+        }
+
+        // Si code valide, on marque comme livré
+        return await this.updateStatus(user, deliveryId, 'delivered', null, null);
     }
 }
 

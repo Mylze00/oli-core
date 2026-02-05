@@ -1,6 +1,13 @@
 const pool = require('../config/db');
 
 /**
+ * Génère un code unique pour la livraison
+ */
+function generateDeliveryCode() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+/**
  * Créer une commande de livraison
  */
 async function create(deliveryData) {
@@ -10,14 +17,16 @@ async function create(deliveryData) {
         delivery_fee, estimated_time
     } = deliveryData;
 
+    const delivery_code = generateDeliveryCode();
+
     const res = await pool.query(`
         INSERT INTO delivery_orders (
             order_id, pickup_address, delivery_address,
             pickup_lat, pickup_lng, delivery_lat, delivery_lng,
-            delivery_fee, estimated_time, status, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW())
+            delivery_fee, estimated_time, status, created_at, delivery_code
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW(), $10)
         RETURNING *
-    `, [order_id, pickup_address, delivery_address, pickup_lat, pickup_lng, delivery_lat, delivery_lng, delivery_fee, estimated_time]);
+    `, [order_id, pickup_address, delivery_address, pickup_lat, pickup_lng, delivery_lat, delivery_lng, delivery_fee, estimated_time, delivery_code]);
 
     return res.rows[0];
 }

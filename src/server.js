@@ -24,6 +24,7 @@ const deliveryRoutes = require("./routes/delivery.routes");
 const userRoutes = require("./routes/user.routes");
 const adminRoutes = require("./routes/admin.routes"); // ✨ Routes admin
 const sellerRoutes = require("./routes/seller.routes"); // ✨ Routes vendeur
+const paymentRoutes = require("./routes/payment.routes"); // 💳 Routes Paiement (Simulé)
 const { requireAuth, optionalAuth } = require("./middlewares/auth.middleware");
 
 const app = express();
@@ -184,6 +185,7 @@ app.use("/api/seller/orders", require('./routes/seller-orders.routes')); // 📦
 app.use("/api/reports", require('./routes/reports.routes')); // 📊 Rapports avancés
 app.use("/api/coupons", require('./routes/coupons.routes')); // 🎫 Coupons promo
 app.use("/api/loyalty", require('./routes/loyalty.routes')); // ⭐ Programme fidélité
+app.use("/api/payment", paymentRoutes); // 💳 Paiement Stripe (Simulé)
 app.use("/admin/ads", adminRoutes); // Mounting admin ads handled inside admin.routes?? No, I created src/routes/admin/ads.routes.js
 // Let's mount explicit paths
 app.use("/ads", require("./routes/ads.routes"));

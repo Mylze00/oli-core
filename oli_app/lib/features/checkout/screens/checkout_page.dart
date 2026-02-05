@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../orders/providers/orders_provider.dart';
+import 'stripe_payment_page.dart';
 
 /// Page de Checkout / Validation de commande
 /// Peut être utilisée avec le panier (défaut) ou avec un achat direct (directPurchaseItem)
@@ -233,7 +234,16 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
         if (!mounted) return;
 
-        // Afficher confirmation
+        // SI PAIEMENT CARTE -> Redirection vers écran Stripe
+        if (_paymentMethod == 'card') {
+           Navigator.pushReplacement(
+             context,
+             MaterialPageRoute(builder: (_) => StripePaymentPage(order: order)),
+           );
+           return;
+        }
+
+        // SINON (Wallet / Mobile Money) -> Afficher confirmation standard
         showDialog(
           context: context,
           barrierDismissible: false,

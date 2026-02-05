@@ -67,4 +67,18 @@ router.post('/:id/status', requireAuth, requireDeliverer, async (req, res) => {
     }
 });
 
+/**
+ * POST /delivery/:id/verify
+ * Vérifier le code QR
+ */
+router.post('/:id/verify', requireAuth, requireDeliverer, async (req, res) => {
+    const { code } = req.body;
+    try {
+        const delivery = await deliveryService.verifyDelivery(req.user, req.params.id, code);
+        res.json({ success: true, delivery });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
 module.exports = router;
