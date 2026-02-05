@@ -1,19 +1,21 @@
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/config/api_config.dart';
+import '../core/providers/dio_provider.dart';
+
+final deliveryServiceProvider = Provider<DeliveryService>((ref) {
+  return DeliveryService(dio: ref.watch(dioProvider));
+});
 
 class DeliveryService {
-  final Dio _dio = Dio();
+  final Dio _dio;
+
+  DeliveryService({required Dio dio}) : _dio = dio;
 
   Future<List<dynamic>> getAvailableOrders() async {
     try {
-      final token = await _getToken();
-      if (token == null) throw Exception("Non authentifié");
-
-      final response = await _dio.get(
-        ApiConfig.deliveryOrdersEndpoint,
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
+      // Token is automatically added by Dio Interceptor
+      final response = await _dio.get(ApiConfig.deliveryOrdersEndpoint);
 
       if (response.statusCode == 200) {
         return response.data as List<dynamic>;
@@ -27,15 +29,11 @@ class DeliveryService {
 
   Future<bool> acceptOrder(int orderId) async {
     try {
-      final token = await _getToken();
-      if (token == null) return false;
-
       // TODO: Implement endpoint for assigning order to driver
       // For now, we might just update status to 'processing' or 'shipped'
       final response = await _dio.patch(
         '${ApiConfig.baseUrl}/orders/$orderId/status',
-        data: {'status': 'shipped'}, // Or specific status
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
+        data: {'status': 'shipped'},
       );
 
       return response.statusCode == 200;
@@ -45,8 +43,18 @@ class DeliveryService {
     }
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('auth_token');
+  Future<bool> markAsDelivered(int orderId) async {
+    try {
+      final response = await _dio.patch(
+        '${ApiConfig.baseUrl}/orders/$orderId/status',
+        data: {'status': 'delivered'},
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error marking as delivered: $e');
+      return false;
+    }
   }
 }
+

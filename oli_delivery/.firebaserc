@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "oli-core"
+  },
+  "targets": {
+    "oli-core": {
+      "hosting": {
+        "delivery": [
+          "olidelivery"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

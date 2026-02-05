@@ -1,7 +1,8 @@
 class ApiConfig {
-  static const String baseUrl = 'https://oli-core.onrender.com/api';
+  static const String baseUrl = 'https://oli-core.onrender.com';
   
-  static const String loginEndpoint = '$baseUrl/auth/login';
-  static const String deliveryOrdersEndpoint = '$baseUrl/orders/delivery'; // New endpoint we will create
+  static const String sendOtpEndpoint = '$baseUrl/auth/send-otp';
+  static const String verifyOtpEndpoint = '$baseUrl/auth/verify-otp';
+  static const String deliveryOrdersEndpoint = '$baseUrl/delivery/available';
   static const String updateStatusEndpoint = '$baseUrl/orders'; // + /:id/status
 }

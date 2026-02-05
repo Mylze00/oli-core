@@ -1,0 +1,9 @@
+{
+    "name": "oli_delivery",
+    "version": "1.0.0",
+    "description": "Oli Delivery Flutter App",
+    "scripts": {
+        "build": "flutter build web --release"
+    },
+    "dependencies": {}
+}

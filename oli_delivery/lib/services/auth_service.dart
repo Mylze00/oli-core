@@ -1,48 +1,72 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/config/api_config.dart';
+import '../core/providers/dio_provider.dart';
+import '../core/providers/storage_provider.dart';
+
+final authServiceProvider = Provider<AuthService>((ref) {
+  return AuthService(
+    dio: ref.watch(dioProvider),
+    storage: ref.watch(secureStorageProvider),
+  );
+});
 
 class AuthService {
-  final Dio _dio = Dio();
+  final Dio _dio;
+  final FlutterSecureStorage _storage;
 
-  Future<bool> login(String email, String password) async {
+  AuthService({required Dio dio, required FlutterSecureStorage storage})
+      : _dio = dio,
+        _storage = storage;
+
+  Future<bool> sendOtp(String phoneNumber) async {
     try {
       final response = await _dio.post(
-        ApiConfig.loginEndpoint,
+        ApiConfig.sendOtpEndpoint,
+        data: {'phone': phoneNumber},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Send OTP error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> verifyOtp(String phoneNumber, String otpCode) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.verifyOtpEndpoint,
         data: {
-          'email': email,
-          'password': password,
+          'phone': phoneNumber,
+          'otpCode': otpCode,
         },
       );
 
       if (response.statusCode == 200) {
         final token = response.data['token'];
         if (token != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('auth_token', token);
+          await _storage.write(key: 'auth_token', value: token);
           return true;
         }
       }
       return false;
     } catch (e) {
-      print('Login error: $e');
+      print('Verify OTP error: $e');
       return false;
     }
   }
 
   Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
+    await _storage.delete(key: 'auth_token');
   }
 
   Future<bool> isLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.containsKey('auth_token');
+    final token = await _storage.read(key: 'auth_token');
+    return token != null;
   }
 
   Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('auth_token');
+    return await _storage.read(key: 'auth_token');
   }
 }
