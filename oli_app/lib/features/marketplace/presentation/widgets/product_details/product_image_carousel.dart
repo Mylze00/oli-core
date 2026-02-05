@@ -74,6 +74,7 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
                             imageUrl:
                                 p.images.isNotEmpty ? p.images.first : null,
                             sellerName: p.seller,
+                            sellerId: p.sellerId,
                           ),
                         );
                     ScaffoldMessenger.of(context).showSnackBar(

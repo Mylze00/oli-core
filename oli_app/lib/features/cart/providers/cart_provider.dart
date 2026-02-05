@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:collection/collection.dart';
 import '../../../models/order_model.dart';
 
 /// Modèle d'un item dans le panier
@@ -9,8 +10,10 @@ class CartItem {
   int quantity;
   final String? imageUrl;
   final String? sellerName;
+  final String sellerId; // ID du vendeur/boutique
   final double deliveryPrice;
   final String deliveryMethod; // "Standard" ou "Express"
+  final bool isSelected; // État de sélection
 
   CartItem({
     required this.productId,
@@ -19,14 +22,39 @@ class CartItem {
     this.quantity = 1,
     this.imageUrl,
     this.sellerName,
+    required this.sellerId,
     this.deliveryPrice = 0.0,
     this.deliveryMethod = 'Standard',
+    this.isSelected = true, // Sélectionné par défaut lors de l'ajout
   });
 
-  // Le total prend en compte le prix du produit * quantite + livraison (une fois par article ou par quantité ?)
-  // Généralement livraison = une fois par commande vendeur, mais ici simplifions : 
-  // Si oli-logistic : souvent par poids/article. Disons par article pour l'instant.
-  double get total => (price * quantity) + deliveryPrice; 
+  double get total => (price * quantity) + deliveryPrice;
+
+  CartItem copyWith({
+    String? productId,
+    String? productName,
+    double? price,
+    int? quantity,
+    String? imageUrl,
+    String? sellerName,
+    String? sellerId,
+    double? deliveryPrice,
+    String? deliveryMethod,
+    bool? isSelected,
+  }) {
+    return CartItem(
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      price: price ?? this.price,
+      quantity: quantity ?? this.quantity,
+      imageUrl: imageUrl ?? this.imageUrl,
+      sellerName: sellerName ?? this.sellerName,
+      sellerId: sellerId ?? this.sellerId,
+      deliveryPrice: deliveryPrice ?? this.deliveryPrice,
+      deliveryMethod: deliveryMethod ?? this.deliveryMethod,
+      isSelected: isSelected ?? this.isSelected,
+    );
+  }
 
   OrderItem toOrderItem() => OrderItem(
     productId: productId,
@@ -35,7 +63,6 @@ class CartItem {
     quantity: quantity,
     imageUrl: imageUrl,
     sellerName: sellerName,
-    // Note: OrderItem devra aussi être mis à jour si on veut persister le mode de livraison
   );
 }
 
@@ -45,26 +72,16 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   /// Ajouter un produit au panier
   void addItem(CartItem item) {
-    // On différencie aussi par mode de livraison pour éviter les conflits ? 
-    // Non, si on change le mode, on met à jour l'item.
     final existingIndex = state.indexWhere((e) => e.productId == item.productId);
     
     if (existingIndex >= 0) {
-      // Produit déjà présent, on remplace (pour mettre à jour le mode de livraison et quantité si besoin)
-      // Ou on incrémente juste la quantité ?
-      // Si l'utilisateur change le mode de livraison, on doit mettre à jour l'item existant.
       state = [
         for (int i = 0; i < state.length; i++)
           if (i == existingIndex)
-             CartItem(
-              productId: state[i].productId,
-              productName: state[i].productName,
-              price: state[i].price,
+            state[i].copyWith(
               quantity: state[i].quantity + item.quantity,
-              imageUrl: state[i].imageUrl,
-              sellerName: state[i].sellerName,
-              deliveryPrice: item.deliveryPrice, // Mise à jour du prix livraison
-              deliveryMethod: item.deliveryMethod, // Mise à jour du mode
+              deliveryPrice: item.deliveryPrice,
+              deliveryMethod: item.deliveryMethod,
             )
           else
             state[i]
@@ -89,18 +106,44 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     state = [
       for (final item in state)
         if (item.productId == productId)
-          CartItem(
-            productId: item.productId,
-            productName: item.productName,
-            price: item.price,
-            quantity: quantity,
-            imageUrl: item.imageUrl,
-            sellerName: item.sellerName,
-            deliveryPrice: item.deliveryPrice,
-            deliveryMethod: item.deliveryMethod,
-          )
+          item.copyWith(quantity: quantity)
         else
           item
+    ];
+  }
+
+  /// Sélectionner/désélectionner un produit
+  void toggleItemSelection(String productId) {
+    state = [
+      for (final item in state)
+        if (item.productId == productId)
+          item.copyWith(isSelected: !item.isSelected)
+        else
+          item
+    ];
+  }
+
+  /// Sélectionner/désélectionner tous les produits d'une boutique
+  void toggleShopSelection(String sellerId) {
+    final shopItems = state.where((item) => item.sellerId == sellerId).toList();
+    final allSelected = shopItems.every((item) => item.isSelected);
+    
+    state = [
+      for (final item in state)
+        if (item.sellerId == sellerId)
+          item.copyWith(isSelected: !allSelected)
+        else
+          item
+    ];
+  }
+
+  /// Tout sélectionner/désélectionner
+  void toggleAllSelection() {
+    final allSelected = state.every((item) => item.isSelected);
+    
+    state = [
+      for (final item in state)
+        item.copyWith(isSelected: !allSelected)
     ];
   }
 
@@ -109,14 +152,34 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     state = [];
   }
 
+  /// Grouper les items par vendeur
+  Map<String, List<CartItem>> getGroupedCart() {
+    return groupBy(state, (CartItem item) => item.sellerId);
+  }
+
+  /// Calculer le sous-total d'une boutique (produits sélectionnés uniquement)
+  double getShopSubtotal(String sellerId) {
+    return state
+        .where((item) => item.sellerId == sellerId && item.isSelected)
+        .fold(0, (sum, item) => sum + item.total);
+  }
+
+  /// Items sélectionnés uniquement
+  List<CartItem> get selectedItems => state.where((item) => item.isSelected).toList();
+
   /// Nombre total d'articles
   int get itemCount => state.fold(0, (sum, item) => sum + item.quantity);
 
-  /// Prix total
+  /// Prix total (tous les items)
   double get totalPrice => state.fold(0, (sum, item) => sum + item.total);
 
-  /// Convertir en liste d'OrderItems pour l'API
-  List<OrderItem> toOrderItems() => state.map((e) => e.toOrderItem()).toList();
+  /// Prix total des items sélectionnés
+  double get selectedTotalPrice => state
+      .where((item) => item.isSelected)
+      .fold(0, (sum, item) => sum + item.total);
+
+  /// Convertir les items sélectionnés en liste d'OrderItems pour l'API
+  List<OrderItem> toOrderItems() => selectedItems.map((e) => e.toOrderItem()).toList();
 }
 
 /// Provider du panier
@@ -130,8 +193,28 @@ final cartItemCountProvider = Provider<int>((ref) {
   return cart.fold(0, (sum, item) => sum + item.quantity);
 });
 
-/// Provider du total du panier
+/// Provider du total du panier (tous les items)
 final cartTotalProvider = Provider<double>((ref) {
   final cart = ref.watch(cartProvider);
   return cart.fold(0, (sum, item) => sum + item.total);
+});
+
+/// Provider du total des items sélectionnés
+final selectedCartTotalProvider = Provider<double>((ref) {
+  final cart = ref.watch(cartProvider);
+  return cart
+      .where((item) => item.isSelected)
+      .fold(0, (sum, item) => sum + item.total);
+});
+
+/// Provider pour vérifier si au moins un item est sélectionné
+final hasSelectedItemsProvider = Provider<bool>((ref) {
+  final cart = ref.watch(cartProvider);
+  return cart.any((item) => item.isSelected);
+});
+
+/// Provider du panier groupé par vendeur
+final groupedCartProvider = Provider<Map<String, List<CartItem>>>((ref) {
+  final cart = ref.watch(cartProvider);
+  return groupBy(cart, (CartItem item) => item.sellerId);
 });
