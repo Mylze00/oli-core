@@ -22,10 +22,11 @@ async function getSellerDashboard(sellerId) {
                 WHERE seller_id = $1
             ),
             seller_orders AS (
-                SELECT o.id, o.status, o.created_at, oi.quantity, oi.price
+                SELECT o.id, o.status, o.created_at, oi.quantity, p.price
                 FROM orders o
                 JOIN order_items oi ON oi.order_id = o.id
-                JOIN seller_products sp ON sp.id = CAST(oi.product_id AS INTEGER)
+                JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
+                JOIN seller_products sp ON sp.id = p.id
             )
             SELECT 
                 -- Produits
@@ -41,11 +42,11 @@ async function getSellerDashboard(sellerId) {
                  WHERE status IN ('pending', 'confirmed')) as pending_orders,
                 
                 -- Revenu du mois
-                (SELECT COALESCE(SUM(quantity * price), 0) FROM seller_orders 
+                (SELECT COALESCE(SUM(quantity * CAST(price AS NUMERIC)), 0) FROM seller_orders 
                  WHERE created_at >= date_trunc('month', CURRENT_DATE)) as revenue_this_month,
                 
                 -- Revenu total
-                (SELECT COALESCE(SUM(quantity * price), 0) FROM seller_orders) as total_revenue,
+                (SELECT COALESCE(SUM(quantity * CAST(price AS NUMERIC)), 0) FROM seller_orders) as total_revenue,
                 
                 -- Nombre total de ventes
                 (SELECT COALESCE(SUM(quantity), 0) FROM seller_orders) as total_sales
@@ -107,20 +108,20 @@ async function getSalesChart(sellerId, period = '7d') {
 
         const query = `
             SELECT 
-                to_char(o.created_at, $3) as date,
+                to_char(o.created_at, $2) as date,
                 COUNT(DISTINCT o.id) as orders,
-                COALESCE(SUM(oi.quantity * oi.price), 0) as revenue,
+                COALESCE(SUM(oi.quantity * CAST(p.price AS NUMERIC)), 0) as revenue,
                 COALESCE(SUM(oi.quantity), 0) as items_sold
             FROM orders o
             JOIN order_items oi ON oi.order_id = o.id
             JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
             WHERE p.seller_id = $1
-              AND o.created_at >= CURRENT_DATE - INTERVAL $2
-            GROUP BY to_char(o.created_at, $3)
+              AND o.created_at >= CURRENT_DATE - INTERVAL '${interval}'
+            GROUP BY to_char(o.created_at, $2)
             ORDER BY date ASC
         `;
 
-        const result = await db.query(query, [sellerIdInt, interval, dateFormat]);
+        const result = await db.query(query, [sellerIdInt, dateFormat]);
         return result.rows;
     } catch (error) {
         console.error('Error in getSalesChart:', error);
@@ -222,7 +223,7 @@ async function getSellerOrderDetails(sellerId, orderId) {
 async function getAdvancedAnalytics(sellerId) {
     try {
         const sellerIdInt = parseInt(sellerId);
-        
+
         const query = `
             WITH seller_products AS (
                 SELECT id, COALESCE(view_count, 0) as views
@@ -256,7 +257,7 @@ async function getAdvancedAnalytics(sellerId) {
                     ELSE 0 
                 END as conversion_rate
         `;
-        
+
         const result = await db.query(query, [sellerIdInt]);
         return result.rows[0] || {
             total_views: 0,
@@ -281,7 +282,7 @@ async function getAdvancedAnalytics(sellerId) {
 async function getTopProducts(sellerId, limit = 10) {
     try {
         const sellerIdInt = parseInt(sellerId);
-        
+
         const query = `
             SELECT 
                 p.id,
@@ -290,7 +291,7 @@ async function getTopProducts(sellerId, limit = 10) {
                 p.price,
                 COALESCE(p.view_count, 0) as views,
                 COALESCE(SUM(oi.quantity), 0)::integer as units_sold,
-                COALESCE(SUM(oi.quantity * oi.price), 0)::numeric(10,2) as revenue
+                COALESCE(SUM(oi.quantity * CAST(p.price AS NUMERIC)), 0)::numeric(10,2) as revenue
             FROM products p
             LEFT JOIN order_items oi ON CAST(oi.product_id AS INTEGER) = p.id
             LEFT JOIN orders o ON o.id = oi.order_id AND o.status NOT IN ('cancelled', 'refunded')
@@ -299,7 +300,7 @@ async function getTopProducts(sellerId, limit = 10) {
             ORDER BY units_sold DESC, revenue DESC
             LIMIT $2
         `;
-        
+
         const result = await db.query(query, [sellerIdInt, limit]);
         return result.rows;
     } catch (error) {
@@ -314,7 +315,7 @@ async function getTopProducts(sellerId, limit = 10) {
 async function getProductsWithoutSales(sellerId, days = 30) {
     try {
         const sellerIdInt = parseInt(sellerId);
-        
+
         const query = `
             SELECT 
                 p.id,
@@ -336,7 +337,7 @@ async function getProductsWithoutSales(sellerId, days = 30) {
             ORDER BY p.view_count DESC, p.created_at DESC
             LIMIT 10
         `;
-        
+
         const result = await db.query(query, [sellerIdInt, days]);
         return result.rows;
     } catch (error) {
@@ -351,7 +352,7 @@ async function getProductsWithoutSales(sellerId, days = 30) {
 async function getRecentOrders(sellerId, limit = 5) {
     try {
         const sellerIdInt = parseInt(sellerId);
-        
+
         const query = `
             SELECT DISTINCT
                 o.id,
@@ -371,7 +372,7 @@ async function getRecentOrders(sellerId, limit = 5) {
             ORDER BY o.created_at DESC
             LIMIT $2
         `;
-        
+
         const result = await db.query(query, [sellerIdInt, limit]);
         return result.rows;
     } catch (error) {

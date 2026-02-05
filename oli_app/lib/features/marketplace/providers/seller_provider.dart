@@ -16,6 +16,7 @@ class SellerProfile {
   final double rating;
   final String? shopName;
   final bool shopVerified;
+  final String? description;
 
   SellerProfile({
     required this.id,
@@ -29,6 +30,7 @@ class SellerProfile {
     this.rating = 0.0,
     this.shopName,
     this.shopVerified = false,
+    this.description,
   });
 
   factory SellerProfile.fromJson(Map<String, dynamic> json) {
@@ -44,6 +46,7 @@ class SellerProfile {
       rating: double.tryParse(json['rating']?.toString() ?? '0') ?? 0.0,
       shopName: json['shop_name'],
       shopVerified: json['shop_verified'] ?? false,
+      description: json['description'],
     );
   }
 }
