@@ -12,6 +12,7 @@ import Shops from './pages/Shops';
 import Requests from './pages/Requests';
 import AdsManager from './pages/AdsManager';
 import ServicesManager from './pages/ServicesManager'; // ✨ Services
+import Support from './pages/Support'; // 🆕 Support
 import Verifications from './pages/Verifications'; // 🆕 Certifications
 import ProductRequests from './pages/ProductRequests'; // 📦 Demandes produit
 
@@ -34,6 +35,7 @@ function App() {
             <Route path="/disputes" element={<Disputes />} />
             <Route path="/ads" element={<AdsManager />} />
             <Route path="/services" element={<ServicesManager />} />
+            <Route path="/support" element={<Support />} /> {/* 🆕 */}
             <Route path="/verifications" element={<Verifications />} /> {/* 🆕 */}
           </Route>
         </Route>

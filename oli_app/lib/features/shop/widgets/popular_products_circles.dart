@@ -37,7 +37,7 @@ class PopularProductsCircles extends ConsumerWidget {
           child: CustomPaint(
             size: const Size(double.infinity, 1),
             painter: _DashedLinePainter(
-              color: Colors.grey.withOpacity(0.6), // Gris 60%
+              color: Colors.grey.withOpacity(0.8), // Gris 60%
             ),
           ),
         ),
@@ -54,7 +54,7 @@ class PopularProductsCircles extends ConsumerWidget {
           ),
         ),
         SizedBox(
-          height: 160,
+          height: 135,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -124,7 +124,7 @@ class PopularProductsCircles extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 12,
+                            fontSize: 15,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -135,7 +135,7 @@ class PopularProductsCircles extends ConsumerWidget {
                         exchangeNotifier.formatProductPrice(double.tryParse(product.price) ?? 0.0),
                         style: TextStyle(
                           color: borderColor,
-                          fontSize: 11,
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

@@ -6,6 +6,22 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
 
+router.get('/recent', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT o.id, o.total_amount, o.status, o.created_at, u.name as buyer_name, u.avatar_url
+            FROM orders o
+            JOIN users u ON o.buyer_id = u.id
+            ORDER BY o.created_at DESC
+            LIMIT 5
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Erreur GET /admin/orders/recent:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
 /**
  * GET /admin/orders
  * Liste toutes les commandes

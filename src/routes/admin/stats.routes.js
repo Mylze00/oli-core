@@ -12,14 +12,19 @@ const pool = require('../../config/db');
  */
 router.get('/overview', async (req, res) => {
     try {
+        const { range = '7d' } = req.query;
+        let days = 7;
+        if (range === '24h') days = 1;
+        if (range === '30d') days = 30;
+        if (range === '1y') days = 365;
+
         // Utilisateurs
         const usersStats = await pool.query(`
             SELECT 
                 COUNT(*) as total_users,
                 COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as users_today,
-                COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as users_this_week,
-                COUNT(*) FILTER (WHERE is_seller = TRUE) as total_sellers,
-                COUNT(*) FILTER (WHERE is_deliverer = TRUE) as total_deliverers
+                COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '${days} days') as users_period,
+                COUNT(*) FILTER (WHERE is_seller = TRUE) as total_sellers
             FROM users
         `);
 
@@ -27,31 +32,52 @@ router.get('/overview', async (req, res) => {
         const productsStats = await pool.query(`
             SELECT 
                 COUNT(*) as total_products,
-                COUNT(*) FILTER (WHERE status = 'active') as active_products,
-                COUNT(*) FILTER (WHERE is_featured = TRUE) as featured_products,
-                COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as products_today
+                COUNT(*) FILTER (WHERE status = 'active') as active_products
             FROM products
         `);
 
-        // Commandes (si table existe)
-        let ordersStats = { rows: [{ total_orders: 0, pending_orders: 0, completed_orders: 0, revenue_today: 0 }] };
+        // Commandes
+        let ordersStats = { rows: [{ total_orders: 0, pending_shipping: 0, revenue_total: 0, revenue_today: 0 }] };
         try {
             ordersStats = await pool.query(`
                 SELECT 
                     COUNT(*) as total_orders,
-                    COUNT(*) FILTER (WHERE status = 'pending') as pending_orders,
-                    COUNT(*) FILTER (WHERE status = 'completed') as completed_orders,
+                    COUNT(*) FILTER (WHERE status = 'confirmed') as pending_shipping,
+                    COALESCE(SUM(total_amount), 0) as revenue_total,
                     COALESCE(SUM(total_amount) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day'), 0) as revenue_today
                 FROM orders
+                WHERE status != 'cancelled'
             `);
         } catch (e) {
-            console.log('Table orders non trouvée, valeurs par défaut utilisées');
+            console.log('Table orders non trouvée');
         }
+
+        // Tickets
+        let ticketsStats = { rows: [{ active_disputes: 0 }] };
+        try {
+            ticketsStats = await pool.query(`
+                SELECT COUNT(*) as active_disputes
+                FROM support_tickets
+                WHERE status IN ('open', 'pending')
+            `);
+        } catch (e) {
+            console.log('Table support_tickets non trouvée');
+        }
+
+        // Top Categories (Simulé pour l'instant si pas de table categories liée aux ventes)
+        const topCategories = [
+            { name: 'Électronique', sales: 1250 },
+            { name: 'Mode', sales: 980 },
+            { name: 'Maison', sales: 750 },
+            { name: 'Beauté', sales: 430 }
+        ];
 
         res.json({
             users: usersStats.rows[0],
             products: productsStats.rows[0],
-            orders: ordersStats.rows[0]
+            orders: ordersStats.rows[0],
+            tickets: ticketsStats.rows[0],
+            top_categories: topCategories
         });
     } catch (err) {
         console.error('Erreur /admin/stats/overview:', err);

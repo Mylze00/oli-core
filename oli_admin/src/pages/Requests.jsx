@@ -71,6 +71,14 @@ export default function Requests() {
         }
     };
 
+    const [selectedDocs, setSelectedDocs] = useState(null);
+
+    // ... (useEffect and fetch functions)
+
+    const handleViewDocs = (docs) => {
+        setSelectedDocs(docs);
+    };
+
     if (loading) return <div className="flex justify-center items-center h-64">Chargement...</div>;
 
     return (
@@ -153,6 +161,7 @@ export default function Requests() {
                                 const TypeIcon = typeInfo.icon || StarIcon;
                                 const statusBadge = STATUS_BADGES[req.admin_status] || STATUS_BADGES.pending;
                                 const paymentBadge = PAYMENT_BADGES[req.payment_status] || PAYMENT_BADGES.pending;
+                                const hasDocs = req.user_documents && req.user_documents.length > 0;
 
                                 return (
                                     <tr key={req.id} className="hover:bg-gray-50">
@@ -193,30 +202,45 @@ export default function Requests() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            {req.admin_status === 'pending' && (
-                                                <div className="flex gap-2">
+                                            <div className="flex flex-col gap-2">
+                                                {/* Bouton Voir Documents (seulement pour certification) */}
+                                                {req.request_type === 'shop_certification' && (
                                                     <button
-                                                        onClick={() => handleAction(req.id, 'approve')}
-                                                        disabled={req.payment_status !== 'paid'}
-                                                        className={`px-3 py-1 rounded text-white text-sm transition ${req.payment_status === 'paid'
+                                                        onClick={() => handleViewDocs(req.user_documents)}
+                                                        className={`text-xs px-2 py-1 rounded border ${hasDocs
+                                                                ? 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                                                                : 'border-gray-200 text-gray-400 cursor-not-allowed'
+                                                            }`}
+                                                        disabled={!hasDocs}
+                                                    >
+                                                        {hasDocs ? 'Voir Documents' : 'Aucun document'}
+                                                    </button>
+                                                )}
+
+                                                {req.admin_status === 'pending' ? (
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleAction(req.id, 'approve')}
+                                                            disabled={req.payment_status !== 'paid'}
+                                                            className={`px-3 py-1 rounded text-white text-xs transition ${req.payment_status === 'paid'
                                                                 ? 'bg-green-500 hover:bg-green-600'
                                                                 : 'bg-gray-300 cursor-not-allowed'
-                                                            }`}
-                                                        title={req.payment_status !== 'paid' ? 'Paiement requis' : 'Approuver'}
-                                                    >
-                                                        Approuver
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleAction(req.id, 'reject')}
-                                                        className="px-3 py-1 rounded bg-red-500 hover:bg-red-600 text-white text-sm transition"
-                                                    >
-                                                        Rejeter
-                                                    </button>
-                                                </div>
-                                            )}
-                                            {req.admin_status !== 'pending' && (
-                                                <span className="text-xs text-gray-400">Traité</span>
-                                            )}
+                                                                }`}
+                                                            title={req.payment_status !== 'paid' ? 'Paiement requis' : 'Approuver'}
+                                                        >
+                                                            Approuver
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleAction(req.id, 'reject')}
+                                                            className="px-3 py-1 rounded bg-red-500 hover:bg-red-600 text-white text-xs transition"
+                                                        >
+                                                            Rejeter
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">Traité</span>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 );
@@ -225,6 +249,70 @@ export default function Requests() {
                     </tbody>
                 </table>
             </div>
+
+            {/* Modal Documents */}
+            {selectedDocs && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setSelectedDocs(null)}>
+                    <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+                            <h3 className="text-xl font-bold">Documents Justificatifs</h3>
+                            <button onClick={() => setSelectedDocs(null)} className="p-2 hover:bg-gray-100 rounded-full">
+                                <XCircleIcon className="h-6 w-6 text-gray-500" />
+                            </button>
+                        </div>
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {selectedDocs.map((doc, idx) => (
+                                <div key={idx} className="border rounded-lg p-4 bg-gray-50">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <span className="font-bold text-gray-800 block capitalize">{doc.type.replace('_', ' ')}</span>
+                                            {doc.number && <span className="text-sm text-gray-500">N° {doc.number}</span>}
+                                        </div>
+                                        <span className={`px-2 py-0.5 text-xs rounded-full ${doc.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                            }`}>
+                                            {doc.status}
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <p className="text-xs text-gray-500 mb-1">Recto</p>
+                                            <img
+                                                src={getImageUrl(doc.front)}
+                                                alt="Recto"
+                                                className="w-full h-48 object-cover rounded border bg-white cursor-pointer hover:opacity-90 transition"
+                                                onClick={() => window.open(getImageUrl(doc.front), '_blank')}
+                                            />
+                                        </div>
+                                        {doc.back && (
+                                            <div>
+                                                <p className="text-xs text-gray-500 mb-1">Verso</p>
+                                                <img
+                                                    src={getImageUrl(doc.back)}
+                                                    alt="Verso"
+                                                    className="w-full h-48 object-cover rounded border bg-white cursor-pointer hover:opacity-90 transition"
+                                                    onClick={() => window.open(getImageUrl(doc.back), '_blank')}
+                                                />
+                                            </div>
+                                        )}
+                                        {doc.selfie && (
+                                            <div>
+                                                <p className="text-xs text-gray-500 mb-1">Selfie</p>
+                                                <img
+                                                    src={getImageUrl(doc.selfie)}
+                                                    alt="Selfie"
+                                                    className="w-full h-48 object-cover rounded border bg-white cursor-pointer hover:opacity-90 transition"
+                                                    onClick={() => window.open(getImageUrl(doc.selfie), '_blank')}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

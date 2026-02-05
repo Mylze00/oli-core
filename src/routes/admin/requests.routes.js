@@ -22,11 +22,24 @@ router.get('/', async (req, res) => {
                 u.avatar_url as user_avatar,
                 p.name as product_name,
                 p.images as product_images,
-                s.name as shop_name
+                s.name as shop_name,
+                docs.documents as user_documents
             FROM service_requests sr
             JOIN users u ON sr.user_id = u.id
             LEFT JOIN products p ON sr.request_type = 'product_sponsorship' AND sr.target_id = p.id
             LEFT JOIN shops s ON sr.request_type = 'shop_certification' AND sr.target_id = s.id
+            LEFT JOIN (
+                SELECT user_id, JSON_AGG(json_build_object(
+                    'type', document_type,
+                    'number', document_number,
+                    'front', front_image_url,
+                    'back', back_image_url,
+                    'selfie', selfie_url,
+                    'status', verification_status
+                )) as documents
+                FROM user_identity_documents
+                GROUP BY user_id
+            ) docs ON sr.user_id = docs.user_id
             WHERE 1=1
         `;
         const params = [];
