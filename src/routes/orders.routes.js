@@ -11,6 +11,11 @@ const orderController = require("../controllers/order.controller");
 router.post("/", orderController.create);
 
 /**
+ * GET /orders/delivery - Liste des commandes prêtes pour livraison
+ */
+router.get("/delivery", orderController.getDeliveryOrders);
+
+/**
  * GET /orders - Liste des commandes de l'utilisateur
  */
 router.get("/", orderController.getAll);

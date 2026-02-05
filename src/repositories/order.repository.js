@@ -5,22 +5,22 @@ const pool = require("../config/db");
  */
 async function createOrder(userId, items, deliveryAddress, paymentMethod, deliveryFee = 0) {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     // Calculer le total
     const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0) + deliveryFee;
-    
+
     // Créer la commande
     const orderResult = await client.query(`
       INSERT INTO orders (user_id, total_amount, delivery_address, delivery_fee, payment_method, status, payment_status)
       VALUES ($1, $2, $3, $4, $5, 'pending', 'pending')
       RETURNING *
     `, [userId, totalAmount, deliveryAddress, deliveryFee, paymentMethod]);
-    
+
     const order = orderResult.rows[0];
-    
+
     // Ajouter les items
     for (const item of items) {
       await client.query(`
@@ -28,9 +28,9 @@ async function createOrder(userId, items, deliveryAddress, paymentMethod, delive
         VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [order.id, item.productId, item.productName, item.imageUrl, item.price, item.quantity, item.sellerName]);
     }
-    
+
     await client.query('COMMIT');
-    
+
     return order;
   } catch (error) {
     await client.query('ROLLBACK');
@@ -61,7 +61,32 @@ async function getOrdersByUser(userId) {
     GROUP BY o.id
     ORDER BY o.created_at DESC
   `, [userId]);
-  
+
+  return ordersResult.rows;
+}
+
+/**
+ * Récupérer les commandes disponibles pour livraison (paid, processing)
+ */
+async function getDeliveryOrders() {
+  const ordersResult = await pool.query(`
+    SELECT o.*, 
+           json_agg(json_build_object(
+             'id', oi.id,
+             'productId', oi.product_id,
+             'productName', oi.product_name,
+             'imageUrl', oi.product_image_url,
+             'price', oi.product_price,
+             'quantity', oi.quantity,
+             'sellerName', oi.seller_name
+           )) as items
+    FROM orders o
+    LEFT JOIN order_items oi ON o.id = oi.order_id
+    WHERE o.status IN ('paid', 'processing')
+    GROUP BY o.id
+    ORDER BY o.created_at DESC
+  `);
+
   return ordersResult.rows;
 }
 
@@ -85,7 +110,7 @@ async function getOrderById(orderId, userId) {
     WHERE o.id = $1 AND o.user_id = $2
     GROUP BY o.id
   `, [orderId, userId]);
-  
+
   return result.rows[0] || null;
 }
 
@@ -99,7 +124,7 @@ async function updateOrderStatus(orderId, status) {
     WHERE id = $1
     RETURNING *
   `, [orderId, status]);
-  
+
   return result.rows[0];
 }
 
@@ -115,7 +140,7 @@ async function updatePaymentStatus(orderId, paymentStatus) {
     WHERE id = $1
     RETURNING *
   `, [orderId, paymentStatus]);
-  
+
   return result.rows[0];
 }
 
@@ -129,7 +154,7 @@ async function cancelOrder(orderId, userId) {
     WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'paid')
     RETURNING *
   `, [orderId, userId]);
-  
+
   return result.rows[0];
 }
 
@@ -139,5 +164,6 @@ module.exports = {
   getOrderById,
   updateOrderStatus,
   updatePaymentStatus,
-  cancelOrder
+  cancelOrder,
+  getDeliveryOrders
 };

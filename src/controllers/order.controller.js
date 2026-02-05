@@ -23,6 +23,16 @@ exports.getAll = async (req, res) => {
     }
 };
 
+exports.getDeliveryOrders = async (req, res) => {
+    try {
+        const orders = await orderService.getDeliveryOrders();
+        res.json(orders);
+    } catch (error) {
+        console.error("Erreur récupération commandes livraison:", error);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+};
+
 exports.getById = async (req, res) => {
     try {
         const orderId = parseInt(req.params.id);

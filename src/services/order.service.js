@@ -97,6 +97,10 @@ class OrderService {
         return order;
     }
 
+    async getDeliveryOrders() {
+        return await orderRepository.getDeliveryOrders();
+    }
+
     // DEV ONLY
     async simulatePayment(orderId, paymentMethod) {
         const order = await orderRepository.updatePaymentStatus(orderId, 'completed');
