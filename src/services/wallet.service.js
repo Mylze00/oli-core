@@ -63,6 +63,32 @@ class WalletService {
         };
     }
 
+    // PAIEMENT DE COMMANDE VIA WALLET
+    async payOrder(userId, amount) {
+        // 1. Vérification du solde
+        const currentBalance = await walletRepository.getBalance(userId);
+        if (currentBalance < amount) {
+            throw new Error("Solde insuffisant");
+        }
+
+        // 2. Débit immédiat (Interne)
+        const transactionId = `ORDER_${Date.now()}`;
+
+        const result = await walletRepository.performWithdrawal(
+            userId,
+            amount,
+            'WALLET_PAYMENT',
+            transactionId,
+            'Paiement de commande OLI'
+        );
+
+        return {
+            success: true,
+            newBalance: result.balanceAfter,
+            transactionId: result.id
+        };
+    }
+
     async depositByCard(userId, amount, cardInfo) {
         // Validation des informations de carte
         this._validateCard(cardInfo);

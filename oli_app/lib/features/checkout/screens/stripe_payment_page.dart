@@ -7,7 +7,7 @@ import '../../../models/order_model.dart';
 // import '../../../core/config/api_config.dart'; // Si disponible
 
 class StripePaymentPage extends StatefulWidget {
-  final OrderModel order;
+  final Order order;
 
   const StripePaymentPage({super.key, required this.order});
 
@@ -227,6 +227,58 @@ class _StripePaymentPageState extends State<StripePaymentPage> {
       _isLoading = true;
       _errorMessage = null;
     });
+
+    // VALIDATION STRICTE SIMULATION
+    // Refuser les cartes qui ne sont pas des cartes de test Stripe valides (4242...)
+    final cleanCardNumber = _cardNumberController.text.replaceAll(' ', '');
+    final expiry = _expiryController.text;
+    final cvv = _cvvController.text;
+
+    bool isValid = true;
+    String errorMsg = "";
+
+    // 1. Check Numéro
+    if (!cleanCardNumber.startsWith('4242')) {
+       isValid = false;
+       errorMsg = "Carte refusée. (Mode Test: Utilisez 4242...)";
+    }
+    
+    // 2. Check CVV
+    else if (cvv != '123') {
+       isValid = false;
+       errorMsg = "CVV invalide. (Mode Test: Utilisez 123)";
+    }
+
+    // 3. Check Date Expiration
+    else if (expiry.length == 5 && expiry.contains('/')) {
+       final parts = expiry.split('/');
+       final month = int.tryParse(parts[0]) ?? 0;
+       final year = int.tryParse(parts[1]) ?? 0;
+       final now = DateTime.now();
+       final currentYear = now.year % 100; // 2 digits
+       
+       if (month < 1 || month > 12) {
+          isValid = false;
+          errorMsg = "Mois invalide.";
+       } else if (year < currentYear || (year == currentYear && month < now.month)) {
+          isValid = false;
+          errorMsg = "Carte expirée.";
+       }
+    } else {
+       isValid = false;
+       errorMsg = "Date invalide.";
+    }
+
+    if (!isValid) {
+      await Future.delayed(const Duration(seconds: 1)); // Petit délai pour effet réaliste
+      if (mounted) {
+        setState(() {
+          _errorMessage = errorMsg;
+          _isLoading = false;
+        });
+      }
+      return;
+    }
 
     try {
       // 1. Créer le PaymentIntent via notre backend
