@@ -252,6 +252,29 @@ export default function UserDetail() {
                             >
                                 {user.is_seller ? 'Vendeur' : 'Client'}
                             </button>
+
+                            <button
+                                onClick={async () => {
+                                    const newValue = !user.is_deliverer;
+                                    if (window.confirm(`${newValue ? 'Promouvoir' : 'Retirer'} le statut Livreur ?`)) {
+                                        try {
+                                            await api.patch(`/admin/users/${user.id}/role`, { is_deliverer: newValue });
+                                            setUser({ ...user, is_deliverer: newValue });
+                                            alert(newValue ? 'Statut Livreur accordé !' : 'Statut Livreur retiré');
+                                        } catch (err) {
+                                            console.error(err);
+                                            alert("Erreur lors de la mise à jour");
+                                        }
+                                    }
+                                }}
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 transition ${user.is_deliverer
+                                    ? 'bg-purple-100 text-purple-800 border-purple-200'
+                                    : 'bg-gray-100 text-gray-500 border-gray-200'
+                                    }`}
+                            >
+                                <TagIcon className="h-3 w-3 mr-1" />
+                                {user.is_deliverer ? 'Livreur' : 'Non Livreur'}
+                            </button>
                         </div>
                     </div>
 
