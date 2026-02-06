@@ -59,8 +59,11 @@ exports.handleWebhook = async (req, res) => {
             if (orderId) {
                 console.log(`📦 Mise à jour de la commande #${orderId} -> PAID`);
                 try {
+                    // Récupérer l'instance Socket.IO pour les notifications temps réel
+                    const io = req.app ? req.app.get('io') : null;
+
                     // Utiliser le service de commande pour valider le paiement
-                    await orderService.simulatePayment(orderId, 'stripe');
+                    await orderService.simulatePayment(orderId, 'stripe', io);
                     console.log(`✅ Commande #${orderId} mise à jour avec succès`);
                 } catch (err) {
                     console.error(`❌ Erreur mise à jour commande #${orderId}:`, err.message);

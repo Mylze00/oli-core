@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/delivery_service.dart';
+import '../../services/socket_service.dart';
 import '../auth/providers/auth_controller.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
@@ -20,7 +21,53 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     _ordersFuture = Future.value([]);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshOrders();
+      _initSocket();
     });
+  }
+
+  void _initSocket() {
+    final authState = ref.read(authControllerProvider);
+    if (authState.user != null) {
+      final socketService = ref.read(socketServiceProvider);
+      socketService.connect(authState.user!.id.toString());
+
+      // Listen for new delivery availability
+      socketService.on('new_delivery_available', (data) {
+        debugPrint('🚚 Nouvelle livraison disponible: $data');
+        _refreshOrders();
+
+        // Show snackbar notification
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: const [
+                  Icon(Icons.delivery_dining, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Nouvelle livraison disponible !',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 4),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    final socketService = ref.read(socketServiceProvider);
+    socketService.off('new_delivery_available');
+    socketService.disconnect();
+    super.dispose();
   }
 
   Future<void> _refreshOrders() async {

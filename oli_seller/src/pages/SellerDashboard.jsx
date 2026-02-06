@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { sellerAPI, shopAPI } from '../services/api';
+import socketService from '../services/socket';
 import {
     TrendingUp, Package, ShoppingCart, DollarSign,
     Eye, Percent, BarChart3, AlertTriangle, Clock,
@@ -20,9 +21,38 @@ export default function SellerDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [chartPeriod, setChartPeriod] = useState('7d');
+    const [showNotification, setShowNotification] = useState(false);
+    const [notificationMessage, setNotificationMessage] = useState('');
 
     useEffect(() => {
         loadDashboard();
+
+        // Initialize Socket.IO for real-time notifications
+        const token = localStorage.getItem('seller_token');
+        if (token) {
+            socketService.connect(token);
+
+            // Listen for new order notifications
+            socketService.on('new_notification', (data) => {
+                console.log('📨 Notification reçue:', data);
+
+                if (data.type === 'order') {
+                    // Show toast notification
+                    setNotificationMessage(data.title || 'Nouvelle commande !');
+                    setShowNotification(true);
+                    setTimeout(() => setShowNotification(false), 5000);
+
+                    // Refresh dashboard data
+                    loadDashboard();
+                }
+            });
+        }
+
+        // Cleanup on unmount
+        return () => {
+            socketService.off('new_notification');
+            socketService.disconnect();
+        };
     }, []);
 
     useEffect(() => {
@@ -203,6 +233,19 @@ export default function SellerDashboard() {
 
     return (
         <div className="p-8 bg-gray-50 min-h-screen">
+            {/* Toast Notification */}
+            {showNotification && (
+                <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg animate-bounce">
+                    <div className="flex items-center gap-3">
+                        <ShoppingCart size={24} />
+                        <div>
+                            <p className="font-semibold">{notificationMessage}</p>
+                            <p className="text-sm text-green-100">Le dashboard a été actualisé</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex justify-between items-center mb-8">
                 <div>
@@ -259,8 +302,8 @@ export default function SellerDashboard() {
                                     key={period}
                                     onClick={() => setChartPeriod(period)}
                                     className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${chartPeriod === period
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                         }`}
                                 >
                                     {period === '7d' ? '7 jours' : period === '30d' ? '30 jours' : '12 mois'}
