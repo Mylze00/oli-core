@@ -27,38 +27,42 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   void _initSocket() {
     final authState = ref.read(authControllerProvider);
-    if (authState.user != null) {
-      final socketService = ref.read(socketServiceProvider);
-      socketService.connect(authState.user!.id.toString());
+    if (authState.isAuthenticated && authState.userData != null) {
+      final phone = authState.userData!['phone'];
+      
+      if (phone != null) {
+        final socketService = ref.read(socketServiceProvider);
+        socketService.connect(phone.toString());
 
-      // Listen for new delivery availability
-      socketService.on('new_delivery_available', (data) {
-        debugPrint('🚚 Nouvelle livraison disponible: $data');
-        _refreshOrders();
+        // Listen for new delivery availability
+        socketService.on('new_delivery_available', (data) {
+          debugPrint('🚚 Nouvelle livraison disponible: $data');
+          _refreshOrders();
 
-        // Show snackbar notification
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: const [
-                  Icon(Icons.delivery_dining, color: Colors.white),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Nouvelle livraison disponible !',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+          // Show snackbar notification
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: const [
+                    Icon(Icons.delivery_dining, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Nouvelle livraison disponible !',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 4),
+                behavior: SnackBarBehavior.floating,
               ),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 4),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      });
+            );
+          }
+        });
+      }
     }
   }
 
