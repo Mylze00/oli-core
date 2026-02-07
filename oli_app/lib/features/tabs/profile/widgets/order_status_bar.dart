@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../orders/screens/purchases_page.dart';
 import '../../../orders/screens/chat_products_page.dart';
 import '../../../cart/screens/cart_page.dart';
+import '../../../sales/screens/my_sales_page.dart';
 
 class OrderStatusBar extends StatelessWidget {
   final Color cardColor;
@@ -54,7 +55,12 @@ class OrderStatusBar extends StatelessWidget {
               ),
               _buildOrderIcon(Icons.local_shipping_outlined, "En cours", textColor),
               _buildOrderIcon(Icons.location_on_outlined, "Suivi colis", textColor),
-              _buildOrderIcon(Icons.rate_review_outlined, "À noter", textColor),
+              _buildOrderIcon(
+                  Icons.sell_outlined,
+                  "Mes Ventes",
+                  textColor,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MySalesPage()))
+              ),
             ],
           ),
         ],
