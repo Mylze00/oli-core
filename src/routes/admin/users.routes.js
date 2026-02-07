@@ -8,41 +8,83 @@ const pool = require('../../config/db');
 
 /**
  * GET /admin/users
- * Liste tous les utilisateurs avec filtres
+ * Liste tous les utilisateurs avec filtres, pagination et stats
  */
 router.get('/', async (req, res) => {
     try {
-        const { search, role, limit = 50, offset = 0 } = req.query;
+        const { search, role, status, limit = 30, offset = 0 } = req.query;
 
-        let query = `
-            SELECT 
-                id, phone, name, id_oli, wallet, avatar_url,
-                is_admin, is_seller, is_deliverer, is_suspended, is_verified,
-                created_at, last_profile_update
-            FROM users
-            WHERE 1=1
-        `;
+        // ── Conditions de filtre ──
+        const conditions = [];
         const params = [];
         let paramIndex = 1;
 
-        // Filtre recherche
         if (search) {
-            query += ` AND (phone ILIKE $${paramIndex} OR name ILIKE $${paramIndex} OR id_oli ILIKE $${paramIndex})`;
+            conditions.push(`(phone ILIKE $${paramIndex} OR name ILIKE $${paramIndex} OR id_oli ILIKE $${paramIndex})`);
             params.push(`%${search}%`);
             paramIndex++;
         }
 
-        // Filtre rôle
-        if (role === 'admin') query += ` AND is_admin = TRUE`;
-        if (role === 'seller') query += ` AND is_seller = TRUE`;
-        if (role === 'deliverer') query += ` AND is_deliverer = TRUE`;
-        if (role === 'verified') query += ` AND is_verified = TRUE`;
+        if (role === 'admin') conditions.push('is_admin = TRUE');
+        if (role === 'seller') conditions.push('is_seller = TRUE');
+        if (role === 'deliverer') conditions.push('is_deliverer = TRUE');
+        if (role === 'verified') conditions.push('is_verified = TRUE');
 
-        query += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
-        params.push(parseInt(limit), parseInt(offset));
+        if (status === 'suspended') conditions.push('is_suspended = TRUE');
+        if (status === 'active') conditions.push('(is_suspended = FALSE OR is_suspended IS NULL)');
 
-        const result = await pool.query(query, params);
-        res.json(result.rows);
+        const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+        // ── Total count (avec filtres) ──
+        const countResult = await pool.query(
+            `SELECT COUNT(*) as total FROM users ${whereClause}`,
+            params.slice(0, paramIndex - 1)
+        );
+
+        // ── Liste paginée ──
+        const listParams = [...params.slice(0, paramIndex - 1)];
+        const limitIdx = paramIndex++;
+        const offsetIdx = paramIndex++;
+        listParams.push(parseInt(limit), parseInt(offset));
+
+        const result = await pool.query(`
+            SELECT 
+                id, phone, name, id_oli, wallet, avatar_url,
+                is_admin, is_seller, is_deliverer, is_suspended, is_verified,
+                account_type, has_certified_shop,
+                created_at, last_profile_update
+            FROM users
+            ${whereClause}
+            ORDER BY created_at DESC 
+            LIMIT $${limitIdx} OFFSET $${offsetIdx}
+        `, listParams);
+
+        // ── Stats globales (sans filtres) ──
+        const statsResult = await pool.query(`
+            SELECT 
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE is_seller = TRUE) as sellers,
+                COUNT(*) FILTER (WHERE is_admin = TRUE) as admins,
+                COUNT(*) FILTER (WHERE is_deliverer = TRUE) as deliverers,
+                COUNT(*) FILTER (WHERE is_suspended = TRUE) as suspended,
+                COUNT(*) FILTER (WHERE is_verified = TRUE) as verified,
+                COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as new_this_week
+            FROM users
+        `);
+
+        res.json({
+            users: result.rows,
+            total: parseInt(countResult.rows[0].total),
+            stats: {
+                total: parseInt(statsResult.rows[0].total),
+                sellers: parseInt(statsResult.rows[0].sellers),
+                admins: parseInt(statsResult.rows[0].admins),
+                deliverers: parseInt(statsResult.rows[0].deliverers),
+                suspended: parseInt(statsResult.rows[0].suspended),
+                verified: parseInt(statsResult.rows[0].verified),
+                new_this_week: parseInt(statsResult.rows[0].new_this_week),
+            }
+        });
     } catch (err) {
         console.error('Erreur GET /admin/users:', err);
         res.status(500).json({ error: 'Erreur serveur' });
