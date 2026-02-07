@@ -12,7 +12,8 @@ import {
     MegaphoneIcon,
     BoltIcon, // ✨ Icone pour Services
     CheckBadgeIcon, // 🆕 Icone pour Certifications
-    ChatBubbleLeftRightIcon // 🆕 Icone pour Support
+    ChatBubbleLeftRightIcon, // 🆕 Icone pour Support
+    CircleStackIcon // 🗄️ Icone pour Base de données
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -29,6 +30,7 @@ const navigation = [
     { name: 'Services', href: '/services', icon: BoltIcon }, // ✨
     { name: 'Support', href: '/support', icon: ChatBubbleLeftRightIcon }, // 🆕
     { name: 'Certifications', href: '/verifications', icon: CheckBadgeIcon }, // 🆕
+    { name: 'Base de données', href: '/database', icon: CircleStackIcon }, // 🗄️
 ];
 
 function classNames(...classes) {

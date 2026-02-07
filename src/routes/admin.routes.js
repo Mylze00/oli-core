@@ -21,6 +21,7 @@ const shopsRoutes = require('./admin/shops.routes');
 const requestsRoutes = require('./admin/requests.routes');
 const servicesRoutes = require('./admin/services.routes');
 const supportRoutes = require('./admin/support.routes'); // 🆕
+const databaseRoutes = require('./admin/database.routes'); // 🗄️ Gestion DB
 
 // Montage des routes
 router.use('/stats', statsRoutes);
@@ -33,6 +34,7 @@ router.use('/requests', requestsRoutes);
 router.use('/services', servicesRoutes);
 router.use('/verifications', require('./admin/verifications.routes'));
 router.use('/support', supportRoutes); // 🆕
+router.use('/database', databaseRoutes); // 🗄️ Gestion DB
 
 
 // Route de test

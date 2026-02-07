@@ -15,6 +15,7 @@ import ServicesManager from './pages/ServicesManager'; // ✨ Services
 import Support from './pages/Support'; // 🆕 Support
 import Verifications from './pages/Verifications'; // 🆕 Certifications
 import ProductRequests from './pages/ProductRequests'; // 📦 Demandes produit
+import DatabaseManager from './pages/DatabaseManager'; // 🗄️ Gestion DB
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
             <Route path="/services" element={<ServicesManager />} />
             <Route path="/support" element={<Support />} /> {/* 🆕 */}
             <Route path="/verifications" element={<Verifications />} /> {/* 🆕 */}
+            <Route path="/database" element={<DatabaseManager />} /> {/* 🗄️ */}
           </Route>
         </Route>
 
