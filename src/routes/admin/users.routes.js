@@ -4,6 +4,7 @@
  */
 const express = require('express');
 const router = express.Router();
+const { BASE_URL } = require('../../config');
 const pool = require('../../config/db');
 
 /**
@@ -395,13 +396,80 @@ router.get('/:id/products', async (req, res) => {
     try {
         const { id } = req.params;
         const result = await pool.query(`
-            SELECT * FROM products 
+            SELECT id, name, description, price, category, images, status, created_at
+            FROM products 
             WHERE seller_id = $1 
             ORDER BY created_at DESC
         `, [id]);
-        res.json(result.rows);
+
+        // Transformer images[] en image_url pour le frontend
+        const products = result.rows.map(p => {
+            let image_url = null;
+            if (p.images && p.images.length > 0) {
+                const first = p.images[0];
+                image_url = first.startsWith('http') ? first : `${BASE_URL}/uploads/${first}`;
+            }
+            return { ...p, image_url };
+        });
+
+        res.json(products);
     } catch (err) {
         console.error('Erreur GET /admin/users/:id/products:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * GET /admin/users/:id/conversations
+ * Voir les conversations d'un utilisateur (admin)
+ */
+router.get('/:id/conversations', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT 
+                c.id as conversation_id,
+                c.type,
+                c.updated_at,
+                u.id as other_id,
+                u.name as other_name,
+                u.phone as other_phone,
+                u.avatar_url as other_avatar,
+                p.id as product_id,
+                p.name as product_name,
+                p.price as product_price,
+                p.images as product_images,
+                m.content as last_message,
+                m.type as last_message_type,
+                m.created_at as last_time,
+                m.sender_id as last_sender_id,
+                (SELECT COUNT(*) FROM messages msg WHERE msg.conversation_id = c.id) as total_messages
+            FROM conversation_participants cp
+            JOIN conversations c ON cp.conversation_id = c.id
+            JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id != $1
+            JOIN users u ON cp2.user_id = u.id
+            LEFT JOIN products p ON c.product_id = p.id
+            LEFT JOIN LATERAL (
+                SELECT content, type, created_at, sender_id 
+                FROM messages WHERE conversation_id = c.id 
+                ORDER BY created_at DESC LIMIT 1
+            ) m ON true
+            WHERE cp.user_id = $1
+            ORDER BY COALESCE(m.created_at, c.updated_at) DESC
+        `, [id]);
+
+        const conversations = result.rows.map(row => {
+            let product_image = null;
+            if (row.product_images && row.product_images.length > 0) {
+                const first = row.product_images[0];
+                product_image = first.startsWith('http') ? first : `${BASE_URL}/uploads/${first}`;
+            }
+            return { ...row, product_image, product_images: undefined, total_messages: parseInt(row.total_messages) };
+        });
+
+        res.json(conversations);
+    } catch (err) {
+        console.error('Erreur GET /admin/users/:id/conversations:', err);
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });

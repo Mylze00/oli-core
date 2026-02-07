@@ -18,7 +18,7 @@ import api from '../services/api';
 import { getImageUrl } from '../utils/image';
 
 // ═══════════════════════════════════
-// ══  TOGGLE SWITCH COMPONENT
+// ══  TOGGLE SWITCH
 // ═══════════════════════════════════
 function ToggleSwitch({ enabled, onChange, label, sublabel, loading: isLoading }) {
     return (
@@ -38,33 +38,18 @@ function ToggleSwitch({ enabled, onChange, label, sublabel, loading: isLoading }
     );
 }
 
-// ═══════════════════════════════════
-// ══  TAB BUTTON
-// ═══════════════════════════════════
 function TabButton({ label, active, onClick, icon: Icon }) {
     return (
-        <button
-            onClick={onClick}
-            className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${active
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200'
-                }`}
+        <button onClick={onClick}
+            className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200'}`}
         >
-            {Icon && <Icon className="h-4 w-4" />}
-            {label}
+            {Icon && <Icon className="h-4 w-4" />}{label}
         </button>
     );
 }
 
-// ═══════════════════════════════════
-// ══  MINI STAT CARD
-// ═══════════════════════════════════
 function MiniStat({ label, value, icon: Icon, color = 'blue', subtitle }) {
-    const bg = {
-        blue: 'bg-blue-50 text-blue-600', green: 'bg-green-50 text-green-600',
-        amber: 'bg-amber-50 text-amber-600', purple: 'bg-purple-50 text-purple-600',
-        rose: 'bg-rose-50 text-rose-600', indigo: 'bg-indigo-50 text-indigo-600',
-    };
+    const bg = { blue: 'bg-blue-50 text-blue-600', green: 'bg-green-50 text-green-600', amber: 'bg-amber-50 text-amber-600', purple: 'bg-purple-50 text-purple-600', rose: 'bg-rose-50 text-rose-600', indigo: 'bg-indigo-50 text-indigo-600' };
     return (
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 mb-3">
@@ -75,6 +60,12 @@ function MiniStat({ label, value, icon: Icon, color = 'blue', subtitle }) {
             {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
         </div>
     );
+}
+
+function StatusBadge({ status }) {
+    const m = { pending: { l: 'En attente', c: 'bg-yellow-100 text-yellow-700' }, paid: { l: 'Payée', c: 'bg-green-100 text-green-700' }, shipped: { l: 'Expédiée', c: 'bg-blue-100 text-blue-700' }, delivered: { l: 'Livrée', c: 'bg-emerald-100 text-emerald-700' }, cancelled: { l: 'Annulée', c: 'bg-red-100 text-red-700' } };
+    const s = m[status] || { l: status, c: 'bg-gray-100 text-gray-600' };
+    return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${s.c}`}>{s.l}</span>;
 }
 
 // ═══════════════════════════════════
@@ -91,13 +82,18 @@ function UserProducts({ userId, limit }) {
         })();
     }, [userId, limit]);
     if (loading) return <div className="p-4 text-center text-gray-400">Chargement...</div>;
-    if (!products.length) return <div className="p-8 text-center text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">Aucun produit.</div>;
+    if (!products.length) return <div className="p-8 text-center text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">Aucun produit mis en vente.</div>;
     return (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {products.map(p => (
                 <div key={p.id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
                     <div className="h-40 bg-gray-100 relative">
-                        <img src={getImageUrl(p.image_url)} alt={p.name} className="w-full h-full object-cover" onError={(e) => e.target.src = 'https://via.placeholder.com/300?text=No+Image'} />
+                        <img
+                            src={p.image_url || getImageUrl(p.images?.[0]) || 'https://via.placeholder.com/300x200?text=Pas+d%27image'}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/300x200?text=Pas+d%27image'; }}
+                        />
                         <span className={`absolute top-2 right-2 px-2 py-0.5 text-xs rounded-full font-medium ${p.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{p.status}</span>
                     </div>
                     <div className="p-3">
@@ -114,18 +110,79 @@ function UserProducts({ userId, limit }) {
 }
 
 // ═══════════════════════════════════
-// ══  STATUS BADGE
+// ══  USER CONVERSATIONS LIST
 // ═══════════════════════════════════
-function StatusBadge({ status }) {
-    const m = {
-        pending: { l: 'En attente', c: 'bg-yellow-100 text-yellow-700' },
-        paid: { l: 'Payée', c: 'bg-green-100 text-green-700' },
-        shipped: { l: 'Expédiée', c: 'bg-blue-100 text-blue-700' },
-        delivered: { l: 'Livrée', c: 'bg-emerald-100 text-emerald-700' },
-        cancelled: { l: 'Annulée', c: 'bg-red-100 text-red-700' },
+function UserConversations({ userId }) {
+    const [convos, setConvos] = useState([]);
+    const [loading, setLoading] = useState(true);
+    useEffect(() => {
+        (async () => {
+            try { const { data } = await api.get(`/admin/users/${userId}/conversations`); setConvos(data); }
+            catch (e) { console.error(e); }
+            finally { setLoading(false); }
+        })();
+    }, [userId]);
+    if (loading) return <div className="p-4 text-center text-gray-400">Chargement des conversations...</div>;
+    if (!convos.length) return <div className="p-8 text-center text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">Aucune conversation.</div>;
+
+    const fmtTime = (d) => {
+        if (!d) return '';
+        const dt = new Date(d);
+        const now = new Date();
+        const diff = now - dt;
+        if (diff < 60000) return 'À l\'instant';
+        if (diff < 3600000) return `${Math.floor(diff / 60000)} min`;
+        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+        return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
     };
-    const s = m[status] || { l: status, c: 'bg-gray-100 text-gray-600' };
-    return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${s.c}`}>{s.l}</span>;
+
+    return (
+        <div className="divide-y divide-gray-50">
+            {convos.map(c => (
+                <div key={c.conversation_id} className="p-4 hover:bg-gray-50 transition flex items-center gap-4">
+                    {/* Avatar */}
+                    <div className="relative flex-shrink-0">
+                        <img
+                            src={getImageUrl(c.other_avatar) || `https://ui-avatars.com/api/?name=${c.other_name || 'U'}&background=6366F1&color=fff`}
+                            className="w-12 h-12 rounded-full object-cover"
+                            alt={c.other_name}
+                            onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${c.other_name || 'U'}&background=6366F1&color=fff`; }}
+                        />
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="font-semibold text-gray-900 text-sm">{c.other_name || c.other_phone}</p>
+                                <p className="text-xs text-gray-400">{c.other_phone}</p>
+                            </div>
+                            <div className="text-right flex-shrink-0 ml-2">
+                                <p className="text-xs text-gray-400">{fmtTime(c.last_time)}</p>
+                                <p className="text-xs text-gray-300 mt-0.5">{c.total_messages} msg</p>
+                            </div>
+                        </div>
+                        {/* Last message */}
+                        <p className="text-sm text-gray-500 truncate mt-1">
+                            {c.last_message_type === 'image' ? '📷 Image' :
+                                c.last_message_type === 'voice' ? '🎤 Message vocal' :
+                                    c.last_message_type === 'money' ? '💰 Transfert' :
+                                        c.last_message || 'Aucun message'}
+                        </p>
+                        {/* Product context */}
+                        {c.product_name && (
+                            <div className="flex items-center gap-2 mt-2 p-2 bg-blue-50 rounded-lg">
+                                {c.product_image && <img src={c.product_image} className="w-8 h-8 rounded object-cover" alt="" />}
+                                <div className="min-w-0">
+                                    <p className="text-xs font-medium text-blue-700 truncate">{c.product_name}</p>
+                                    <p className="text-xs text-blue-500">{c.product_price} $</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
 }
 
 // ═══════════════════════════════════════════════
@@ -162,12 +219,10 @@ export default function UserDetail() {
         } finally { setLoading(false); }
     };
 
-    // ── Unified toggle handler ──
     const handleToggle = async (field, apiCall) => {
         setToggleLoading(prev => ({ ...prev, [field]: true }));
         try {
             await apiCall();
-            // Refetch to get consistent data
             const { data } = await api.get(`/admin/users/${id}`);
             const u = data.user || data;
             setUser(prev => ({
@@ -195,26 +250,22 @@ export default function UserDetail() {
 
     return (
         <div className="space-y-6 p-4 md:p-6 bg-gray-50 min-h-screen">
-            {/* ── Back ── */}
+            {/* Back */}
             <button onClick={() => navigate('/users')} className="flex items-center text-gray-400 hover:text-gray-600 transition text-sm">
                 <ChevronLeftIcon className="h-4 w-4 mr-1" /> Retour aux utilisateurs
             </button>
 
             {/* ═══════════════════════════════════ */}
-            {/* ══  PROFILE HEADER (FIXED LAYOUT)  */}
+            {/* ══  PROFILE HEADER                  */}
             {/* ═══════════════════════════════════ */}
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-                {/* Banner */}
                 <div className="h-32 bg-gradient-to-r from-blue-600 via-indigo-500 to-emerald-400 relative">
                     <div className={`absolute top-4 right-4 backdrop-blur-sm rounded-full px-3.5 py-1.5 flex items-center text-xs font-bold border ${user.is_active ? 'bg-white/20 text-white border-white/30' : 'bg-red-500/30 text-white border-red-300/30'}`}>
                         {user.is_active ? 'ACTIF' : 'SUSPENDU'}
                         <div className={`ml-2 w-2 h-2 rounded-full ${user.is_active ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
                     </div>
                 </div>
-
-                {/* Profile Info - Separate section below banner */}
                 <div className="px-6 md:px-8 pb-6 relative">
-                    {/* Avatar - Positioned overlapping the banner */}
                     <div className="flex flex-col md:flex-row md:items-end gap-5">
                         <div className="relative -mt-12 flex-shrink-0">
                             <img
@@ -232,8 +283,6 @@ export default function UserDetail() {
                                 </div>
                             )}
                         </div>
-
-                        {/* Name & Info */}
                         <div className="flex-1 pt-2 md:pt-0 md:pb-1">
                             <h1 className="text-xl font-bold text-gray-900">{user.name || 'Sans nom'}</h1>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-gray-500 text-xs mt-1">
@@ -242,105 +291,63 @@ export default function UserDetail() {
                                 <span className="flex items-center"><CalendarDaysIcon className="h-3.5 w-3.5 mr-1" />Inscrit le {user.created_at ? new Date(user.created_at).toLocaleDateString('fr-FR') : '—'}</span>
                             </div>
                         </div>
-
-                        {/* Quick Actions */}
                         <div className="flex gap-2 flex-shrink-0 pb-1">
                             <button
                                 onClick={async () => {
                                     const msg = prompt("Message à " + (user.name || 'utilisateur') + " :");
-                                    if (msg?.trim()) {
-                                        try { await api.post(`/admin/users/${user.id}/message`, { content: msg }); alert("Message envoyé !"); }
-                                        catch (err) { console.error(err); alert("Erreur envoi"); }
-                                    }
+                                    if (msg?.trim()) { try { await api.post(`/admin/users/${user.id}/message`, { content: msg }); alert("Message envoyé !"); } catch (err) { console.error(err); alert("Erreur envoi"); } }
                                 }}
                                 className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-blue-700 transition"
-                            >
-                                <EnvelopeIcon className="h-4 w-4 mr-1.5" /> Message
-                            </button>
+                            ><EnvelopeIcon className="h-4 w-4 mr-1.5" /> Message</button>
                             <button
                                 onClick={() => handleToggle('is_suspended', () => api.post(`/admin/users/${user.id}/suspend`, { suspended: user.is_active }))}
                                 className={`flex items-center px-4 py-2 text-white rounded-xl text-sm font-medium shadow-sm transition ${user.is_active ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
-                            >
-                                <NoSymbolIcon className="h-4 w-4 mr-1.5" />
-                                {user.is_active ? 'Bloquer' : 'Débloquer'}
-                            </button>
+                            ><NoSymbolIcon className="h-4 w-4 mr-1.5" />{user.is_active ? 'Bloquer' : 'Débloquer'}</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* ═══════════════════════════════════ */}
-            {/* ══  MAIN LAYOUT: 2 columns          */}
+            {/* ══  MAIN LAYOUT: Sidebar + Tabs     */}
             {/* ═══════════════════════════════════ */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
                 {/* ── LEFT SIDEBAR: Admin Controls ── */}
                 <div className="lg:col-span-1 space-y-4">
-                    {/* Rôles & Permissions */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3">Rôles & Permissions</h3>
                         <div className="divide-y divide-gray-100">
-                            <ToggleSwitch
-                                label="Administrateur"
-                                sublabel="Accès au panneau admin"
-                                enabled={user.is_admin}
-                                loading={toggleLoading.is_admin}
-                                onChange={() => handleToggle('is_admin', () => api.patch(`/admin/users/${user.id}/role`, { is_admin: !user.is_admin }))}
-                            />
-                            <ToggleSwitch
-                                label="Vendeur"
-                                sublabel="Peut vendre des produits"
-                                enabled={user.is_seller}
-                                loading={toggleLoading.is_seller}
-                                onChange={() => handleToggle('is_seller', () => api.patch(`/admin/users/${user.id}/role`, { is_seller: !user.is_seller }))}
-                            />
-                            <ToggleSwitch
-                                label="Livreur"
-                                sublabel="Peut livrer des commandes"
-                                enabled={user.is_deliverer}
-                                loading={toggleLoading.is_deliverer}
-                                onChange={() => handleToggle('is_deliverer', () => api.patch(`/admin/users/${user.id}/role`, { is_deliverer: !user.is_deliverer }))}
-                            />
+                            <ToggleSwitch label="Administrateur" sublabel="Accès au panneau admin" enabled={user.is_admin} loading={toggleLoading.is_admin}
+                                onChange={() => handleToggle('is_admin', () => api.patch(`/admin/users/${user.id}/role`, { is_admin: !user.is_admin }))} />
+                            <ToggleSwitch label="Vendeur" sublabel="Peut vendre des produits" enabled={user.is_seller} loading={toggleLoading.is_seller}
+                                onChange={() => handleToggle('is_seller', () => api.patch(`/admin/users/${user.id}/role`, { is_seller: !user.is_seller }))} />
+                            <ToggleSwitch label="Livreur" sublabel="Peut livrer des commandes" enabled={user.is_deliverer} loading={toggleLoading.is_deliverer}
+                                onChange={() => handleToggle('is_deliverer', () => api.patch(`/admin/users/${user.id}/role`, { is_deliverer: !user.is_deliverer }))} />
                         </div>
                     </div>
 
-                    {/* Certification & Vérification */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3">Vérification</h3>
                         <div className="divide-y divide-gray-100">
-                            <ToggleSwitch
-                                label="Compte vérifié"
-                                sublabel="Badge bleu sur le profil"
-                                enabled={user.is_verified}
-                                loading={toggleLoading.is_verified}
-                                onChange={() => handleToggle('is_verified', () => api.patch(`/admin/users/${user.id}/verify`, { verified: !user.is_verified }))}
-                            />
-                            <ToggleSwitch
-                                label="Boutique certifiée"
-                                sublabel="Badge or magasin"
-                                enabled={user.has_certified_shop}
-                                loading={toggleLoading.has_certified_shop}
-                                onChange={() => handleToggle('has_certified_shop', () => api.patch(`/admin/users/${user.id}/account-type`, { has_certified_shop: !user.has_certified_shop }))}
-                            />
+                            <ToggleSwitch label="Compte vérifié" sublabel="Badge bleu sur le profil" enabled={user.is_verified} loading={toggleLoading.is_verified}
+                                onChange={() => handleToggle('is_verified', () => api.patch(`/admin/users/${user.id}/verify`, { verified: !user.is_verified }))} />
+                            <ToggleSwitch label="Boutique certifiée" sublabel="Badge or magasin" enabled={user.has_certified_shop} loading={toggleLoading.has_certified_shop}
+                                onChange={() => handleToggle('has_certified_shop', () => api.patch(`/admin/users/${user.id}/account-type`, { has_certified_shop: !user.has_certified_shop }))} />
                         </div>
                     </div>
 
-                    {/* Type de compte */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3">Type de compte</h3>
                         <div className="space-y-2">
                             {[
                                 { value: 'ordinaire', label: 'Ordinaire', desc: 'Compte standard', color: '#6b7280' },
                                 { value: 'certifie', label: 'Certifié ✓', desc: 'Vendeur de confiance', color: '#3b82f6' },
-                                { value: 'entreprise', label: 'Entreprise 🏢', desc: 'Compte professionnel', color: '#eab308' },
+                                { value: 'entreprise', label: 'Entreprise 🏢', desc: 'Compte pro', color: '#eab308' },
                             ].map(type => (
-                                <button
-                                    key={type.value}
+                                <button key={type.value}
                                     onClick={() => handleToggle('account_type', () => api.patch(`/admin/users/${user.id}/account-type`, { account_type: type.value }))}
-                                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${user.account_type === type.value
-                                            ? 'border-current shadow-sm'
-                                            : 'border-gray-100 hover:border-gray-200'
-                                        }`}
+                                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${user.account_type === type.value ? 'border-current shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
                                     style={{ borderColor: user.account_type === type.value ? type.color : undefined }}
                                 >
                                     <div className="flex items-center justify-between">
@@ -359,29 +366,22 @@ export default function UserDetail() {
                         </div>
                     </div>
 
-                    {/* Statut du compte */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3">Statut</h3>
-                        <ToggleSwitch
-                            label="Compte actif"
-                            sublabel={user.is_active ? "L'utilisateur peut se connecter" : "Compte bloqué"}
-                            enabled={user.is_active}
-                            loading={toggleLoading.is_suspended}
-                            onChange={() => handleToggle('is_suspended', () => api.post(`/admin/users/${user.id}/suspend`, { suspended: user.is_active }))}
-                        />
+                        <ToggleSwitch label="Compte actif" sublabel={user.is_active ? "L'utilisateur peut se connecter" : "Compte bloqué"} enabled={user.is_active} loading={toggleLoading.is_suspended}
+                            onChange={() => handleToggle('is_suspended', () => api.post(`/admin/users/${user.id}/suspend`, { suspended: user.is_active }))} />
                     </div>
                 </div>
 
                 {/* ── RIGHT CONTENT: Tabs ── */}
                 <div className="lg:col-span-3 space-y-6">
-                    {/* Tabs */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-3">
                         <div className="flex space-x-1 overflow-x-auto">
                             <TabButton label="Vue Générale" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
                             <TabButton label="Finance" active={activeTab === 'finance'} onClick={() => setActiveTab('finance')} icon={CurrencyDollarIcon} />
                             <TabButton label="Commandes" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} icon={ShoppingCartIcon} />
                             <TabButton label="Marketplace" active={activeTab === 'marketplace'} onClick={() => setActiveTab('marketplace')} icon={BuildingStorefrontIcon} />
-                            <TabButton label="Activité" active={activeTab === 'activity'} onClick={() => setActiveTab('activity')} icon={ChatBubbleLeftRightIcon} />
+                            <TabButton label="Conversations" active={activeTab === 'conversations'} onClick={() => setActiveTab('conversations')} icon={ChatBubbleLeftRightIcon} />
                         </div>
                     </div>
 
@@ -397,7 +397,6 @@ export default function UserDetail() {
                                 <MiniStat label="Ventes" value={user.stats?.seller_orders?.total || 0} icon={ShoppingCartIcon} color="indigo" subtitle={`${(user.stats?.seller_orders?.revenue || 0).toLocaleString()} $ CA`} />
                             </div>
 
-                            {/* Boutiques */}
                             {user.shops?.length > 0 && (
                                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                                     <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><BuildingStorefrontIcon className="h-5 w-5 text-amber-500" /> Boutiques</h3>
@@ -415,7 +414,6 @@ export default function UserDetail() {
                                 </div>
                             )}
 
-                            {/* Aperçu produits */}
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-bold text-gray-900">Produits</h3>
@@ -424,7 +422,6 @@ export default function UserDetail() {
                                 <UserProducts userId={id} limit={4} />
                             </div>
 
-                            {/* Commandes récentes */}
                             {user.recentOrders?.length > 0 && (
                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
                                     <div className="p-5 border-b border-gray-100 flex justify-between items-center">
@@ -561,13 +558,23 @@ export default function UserDetail() {
                         </div>
                     )}
 
-                    {/* ══ TAB: ACTIVITÉ ══ */}
-                    {activeTab === 'activity' && (
+                    {/* ══ TAB: CONVERSATIONS ══ */}
+                    {activeTab === 'conversations' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <MiniStat label="Conversations" value={user.stats?.conversations || 0} icon={ChatBubbleLeftRightIcon} color="purple" />
                                 <MiniStat label="Messages envoyés" value={user.stats?.messages || 0} icon={EnvelopeIcon} color="blue" />
                             </div>
+
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                                <div className="p-5 border-b border-gray-100">
+                                    <h3 className="font-bold text-gray-900">Toutes les conversations</h3>
+                                    <p className="text-xs text-gray-400 mt-1">Échanges entre cet utilisateur et les autres membres de la plateforme</p>
+                                </div>
+                                <UserConversations userId={id} />
+                            </div>
+
+                            {/* Account Info */}
                             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                                 <h3 className="font-bold text-gray-900 mb-4">Informations du compte</h3>
                                 <div className="space-y-2">
