@@ -93,26 +93,92 @@ router.get('/', async (req, res) => {
 
 /**
  * GET /admin/users/:id
- * Détails d'un utilisateur spécifique
+ * Détails complets d'un utilisateur
  */
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        const userResult = await pool.query(`
-            SELECT * FROM users WHERE id = $1
-        `, [id]);
+        const userResult = await pool.query(`SELECT * FROM users WHERE id = $1`, [id]);
 
         if (userResult.rows.length === 0) {
             return res.status(404).json({ error: 'Utilisateur non trouvé' });
         }
 
-        // Stats produits vendus
-        const productsCount = await pool.query(`
-            SELECT COUNT(*) as count FROM products WHERE seller_id = $1
-        `, [id]);
+        // ── Stats produits ──
+        const productsCount = await pool.query(
+            `SELECT COUNT(*) as count FROM products WHERE seller_id = $1`, [id]
+        );
 
-        // Historique des transactions (si la table existe)
+        // ── Stats commandes (acheteur) ──
+        let ordersStats = { total: 0, paid: 0, total_spent: 0 };
+        try {
+            const ordersResult = await pool.query(`
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE status = 'paid' OR status = 'delivered' OR status = 'shipped') as paid,
+                    COALESCE(SUM(total_amount) FILTER (WHERE status = 'paid' OR status = 'delivered' OR status = 'shipped'), 0) as total_spent
+                FROM orders WHERE buyer_id = $1
+            `, [id]);
+            ordersStats = {
+                total: parseInt(ordersResult.rows[0].total),
+                paid: parseInt(ordersResult.rows[0].paid),
+                total_spent: parseFloat(ordersResult.rows[0].total_spent),
+            };
+        } catch (e) { console.warn('orders stats error:', e.message); }
+
+        // ── Stats commandes (vendeur) ──
+        let sellerOrdersStats = { total: 0, revenue: 0 };
+        try {
+            const soResult = await pool.query(`
+                SELECT 
+                    COUNT(*) as total,
+                    COALESCE(SUM(total_amount) FILTER (WHERE status = 'paid' OR status = 'delivered' OR status = 'shipped'), 0) as revenue
+                FROM orders WHERE seller_id = $1
+            `, [id]);
+            sellerOrdersStats = {
+                total: parseInt(soResult.rows[0].total),
+                revenue: parseFloat(soResult.rows[0].revenue),
+            };
+        } catch (e) { console.warn('seller orders stats error:', e.message); }
+
+        // ── Stats conversations ──
+        let conversationsCount = 0, messagesCount = 0;
+        try {
+            const convResult = await pool.query(`
+                SELECT COUNT(DISTINCT cp.conversation_id) as conv_count
+                FROM conversation_participants cp WHERE cp.user_id = $1
+            `, [id]);
+            conversationsCount = parseInt(convResult.rows[0].conv_count);
+
+            const msgResult = await pool.query(
+                `SELECT COUNT(*) as count FROM messages WHERE sender_id = $1`, [id]
+            );
+            messagesCount = parseInt(msgResult.rows[0].count);
+        } catch (e) { console.warn('conversations stats error:', e.message); }
+
+        // ── Boutique ──
+        let shops = [];
+        try {
+            const shopResult = await pool.query(`
+                SELECT id, name, description, category, location, logo_url, created_at 
+                FROM shops WHERE owner_id = $1 ORDER BY created_at DESC
+            `, [id]);
+            shops = shopResult.rows;
+        } catch (e) { console.warn('shops error:', e.message); }
+
+        // ── Commandes récentes (acheteur) ──
+        let recentOrders = [];
+        try {
+            const roResult = await pool.query(`
+                SELECT id, total_amount, status, created_at
+                FROM orders WHERE buyer_id = $1
+                ORDER BY created_at DESC LIMIT 10
+            `, [id]);
+            recentOrders = roResult.rows;
+        } catch (e) { console.warn('recent orders error:', e.message); }
+
+        // ── Transactions wallet ──
         let transactions = [];
         try {
             const txResult = await pool.query(`
@@ -122,16 +188,19 @@ router.get('/:id', async (req, res) => {
                 LIMIT 50
             `, [id]);
             transactions = txResult.rows;
-        } catch (err) {
-            console.warn("Table transactions non trouvée ou erreur:", err.message);
-            // On ignore l'erreur pour ne pas bloquer l'affichage du user
-        }
+        } catch (e) { console.warn("Table transactions non trouvée:", e.message); }
 
         res.json({
             user: userResult.rows[0],
-            transactions: transactions,
+            transactions,
+            recentOrders,
+            shops,
             stats: {
-                products_count: parseInt(productsCount.rows[0].count)
+                products_count: parseInt(productsCount.rows[0].count),
+                orders: ordersStats,
+                seller_orders: sellerOrdersStats,
+                conversations: conversationsCount,
+                messages: messagesCount,
             }
         });
     } catch (err) {
