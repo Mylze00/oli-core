@@ -23,6 +23,7 @@ router.get('/', async (req, res) => {
                     COUNT(*) as total,
                     COUNT(*) FILTER (WHERE status = 'active') as active,
                     COUNT(*) FILTER (WHERE status = 'banned') as banned,
+                    COUNT(*) FILTER (WHERE status = 'hidden') as hidden,
                     COUNT(*) FILTER (WHERE is_featured = TRUE) as featured,
                     COUNT(*) FILTER (WHERE is_good_deal = TRUE) as good_deals
                 FROM products
@@ -81,12 +82,36 @@ router.get('/', async (req, res) => {
                 total: parseInt(globalStats.total),
                 active: parseInt(globalStats.active),
                 banned: parseInt(globalStats.banned),
+                hidden: parseInt(globalStats.hidden || 0),
                 featured: parseInt(globalStats.featured),
                 good_deals: parseInt(globalStats.good_deals),
             }
         });
     } catch (err) {
         console.error('Erreur GET /admin/products:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * PATCH /admin/products/:id/toggle-visibility
+ * Masquer / Afficher un produit
+ */
+router.patch('/:id/toggle-visibility', async (req, res) => {
+    try {
+        const { id } = req.params;
+        // Get current status
+        const current = await pool.query('SELECT status FROM products WHERE id = $1', [id]);
+        if (current.rows.length === 0) return res.status(404).json({ error: 'Produit introuvable' });
+
+        const newStatus = current.rows[0].status === 'hidden' ? 'active' : 'hidden';
+        const result = await pool.query(
+            'UPDATE products SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+            [newStatus, id]
+        );
+        res.json({ message: newStatus === 'hidden' ? 'Produit masqué' : 'Produit visible', product: result.rows[0] });
+    } catch (err) {
+        console.error('Erreur PATCH toggle-visibility:', err);
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });

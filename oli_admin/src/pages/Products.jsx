@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { getImageUrl } from '../utils/image';
-import { StarIcon as StarOutline, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { StarIcon as StarOutline, TrashIcon, XMarkIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import {
     StarIcon,
     CubeIcon,
@@ -44,7 +44,7 @@ function FilterPill({ label, count, active, onClick }) {
 /* ═══════════════════════════════════
    PRODUCT DETAIL MODAL
    ═══════════════════════════════════ */
-function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onToggleGoodDeal, onDelete }) {
+function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onToggleGoodDeal, onDelete, onHide }) {
     if (!product) return null;
 
     const allImages = [];
@@ -93,6 +93,8 @@ function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onT
                             )}
                             {product.status === 'active' ? (
                                 <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold">Actif</span>
+                            ) : product.status === 'hidden' ? (
+                                <span className="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">Masqué</span>
                             ) : (
                                 <span className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">{product.status}</span>
                             )}
@@ -160,6 +162,12 @@ function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onT
                             <FireIcon className="h-4 w-4" />
                             {product.is_good_deal ? 'Retirer deal' : 'Bon Deal'}
                         </button>
+                        <button onClick={() => { onHide(product); }}
+                            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.status === 'hidden' ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                            <EyeSlashIcon className="h-4 w-4" />
+                            {product.status === 'hidden' ? 'Afficher' : 'Masquer'}
+                        </button>
                         <button onClick={() => { onDelete(product.id); onClose(); }}
                             className="py-2.5 px-4 rounded-xl text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition flex items-center gap-2"
                         >
@@ -177,7 +185,7 @@ function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onT
    ═══════════════════════════════════ */
 export default function Products() {
     const [products, setProducts] = useState([]);
-    const [stats, setStats] = useState({ total: 0, active: 0, banned: 0, featured: 0, good_deals: 0 });
+    const [stats, setStats] = useState({ total: 0, active: 0, banned: 0, hidden: 0, featured: 0, good_deals: 0 });
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
@@ -190,6 +198,7 @@ export default function Products() {
             let url = '/admin/products?limit=200';
             if (filter === 'active') url += '&status=active';
             if (filter === 'banned') url += '&status=banned';
+            if (filter === 'hidden') url += '&status=hidden';
             if (filter === 'featured') url += '&is_featured=true';
             const { data } = await api.get(url);
             if (Array.isArray(data)) { setProducts(data); }
@@ -227,6 +236,16 @@ export default function Products() {
         } catch (err) { alert('Erreur'); }
     };
 
+    const handleHide = async (product) => {
+        try {
+            const { data } = await api.patch(`/admin/products/${product.id}/toggle-visibility`);
+            const newStatus = product.status === 'hidden' ? 'active' : 'hidden';
+            const updated = products.map(p => p.id === product.id ? { ...p, status: newStatus } : p);
+            setProducts(updated);
+            if (selectedProduct?.id === product.id) setSelectedProduct({ ...product, status: newStatus });
+        } catch (error) { console.error("Erreur:", error); alert("Erreur"); }
+    };
+
     const getDisplayImage = (product) => {
         if (product.image_url) return product.image_url;
         if (product.images) {
@@ -261,6 +280,7 @@ export default function Products() {
                     onToggleFeatured={toggleFeatured}
                     onToggleGoodDeal={toggleGoodDeal}
                     onDelete={handleDelete}
+                    onHide={handleHide}
                 />
             )}
 
@@ -291,6 +311,7 @@ export default function Products() {
             <div className="flex gap-2 flex-wrap">
                 <FilterPill label="Tous" count={stats.total} active={filter === 'all'} onClick={() => setFilter('all')} />
                 <FilterPill label="✓ Actifs" count={stats.active} active={filter === 'active'} onClick={() => setFilter('active')} />
+                <FilterPill label="👁 Masqués" count={stats.hidden} active={filter === 'hidden'} onClick={() => setFilter('hidden')} />
                 <FilterPill label="⛔ Bannis" count={stats.banned} active={filter === 'banned'} onClick={() => setFilter('banned')} />
                 <FilterPill label="⭐ En avant" count={stats.featured} active={filter === 'featured'} onClick={() => setFilter('featured')} />
             </div>
@@ -367,6 +388,8 @@ export default function Products() {
                                 <div className="col-span-1 text-center">
                                     {product.status === 'active' ? (
                                         <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">Actif</span>
+                                    ) : product.status === 'hidden' ? (
+                                        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700">Masqué</span>
                                     ) : product.status === 'banned' ? (
                                         <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">Banni</span>
                                     ) : (
