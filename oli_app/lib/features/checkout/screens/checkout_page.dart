@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../orders/providers/orders_provider.dart';
 import 'stripe_payment_page.dart';
+import 'order_success_page.dart';
 
 /// Page de Checkout / Validation de commande
 /// Peut être utilisée avec le panier (défaut) ou avec un achat direct (directPurchaseItem)
@@ -243,60 +244,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
            return;
         }
 
-        // SINON (Wallet / Mobile Money) -> Afficher confirmation standard
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A1A),
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 28),
-                SizedBox(width: 8),
-                Text('Commande créée !', style: TextStyle(color: Colors.white)),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Commande #${order.id}', style: const TextStyle(color: Colors.grey)),
-                const SizedBox(height: 8),
-                Text('Total: \$${order.totalAmount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.orange, size: 16),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Paiement en attente. Le vendeur sera notifié.',
-                          style: TextStyle(color: Colors.orange, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context); // Fermer dialog
-                  // Retourner à l'accueil
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+        // SINON (Wallet / Mobile Money) -> Redirection vers page de confirmation
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => OrderSuccessPage(order: order)),
         );
       } else {
         throw Exception('Erreur de création');

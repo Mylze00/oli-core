@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async'; // Pour le Timer
 import '../../../models/order_model.dart';
+import 'order_success_page.dart';
 // import '../../../core/config/api_config.dart'; // Si disponible
 
 class StripePaymentPage extends StatefulWidget {
@@ -171,23 +172,23 @@ class _StripePaymentPageState extends State<StripePaymentPage> {
   }
 
   Widget _buildSuccessView() {
-    return Center(
+    // Rediriger automatiquement vers la page de confirmation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => OrderSuccessPage(order: widget.order)),
+      );
+    });
+
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.check_circle, color: Colors.green, size: 80),
-          const SizedBox(height: 24),
-          const Text('Paiement Réussi !', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Text('Votre commande #${widget.order.id} a été payée.', style: const TextStyle(color: Colors.grey)),
-          const SizedBox(height: 40),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black),
-            child: const Text('Retour à l\'accueil'),
-          ),
+          Icon(Icons.check_circle, color: Colors.green, size: 80),
+          SizedBox(height: 24),
+          Text('Paiement Réussi !', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+          SizedBox(height: 12),
+          CircularProgressIndicator(color: Colors.white),
         ],
       ),
     );
