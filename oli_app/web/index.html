@@ -32,6 +32,22 @@
   <title>oli_app</title>
   <link rel="manifest" href="manifest.json">
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCNF6OIdKHDIgNPnMxPUx8doloEm00iqJs"></script>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDQMF7DsuTE4-2TlkzA9ZC96fjIzYX3wpc",
+      authDomain: "oli-core.firebaseapp.com",
+      projectId: "oli-core",
+      storageBucket: "oli-core.firebasestorage.app",
+      messagingSenderId: "1045211732966",
+      appId: "1:1045211732966:web:af7f43365f187d500b1427",
+      measurementId: "G-C2JSC1HMDK"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
   <script>
