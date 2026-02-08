@@ -1,9 +1,11 @@
 /**
  * Service de Notifications
  * Fournit des helpers pour créer et envoyer des notifications
+ * 3 canaux: DB + Socket.IO + FCM Push
  */
 
 const notificationRepo = require('../repositories/notification.repository');
+const fcmService = require('./fcm.service');
 
 class NotificationService {
     /**
@@ -16,15 +18,18 @@ class NotificationService {
      * @param {object} io - Instance Socket.io pour émettre en temps réel (optionnel)
      */
     async send(userId, type, title, body, data = null, io = null) {
-        // Créer la notification en DB
+        // 1. Créer la notification en DB
         const notification = await notificationRepo.create(userId, type, title, body, data);
 
-        // Émettre via Socket.io si disponible
+        // 2. Émettre via Socket.io si disponible
         if (io) {
             const userRoom = `user_${userId}`;
             io.to(userRoom).emit('new_notification', notification);
             console.log(`   📡 Notification émise via Socket.io vers ${userRoom}`);
         }
+
+        // 3. Envoyer push FCM
+        await fcmService.sendToUser(userId, title, body, { type, ...(data || {}) });
 
         return notification;
     }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../config/api_config.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/storage/secure_storage_service.dart';
+import '../../../core/services/fcm_service.dart';
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>((ref) {
   return AuthController();
@@ -188,6 +189,9 @@ class AuthController extends StateNotifier<AuthState> {
           },
         );
         
+        // Initialiser FCM et enregistrer le token
+        FcmService().init();
+        
         // Pas besoin de fetchUserProfile immédiatement si on a déjà les données login
         // mais on peut le faire pour être sûr d'avoir tout (wallet, etc.)
         fetchUserProfile(); 
@@ -204,6 +208,8 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    // Supprimer le token FCM avant la déconnexion
+    await FcmService().removeToken();
     await _storage.deleteAll();
     state = const AuthState(isAuthenticated: false, userData: null);
   }

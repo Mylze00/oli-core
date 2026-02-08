@@ -116,4 +116,48 @@ router.get('/migrate-exchange-rates', async (req, res) => {
     }
 });
 
+/**
+ * GET /setup/migrate-device-tokens
+ * Route utilitaire pour créer la table 'device_tokens' (FCM)
+ */
+router.get('/migrate-device-tokens', async (req, res) => {
+    try {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS device_tokens (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    token TEXT NOT NULL UNIQUE,
+                    platform VARCHAR(20) DEFAULT 'android',
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+            `);
+            console.log('✅ Table "device_tokens" créée.');
+
+            await client.query(`
+                CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
+            `);
+            console.log('✅ Index créé.');
+
+            await client.query('COMMIT');
+            res.json({
+                success: true,
+                message: 'Table device_tokens créée avec succès ! 📱🔔'
+            });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error('Erreur Migration device_tokens:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;

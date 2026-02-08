@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'features/auth/screens/login_page.dart';
 import 'features/home/home_page.dart';
 import 'features/auth/providers/auth_controller.dart';
+import 'core/services/fcm_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialiser Firebase
+  await Firebase.initializeApp();
+  
+  // Enregistrer le handler pour les messages en arrière-plan
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  
   await EasyLocalization.ensureInitialized();
 
   runApp(

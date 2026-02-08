@@ -12,6 +12,10 @@ const jwt = require("jsonwebtoken");
 // Configuration
 const config = require("./config");
 
+// Initialiser FCM
+const fcmService = require('./services/fcm.service');
+fcmService.init();
+
 
 // Routes
 const authRoutes = require("./routes/auth.routes");
@@ -165,6 +169,7 @@ app.get("/user/public-profile/:id", require('./controllers/user.controller').get
 app.use("/user", requireAuth, userRoutes);
 app.use("/addresses", requireAuth, require('./routes/address.routes'));
 app.use("/notifications", require('./routes/notifications.routes')); // Notifications
+app.use("/device-tokens", require('./routes/device-tokens.routes')); // 📱 Tokens FCM
 
 // 🆕 Routes pour l'architecture utilisateur unifiée
 app.use("/api/identity", require('./routes/identity.routes'));

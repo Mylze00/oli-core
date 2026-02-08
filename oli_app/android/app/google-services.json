@@ -1,0 +1,29 @@
+{
+    "project_info": {
+        "project_number": "1045211732966",
+        "project_id": "oli-core",
+        "storage_bucket": "oli-core.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:1045211732966:android:56bb5bd9d0baf97e0b1427",
+                "android_client_info": {
+                    "package_name": "com.mylze.oli"
+                }
+            },
+            "oauth_client": [],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyD94QiOmpjpjiQPoBW-5dKJxhTI-ydQwDA"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": []
+                }
+            }
+        }
+    ],
+    "configuration_version": "1"
+}
