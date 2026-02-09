@@ -125,7 +125,7 @@ io.on('connection', (socket) => {
 
 // --- MIDDLEWARES GÉNÉRAUX ---
 app.use(cors({
-    origin: config.ALLOWED_ORIGINS,
+    origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "authorization", "X-Requested-With", "Accept"],
@@ -175,6 +175,7 @@ app.use("/device-tokens", require('./routes/device-tokens.routes')); // 📱 Tok
 app.use("/api/identity", require('./routes/identity.routes'));
 app.use("/api/verification", require('./routes/verification.routes'));
 app.use("/api/behavior", require('./routes/behavior.routes'));
+app.use("/api/trust-score", require('./routes/trust-score.routes'));
 app.use("/api/trust-score", require('./routes/trust-score.routes'));
 app.use("/api/exchange-rate", require('./routes/exchange-rate.routes')); // 💱 Taux de change
 app.use("/api/subscription", require('./routes/subscription.routes')); // 🆕 Abonnement & Certification

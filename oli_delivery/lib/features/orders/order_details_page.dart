@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/delivery_service.dart';
-import '../../services/location_service.dart';
-import 'qr_scanner_page.dart';
 
 class OrderDetailsPage extends ConsumerStatefulWidget {
   final int orderId;
@@ -19,8 +17,6 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
   bool _isLoading = true;
   bool _isAccepting = false;
   bool _isDelivering = false;
-  double? _distanceKm;
-  bool _gpsAvailable = false;
 
   @override
   void initState() {
@@ -31,66 +27,22 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
   Future<void> _loadOrder() async {
     setState(() => _isLoading = true);
     try {
-      final service = ref.read(deliveryServiceProvider);
-
-      // Chercher dans les disponibles ET dans mes tâches
-      final available = await service.getAvailableOrders();
-      var order = available.firstWhere(
-        (o) => (o['id'] == widget.orderId || o['order_id'] == widget.orderId),
+      final orders = await ref.read(deliveryServiceProvider).getAvailableOrders();
+      final order = orders.firstWhere(
+        (o) => o['id'] == widget.orderId,
         orElse: () => null,
       );
-
-      if (order == null) {
-        final tasks = await service.getMyTasks();
-        order = tasks.firstWhere(
-          (o) => (o['id'] == widget.orderId || o['order_id'] == widget.orderId),
-          orElse: () => null,
-        );
-      }
-
       setState(() {
         _order = order;
         _isLoading = false;
       });
-
-      // Calculer la distance si possible
-      if (_order != null) {
-        _updateDistance();
-      }
     } catch (e) {
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _updateDistance() async {
-    final lat = _order?['delivery_lat'] ?? _order?['lat'];
-    final lng = _order?['delivery_lng'] ?? _order?['lng'];
-
-    if (lat == null || lng == null) return;
-
-    final position = await LocationService.getCurrentPosition();
-    if (position != null && mounted) {
-      final destLat = (lat is String) ? double.tryParse(lat) ?? 0.0 : (lat as num).toDouble();
-      final destLng = (lng is String) ? double.tryParse(lng) ?? 0.0 : (lng as num).toDouble();
-
-      setState(() {
-        _distanceKm = LocationService.distanceBetween(
-          position.latitude,
-          position.longitude,
-          destLat,
-          destLng,
-        );
-        _gpsAvailable = true;
-      });
-    }
-  }
-
   Future<void> _acceptOrder() async {
     setState(() => _isAccepting = true);
-
-    // Obtenir la position GPS au moment de l'acceptation
-    final position = await LocationService.getCurrentPosition();
-
     final success = await ref.read(deliveryServiceProvider).acceptOrder(widget.orderId);
     setState(() => _isAccepting = false);
 
@@ -102,38 +54,14 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
         ),
       );
       if (success) {
-        // Envoyer la position initiale si disponible
-        if (position != null) {
-          await ref.read(deliveryServiceProvider).updateStatus(
-            widget.orderId,
-            'assigned',
-            lat: position.latitude,
-            lng: position.longitude,
-          );
-        }
-        _loadOrder();
+        _loadOrder(); // Refresh order data
       }
     }
   }
 
   Future<void> _markAsDelivered() async {
     setState(() => _isDelivering = true);
-
-    // Obtenir la position GPS au moment de la livraison
-    final position = await LocationService.getCurrentPosition();
-
-    final bool success;
-    if (position != null) {
-      success = await ref.read(deliveryServiceProvider).updateStatus(
-        widget.orderId,
-        'delivered',
-        lat: position.latitude,
-        lng: position.longitude,
-      );
-    } else {
-      success = await ref.read(deliveryServiceProvider).markAsDelivered(widget.orderId);
-    }
-
+    final success = await ref.read(deliveryServiceProvider).markAsDelivered(widget.orderId);
     setState(() => _isDelivering = false);
 
     if (mounted) {
@@ -158,39 +86,12 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
 
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d\'ouvrir Maps')),
-      );
-    }
-  }
-
-  Future<void> _callCustomer() async {
-    final phone = _order?['customer_phone'];
-    if (phone == null) return;
-
-    final url = Uri.parse('tel:$phone');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    }
-  }
-
-  Future<void> _scanQR() async {
-    final verified = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => QrScannerPage(orderId: widget.orderId),
-      ),
-    );
-
-    if (verified == true && mounted) {
-      // QR vérifié avec succès → marquer comme livrée automatiquement
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ QR vérifié ! Livraison confirmée.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      _markAsDelivered();
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible d\'ouvrir Maps')),
+        );
+      }
     }
   }
 
@@ -206,42 +107,20 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
     if (_order == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Détails commande')),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.search_off, size: 64, color: Colors.grey),
-              const SizedBox(height: 16),
-              const Text('Commande non trouvée'),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _loadOrder,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Réessayer'),
-              ),
-            ],
-          ),
-        ),
+        body: const Center(child: Text('Commande non trouvée')),
       );
     }
 
     final status = _order!['status'] ?? 'pending';
-    final isAccepted = status == 'assigned' || status == 'shipped' ||
-        status == 'picked_up' || status == 'in_transit';
+    final isAccepted = status == 'shipped' || status == 'processing';
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Commande #${_order!['order_id'] ?? _order!['id']}'),
+        title: Text('Commande #${_order!['id']}'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/dashboard'),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadOrder,
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -250,10 +129,6 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
           children: [
             // 📦 Statut
             _buildStatusCard(status),
-            const SizedBox(height: 16),
-
-            // 🗺️ Navigation & GPS
-            _buildMapSection(),
             const SizedBox(height: 16),
 
             // 💰 Montant
@@ -265,13 +140,62 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
             ),
             const SizedBox(height: 16),
 
+            // 📍 Adresse
+            _buildAddressCard(),
+            const SizedBox(height: 16),
+
             // 👤 Client
-            _buildCustomerCard(),
+            if (_order!['customer_name'] != null || _order!['customer_phone'] != null)
+              _buildInfoCard(
+                icon: Icons.person,
+                title: 'Client',
+                value: _order!['customer_name'] ?? _order!['customer_phone'] ?? 'Inconnu',
+                color: Colors.blue,
+              ),
             const SizedBox(height: 16),
 
             // 📋 Articles
             if (_order!['items'] != null) ...[
-              _buildItemsCard(),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.list_alt, color: Colors.orange),
+                          SizedBox(width: 8),
+                          Text(
+                            'Articles',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ...(_order!['items'] as List).map<Widget>((item) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${item['quantity']}x ${item['product_name'] ?? 'Produit'}',
+                                ),
+                              ),
+                              Text('\$${item['price'] ?? 0}'),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
             ],
 
@@ -281,7 +205,8 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
                 onPressed: _isAccepting ? null : _acceptOrder,
                 icon: _isAccepting
                     ? const SizedBox(
-                        width: 20, height: 20,
+                        width: 20,
+                        height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.check_circle),
@@ -293,11 +218,10 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
                 ),
               ),
             ] else ...[
-              // Scanner QR pour vérifier la livraison
               ElevatedButton.icon(
-                onPressed: _scanQR,
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('SCANNER QR CLIENT'),
+                onPressed: _openMaps,
+                icon: const Icon(Icons.navigation),
+                label: const Text('NAVIGUER VERS L\'ADRESSE'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1E7DBA),
                   foregroundColor: Colors.white,
@@ -309,7 +233,8 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
                 onPressed: _isDelivering ? null : _markAsDelivered,
                 icon: _isDelivering
                     ? const SizedBox(
-                        width: 20, height: 20,
+                        width: 20,
+                        height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.done_all),
@@ -327,270 +252,16 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
     );
   }
 
-  // ─── MAP & NAVIGATION SECTION ───────────────────────────────
-
-  Widget _buildMapSection() {
-    final address = _order?['delivery_address'] ?? 'Adresse inconnue';
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        children: [
-          // Adresse + distance
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.location_on, color: Colors.red, size: 24),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Destination',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          Text(
-                            address,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (_distanceKm != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E7DBA).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.straighten, size: 14, color: Color(0xFF1E7DBA)),
-                            const SizedBox(width: 4),
-                            Text(
-                              _distanceKm! < 1
-                                  ? '${(_distanceKm! * 1000).toInt()} m'
-                                  : '${_distanceKm!.toStringAsFixed(1)} km',
-                              style: const TextStyle(
-                                color: Color(0xFF1E7DBA),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Boutons de navigation
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _openMaps,
-                    icon: const Icon(Icons.navigation, size: 20),
-                    label: const Text('Naviguer'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E7DBA),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await _updateDistance();
-                      if (mounted && _distanceKm != null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Distance: ${_distanceKm!.toStringAsFixed(1)} km',
-                            ),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      } else if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('GPS indisponible ou pas de coordonnées'),
-                          ),
-                        );
-                      }
-                    },
-                    icon: Icon(
-                      _gpsAvailable ? Icons.gps_fixed : Icons.gps_not_fixed,
-                      size: 20,
-                    ),
-                    label: const Text('Position'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF1E7DBA),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      side: const BorderSide(color: Color(0xFF1E7DBA)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── CUSTOMER CARD ─────────────────────────────────────────
-
-  Widget _buildCustomerCard() {
-    final name = _order?['customer_name'];
-    final phone = _order?['customer_phone'];
-
-    if (name == null && phone == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFF1E7DBA),
-              child: Icon(Icons.person, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Client',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                  Text(
-                    name ?? 'Client',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (phone != null)
-                    Text(
-                      phone,
-                      style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
-                    ),
-                ],
-              ),
-            ),
-            if (phone != null)
-              IconButton(
-                onPressed: _callCustomer,
-                icon: const Icon(Icons.phone, color: Colors.green),
-                tooltip: 'Appeler le client',
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.green.withOpacity(0.1),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─── ITEMS CARD ────────────────────────────────────────────
-
-  Widget _buildItemsCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.list_alt, color: Colors.orange),
-                SizedBox(width: 8),
-                Text(
-                  'Articles',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...(_order!['items'] as List).map<Widget>((item) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${item['quantity']}x ${item['product_name'] ?? 'Produit'}',
-                      ),
-                    ),
-                    Text('\$${item['price'] ?? 0}'),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─── STATUS & INFO CARDS ───────────────────────────────────
-
   Widget _buildStatusCard(String status) {
     Color color;
     String label;
     IconData icon;
 
     switch (status) {
-      case 'assigned':
-        color = Colors.blue;
-        label = 'Assignée';
-        icon = Icons.assignment_ind;
-        break;
       case 'shipped':
         color = Colors.blue;
         label = 'En cours de livraison';
         icon = Icons.local_shipping;
-        break;
-      case 'picked_up':
-        color = Colors.orange;
-        label = 'Colis récupéré';
-        icon = Icons.inventory;
-        break;
-      case 'in_transit':
-        color = Colors.purple;
-        label = 'En route';
-        icon = Icons.directions_bike;
         break;
       case 'processing':
         color = Colors.orange;
@@ -648,15 +319,61 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
               children: [
                 Text(
                   title,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
                 ),
                 Text(
                   value,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddressCard() {
+    return Card(
+      child: InkWell(
+        onTap: _openMaps,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.location_on, color: Colors.red, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Adresse de livraison',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    Text(
+                      _order!['delivery_address'] ?? 'Adresse inconnue',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.open_in_new, color: Colors.grey),
+            ],
+          ),
         ),
       ),
     );

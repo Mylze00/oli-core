@@ -1,90 +1,83 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
-import '../../../core/router/network/dio_provider.dart';
+import '../../../core/storage/secure_storage_service.dart';
 import '../models/delivery_order_model.dart';
 
-/// Provider pour le service de livraison
-final deliveryServiceProvider = Provider<DeliveryService>((ref) {
-  return DeliveryService(ref.read(dioProvider));
-});
-
 class DeliveryService {
-  final Dio _dio;
+  final SecureStorageService _storage = SecureStorageService();
 
-  DeliveryService(this._dio);
+  Future<Map<String, String>> _getHeaders() async {
+    final token = await _storage.getToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
 
   // Commandes disponibles
   Future<List<DeliveryOrder>> getAvailableDeliveries() async {
-    try {
-      final response = await _dio.get(ApiConfig.deliveryAvailable);
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('${ApiConfig.baseUrl}/delivery/available'), headers: headers); // Note: Assuming baseUrl handles /api prefix implicitly or explicitly in ApiConfig
+    // Wait, ApiConfig might be base URL without /api? 
+    // Let's check api_config.dart content from memory or assume standard structure.
+    // In step 307: static const String baseUrl = 'https://oli-core.onrender.com';
+    // The server routes are mounted directly on app.use('/delivery', ...) in server.js?
+    // In server.js (Step 293): app.use("/delivery", requireAuth, deliveryRoutes);
+    // So URL is https://oli-core.onrender.com/delivery/available. Correct.
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data is List ? response.data : [];
-        return data.map((json) => DeliveryOrder.fromJson(json)).toList();
-      } else {
-        throw Exception('Failed to load available deliveries');
-      }
-    } on DioException catch (e) {
-      debugPrint('❌ Erreur getAvailableDeliveries: ${e.message}');
-      rethrow;
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => DeliveryOrder.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load available deliveries: ${response.body}');
     }
   }
 
   // Mes livraisons
   Future<List<DeliveryOrder>> getMyTasks() async {
-    try {
-      final response = await _dio.get(ApiConfig.deliveryMyTasks);
+    final headers = await _getHeaders();
+    final response = await http.get(Uri.parse('${ApiConfig.baseUrl}/delivery/my-tasks'), headers: headers);
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data is List ? response.data : [];
-        return data.map((json) => DeliveryOrder.fromJson(json)).toList();
-      } else {
-        throw Exception('Failed to load my tasks');
-      }
-    } on DioException catch (e) {
-      debugPrint('❌ Erreur getMyTasks: ${e.message}');
-      rethrow;
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => DeliveryOrder.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load my tasks');
     }
   }
 
   // Accepter une livraison
   Future<DeliveryOrder> acceptDelivery(int id) async {
-    try {
-      final response = await _dio.post(ApiConfig.deliveryAccept(id));
+    final headers = await _getHeaders();
+    final response = await http.post(Uri.parse('${ApiConfig.baseUrl}/delivery/$id/accept'), headers: headers);
 
-      if (response.statusCode == 200) {
-        return DeliveryOrder.fromJson(response.data['delivery']);
-      } else {
-        throw Exception('Failed to accept delivery');
-      }
-    } on DioException catch (e) {
-      debugPrint('❌ Erreur acceptDelivery: ${e.message}');
-      rethrow;
+    if (response.statusCode == 200) {
+      return DeliveryOrder.fromJson(jsonDecode(response.body)['delivery']);
+    } else {
+      throw Exception('Failed to accept delivery: ${response.body}');
     }
   }
 
   // Mettre à jour le statut
   Future<DeliveryOrder> updateStatus(int id, String status, {double? lat, double? lng}) async {
-    try {
-      final response = await _dio.post(
-        ApiConfig.deliveryStatus(id),
-        data: {
-          'status': status,
-          if (lat != null) 'lat': lat,
-          if (lng != null) 'lng': lng,
-        },
-      );
+    final headers = await _getHeaders();
+    final body = jsonEncode({
+      'status': status,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
+    });
 
-      if (response.statusCode == 200) {
-        return DeliveryOrder.fromJson(response.data['delivery']);
-      } else {
-        throw Exception('Failed to update status');
-      }
-    } on DioException catch (e) {
-      debugPrint('❌ Erreur updateStatus: ${e.message}');
-      rethrow;
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/delivery/$id/status'), 
+      headers: headers,
+      body: body
+    );
+
+    if (response.statusCode == 200) {
+      return DeliveryOrder.fromJson(jsonDecode(response.body)['delivery']);
+    } else {
+      throw Exception('Failed to update status');
     }
   }
 }

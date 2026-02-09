@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/config/api_config.dart';
 import '../core/providers/dio_provider.dart';
@@ -13,79 +12,49 @@ class DeliveryService {
 
   DeliveryService({required Dio dio}) : _dio = dio;
 
-  /// GET /delivery/available — Commandes en attente de prise en charge
   Future<List<dynamic>> getAvailableOrders() async {
     try {
-      final response = await _dio.get(ApiConfig.deliveryAvailable);
+      // Token is automatically added by Dio Interceptor
+      final response = await _dio.get(ApiConfig.deliveryOrdersEndpoint);
+
       if (response.statusCode == 200) {
         return response.data as List<dynamic>;
       }
       return [];
     } catch (e) {
-      debugPrint('❌ Error fetching available orders: $e');
+      print('Error fetching orders: $e');
       return [];
     }
   }
 
-  /// GET /delivery/my-tasks — Mes livraisons en cours
-  Future<List<dynamic>> getMyTasks() async {
-    try {
-      final response = await _dio.get(ApiConfig.deliveryMyTasks);
-      if (response.statusCode == 200) {
-        return response.data as List<dynamic>;
-      }
-      return [];
-    } catch (e) {
-      debugPrint('❌ Error fetching my tasks: $e');
-      return [];
-    }
-  }
-
-  /// POST /delivery/:id/accept — Accepter une livraison
   Future<bool> acceptOrder(int orderId) async {
     try {
-      final response = await _dio.post(ApiConfig.deliveryAccept(orderId));
-      return response.statusCode == 200;
-    } catch (e) {
-      debugPrint('❌ Error accepting order: $e');
-      return false;
-    }
-  }
-
-  /// POST /delivery/:id/status — Mettre à jour statut + position GPS
-  Future<bool> updateStatus(int orderId, String status, {double? lat, double? lng}) async {
-    try {
-      final response = await _dio.post(
-        ApiConfig.deliveryStatus(orderId),
-        data: {
-          'status': status,
-          if (lat != null) 'lat': lat,
-          if (lng != null) 'lng': lng,
-        },
+      // TODO: Implement endpoint for assigning order to driver
+      // For now, we might just update status to 'processing' or 'shipped'
+      final response = await _dio.patch(
+        '${ApiConfig.baseUrl}/orders/$orderId/status',
+        data: {'status': 'shipped'},
       );
+
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('❌ Error updating status: $e');
+      print('Error accepting order: $e');
       return false;
     }
   }
 
-  /// Raccourci : marquer comme livrée
   Future<bool> markAsDelivered(int orderId) async {
-    return updateStatus(orderId, 'delivered');
-  }
-
-  /// POST /delivery/:id/verify — Vérifier le code QR de livraison
-  Future<bool> verifyDeliveryCode(int orderId, String code) async {
     try {
-      final response = await _dio.post(
-        ApiConfig.deliveryVerify(orderId),
-        data: {'code': code},
+      final response = await _dio.patch(
+        '${ApiConfig.baseUrl}/orders/$orderId/status',
+        data: {'status': 'delivered'},
       );
+
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('❌ Error verifying delivery code: $e');
+      print('Error marking as delivered: $e');
       return false;
     }
   }
 }
+

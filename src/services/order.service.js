@@ -1,7 +1,6 @@
 const orderRepository = require('../repositories/order.repository');
 const walletService = require('./wallet.service');
 const notificationService = require('./notification.service');
-const deliveryRepo = require('../repositories/delivery.repository');
 const pool = require('../config/db');
 
 class OrderService {
@@ -62,20 +61,6 @@ class OrderService {
             await orderRepository.updateOrderStatus(order.id, 'paid');
             order.status = 'paid';
             order.paymentStatus = 'paid';
-
-            // 🚚 Créer l'entrée delivery_orders pour les livreurs
-            try {
-                await deliveryRepo.create({
-                    order_id: order.id,
-                    pickup_address: 'À déterminer', // Le vendeur renseigne son adresse
-                    delivery_address: deliveryAddress || 'Non spécifiée',
-                    delivery_fee: parseFloat(deliveryFee) || 0,
-                    estimated_time: '45 min'
-                });
-                console.log(`   🚚 delivery_orders créé pour commande #${order.id}`);
-            } catch (deliveryErr) {
-                console.error('⚠️ Erreur création delivery_orders (non-bloquante):', deliveryErr.message);
-            }
         }
 
         return order;
@@ -190,26 +175,10 @@ class OrderService {
             console.log(`   ✅ Notification vendeur envoyée (Seller #${sellerId})`);
         }
 
-        // 4. 🚚 CRÉER L'ENTRÉE delivery_orders POUR LES LIVREURS
-        let deliveryOrder = null;
-        try {
-            deliveryOrder = await deliveryRepo.create({
-                order_id: orderId,
-                pickup_address: 'À déterminer',
-                delivery_address: order.delivery_address || 'Non spécifiée',
-                delivery_fee: 0,
-                estimated_time: '45 min'
-            });
-            console.log(`   🚚 delivery_orders créé: ID ${deliveryOrder.id} pour commande #${orderId}`);
-        } catch (deliveryErr) {
-            console.error('⚠️ Erreur création delivery_orders:', deliveryErr.message);
-        }
-
-        // 5. BROADCAST POUR LIVREURS (via Socket.IO)
+        // 4. BROADCAST POUR LIVREURS (via Socket.IO uniquement)
         if (io) {
             io.emit('new_delivery_available', {
                 order_id: orderId,
-                delivery_id: deliveryOrder?.id,
                 delivery_address: order.delivery_address,
                 total_amount: order.total_amount,
                 created_at: new Date()

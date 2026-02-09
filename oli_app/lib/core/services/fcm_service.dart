@@ -1,6 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:dio/dio.dart';
 import '../../config/api_config.dart';
@@ -10,7 +9,7 @@ import '../storage/secure_storage_service.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  debugPrint('🔔 [FCM] Message reçu en arrière-plan: ${message.notification?.title}');
+  print('🔔 [FCM] Message reçu en arrière-plan: ${message.notification?.title}');
 }
 
 /// Service FCM pour gérer les push notifications
@@ -51,10 +50,10 @@ class FcmService {
         sound: true,
       );
 
-      debugPrint('🔔 [FCM] Permission: ${settings.authorizationStatus}');
+      print('🔔 [FCM] Permission: ${settings.authorizationStatus}');
 
       if (settings.authorizationStatus == AuthorizationStatus.denied) {
-        debugPrint('❌ [FCM] Permission refusée par l\'utilisateur');
+        print('❌ [FCM] Permission refusée par l\'utilisateur');
         return;
       }
 
@@ -64,13 +63,13 @@ class FcmService {
       // 3. Récupérer et enregistrer le token
       final token = await _messaging.getToken();
       if (token != null) {
-        debugPrint('📱 [FCM] Token: ${token.substring(0, 20)}...');
+        print('📱 [FCM] Token: ${token.substring(0, 20)}...');
         await _registerToken(token);
       }
 
       // 4. Écouter le renouvellement du token
       _messaging.onTokenRefresh.listen((newToken) {
-        debugPrint('🔄 [FCM] Token renouvelé');
+        print('🔄 [FCM] Token renouvelé');
         _registerToken(newToken);
       });
 
@@ -78,9 +77,9 @@ class FcmService {
       _setupMessageHandlers();
 
       _initialized = true;
-      debugPrint('✅ [FCM] Service initialisé');
+      print('✅ [FCM] Service initialisé');
     } catch (e) {
-      debugPrint('❌ [FCM] Erreur d\'initialisation: $e');
+      print('❌ [FCM] Erreur d\'initialisation: $e');
     }
   }
 
@@ -101,7 +100,7 @@ class FcmService {
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (response) {
-        debugPrint('🔔 [FCM] Notification locale tappée: ${response.payload}');
+        print('🔔 [FCM] Notification locale tappée: ${response.payload}');
         // TODO: Navigation vers la page appropriée selon le payload
       },
     );
@@ -116,13 +115,13 @@ class FcmService {
   void _setupMessageHandlers() {
     // Message reçu quand l'app est au premier plan
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('🔔 [FCM] Message foreground: ${message.notification?.title}');
+      print('🔔 [FCM] Message foreground: ${message.notification?.title}');
       _showLocalNotification(message);
     });
 
     // Quand l'utilisateur tape sur une notification (app en background)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('🔔 [FCM] Notification ouverte: ${message.notification?.title}');
+      print('🔔 [FCM] Notification ouverte: ${message.notification?.title}');
       // TODO: Navigation vers la page appropriée selon message.data
     });
   }
@@ -160,7 +159,7 @@ class FcmService {
     try {
       final authToken = await _storage.getToken();
       if (authToken == null) {
-        debugPrint('⚠️ [FCM] Pas de token auth, impossible d\'enregistrer');
+        print('⚠️ [FCM] Pas de token auth, impossible d\'enregistrer');
         return;
       }
 
@@ -173,9 +172,9 @@ class FcmService {
         options: Options(headers: {'Authorization': 'Bearer $authToken'}),
       );
 
-      debugPrint('✅ [FCM] Token enregistré auprès du backend');
+      print('✅ [FCM] Token enregistré auprès du backend');
     } catch (e) {
-      debugPrint('❌ [FCM] Erreur enregistrement token: $e');
+      print('❌ [FCM] Erreur enregistrement token: $e');
     }
   }
 
@@ -191,17 +190,18 @@ class FcmService {
           data: {'token': fcmToken},
           options: Options(headers: {'Authorization': 'Bearer $authToken'}),
         );
-        debugPrint('✅ [FCM] Token supprimé du backend');
+        print('✅ [FCM] Token supprimé du backend');
       }
 
       _initialized = false;
     } catch (e) {
-      debugPrint('❌ [FCM] Erreur suppression token: $e');
+      print('❌ [FCM] Erreur suppression token: $e');
     }
   }
 
   /// Détecter la plateforme
   String _getPlatform() {
-    return defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+    // Simple detection - in production use Platform.isAndroid etc.
+    return 'android';
   }
 }

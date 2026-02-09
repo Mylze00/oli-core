@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/delivery_service.dart';
 import '../../services/socket_service.dart';
+import '../auth/providers/auth_controller.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -20,42 +21,56 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     _ordersFuture = Future.value([]);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshOrders();
-      _listenSocket();
+      _initSocket();
     });
   }
 
-  void _listenSocket() {
-    final socketService = ref.read(socketServiceProvider);
-    socketService.on('new_delivery_available', (data) {
-      debugPrint('🚚 Nouvelle livraison disponible: $data');
-      _refreshOrders();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.delivery_dining, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Nouvelle livraison disponible !',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+  void _initSocket() {
+    final authState = ref.read(authControllerProvider);
+    if (authState.isAuthenticated && authState.userData != null) {
+      final phone = authState.userData!['phone'];
+      
+      if (phone != null) {
+        final socketService = ref.read(socketServiceProvider);
+        socketService.connect(phone.toString());
+
+        // Listen for new delivery availability
+        socketService.on('new_delivery_available', (data) {
+          debugPrint('🚚 Nouvelle livraison disponible: $data');
+          _refreshOrders();
+
+          // Show snackbar notification
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: const [
+                    Icon(Icons.delivery_dining, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Nouvelle livraison disponible !',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 4),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        });
       }
-    });
+    }
   }
 
   @override
   void dispose() {
-    ref.read(socketServiceProvider).off('new_delivery_available');
+    final socketService = ref.read(socketServiceProvider);
+    socketService.off('new_delivery_available');
+    socketService.disconnect();
     super.dispose();
   }
 
@@ -65,69 +80,100 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     });
   }
 
+  void _logout() async {
+    await ref.read(authControllerProvider.notifier).logout();
+    if (mounted) {
+      context.go('/login');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _refreshOrders,
-      child: FutureBuilder<List<dynamic>>(
-        future: _ordersFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mes Livraisons'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualiser',
+            onPressed: _refreshOrders,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Déconnexion',
+            onPressed: _logout,
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshOrders,
+        child: FutureBuilder<List<dynamic>>(
+          future: _ordersFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text('Erreur: ${snapshot.error}'),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _refreshOrders,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Réessayer'),
-                  ),
-                ],
-              ),
+            if (snapshot.hasError) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text('Erreur: ${snapshot.error}'),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: _refreshOrders,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Réessayer'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final orders = snapshot.data ?? [];
+            if (orders.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.delivery_dining,
+                      size: 80,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Aucune livraison disponible',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: _refreshOrders,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Actualiser'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              itemCount: orders.length,
+              itemBuilder: (context, index) {
+                final order = orders[index];
+                return _buildOrderCard(order);
+              },
             );
-          }
-
-          final orders = snapshot.data ?? [];
-          if (orders.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.delivery_dining, size: 80, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Aucune livraison disponible',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _refreshOrders,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Actualiser'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
-            itemCount: orders.length,
-            itemBuilder: (context, index) {
-              final order = orders[index];
-              return _buildOrderCard(order);
-            },
-          );
-        },
+          },
+        ),
       ),
     );
   }

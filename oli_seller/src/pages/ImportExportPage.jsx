@@ -69,7 +69,7 @@ export default function ImportExportPage() {
 
     const handleExport = () => {
         const token = localStorage.getItem('token');
-        const baseUrl = import.meta.env.VITE_API_URL || 'https://oli-core.onrender.com';
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
         // Open export URL in new window (will download automatically)
         window.open(`${baseUrl}/api/import-export/export`, '_blank');
@@ -147,8 +147,8 @@ export default function ImportExportPage() {
                             />
                             <button
                                 className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors ${importing
-                                    ? 'bg-gray-100 text-gray-400 cursor-wait'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                        ? 'bg-gray-100 text-gray-400 cursor-wait'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
                                     }`}
                                 disabled={importing}
                             >
@@ -170,8 +170,8 @@ export default function ImportExportPage() {
                     {/* Import Result */}
                     {importResult && (
                         <div className={`mt-4 p-4 rounded-lg ${importResult.success
-                            ? 'bg-green-50 border border-green-200'
-                            : 'bg-red-50 border border-red-200'
+                                ? 'bg-green-50 border border-green-200'
+                                : 'bg-red-50 border border-red-200'
                             }`}>
                             {importResult.success ? (
                                 <>

@@ -1,8 +1,5 @@
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../models/order_model.dart';
 
 /// Modèle d'un item dans le panier
@@ -67,68 +64,11 @@ class CartItem {
     imageUrl: imageUrl,
     sellerName: sellerName,
   );
-
-  /// Sérialisation pour persistance locale
-  Map<String, dynamic> toJson() => {
-    'productId': productId,
-    'productName': productName,
-    'price': price,
-    'quantity': quantity,
-    'imageUrl': imageUrl,
-    'sellerName': sellerName,
-    'sellerId': sellerId,
-    'deliveryPrice': deliveryPrice,
-    'deliveryMethod': deliveryMethod,
-    'isSelected': isSelected,
-  };
-
-  factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
-    productId: json['productId'] ?? '',
-    productName: json['productName'] ?? '',
-    price: (json['price'] ?? 0).toDouble(),
-    quantity: json['quantity'] ?? 1,
-    imageUrl: json['imageUrl'],
-    sellerName: json['sellerName'],
-    sellerId: json['sellerId'] ?? '',
-    deliveryPrice: (json['deliveryPrice'] ?? 0).toDouble(),
-    deliveryMethod: json['deliveryMethod'] ?? 'Standard',
-    isSelected: json['isSelected'] ?? true,
-  );
 }
 
-/// Notifier pour gérer l'état du panier avec persistance locale
+/// Notifier pour gérer l'état du panier
 class CartNotifier extends StateNotifier<List<CartItem>> {
-  static const _storageKey = 'oli_cart_items';
-  
-  CartNotifier() : super([]) {
-    _loadFromStorage();
-  }
-
-  /// Charger le panier sauvegardé
-  Future<void> _loadFromStorage() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_storageKey);
-      if (jsonString != null) {
-        final List<dynamic> jsonList = jsonDecode(jsonString);
-        state = jsonList.map((e) => CartItem.fromJson(e)).toList();
-        debugPrint('🛒 Panier restauré: ${state.length} items');
-      }
-    } catch (e) {
-      debugPrint('⚠️ Erreur restauration panier: $e');
-    }
-  }
-
-  /// Sauvegarder le panier
-  Future<void> _saveToStorage() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonString = jsonEncode(state.map((e) => e.toJson()).toList());
-      await prefs.setString(_storageKey, jsonString);
-    } catch (e) {
-      debugPrint('⚠️ Erreur sauvegarde panier: $e');
-    }
-  }
+  CartNotifier() : super([]);
 
   /// Ajouter un produit au panier
   void addItem(CartItem item) {
@@ -149,13 +89,11 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     } else {
       state = [...state, item];
     }
-    _saveToStorage();
   }
 
   /// Retirer un produit du panier
   void removeItem(String productId) {
     state = state.where((item) => item.productId != productId).toList();
-    _saveToStorage();
   }
 
   /// Modifier la quantité
@@ -172,7 +110,6 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         else
           item
     ];
-    _saveToStorage();
   }
 
   /// Sélectionner/désélectionner un produit
@@ -184,7 +121,6 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         else
           item
     ];
-    _saveToStorage();
   }
 
   /// Sélectionner/désélectionner tous les produits d'une boutique
@@ -199,7 +135,6 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         else
           item
     ];
-    _saveToStorage();
   }
 
   /// Tout sélectionner/désélectionner
@@ -210,13 +145,11 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       for (final item in state)
         item.copyWith(isSelected: !allSelected)
     ];
-    _saveToStorage();
   }
 
   /// Vider le panier
   void clearCart() {
     state = [];
-    _saveToStorage();
   }
 
   /// Grouper les items par vendeur

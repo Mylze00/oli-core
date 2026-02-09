@@ -1,36 +1,41 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
 import '../../../models/order_model.dart';
-import '../../../core/router/network/dio_provider.dart';
+import '../../../core/storage/secure_storage_service.dart';
+
+// Base URL handled by ApiConfig
+
 
 /// Provider pour récupérer les commandes de l'utilisateur
 final ordersProvider = FutureProvider<List<Order>>((ref) async {
-  final dio = ref.read(dioProvider);
+  final storage = SecureStorageService();
+  final token = await storage.getToken();
   
-  try {
-    final response = await dio.get(ApiConfig.orders);
-    
-    if (response.statusCode == 200) {
-      final List<dynamic> data = response.data is List ? response.data : [];
-      return data.map((e) => Order.fromJson(e)).toList();
-    }
-    
-    throw Exception('Erreur ${response.statusCode}');
-  } on DioException catch (e) {
-    if (e.response?.statusCode == 401) {
-      throw Exception('Non authentifié');
-    }
-    throw Exception('Erreur réseau: ${e.message}');
+  if (token == null) {
+    throw Exception('Non authentifié');
   }
+  
+  final response = await http.get(
+    Uri.parse('${ApiConfig.baseUrl}/orders'),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    },
+  );
+  
+  if (response.statusCode == 200) {
+    final List<dynamic> data = jsonDecode(response.body);
+    return data.map((e) => Order.fromJson(e)).toList();
+  }
+  
+  throw Exception('Erreur ${response.statusCode}');
 });
 
 /// Service pour créer une commande
 class OrderService {
-  final Dio _dio;
-  
-  OrderService(this._dio);
+  final SecureStorageService _storage = SecureStorageService();
   
   Future<Order?> createOrder({
     required List<OrderItem> items,
@@ -38,53 +43,62 @@ class OrderService {
     String paymentMethod = 'wallet',
     double deliveryFee = 0,
   }) async {
-    try {
-      final response = await _dio.post(
-        ApiConfig.orders,
-        data: {
-          'items': items.map((e) => e.toJson()).toList(),
-          'deliveryAddress': deliveryAddress,
-          'paymentMethod': paymentMethod,
-          'deliveryFee': deliveryFee,
-        },
-      );
-      
-      if (response.statusCode == 201) {
-        return Order.fromJson(response.data['order']);
-      }
-      
-      return null;
-    } catch (e) {
-      debugPrint('❌ Erreur création commande: $e');
-      return null;
+    final token = await _storage.getToken();
+    if (token == null) return null;
+    
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/orders'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'items': items.map((e) => e.toJson()).toList(),
+        'deliveryAddress': deliveryAddress,
+        'paymentMethod': paymentMethod,
+        'deliveryFee': deliveryFee,
+      }),
+    );
+    
+    if (response.statusCode == 201) {
+      final data = jsonDecode(response.body);
+      return Order.fromJson(data['order']);
     }
+    
+    return null;
   }
   
   Future<bool> cancelOrder(int orderId) async {
-    try {
-      final response = await _dio.post(ApiConfig.orderCancel(orderId));
-      return response.statusCode == 200;
-    } catch (e) {
-      debugPrint('❌ Erreur annulation commande: $e');
-      return false;
-    }
+    final token = await _storage.getToken();
+    if (token == null) return false;
+    
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/orders/$orderId/cancel'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    
+    return response.statusCode == 200;
   }
   
   Future<bool> payOrder(int orderId, String paymentMethod) async {
-    try {
-      final response = await _dio.post(
-        ApiConfig.orderPay(orderId),
-        data: {'paymentMethod': paymentMethod},
-      );
-      return response.statusCode == 200;
-    } catch (e) {
-      debugPrint('❌ Erreur paiement commande: $e');
-      return false;
-    }
+    final token = await _storage.getToken();
+    if (token == null) return false;
+    
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/orders/$orderId/pay'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({'paymentMethod': paymentMethod}),
+    );
+    
+    return response.statusCode == 200;
   }
 }
 
 /// Provider du service de commandes
-final orderServiceProvider = Provider<OrderService>((ref) {
-  return OrderService(ref.read(dioProvider));
-});
+final orderServiceProvider = Provider<OrderService>((ref) => OrderService());

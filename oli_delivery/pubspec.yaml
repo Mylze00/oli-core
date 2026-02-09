@@ -49,13 +49,6 @@ dependencies:
   # Real-time communication
   socket_io_client: ^2.0.3+1
 
-  # QR Scanner for delivery verification
-  mobile_scanner: ^5.1.1
-
-  # Firebase Push Notifications
-  firebase_core: ^2.24.2
-  firebase_messaging: ^14.7.10
-
 dev_dependencies:
   flutter_test:
     sdk: flutter

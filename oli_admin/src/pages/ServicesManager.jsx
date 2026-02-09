@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Trash2, Plus, Edit2, Upload } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://oli-core.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 function ServicesManager() {
     const [services, setServices] = useState([]);
@@ -220,7 +220,7 @@ function ServicesManager() {
                         <div className="h-32 bg-gray-900 flex items-center justify-center relative p-4" style={{ backgroundColor: service.color_hex + '20' }}>
                             <img src={service.logo_url} alt={service.name} className="h-16 object-contain" />
                             <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-bold ${service.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                                service.status === 'coming_soon' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
+                                    service.status === 'coming_soon' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
                                 }`}>
                                 {service.status === 'active' ? 'ACTIF' : service.status === 'coming_soon' ? 'BIENTÔT' : 'OFF'}
                             </div>

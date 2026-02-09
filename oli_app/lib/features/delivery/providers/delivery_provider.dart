@@ -26,27 +26,25 @@ class DeliveryState {
       availableOrders: availableOrders ?? this.availableOrders,
       myTasks: myTasks ?? this.myTasks,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: error,
     );
   }
 }
 
-// Notifier — utilise le deliveryServiceProvider injecté
+// Notifier
 class DeliveryNotifier extends StateNotifier<DeliveryState> {
-  final DeliveryService _service;
+  final DeliveryService _service = DeliveryService();
 
-  DeliveryNotifier(this._service) : super(DeliveryState());
+  DeliveryNotifier() : super(DeliveryState());
 
   Future<void> loadData() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final results = await Future.wait([
-        _service.getAvailableDeliveries(),
-        _service.getMyTasks(),
-      ]);
+      final available = await _service.getAvailableDeliveries();
+      final myTasks = await _service.getMyTasks();
       state = state.copyWith(
-        availableOrders: results[0],
-        myTasks: results[1],
+        availableOrders: available,
+        myTasks: myTasks,
         isLoading: false,
       );
     } catch (e) {
@@ -57,7 +55,7 @@ class DeliveryNotifier extends StateNotifier<DeliveryState> {
   Future<void> acceptOrder(int id) async {
     try {
       await _service.acceptDelivery(id);
-      await loadData();
+      await loadData(); // Reload to refresh lists
     } catch (e) {
       state = state.copyWith(error: "Erreur lors de l'acceptation : $e");
     }
@@ -75,6 +73,5 @@ class DeliveryNotifier extends StateNotifier<DeliveryState> {
 
 // Provider
 final deliveryProvider = StateNotifierProvider<DeliveryNotifier, DeliveryState>((ref) {
-  final service = ref.read(deliveryServiceProvider);
-  return DeliveryNotifier(service);
+  return DeliveryNotifier();
 });

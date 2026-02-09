@@ -1,15 +1,13 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
 import '../../../core/storage/secure_storage_service.dart';
-import '../../../core/router/network/dio_provider.dart';
 import '../models/shop_model.dart';
 
 final shopControllerProvider = StateNotifierProvider<ShopController, AsyncValue<List<Shop>>>((ref) {
-  return ShopController(ref);
+  return ShopController();
 });
 
 final myShopsProvider = FutureProvider<List<Shop>>((ref) async {
@@ -18,18 +16,20 @@ final myShopsProvider = FutureProvider<List<Shop>>((ref) async {
 });
 
 class ShopController extends StateNotifier<AsyncValue<List<Shop>>> {
-  final Ref _ref;
+  final _storage = SecureStorageService();
 
-  ShopController(this._ref) : super(const AsyncValue.loading());
-
-  Dio get _dio => _ref.read(dioProvider);
+  ShopController() : super(const AsyncValue.loading());
 
   Future<List<Shop>> fetchMyShops() async {
     try {
-      final response = await _dio.get('${ApiConfig.shops}/my-shops');
+      final token = await _storage.getToken();
+      final response = await http.get(
+        Uri.parse('${ApiConfig.shops}/my-shops'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data is List ? response.data : [];
+        final List<dynamic> data = jsonDecode(response.body);
         final shops = data.map((json) => Shop.fromJson(json)).toList();
         state = AsyncValue.data(shops);
         return shops;
@@ -42,8 +42,6 @@ class ShopController extends StateNotifier<AsyncValue<List<Shop>>> {
     }
   }
 
-  /// NOTE: createShop utilise encore http.MultipartRequest car Dio FormData
-  /// nécessite une migration plus complexe pour les fichiers.
   Future<bool> createShop({
     required String name,
     required String description,
@@ -53,8 +51,7 @@ class ShopController extends StateNotifier<AsyncValue<List<Shop>>> {
     XFile? banner,
   }) async {
     try {
-      final storage = _ref.read(secureStorageProvider);
-      final token = await storage.getToken();
+      final token = await _storage.getToken();
       var request = http.MultipartRequest('POST', Uri.parse(ApiConfig.shops));
       
       request.headers['Authorization'] = 'Bearer $token';
@@ -84,12 +81,12 @@ class ShopController extends StateNotifier<AsyncValue<List<Shop>>> {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 201) {
+        // Refresh list
         await fetchMyShops();
         return true;
       }
       return false;
     } catch (e) {
-      debugPrint('❌ Erreur création shop: $e');
       return false;
     }
   }

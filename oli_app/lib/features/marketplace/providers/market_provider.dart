@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
@@ -19,92 +18,35 @@ class MarketState {
 }
 
 class MarketProductsNotifier extends StateNotifier<AsyncValue<List<Product>>> {
-  int _offset = 0;
-  bool _hasMore = true;
-  static const int _pageSize = 200;
-
   MarketProductsNotifier() : super(const AsyncValue.loading()) {
     fetchProducts();
   }
 
-  bool get hasMore => _hasMore;
-
-  /// Charge TOUS les produits (toutes les pages) pour que chaque utilisateur soit visible
   Future<void> fetchProducts({String? search, String? category, String? sellerId}) async {
-    _offset = 0;
-    _hasMore = true;
     state = const AsyncValue.loading();
-    
-    // Charger la première page
-    await _loadProducts(search: search, category: category, sellerId: sellerId, append: false);
-    
-    // Charger automatiquement les pages suivantes
-    while (_hasMore) {
-      await _loadProducts(search: search, category: category, sellerId: sellerId, append: true);
-    }
-  }
-
-  Future<void> loadMore({String? search, String? category, String? sellerId}) async {
-    if (!_hasMore) return;
-    await _loadProducts(search: search, category: category, sellerId: sellerId, append: true);
-  }
-
-  Future<void> _loadProducts({String? search, String? category, String? sellerId, bool append = false}) async {
     try {
       final queryParams = <String, String>{};
       if (search != null && search.isNotEmpty) queryParams['search'] = search;
       if (category != null && category.isNotEmpty) queryParams['category'] = category;
       if (sellerId != null && sellerId.isNotEmpty) queryParams['seller_id'] = sellerId;
-      queryParams['limit'] = '$_pageSize';
-      queryParams['offset'] = '$_offset';
 
       final uri = Uri.parse('${ApiConfig.baseUrl}/products').replace(queryParameters: queryParams);
       
       final response = await http.get(uri);
       
       if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        
-        List<dynamic> data;
-        if (decoded is List) {
-          data = decoded;
-        } else if (decoded is Map<String, dynamic> && decoded['products'] != null) {
-          data = decoded['products'] as List<dynamic>;
-          _hasMore = decoded['hasMore'] ?? false;
-        } else {
-          data = [];
-        }
-        
-        final newProducts = <Product>[];
-        for (final json in data) {
-          try {
-            newProducts.add(Product.fromJson(json));
-          } catch (e) {
-            print('⚠️ Skipping malformed product: $e');
-          }
-        }
-
-        _offset += newProducts.length;
-        
-        if (append && state.hasValue) {
-          state = AsyncValue.data([...state.value!, ...newProducts]);
-        } else {
-          state = AsyncValue.data(newProducts);
-        }
-
-        // Si on a reçu moins que demandé, il n'y a plus de produits
-        if (newProducts.length < _pageSize) {
-          _hasMore = false;
-        }
+        final List<dynamic> data = jsonDecode(response.body);
+        final products = data.map((json) {
+           // Handle dynamic to Product conversion safely
+           // Assuming Product.fromJson exists
+           return Product.fromJson(json);
+        }).toList();
+        state = AsyncValue.data(products);
       } else {
-        if (!append) {
-          state = AsyncValue.error('Erreur serveur ${response.statusCode}', StackTrace.current);
-        }
+        state = AsyncValue.error('Erreur serveur ${response.statusCode}', StackTrace.current);
       }
     } catch (e, st) {
-      if (!append) {
-        state = AsyncValue.error(e, st);
-      }
+      state = AsyncValue.error(e, st);
     }
   }
 }
@@ -138,7 +80,7 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
     _error = null;
 
     try {
-      final featuredUrl = '${ApiConfig.productsFeatured}?limit=100';
+      final featuredUrl = ApiConfig.products.replaceAll('/products', '/products/featured?limit=100');
       final uri = Uri.parse(featuredUrl);
       final response = await http.get(uri);
       
@@ -188,7 +130,7 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
     _error = null;
 
     try {
-      final topSellersUrl = ApiConfig.productsTopSellers;
+      final topSellersUrl = ApiConfig.products.replaceAll('/products', '/products/top-sellers');
       final uri = Uri.parse(topSellersUrl);
       final response = await http.get(uri);
       
@@ -238,7 +180,7 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
     _error = null;
 
     try {
-      final verifiedUrl = ApiConfig.productsVerifiedShops;
+      final verifiedUrl = ApiConfig.products.replaceAll('/products', '/products/verified-shops');
       final uri = Uri.parse(verifiedUrl);
       final response = await http.get(uri);
       
@@ -281,14 +223,14 @@ class AdsNotifier extends StateNotifier<List<Map<String, dynamic>>> {
 
   Future<void> fetchAds() async {
     try {
-      final uri = Uri.parse(ApiConfig.ads);
+      final uri = Uri.parse('${ApiConfig.baseUrl}/ads');
       final response = await http.get(uri);
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         state = data.cast<Map<String, dynamic>>();
       }
     } catch (e) {
-      debugPrint("Erreur fetch ads: $e");
+      print("Erreur fetch ads: $e");
     }
   }
 }
@@ -304,14 +246,14 @@ class GoodDealsNotifier extends StateNotifier<List<Product>> {
 
   Future<void> fetchGoodDeals() async {
     try {
-      final uri = Uri.parse(ApiConfig.productsGoodDeals);
+      final uri = Uri.parse('${ApiConfig.products}/good-deals');
       final response = await http.get(uri);
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         state = data.map((item) => Product.fromJson(item)).toList();
       }
     } catch (e) {
-      debugPrint("Erreur fetch good deals: $e");
+      print("Erreur fetch good deals: $e");
     }
   }
 }

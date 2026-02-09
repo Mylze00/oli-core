@@ -1,27 +1,25 @@
 import 'dart:convert';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../config/api_config.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/storage/secure_storage_service.dart';
-import '../../../core/router/network/dio_provider.dart';
 import '../../../core/services/fcm_service.dart';
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>((ref) {
-  return AuthController(ref);
+  return AuthController();
 });
 
 class AuthState {
   final bool isLoading;
-  final bool isCheckingSession;
+  final bool isCheckingSession; // Nouveau champ
   final String? error;
   final bool isAuthenticated;
   final Map<String, dynamic>? userData;
 
   const AuthState({
     this.isLoading = false,
-    this.isCheckingSession = true,
+    this.isCheckingSession = true, // Par défaut on vérifie la session
     this.error, 
     this.isAuthenticated = false,
     this.userData,
@@ -37,7 +35,7 @@ class AuthState {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
       isCheckingSession: isCheckingSession ?? this.isCheckingSession,
-      error: error ?? this.error,
+      error: error,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
       userData: userData ?? this.userData,
     );
@@ -45,14 +43,12 @@ class AuthState {
 }
 
 class AuthController extends StateNotifier<AuthState> {
-  final Ref _ref;
   final _storage = SecureStorageService();
+  final String baseUrl = ApiConfig.auth;
 
-  AuthController(this._ref) : super(const AuthState()) {
+  AuthController() : super(const AuthState()) {
     checkSession();
   }
-
-  Dio get _dio => _ref.read(dioProvider);
 
   Future<void> checkSession() async {
     try {
@@ -63,6 +59,7 @@ class AuthController extends StateNotifier<AuthState> {
       final avatarUrl = localData['avatar_url'];
       
       if (token != null && token.isNotEmpty) {
+        // 1. Restaurer immédiatement l'état local (Optimistic UI)
         state = state.copyWith(
           isAuthenticated: true,
           isCheckingSession: false, 
@@ -72,8 +69,10 @@ class AuthController extends StateNotifier<AuthState> {
             'avatar_url': avatarUrl,
           }
         );
+        // 2. Rafraîchir depuis le serveur
         fetchUserProfile(); 
       } else {
+        // Pas de token, fin de vérification
         state = state.copyWith(isCheckingSession: false);
       }
     } catch (e) {
@@ -82,40 +81,56 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  /// 🔹 RÉCUPÉRER LE PROFIL (utilise Dio avec token automatique)
+  /// 🔹 RÉCUPÉRER LE PROFIL (Depuis PostgreSQL)
   Future<void> fetchUserProfile() async {
+    final token = await _storage.getToken();
+    if (token == null) return;
+
     try {
-      final response = await _dio.get(ApiConfig.authMe);
+      final response = await http.get(
+        Uri.parse('$baseUrl/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
 
-      final data = response.data;
-      final Map<String, dynamic>? userData = (data is Map && data.containsKey('user')) 
-          ? data['user'] 
-          : (data is Map ? data as Map<String, dynamic> : null);
-      
-      final currentData = state.userData ?? {};
-      
-      debugPrint("📥 Fetch Profile: Server Avatar = ${userData?['avatar_url']}");
-      debugPrint("💾 Local State Avatar = ${currentData['avatar_url']}");
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final Map<String, dynamic>? userData = (data is Map && data.containsKey('user')) 
+            ? data['user'] 
+            : (data is Map ? data as Map<String, dynamic> : null);
+        
+        // On fusionne les nouvelles données
+        final currentData = state.userData ?? {};
+        
+        // Log pour debug
+        debugPrint("📥 Fetch Profile: Server Avatar = ${userData?['avatar_url']}");
+        debugPrint("💾 Local State Avatar = ${currentData['avatar_url']}");
 
-      final serverAvatar = userData?['avatar_url'];
-      final mergedAvatar = serverAvatar ?? currentData['avatar_url'];
-      
-      final Map<String, dynamic> newData = {
-        ...currentData,
-        ...?userData,
-        'avatar_url': mergedAvatar,
-      };
-      
-      state = state.copyWith(userData: newData); 
-      
-      if (mergedAvatar != null) {
-        await _storage.saveProfile(
-          name: newData['name'],
-          avatarUrl: mergedAvatar
-        );
-      }
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+        // Défense: Si le serveur renvoie null pour l'avatar, on garde ce qu'on a en local (Optimistic/Storage)
+        // Sauf si on explicitement veut permettre la suppression (TODO: gérer ça autrement si besoin)
+        final serverAvatar = userData?['avatar_url'];
+        final mergedAvatar = serverAvatar ?? currentData['avatar_url'];
+        
+        // Création du map fusionné avec protection
+        final Map<String, dynamic> newData = {
+          ...currentData,
+          ...?userData,
+          'avatar_url': mergedAvatar, // Force le garde
+        };
+        
+        state = state.copyWith(userData: newData); 
+        
+        // 🔥 Sauvegarder uniiquement si on a une valeur valide
+        if (mergedAvatar != null) {
+          await _storage.saveProfile(
+            name: newData['name'],
+            avatarUrl: mergedAvatar
+          );
+        }
+
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
         debugPrint("🔴 Session expirée ou invalide. Déconnexion automatique.");
         logout();
       }
@@ -124,12 +139,11 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  /// sendOtp et verifyOtp utilisent http car appelés AVANT login (pas de token)
   Future<bool> sendOtp(String phone) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final response = await http.post(
-        Uri.parse(ApiConfig.authSendOtp),
+        Uri.parse('$baseUrl/send-otp'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone': phone}),
       );
@@ -145,7 +159,7 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final response = await http.post(
-        Uri.parse(ApiConfig.authVerifyOtp),
+        Uri.parse('$baseUrl/verify-otp'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone': phone, 'otpCode': otpCode}),
       );
@@ -175,7 +189,11 @@ class AuthController extends StateNotifier<AuthState> {
           },
         );
         
+        // Initialiser FCM et enregistrer le token
         FcmService().init();
+        
+        // Pas besoin de fetchUserProfile immédiatement si on a déjà les données login
+        // mais on peut le faire pour être sûr d'avoir tout (wallet, etc.)
         fetchUserProfile(); 
         return true;
       }
@@ -190,6 +208,7 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    // Supprimer le token FCM avant la déconnexion
     await FcmService().removeToken();
     await _storage.deleteAll();
     state = const AuthState(isAuthenticated: false, userData: null);
@@ -203,8 +222,11 @@ class AuthController extends StateNotifier<AuthState> {
       userData: {...state.userData ?? {}, ...newPartialData},
     );
     
+    // Persister les changements locaux importants
     if (newPartialData.containsKey('name') || newPartialData.containsKey('avatar_url')) {
       final newAvatar = newPartialData['avatar_url'];
+      // 🛡️ SÉCURITÉ : Ne jamais sauvegarder une image Base64 (trop lourd)
+      // On ne sauvegarde que les "vraies" URL HTTP (Cloudinary)
       if (newAvatar != null && newAvatar.toString().startsWith('data:')) {
          return; 
       }

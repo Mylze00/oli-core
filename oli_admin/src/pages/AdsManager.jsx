@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Trash2, Plus, ToggleLeft, ToggleRight, ExternalLink, Upload } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://oli-core.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 function AdsManager() {
     const [ads, setAds] = useState([]);

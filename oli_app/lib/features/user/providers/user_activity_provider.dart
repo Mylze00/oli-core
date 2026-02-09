@@ -1,8 +1,8 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
-import '../../../core/router/network/dio_provider.dart';
+import '../../../core/storage/secure_storage_service.dart';
 import '../models/visited_product_model.dart';
 
 // --- STATE ---
@@ -25,36 +25,37 @@ class UserActivityState {
     return UserActivityState(
       visitedProducts: visitedProducts ?? this.visitedProducts,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: error,
     );
   }
 }
 
 // --- PROVIDER ---
 final userActivityProvider = StateNotifierProvider<UserActivityNotifier, UserActivityState>((ref) {
-  return UserActivityNotifier(ref);
+  return UserActivityNotifier();
 });
 
 // --- NOTIFIER ---
 class UserActivityNotifier extends StateNotifier<UserActivityState> {
-  final Ref _ref;
+  final _storage = SecureStorageService();
 
-  UserActivityNotifier(this._ref) : super(UserActivityState());
-
-  Dio get _dio => _ref.read(dioProvider);
+  UserActivityNotifier() : super(UserActivityState());
 
   /// Charge les produits visités depuis l'API
   Future<void> fetchVisitedProducts({int limit = 20}) async {
     state = state.copyWith(isLoading: true, error: null);
     
     try {
-      final response = await _dio.get(
-        '${ApiConfig.baseUrl}/user/visited-products',
-        queryParameters: {'limit': limit},
+      final token = await _storage.getToken();
+      if (token == null) throw Exception("Non authentifié");
+
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/user/visited-products?limit=$limit'),
+        headers: {'Authorization': 'Bearer $token'},
       );
 
       if (response.statusCode == 200) {
-        final List data = response.data is List ? response.data : [];
+        final List data = jsonDecode(response.body);
         final products = data.map((json) => VisitedProduct.fromJson(json)).toList();
         
         state = state.copyWith(
@@ -76,26 +77,39 @@ class UserActivityNotifier extends StateNotifier<UserActivityState> {
   Future<void> addToVisited(dynamic product) async {
       if (product == null) return;
       try {
+        // Tenter de récupérer l'ID, qu'il soit String ou int
         final idStr = product is int ? product.toString() : product.id.toString();
         final id = int.tryParse(idStr);
         
         if (id != null) {
           await trackProductView(id);
         } else {
-          debugPrint("⚠️ Impossible de tracker le produit: ID invalide ($idStr)");
+          print("⚠️ Impossible de tracker le produit: ID invalide ($idStr)");
         }
       } catch (e) {
-        debugPrint("⚠️ Erreur addToVisited: $e");
+        print("⚠️ Erreur addToVisited: $e");
       }
   }
 
   /// Enregistre une vue de produit
   Future<void> trackProductView(int productId) async {
     try {
-      await _dio.post('${ApiConfig.baseUrl}/user/track-view/$productId');
+      final token = await _storage.getToken();
+      if (token == null) return; // Silently fail if not authenticated
+
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/user/track-view/$productId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      
+      // Optionally refresh the list
+      // await fetchVisitedProducts();
     } catch (e) {
       // Silently fail - tracking is not critical
-      debugPrint('Erreur tracking view: $e');
+      print('Erreur tracking view: $e');
     }
   }
 }
