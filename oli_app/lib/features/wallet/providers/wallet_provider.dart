@@ -1,8 +1,8 @@
-import 'dart:convert';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
-import '../../../core/storage/secure_storage_service.dart';
+import '../../../core/router/network/dio_provider.dart';
 import '../models/transaction_model.dart';
 
 // --- STATE ---
@@ -29,49 +29,44 @@ class WalletState {
       balance: balance ?? this.balance,
       transactions: transactions ?? this.transactions,
       isLoading: isLoading ?? this.isLoading,
-      error: error,
+      error: error ?? this.error,
     );
   }
 }
 
 // --- PROVIDER ---
 final walletProvider = StateNotifierProvider<WalletNotifier, WalletState>((ref) {
-  return WalletNotifier();
+  return WalletNotifier(ref);
 });
 
 // --- NOTIFIER ---
 class WalletNotifier extends StateNotifier<WalletState> {
-  final _storage = SecureStorageService();
+  final Ref _ref;
 
-  WalletNotifier() : super(WalletState());
+  WalletNotifier(this._ref) : super(WalletState());
+
+  Dio get _dio => _ref.read(dioProvider);
 
   Future<void> loadWalletData() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final token = await _storage.getToken();
-      if (token == null) throw Exception("Non authentifié");
+      // Appels parallèles au lieu de séquentiels (#12)
+      final results = await Future.wait([
+        _dio.get(ApiConfig.walletBalance),
+        _dio.get(ApiConfig.walletTransactions),
+      ]);
 
-      // 1. Fetch Balance
-      final balRes = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/wallet/balance'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      
+      final balRes = results[0];
+      final histRes = results[1];
+
       double balance = 0.0;
       if (balRes.statusCode == 200) {
-        final data = jsonDecode(balRes.body);
-        balance = double.parse(data['balance'].toString());
+        balance = double.parse(balRes.data['balance'].toString());
       }
 
-      // 2. Fetch History
-      final histRes = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/wallet/transactions'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      
       List<WalletTransaction> transactions = [];
       if (histRes.statusCode == 200) {
-        final List list = jsonDecode(histRes.body);
+        final List list = histRes.data is List ? histRes.data : [];
         transactions = list.map((e) => WalletTransaction.fromJson(e)).toList();
       }
 
@@ -81,12 +76,13 @@ class WalletNotifier extends StateNotifier<WalletState> {
         transactions: transactions,
       );
     } catch (e) {
+      debugPrint('❌ Erreur loadWalletData: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
   Future<bool> deposit({required double amount, required String provider, required String phone}) async {
-    return _performTransaction('/wallet/deposit', {
+    return _performTransaction(ApiConfig.walletDeposit, {
       'amount': amount,
       'provider': provider,
       'phoneNumber': phone
@@ -94,7 +90,7 @@ class WalletNotifier extends StateNotifier<WalletState> {
   }
 
   Future<bool> withdraw({required double amount, required String provider, required String phone}) async {
-    return _performTransaction('/wallet/withdraw', {
+    return _performTransaction(ApiConfig.walletWithdraw, {
       'amount': amount,
       'provider': provider,
       'phoneNumber': phone
@@ -108,7 +104,7 @@ class WalletNotifier extends StateNotifier<WalletState> {
     required String cardholderName,
     required double amount,
   }) async {
-    return _performCardTransaction({
+    return _performTransaction(ApiConfig.walletDepositCard, {
       'amount': amount,
       'cardNumber': cardNumber,
       'expiryDate': expiryDate,
@@ -117,56 +113,23 @@ class WalletNotifier extends StateNotifier<WalletState> {
     });
   }
 
-  Future<bool> _performCardTransaction(Map<String, dynamic> body) async {
+  Future<bool> _performTransaction(String url, Map<String, dynamic> body) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final token = await _storage.getToken();
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/wallet/deposit-card'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token'
-        },
-        body: jsonEncode(body),
-      );
+      final response = await _dio.post(url, data: body);
 
       if (response.statusCode == 200) {
-        // Reload data to reflect new balance
         await loadWalletData();
         return true;
       } else {
-        final err = jsonDecode(response.body);
+        final err = response.data;
         state = state.copyWith(isLoading: false, error: err['error'] ?? 'Erreur inconnue');
         return false;
       }
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+    } on DioException catch (e) {
+      final errMsg = e.response?.data?['error'] ?? e.message ?? 'Erreur réseau';
+      state = state.copyWith(isLoading: false, error: errMsg.toString());
       return false;
-    }
-  }
-
-  Future<bool> _performTransaction(String endpoint, Map<String, dynamic> body) async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final token = await _storage.getToken();
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}$endpoint'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token'
-        },
-        body: jsonEncode(body),
-      );
-
-      if (response.statusCode == 200) {
-        // Reload data to reflect new balance
-        await loadWalletData(); 
-        return true;
-      } else {
-        final err = jsonDecode(response.body);
-        state = state.copyWith(isLoading: false, error: err['error'] ?? 'Erreur inconnue');
-        return false;
-      }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
       return false;

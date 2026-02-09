@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../core/config/api_config.dart';
-import 'auth_service.dart';
+import '../core/providers/storage_provider.dart';
 
 final socketServiceProvider = Provider<SocketService>((ref) {
   return SocketService(ref);
@@ -31,8 +31,8 @@ class SocketService {
     }
 
     // Récupérer le token
-    final authService = _ref.read(authServiceProvider);
-    final token = await authService.getToken();
+    final storage = _ref.read(secureStorageProvider);
+    final token = await storage.read(key: 'auth_token');
 
     if (token == null) {
       debugPrint("❌ Pas de token disponible pour Socket.IO");

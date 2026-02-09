@@ -29,7 +29,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (widget.directPurchaseItem != null) {
       return [widget.directPurchaseItem!];
     }
-    return ref.watch(cartProvider);
+    return ref.watch(cartProvider).where((item) => item.isSelected).toList();
   }
 
   /// Calcule le sous-total
@@ -207,6 +207,56 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         const SnackBar(content: Text('Veuillez entrer une adresse de livraison'), backgroundColor: Colors.red),
       );
       return;
+    }
+
+    // #20 — Dialog de confirmation pour wallet et mobile money
+    if (_paymentMethod != 'card') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A2E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Confirmer le paiement', style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Montant total : ${total.toStringAsFixed(2)} \$',
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Méthode : ${_paymentMethod == 'wallet' ? 'Portefeuille Oli' : 'Mobile Money'}',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Adresse : $_deliveryAddress',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Cette action est irréversible.',
+                style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler', style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E7DBA)),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Confirmer', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
     }
 
     setState(() => _isLoading = true);

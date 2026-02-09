@@ -108,6 +108,7 @@ class ProductRepository {
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE p.status != 'deleted'
+              AND (u.is_hidden IS NULL OR u.is_hidden = FALSE)
         `;
 
         const params = [];

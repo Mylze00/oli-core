@@ -51,21 +51,60 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final storage = _ref.read(secureStorageProvider);
       final token = await storage.read(key: 'auth_token');
-      final phone = await storage.read(key: 'user_phone');
 
-      if (token != null && token.isNotEmpty) {
+      if (token == null || token.isEmpty) {
+        state = state.copyWith(isCheckingSession: false);
+        return;
+      }
+
+      // Valider le token en appelant /auth/me
+      final dio = _ref.read(dioProvider);
+      final response = await dio.get(ApiConfig.meEndpoint);
+
+      if (response.statusCode == 200) {
+        final user = response.data['user'];
+
+        // Vérifier que l'utilisateur est bien un livreur
+        if (user == null || user['is_deliverer'] != true) {
+          await _clearCredentials();
+          state = state.copyWith(
+            isCheckingSession: false,
+            error: 'Accès réservé aux livreurs',
+          );
+          return;
+        }
+
+        await storage.write(key: 'user_phone', value: user['phone'] ?? '');
         state = state.copyWith(
           isAuthenticated: true,
           isCheckingSession: false,
-          userData: {'phone': phone ?? 'Livreur'},
+          userData: {
+            'phone': user['phone'] ?? 'Livreur',
+            'name': user['name'] ?? 'Livreur',
+            'is_deliverer': true,
+          },
         );
       } else {
+        await _clearCredentials();
         state = state.copyWith(isCheckingSession: false);
       }
+    } on DioException catch (e) {
+      // Token expiré ou invalide → nettoyer
+      if (e.response?.statusCode == 401) {
+        await _clearCredentials();
+      }
+      state = state.copyWith(isCheckingSession: false);
     } catch (e) {
       print('Erreur session: $e');
       state = state.copyWith(isCheckingSession: false);
     }
+  }
+
+  Future<void> _clearCredentials() async {
+    final storage = _ref.read(secureStorageProvider);
+    await storage.delete(key: 'auth_token');
+    await storage.delete(key: 'user_phone');
+    await storage.delete(key: 'user_data');
   }
 
   Future<bool> sendOtp(String phone) async {
