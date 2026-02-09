@@ -83,19 +83,6 @@ class _QrScannerPageState extends ConsumerState<QrScannerPage> {
       appBar: AppBar(
         title: Text('Scanner — Commande #${widget.orderId}'),
         actions: [
-          // Toggle flash
-          IconButton(
-            icon: ValueListenableBuilder<TorchState>(
-              valueListenable: _controller.torchState,
-              builder: (_, state, __) {
-                return Icon(
-                  state == TorchState.on ? Icons.flash_on : Icons.flash_off,
-                  color: state == TorchState.on ? Colors.amber : Colors.white,
-                );
-              },
-            ),
-            onPressed: () => _controller.toggleTorch(),
-          ),
           // Switch camera
           IconButton(
             icon: const Icon(Icons.cameraswitch),

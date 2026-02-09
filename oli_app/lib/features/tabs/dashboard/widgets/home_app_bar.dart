@@ -77,10 +77,7 @@ class HomeAppBar extends ConsumerWidget {
         child: DynamicSearchBar(
           controller: searchCtrl,
           onSubmitted: onSearch,
-          productNames: [
-            ...allProducts.map((p) => p.name),
-            ...verifiedShopsProducts.map((p) => p.name)
-          ].take(10).toList(),
+          allProducts: allProducts,
         ),
       ),
       actions: [
@@ -88,15 +85,16 @@ class HomeAppBar extends ConsumerWidget {
           padding: EdgeInsets.only(right: 8.0),
           child: CurrencySelectorWidget(),
         ),
-        IconButton(
-          icon: Icon(
-            ref.watch(themeProvider) ? Icons.light_mode : Icons.dark_mode,
-            color: Colors.white,
-          ),
-          onPressed: () {
-            ref.read(themeProvider.notifier).toggleTheme();
-          },
-        ),
+        // Theme toggle button - Hidden temporarily
+        // IconButton(
+        //   icon: Icon(
+        //     ref.watch(themeProvider) ? Icons.light_mode : Icons.dark_mode,
+        //     color: Colors.white,
+        //   ),
+        //   onPressed: () {
+        //     ref.read(themeProvider.notifier).toggleTheme();
+        //   },
+        // ),
         Consumer(
           builder: (context, ref, child) {
             final notificationState = ref.watch(notificationProvider);

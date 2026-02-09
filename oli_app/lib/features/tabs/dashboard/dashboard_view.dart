@@ -9,6 +9,7 @@ import '../../marketplace/presentation/pages/product_details_page.dart'; // For 
 import '../dashboard/providers/shops_provider.dart';
 import '../../marketplace/providers/market_provider.dart';
 import '../../marketplace/presentation/pages/market_view.dart';
+import '../../search/providers/search_filters_provider.dart'; // <- Added
 import 'widgets/ads_carousel.dart';
 import 'widgets/home_app_bar.dart';
 import 'widgets/quick_actions_row.dart';
@@ -19,8 +20,12 @@ import 'widgets/discovery_carousel.dart';
 import 'widgets/product_sections.dart';
 import '../../../../app/theme/theme_provider.dart';
 
+
 class MainDashboardView extends ConsumerStatefulWidget {
-  const MainDashboardView({super.key});
+  final VoidCallback? onSwitchToMarket;
+  final VoidCallback? onBecameVisible;
+  
+  const MainDashboardView({super.key, this.onSwitchToMarket, this.onBecameVisible});
 
   @override
   ConsumerState<MainDashboardView> createState() => _MainDashboardViewState();
@@ -47,7 +52,15 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   @override
   void initState() {
     super.initState();
-    // Logic for selection is now handled in build to ensure we have products to check against
+  }
+  
+  @override
+  void didUpdateWidget(MainDashboardView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Clear search when dashboard becomes visible (callback triggered)
+    if (widget.onBecameVisible != oldWidget.onBecameVisible) {
+      _searchCtrl.clear();
+    }
   }
 
   @override
@@ -59,6 +72,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
 
   void _onSearch(String value) {
     if (value.trim().isEmpty) return;
+    
+    // Set the search query in the market provider
+    // For now, still use Navigator.push for search since it needs the query parameter
+    // MarketView will need to read from a provider instead
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => MarketView(initialSearchQuery: value.trim())),
@@ -67,13 +84,23 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
 
   void _onCategorySelected(String label) {
     _hideCategoriesTimer?.cancel();
-    // Navigate to MarketView with selected category
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MarketView(initialCategoryLabel: label),
-      ),
-    );
+    
+    // Set the category filter in the provider
+    final categoryKey = _categories[label] ?? '';
+    ref.read(searchFiltersProvider.notifier).setCategory(categoryKey);
+    
+    // Switch to the Market tab instead of pushing a new page
+    if (widget.onSwitchToMarket != null) {
+      widget.onSwitchToMarket!();
+    } else {
+      // Fallback: push if callback not provided (shouldn't happen)
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MarketView(initialCategoryLabel: label),
+        ),
+      );
+    }
   }
 
   void _toggleCategories() {
@@ -110,7 +137,13 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     final subTextColor = isDark ? Colors.white.withOpacity(0.7) : Colors.black87;
 
     // 1. Data Providers
-    final allProducts = ref.watch(featuredProductsProvider);
+    final featuredProductsAsync = ref.watch(featuredProductsProvider);
+    final allProducts = featuredProductsAsync; // Pour l'affichage page d'accueil
+    
+    // IMPORTANT: Pour la recherche, utiliser TOUS les produits de la marketplace
+    final allProductsForSearchAsync = ref.watch(marketProductsProvider);
+    final allProductsForSearch = allProductsForSearchAsync.valueOrNull ?? [];
+    
     final topSellers = ref.watch(topSellersProvider);
     final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
     final verifiedShopsAsync = ref.watch(verifiedShopsProvider); 
@@ -193,7 +226,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           HomeAppBar(
             searchCtrl: _searchCtrl, 
             onSearch: _onSearch,
-            allProducts: allProducts,
+            allProducts: allProductsForSearch, // Utilise TOUS les produits pour la recherche
             verifiedShopsProducts: verifiedShopsProducts,
           ),
 

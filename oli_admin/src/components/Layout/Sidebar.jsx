@@ -13,7 +13,8 @@ import {
     BoltIcon, // ✨ Icone pour Services
     CheckBadgeIcon, // 🆕 Icone pour Certifications
     ChatBubbleLeftRightIcon, // 🆕 Icone pour Support
-    CircleStackIcon // 🗄️ Icone pour Base de données
+    CircleStackIcon, // 🗄️ Icone pour Base de données
+    GiftIcon // 📦 Icone pour Demandes Produit
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -21,7 +22,8 @@ const navigation = [
     { name: 'Utilisateurs', href: '/users', icon: UsersIcon },
     { name: 'Marchands', href: '/shops', icon: ShoppingBagIcon },
     { name: 'Produits', href: '/products', icon: CubeIcon },
-    { name: 'Demandes', href: '/requests', icon: ClipboardDocumentListIcon },
+    { name: 'Demandes Vendeur', href: '/requests', icon: ClipboardDocumentListIcon },
+    { name: 'Demandes Produit', href: '/product-requests', icon: GiftIcon }, // 📦
     { name: 'Livreurs', href: '/delivery', icon: TruckIcon },
     { name: 'Commandes', href: '/orders', icon: CubeIcon },
     { name: 'Finances', href: '/finances', icon: CreditCardIcon },

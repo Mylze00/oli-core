@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+// Firebase disabled for web build (incompatible versions)
+// import 'package:firebase_messaging/firebase_messaging.dart';
 import '../core/config/api_config.dart';
 import '../core/providers/dio_provider.dart';
 
 /// Service de push notifications via Firebase Cloud Messaging
+/// DISABLED FOR WEB BUILD - Using Socket.IO for real-time notifications instead
 class PushNotificationService {
   final Ref _ref;
   String? _currentToken;
@@ -14,6 +16,9 @@ class PushNotificationService {
 
   /// Initialiser les notifications push
   Future<void> init() async {
+    debugPrint('⚠️ [FCM] Firebase Messaging disabled for web build. Using Socket.IO instead.');
+    // Socket.IO handles real-time notifications
+    /* Firebase code commented for web compatibility
     final messaging = FirebaseMessaging.instance;
 
     // 1. Demander la permission
@@ -62,6 +67,7 @@ class PushNotificationService {
       debugPrint('📬 [FCM] App ouverte via notification');
       _handleMessageOpenedApp(initialMessage);
     }
+    */
   }
 
   /// Enregistrer le token FCM auprès du backend
@@ -99,27 +105,24 @@ class PushNotificationService {
   }
 
   /// Gérer un message reçu en foreground
-  void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('📩 [FCM] Message foreground: ${message.notification?.title}');
-
+  void _handleForegroundMessage(dynamic message) {
+    debugPrint('📩 [FCM] Message foreground (disabled)');
+    /* Firebase code commented
     final notification = message.notification;
     if (notification == null) return;
-
-    // Afficher une notification locale via SnackBar ou overlay
-    // (utilise le navigatorKey si disponible)
     debugPrint('   📌 ${notification.title}: ${notification.body}');
+    */
   }
 
   /// Gérer le tap sur une notification (app en background/terminated)
-  void _handleMessageOpenedApp(RemoteMessage message) {
-    debugPrint('📬 [FCM] Notification tappée: ${message.data}');
-
-    // Naviguer vers la commande si l'ID est dans les data
+  void _handleMessageOpenedApp(dynamic message) {
+    debugPrint('📬 [FCM] Notification tappée (disabled)');
+    /* Firebase code commented
     final orderId = message.data['order_id'] ?? message.data['orderId'];
     if (orderId != null) {
       debugPrint('   🔗 Navigation vers commande #$orderId');
-      // Navigation sera gérée par le GoRouter dans une version future
     }
+    */
   }
 
   String? get currentToken => _currentToken;

@@ -5,6 +5,7 @@ import '../widgets/search_result_card.dart';
 import '../providers/search_filters_provider.dart';
 import '../providers/search_history_provider.dart';
 import '../widgets/search_filters_sheet.dart';
+import '../widgets/product_request_widget.dart';
 
 /// Page dédiée pour afficher les résultats de recherche
 class SearchResultsPage extends ConsumerStatefulWidget {
@@ -283,31 +284,40 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
 
   /// Widget affiché quand aucun résultat
   Widget _buildEmptyState() {
+    // Show product request widget when no results found
+    if (_searchController.text.trim().isNotEmpty) {
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            const Icon(Icons.search_off, size: 80, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text(
+              'Aucun produit trouvé',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Product Request Widget
+            ProductRequestWidget(searchQuery: _searchController.text.trim()),
+          ],
+        ),
+      );
+    }
+
+    // Default empty state
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.search_off,
-            size: 80,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.search, size: 80, color: Colors.grey[300]),
           const SizedBox(height: 16),
           Text(
-            'Aucun produit trouvé',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Essayez d\'ajuster vos filtres ou votre recherche',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
+            'Aucun résultat',
+            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
           ),
         ],
       ),
