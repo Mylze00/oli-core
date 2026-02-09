@@ -178,6 +178,11 @@ class ProductRepository {
             }
         }
 
+        // Exclure les produits des utilisateurs masqués (sauf si on filtre par seller_id - dashboard vendeur)
+        if (!filters.seller_id) {
+            query += ` AND (u.is_hidden IS NULL OR u.is_hidden = FALSE)`;
+        }
+
         // Tri selon le type de filtre
         if (filters.filterType === 'popular') {
             query += ` ORDER BY COALESCE(p.view_count, 0) DESC, p.created_at DESC`;

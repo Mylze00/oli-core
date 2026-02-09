@@ -283,6 +283,36 @@ router.post('/:id/suspend', async (req, res) => {
 });
 
 /**
+ * POST /admin/users/:id/hide
+ * Masquer/afficher un utilisateur et ses produits du marketplace
+ */
+router.post('/:id/hide', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { hidden } = req.body;
+
+        const result = await pool.query(`
+            UPDATE users 
+            SET is_hidden = $1, updated_at = NOW()
+            WHERE id = $2
+            RETURNING id, name, is_hidden
+        `, [hidden, id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Utilisateur non trouvé' });
+        }
+
+        res.json({
+            message: hidden ? 'Utilisateur masqué avec succès' : 'Utilisateur rendu visible avec succès',
+            user: result.rows[0]
+        });
+    } catch (err) {
+        console.error('Erreur POST /admin/users/:id/hide:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
  * PATCH /admin/users/:id/verify
  * Toggle le statut vérifié d'un utilisateur
  */

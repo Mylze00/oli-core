@@ -13,6 +13,8 @@ import {
     ShieldExclamationIcon,
     CalendarDaysIcon,
     BuildingStorefrontIcon,
+    EyeIcon,
+    EyeSlashIcon,
 } from '@heroicons/react/24/solid';
 import api from '../services/api';
 import { getImageUrl } from '../utils/image';
@@ -208,6 +210,7 @@ export default function UserDetail() {
                 wallet_balance: parseFloat(u.wallet || 0),
                 reward_points: u.reward_points || 0,
                 is_active: !u.is_suspended,
+                is_hidden: u.is_hidden || false,
                 stats: data.stats || {},
                 transactions: data.transactions || [],
                 recentOrders: data.recentOrders || [],
@@ -230,6 +233,7 @@ export default function UserDetail() {
                 city: u.location || u.city || 'Non renseigné',
                 wallet_balance: parseFloat(u.wallet || 0),
                 is_active: !u.is_suspended,
+                is_hidden: u.is_hidden || false,
                 stats: data.stats || prev.stats,
                 transactions: data.transactions || prev.transactions,
                 recentOrders: data.recentOrders || prev.recentOrders,
@@ -299,6 +303,10 @@ export default function UserDetail() {
                                 }}
                                 className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-blue-700 transition"
                             ><EnvelopeIcon className="h-4 w-4 mr-1.5" /> Message</button>
+                            <button
+                                onClick={() => handleToggle('is_hidden', () => api.post(`/admin/users/${user.id}/hide`, { hidden: !user.is_hidden }))}
+                                className={`flex items-center px-4 py-2 text-white rounded-xl text-sm font-medium shadow-sm transition ${user.is_hidden ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-600 hover:bg-gray-700'}`}
+                            >{user.is_hidden ? <><EyeIcon className="h-4 w-4 mr-1.5" /> Afficher</> : <><EyeSlashIcon className="h-4 w-4 mr-1.5" /> Masquer</>}</button>
                             <button
                                 onClick={() => handleToggle('is_suspended', () => api.post(`/admin/users/${user.id}/suspend`, { suspended: user.is_active }))}
                                 className={`flex items-center px-4 py-2 text-white rounded-xl text-sm font-medium shadow-sm transition ${user.is_active ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
