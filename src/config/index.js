@@ -25,6 +25,7 @@ const DEFAULT_ORIGINS = [
     // Admin Dashboard Vercel
     "https://oli-admin-windx.vercel.app",
     "https://oli-admin-efls2c6tm-mylze00s-projects.vercel.app",
+    "https://oli-admin-smoky.vercel.app",
     // Backend
     "https://oli-core.onrender.com",
     // Local development
