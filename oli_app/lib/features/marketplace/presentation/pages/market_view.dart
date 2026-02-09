@@ -73,13 +73,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
       ).toList();
     }
 
-    // Filtre par catégorie
+    // Filtre par catégorie (utilise maintenant le vrai champ category)
     if (_selectedCategory != "Tout") {
       final categoryKey = _categories[_selectedCategory] ?? "";
       if (categoryKey.isNotEmpty) {
         filtered = filtered.where((p) =>
-          p.name.toLowerCase().contains(categoryKey) ||
-          p.description.toLowerCase().contains(categoryKey)
+          p.category?.toLowerCase() == categoryKey.toLowerCase()
         ).toList();
       }
     }

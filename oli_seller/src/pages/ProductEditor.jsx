@@ -58,9 +58,16 @@ export default function ProductEditor() {
         "Douzaine", "Paquet", "Sac (25kg)", "Sac (50kg)", "Palette"
     ];
 
+    // Catégories standardisées (correspondant au système)
     const categories = [
-        "Alimentation > Épicerie", "Alimentation > Boissons", "Alimentation > Frais",
-        "Maison & Entretien", "Beauté & Hygiène", "Électronique", "Textile"
+        { label: "Alimentation", value: "food" },
+        { label: "Beauté", value: "beauty" },
+        { label: "Maison", value: "home" },
+        { label: "Enfants", value: "kids" },
+        { label: "Industrie", value: "industry" },
+        { label: "Mode", value: "fashion" },
+        { label: "Électronique", value: "electronics" },
+        { label: "Véhicules", value: "vehicles" }
     ];
 
     const addTier = () => {
@@ -146,15 +153,17 @@ export default function ProductEditor() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie *</label>
                             <select
-                                className="w-full border p-2 rounded"
+                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={product.category}
                                 onChange={e => setProduct({ ...product, category: e.target.value })}
+                                required
                             >
-                                <option value="">Choisir...</option>
-                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                <option value="">Choisir une catégorie...</option>
+                                {categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                             </select>
+                            <p className="text-xs text-gray-500 mt-1">Sélectionnez la catégorie principale du produit</p>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Marque</label>

@@ -37,6 +37,7 @@ class Product {
   final String sellerAccountType;
   final bool sellerHasCertifiedShop;
   final String condition;
+  final String? category; // Product category (industry, home, vehicles, fashion, electronics, beauty, kids)
   final String description;
   final String color;
   final String deliveryTime;
@@ -74,6 +75,7 @@ class Product {
     this.sellerAccountType = 'ordinaire',
     this.sellerHasCertifiedShop = false,
     required this.condition,
+    this.category,
     required this.description,
     required this.color,
     required this.deliveryPrice,
@@ -129,6 +131,7 @@ class Product {
       sellerAccountType: json['sellerAccountType'] ?? json['seller_account_type'] ?? 'ordinaire',
       sellerHasCertifiedShop: json['sellerHasCertifiedShop'] ?? json['seller_has_certified_shop'] ?? false,
       condition: json['condition'] ?? 'Inconnu',
+      category: json['category'], // Nullable - peut être null pour anciens produits
       description: json['description'] ?? '',
       color: json['color'] ?? '',
       // Support camelCase ET snake_case
