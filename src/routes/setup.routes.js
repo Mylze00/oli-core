@@ -160,4 +160,44 @@ router.get('/migrate-device-tokens', async (req, res) => {
     }
 });
 
+/**
+ * GET /setup/migrate-user-hidden
+ * Ajoute la colonne is_hidden pour masquer des utilisateurs du marketplace
+ */
+router.get('/migrate-user-hidden', async (req, res) => {
+    try {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            await client.query(`
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE;
+            `);
+            console.log('✅ Colonne "is_hidden" ajoutée à "users".');
+
+            await client.query(`
+                CREATE INDEX IF NOT EXISTS idx_users_is_hidden 
+                ON users(is_hidden) 
+                WHERE is_hidden = TRUE;
+            `);
+            console.log('✅ Index créé.');
+
+            await client.query('COMMIT');
+            res.json({
+                success: true,
+                message: 'Colonne is_hidden ajoutée avec succès ! 👁️'
+            });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error('Erreur Migration user hidden:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;

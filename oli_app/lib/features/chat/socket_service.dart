@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../../config/api_config.dart';
 import '../../core/storage/secure_storage_service.dart';
@@ -69,21 +68,27 @@ class SocketService {
     // Ecoute des messages entrants
     _socket!.on('new_message', (data) => _onMessageReceived(data));
     
-    // Ecoute des changements de statut (online/offline)
+    // Ecoute des changements de statut (online/offline) — handler séparé (#9)
     _socket!.on('user_status', (data) {
-       debugPrint("Statut utilisateur changé: $data");
-       // On peut réutiliser le handler de message pour invalider, ou juste émettre un event
-       // Pour l'instant, on traite ça comme un message pour déclencher le refresh de la liste
-       _onMessageReceived(data); 
+       debugPrint("👤 Statut utilisateur changé: $data");
+       _onStatusChanged(data);
     });
   }
 
-  // Système de callback pour le controller
+  // Callbacks séparés pour messages et statuts (#9)
   Function(Map<String, dynamic>)? _messageHandler;
+  Function(Map<String, dynamic>)? _statusHandler;
 
+  /// Enregistrer un callback pour les messages reçus
   VoidCallback onMessage(Function(Map<String, dynamic>) callback) {
     _messageHandler = callback;
     return () => _messageHandler = null;
+  }
+
+  /// Enregistrer un callback pour les changements de statut utilisateur
+  VoidCallback onUserStatus(Function(Map<String, dynamic>) callback) {
+    _statusHandler = callback;
+    return () => _statusHandler = null;
   }
   
   // Generic handler for other events
@@ -102,6 +107,12 @@ class SocketService {
   void _onMessageReceived(dynamic data) {
     if (_messageHandler != null) {
       _messageHandler!(Map<String, dynamic>.from(data));
+    }
+  }
+
+  void _onStatusChanged(dynamic data) {
+    if (_statusHandler != null && data is Map) {
+      _statusHandler!(Map<String, dynamic>.from(data));
     }
   }
 

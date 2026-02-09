@@ -1,8 +1,8 @@
-import 'dart:convert';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
-import '../../../core/storage/secure_storage_service.dart';
+import '../../../core/router/network/dio_provider.dart';
 import '../models/seller_order.dart';
 
 /// État des commandes vendeur
@@ -36,7 +36,7 @@ class SellerOrdersState {
       statusCounts: statusCounts ?? this.statusCounts,
       stats: stats ?? this.stats,
       isLoading: isLoading ?? this.isLoading,
-      error: error,
+      error: error ?? this.error,
       currentFilter: currentFilter ?? this.currentFilter,
     );
   }
@@ -47,33 +47,26 @@ class SellerOrdersState {
 
 /// Notifier Riverpod pour les commandes vendeur
 class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
-  final SecureStorageService _storage = SecureStorageService();
+  final Ref _ref;
 
-  SellerOrdersNotifier() : super(const SellerOrdersState());
+  SellerOrdersNotifier(this._ref) : super(const SellerOrdersState());
 
-  /// Headers d'authentification
-  Future<Map<String, String>> _getHeaders() async {
-    final token = await _storage.getToken();
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
-  }
+  Dio get _dio => _ref.read(dioProvider);
 
   /// Charger les commandes vendeur
   Future<void> fetchOrders({String? status}) async {
     state = state.copyWith(isLoading: true, error: null, currentFilter: status);
 
     try {
-      final headers = await _getHeaders();
-      final uri = Uri.parse('${ApiConfig.baseUrl}/api/seller/orders').replace(
-        queryParameters: status != null ? {'status': status} : null,
+      final queryParams = status != null ? {'status': status} : <String, dynamic>{};
+      
+      final response = await _dio.get(
+        '${ApiConfig.baseUrl}/api/seller/orders',
+        queryParameters: queryParams,
       );
 
-      final response = await http.get(uri, headers: headers);
-
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = response.data;
         final orders = (data['orders'] as List)
             .map((e) => SellerOrder.fromJson(e))
             .toList();
@@ -99,6 +92,15 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
           error: 'Erreur ${response.statusCode}',
         );
       }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 403) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Vous devez être vendeur pour accéder à cette section',
+        );
+      } else {
+        state = state.copyWith(isLoading: false, error: e.message ?? 'Erreur réseau');
+      }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
@@ -107,19 +109,15 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
   /// Charger les statistiques
   Future<void> fetchStats() async {
     try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/seller/orders/stats/summary'),
-        headers: headers,
+      final response = await _dio.get(
+        '${ApiConfig.baseUrl}/api/seller/orders/stats/summary',
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        state = state.copyWith(stats: SellerOrderStats.fromJson(data));
+        state = state.copyWith(stats: SellerOrderStats.fromJson(response.data));
       }
     } catch (e) {
-      // Silently fail for stats
-      print('Error fetching seller stats: $e');
+      debugPrint('Erreur fetching seller stats: $e');
     }
   }
 
@@ -141,7 +139,6 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
     String? notes,
   }) async {
     try {
-      final headers = await _getHeaders();
       final body = <String, dynamic>{'status': newStatus};
 
       if (trackingNumber != null) body['tracking_number'] = trackingNumber;
@@ -149,20 +146,20 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
       if (estimatedDelivery != null) body['estimated_delivery'] = estimatedDelivery;
       if (notes != null) body['notes'] = notes;
 
-      final response = await http.patch(
-        Uri.parse('${ApiConfig.baseUrl}/api/seller/orders/$orderId/status'),
-        headers: headers,
-        body: jsonEncode(body),
+      final response = await _dio.patch(
+        '${ApiConfig.baseUrl}/api/seller/orders/$orderId/status',
+        data: body,
       );
 
       if (response.statusCode == 200) {
-        // Rafraîchir les données
         await loadAll();
         return true;
       }
       
-      final data = jsonDecode(response.body);
-      state = state.copyWith(error: data['error'] ?? 'Erreur mise à jour');
+      state = state.copyWith(error: response.data?['error'] ?? 'Erreur mise à jour');
+      return false;
+    } on DioException catch (e) {
+      state = state.copyWith(error: e.response?.data?['error'] ?? 'Erreur réseau');
       return false;
     } catch (e) {
       state = state.copyWith(error: e.toString());
@@ -173,15 +170,12 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
   /// Obtenir les détails d'une commande
   Future<SellerOrder?> getOrderDetails(int orderId) async {
     try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/seller/orders/$orderId'),
-        headers: headers,
+      final response = await _dio.get(
+        '${ApiConfig.baseUrl}/api/seller/orders/$orderId',
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return SellerOrder.fromJson(data);
+        return SellerOrder.fromJson(response.data);
       }
       return null;
     } catch (e) {
@@ -198,28 +192,20 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
 /// Provider global des commandes vendeur
 final sellerOrdersProvider =
     StateNotifierProvider<SellerOrdersNotifier, SellerOrdersState>(
-  (ref) => SellerOrdersNotifier(),
+  (ref) => SellerOrdersNotifier(ref),
 );
 
 /// Provider pour les stats uniquement (plus léger)
 final sellerStatsProvider = FutureProvider<SellerOrderStats?>((ref) async {
-  final storage = SecureStorageService();
-  final token = await storage.getToken();
-
-  if (token == null) return null;
+  final dio = ref.read(dioProvider);
 
   try {
-    final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/api/seller/orders/stats/summary'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
+    final response = await dio.get(
+      '${ApiConfig.baseUrl}/api/seller/orders/stats/summary',
     );
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return SellerOrderStats.fromJson(data);
+      return SellerOrderStats.fromJson(response.data);
     }
     return null;
   } catch (e) {

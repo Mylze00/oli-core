@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middlewares/auth.middleware');
 const db = require('../config/db');
+const notificationRepo = require('../repositories/notification.repository');
 
 /**
  * Middleware pour vérifier que l'utilisateur est vendeur
@@ -233,15 +234,32 @@ router.patch('/:id/status', requireAuth, requireSeller, async (req, res) => {
             VALUES ($1, $2, $3, $4, 'seller', $5)
         `, [req.params.id, currentStatus, status, req.user.id, notes || null]);
 
-        // Créer une notification pour l'acheteur (dans admin_notifications pour l'instant)
+        // Créer une notification pour l'acheteur (table notifications, liée à user_id)
         const notifMessage = status === 'shipped'
             ? `Votre commande #${req.params.id} a été expédiée${tracking_number ? ` - Suivi: ${tracking_number}` : ''}`
             : `Statut de votre commande #${req.params.id}: ${STATUS_LABELS[status]}`;
 
-        await client.query(`
-            INSERT INTO admin_notifications (type, title, message, data, is_read)
-            VALUES ('order_status', 'Commande mise à jour', $1, $2, false)
-        `, [notifMessage, JSON.stringify({ order_id: req.params.id, buyer_id: buyerId, status })]);
+        try {
+            await notificationRepo.create(
+                buyerId,
+                'order_status',
+                'Commande mise à jour',
+                notifMessage,
+                { order_id: parseInt(req.params.id), status }
+            );
+
+            // Émettre via Socket.IO pour notification en temps réel
+            const io = req.app.get('io');
+            if (io) {
+                io.to(`user_${buyerId}`).emit('order_status_updated', {
+                    order_id: parseInt(req.params.id),
+                    status,
+                    message: notifMessage
+                });
+            }
+        } catch (notifError) {
+            console.error('⚠️ Erreur notification acheteur (non-bloquante):', notifError.message);
+        }
 
         await client.query('COMMIT');
 
