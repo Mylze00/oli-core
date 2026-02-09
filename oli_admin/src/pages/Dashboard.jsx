@@ -95,8 +95,8 @@ export default function Dashboard() {
                             key={range}
                             onClick={() => setTimeRange(range)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${timeRange === range
-                                    ? 'bg-blue-600 text-white shadow-md'
-                                    : 'text-gray-500 hover:bg-gray-100'
+                                ? 'bg-blue-600 text-white shadow-md'
+                                : 'text-gray-500 hover:bg-gray-100'
                                 }`}
                         >
                             {range.toUpperCase()}
@@ -113,6 +113,7 @@ export default function Dashboard() {
                     trend={stats?.orders?.revenue_trend}
                     icon={<CurrencyDollarIcon className="h-6 w-6 text-green-600" />}
                     subtitle={`${Number(stats?.orders?.revenue_period || 0).toLocaleString()} $ cette période`}
+                    link="/commandes"
                 />
                 <StatsCard
                     title="Utilisateurs"
@@ -120,6 +121,7 @@ export default function Dashboard() {
                     trend={stats?.users?.trend}
                     icon={<UserGroupIcon className="h-6 w-6 text-blue-600" />}
                     subtitle={`${stats?.users?.today || 0} aujourd'hui · ${stats?.users?.sellers || 0} vendeurs`}
+                    link="/users"
                 />
                 <StatsCard
                     title="Produits Actifs"
@@ -127,6 +129,7 @@ export default function Dashboard() {
                     trend={stats?.products?.trend}
                     icon={<CubeIcon className="h-6 w-6 text-violet-600" />}
                     subtitle={`${stats?.products?.total || 0} total`}
+                    link="/produits"
                 />
                 <StatsCard
                     title="Commandes"
@@ -134,18 +137,21 @@ export default function Dashboard() {
                     trend={stats?.orders?.orders_trend}
                     icon={<ShoppingBagIcon className="h-6 w-6 text-indigo-600" />}
                     subtitle={`${stats?.orders?.paid || 0} payées · ${stats?.orders?.pending_shipping || 0} en attente`}
+                    link="/commandes"
                 />
                 <StatsCard
                     title="Boutiques"
                     value={stats?.shops?.total || 0}
                     icon={<BuildingStorefrontIcon className="h-6 w-6 text-amber-600" />}
                     subtitle={`${stats?.shops?.period || 0} nouvelles cette période`}
+                    link="/magasins"
                 />
                 <StatsCard
                     title="Conversations"
                     value={Number(stats?.chat?.total_conversations || 0).toLocaleString()}
                     icon={<ChatBubbleLeftRightIcon className="h-6 w-6 text-cyan-600" />}
                     subtitle={`${stats?.chat?.messages_period || 0} messages cette période`}
+                    link="/messagerie"
                 />
                 <StatsCard
                     title="Livraisons"
@@ -153,6 +159,7 @@ export default function Dashboard() {
                     icon={<TruckIcon className="h-6 w-6 text-emerald-600" />}
                     subtitle={`${stats?.deliveries?.pending || 0} en cours`}
                     color={stats?.deliveries?.pending > 0 ? 'bg-emerald-50' : 'bg-white'}
+                    link="/livraisons"
                 />
                 <StatsCard
                     title="Tickets Support"
@@ -160,6 +167,7 @@ export default function Dashboard() {
                     icon={<ExclamationTriangleIcon className="h-6 w-6 text-red-600" />}
                     subtitle={`${stats?.tickets?.total || 0} total`}
                     color={stats?.tickets?.active > 0 ? 'bg-red-50' : 'bg-white'}
+                    link="/support"
                 />
             </div>
 
