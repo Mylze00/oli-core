@@ -32,7 +32,7 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
           borderRadius: BorderRadius.circular(16),
           child: Container(
             color: const Color(0xFF1A1A1A),
-            height: 352,
+            height: 405, // Increased by 15% from 352 for better presentation
             width: double.infinity,
         child: p.images.isEmpty
             ? const Center(
