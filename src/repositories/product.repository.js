@@ -10,7 +10,6 @@ class ProductRepository {
                    u.is_verified as seller_is_verified,
                    u.account_type as seller_account_type,
                    u.has_certified_shop as seller_has_certified_shop,
-                   u.location as location,
                    s.name as shop_name, 
                    s.is_verified as shop_verified
             FROM products p 
@@ -34,7 +33,6 @@ class ProductRepository {
                    u.is_verified as seller_is_verified,
                    u.account_type as seller_account_type,
                    u.has_certified_shop as seller_has_certified_shop,
-                   u.location as location,
                    s.name as shop_name, 
                    s.is_verified as shop_verified
             FROM products p 
@@ -57,7 +55,6 @@ class ProductRepository {
                    u.is_verified as seller_is_verified,
                    u.account_type as seller_account_type,
                    u.has_certified_shop as seller_has_certified_shop,
-                   u.location as location,
                    s.name as shop_name, 
                    s.is_verified as shop_verified,
                    s.logo_url as shop_logo,
@@ -83,7 +80,6 @@ class ProductRepository {
             SELECT p.*, 
                    u.name as seller_name, 
                    u.avatar_url as seller_avatar, 
-                   u.location as location,
                    s.name as shop_name
             FROM products p 
             JOIN users u ON p.seller_id = u.id
