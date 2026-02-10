@@ -56,17 +56,17 @@ class _HomePageState extends ConsumerState<HomePage> {
     // Décalage d'index après le bouton +
     final adjustedIndex = index > 2 ? index - 1 : index;
 
-    // Réinitialiser les filtres de recherche si retour à l'accueil (index 0)
-    if (adjustedIndex == 0 && _currentIndex != 0) {
-      ref.read(searchFiltersProvider.notifier).reset();
-      // Increment key to force dashboard widget rebuild and clear search bar
-      setState(() {
+    setState(() {
+      // Réinitialiser les filtres de recherche si retour à l'accueil (index 0)
+      if (adjustedIndex == 0 && _currentIndex != 0) {
+        ref.read(searchFiltersProvider.notifier).reset();
+        // Increment key to force dashboard widget rebuild and clear search bar
         _dashboardKey++;
-        _buildPages();
-      });
-    }
-
-    setState(() => _currentIndex = adjustedIndex);
+        _buildPages(); // Rebuild pages list within setState
+      }
+      
+      _currentIndex = adjustedIndex;
+    });
   }
 
   void _openPublishPage() {

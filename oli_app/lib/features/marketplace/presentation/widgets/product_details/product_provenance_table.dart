@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../../../models/product_model.dart';
 import '../../pages/seller_profile_page.dart';
+import '../../../../../../core/services/geocoding_service.dart';
 
 class ProductProvenanceTable extends StatelessWidget {
   final Product product;
@@ -31,7 +32,7 @@ class ProductProvenanceTable extends StatelessWidget {
             border: TableBorder(
                 horizontalInside: BorderSide(color: Colors.white.withOpacity(0.05))),
             children: [
-              _buildProvenanceRow("Localisation", product.location ?? "Non spécifié"),
+              _buildLocationRow(),
               _buildProvenanceRow(
                 "Vendeur",
                 (product.shopName != null && product.shopName!.isNotEmpty)
@@ -64,6 +65,45 @@ class ProductProvenanceTable extends StatelessWidget {
     if (diff.inDays == 1) return "Hier";
     if (diff.inHours > 0) return "Il y a ${diff.inHours} heures";
     return "Il y a quelques minutes";
+  }
+  
+  /// Build location row with geocoding
+  TableRow _buildLocationRow() {
+    return TableRow(
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text("Localisation",
+              style: TextStyle(color: Colors.grey, fontSize: 13)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: FutureBuilder<String>(
+            future: GeocodingService.coordinatesToLocationName(product.location),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox(
+                  height: 14,
+                  width: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+                  ),
+                );
+              }
+              return Text(
+                snapshot.data ?? "Non spécifié",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   TableRow _buildProvenanceRow(String label, String value,
