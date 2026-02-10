@@ -26,10 +26,14 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
   Widget build(BuildContext context) {
     final p = widget.product;
     return Stack(children: [
-      Container(
-        color: const Color(0xFF1A1A1A),
-        height: 400,
-        width: double.infinity,
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            color: const Color(0xFF1A1A1A),
+            height: 352,
+            width: double.infinity,
         child: p.images.isEmpty
             ? const Center(
                 child: Icon(Icons.image, size: 60, color: Colors.grey))
@@ -43,6 +47,8 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
                       child: Icon(Icons.broken_image, color: Colors.grey)),
                 ),
               ),
+          ),
+        ),
       ),
       Positioned(
         top: 10,
