@@ -17,11 +17,12 @@ class ProductSellerInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = product;
-    // Fix: Use shopName only if available and verified, otherwise fallback to seller name
-    // Also ensuring we display meaningful names.
-    final displayName = (p.shopName != null && p.shopName!.isNotEmpty) 
-        ? p.shopName! 
-        : p.seller;
+    // Filter out placeholder 'BOUTIQUE ENTREPRISE' and use actual shop/seller name
+    final isValidShopName = p.shopName != null && 
+                           p.shopName!.isNotEmpty && 
+                           p.shopName!.toUpperCase() != 'BOUTIQUE ENTREPRISE';
+    
+    final displayName = isValidShopName ? p.shopName! : p.seller;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
