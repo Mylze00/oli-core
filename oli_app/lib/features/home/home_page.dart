@@ -20,7 +20,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   int _currentIndex = 0;
 
   // Tabs principaux (sans le bouton +)
-  late final List<Widget> _pages;
+  late List<Widget> _pages; // Removed 'final' to allow reassignment
   int _dashboardKey = 0; // Counter to trigger updates
   
   @override
