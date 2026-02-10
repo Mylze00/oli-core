@@ -215,23 +215,15 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
 
 /// Notifier pour les produits des grands magasins vérifiés
 class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
-  Timer? _refreshTimer;
   bool _isLoading = false;
   String? _error;
 
   VerifiedShopsProductsNotifier() : super([]) {
-    fetchVerifiedShopsProducts();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 120), (_) => fetchVerifiedShopsProducts());
+    fetchVerifiedShopsProducts(); // Load once on init, refresh only on manual pull-to-refresh
   }
 
   bool get isLoading => _isLoading;
   String? get error => _error;
-
-  @override
-  void dispose() {
-    _refreshTimer?.cancel();
-    super.dispose();
-  }
 
   Future<void> fetchVerifiedShopsProducts({bool shuffle = true}) async {
     _isLoading = true;
