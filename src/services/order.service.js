@@ -570,15 +570,46 @@ class OrderService {
 
         let deliveryOrder = null;
         if (needsDeliverer) {
+            // R4: Récupérer l'adresse du vendeur depuis la table addresses
+            let pickupAddress = 'À déterminer';
+            try {
+                const sellerAddr = await pool.query(
+                    `SELECT COALESCE(
+                        CONCAT_WS(', ',
+                            NULLIF(a.avenue, ''),
+                            NULLIF(a.numero, ''),
+                            NULLIF(a.quartier, ''),
+                            NULLIF(a.commune, ''),
+                            NULLIF(a.ville, '')
+                        ),
+                        a.address,
+                        u.name
+                    ) as full_address
+                    FROM order_items oi
+                    JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
+                    LEFT JOIN users u ON u.id = p.seller_id
+                    LEFT JOIN addresses a ON a.user_id = p.seller_id
+                    WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL
+                    ORDER BY a.created_at DESC
+                    LIMIT 1`,
+                    [orderId]
+                );
+                if (sellerAddr.rows.length > 0 && sellerAddr.rows[0].full_address) {
+                    pickupAddress = sellerAddr.rows[0].full_address;
+                }
+            } catch (addrErr) {
+                console.error('⚠️ Erreur récupération adresse vendeur:', addrErr.message);
+            }
+
             try {
                 deliveryOrder = await deliveryRepo.create({
                     order_id: orderId,
-                    pickup_address: 'À déterminer',
+                    pickup_address: pickupAddress,
                     delivery_address: order.delivery_address || 'Non spécifiée',
                     delivery_fee: parseFloat(order.delivery_fee) || 0,
                     estimated_time: deliveryMethod === 'oli_express' ? '1-2h' : '45 min'
                 });
-                console.log(`   🚚 delivery_orders créé: ID ${deliveryOrder.id} pour commande #${orderId} (mode: ${deliveryMethod})`);
+                console.log(`   🚚 delivery_orders créé: ID ${deliveryOrder.id} pour commande #${orderId} (mode: ${deliveryMethod}, pickup: ${pickupAddress})`);
             } catch (deliveryErr) {
                 console.error('⚠️ Erreur création delivery_orders:', deliveryErr.message);
             }

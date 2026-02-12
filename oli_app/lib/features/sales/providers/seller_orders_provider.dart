@@ -187,6 +187,44 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
   void clearError() {
     state = state.copyWith(error: null);
   }
+
+  /// Vendeur Pick & Go: vérifier le pickup_code du client
+  Future<bool> verifyPickupCode(int orderId, String code) async {
+    try {
+      final response = await _dio.post(
+        '${ApiConfig.baseUrl}/api/orders/$orderId/verify-pickup',
+        data: {'code': code},
+      );
+      if (response.statusCode == 200) {
+        await loadAll();
+        return true;
+      }
+      state = state.copyWith(error: response.data?['error'] ?? 'Code invalide');
+      return false;
+    } on DioException catch (e) {
+      state = state.copyWith(error: e.response?.data?['error'] ?? 'Erreur réseau');
+      return false;
+    }
+  }
+
+  /// Vendeur Hand Delivery: confirmer la remise avec delivery_code
+  Future<bool> verifyDeliveryCode(int orderId, String code) async {
+    try {
+      final response = await _dio.post(
+        '${ApiConfig.baseUrl}/api/orders/$orderId/verify-delivery',
+        data: {'code': code},
+      );
+      if (response.statusCode == 200) {
+        await loadAll();
+        return true;
+      }
+      state = state.copyWith(error: response.data?['error'] ?? 'Code invalide');
+      return false;
+    } on DioException catch (e) {
+      state = state.copyWith(error: e.response?.data?['error'] ?? 'Erreur réseau');
+      return false;
+    }
+  }
 }
 
 /// Provider global des commandes vendeur

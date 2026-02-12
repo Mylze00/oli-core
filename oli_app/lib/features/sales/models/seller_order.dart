@@ -7,6 +7,9 @@ class SellerOrder {
   final double totalAmount;
   final String? deliveryAddress;
   final double deliveryFee;
+  final String? deliveryMethodId;
+  final String? pickupCode;
+  final String? deliveryCode;
   final String? trackingNumber;
   final String? carrier;
   final DateTime? estimatedDelivery;
@@ -26,6 +29,9 @@ class SellerOrder {
     required this.totalAmount,
     this.deliveryAddress,
     required this.deliveryFee,
+    this.deliveryMethodId,
+    this.pickupCode,
+    this.deliveryCode,
     this.trackingNumber,
     this.carrier,
     this.estimatedDelivery,
@@ -47,6 +53,9 @@ class SellerOrder {
       totalAmount: double.tryParse(json['total_amount']?.toString() ?? '0') ?? 0,
       deliveryAddress: json['delivery_address'],
       deliveryFee: double.tryParse(json['delivery_fee']?.toString() ?? '0') ?? 0,
+      deliveryMethodId: json['delivery_method_id'],
+      pickupCode: json['pickup_code'],
+      deliveryCode: json['delivery_code'],
       trackingNumber: json['tracking_number'],
       carrier: json['carrier'],
       estimatedDelivery: json['estimated_delivery'] != null

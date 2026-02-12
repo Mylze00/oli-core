@@ -110,7 +110,7 @@ class _SellerOrderDetailsPageState
           : _error != null
               ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
               : _buildContent(),
-      bottomNavigationBar: _order != null && _order!.allowedTransitions.isNotEmpty
+      bottomNavigationBar: _order != null && _hasBottomAction()
           ? _buildBottomActions()
           : null,
     );
@@ -525,10 +525,52 @@ class _SellerOrderDetailsPageState
     );
   }
 
+  /// Détermine si une action est disponible pour le vendeur
+  bool _hasBottomAction() {
+    final order = _order!;
+    // Transitions standard (paid→processing, processing→ready)
+    if (order.allowedTransitions.isNotEmpty) return true;
+    // Pick & Go: vendeur vérifie le pickup_code du client quand ready
+    if (order.deliveryMethodId == 'pick_go' && order.status == 'ready') return true;
+    // Hand Delivery: vendeur confirme la remise quand processing
+    if (order.deliveryMethodId == 'hand_delivery' && order.status == 'processing') return true;
+    return false;
+  }
+
   Widget _buildBottomActions() {
     final order = _order!;
-    final nextStatus = order.allowedTransitions.first;
 
+    // Pick & Go en ready → bouton "Vérifier le code client"
+    if (order.deliveryMethodId == 'pick_go' && order.status == 'ready') {
+      return _buildActionBar(
+        icon: Icons.qr_code_scanner,
+        label: 'Vérifier le code client',
+        color: Colors.green,
+        onPressed: () => _showPickupCodeDialog(),
+      );
+    }
+
+    // Hand Delivery en processing → bouton "Confirmer la remise"
+    if (order.deliveryMethodId == 'hand_delivery' && order.status == 'processing') {
+      return _buildActionBar(
+        icon: Icons.handshake,
+        label: 'Confirmer la remise en main propre',
+        color: Colors.teal,
+        onPressed: () => _showDeliveryCodeDialog(),
+      );
+    }
+
+    // Transition standard
+    final nextStatus = order.allowedTransitions.first;
+    return _buildActionBar(
+      icon: _getActionIcon(nextStatus),
+      label: _getActionLabel(nextStatus),
+      color: const Color(0xFF1E7DBA),
+      onPressed: () => _handleStatusChange(nextStatus),
+    );
+  }
+
+  Widget _buildActionBar({required IconData icon, required String label, required Color color, required VoidCallback onPressed}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -543,11 +585,11 @@ class _SellerOrderDetailsPageState
       ),
       child: SafeArea(
         child: ElevatedButton.icon(
-          onPressed: () => _handleStatusChange(nextStatus),
-          icon: Icon(_getActionIcon(nextStatus)),
-          label: Text(_getActionLabel(nextStatus)),
+          onPressed: onPressed,
+          icon: Icon(icon),
+          label: Text(label),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1E7DBA),
+            backgroundColor: color,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
@@ -555,6 +597,108 @@ class _SellerOrderDetailsPageState
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Dialog pour Pick & Go : vendeur entre le code du client
+  void _showPickupCodeDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Code client Pick & Go'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Entrez le code de commande présenté par le client :'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                hintText: 'Ex: ABC123',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            onPressed: () async {
+              final code = controller.text.trim();
+              if (code.isEmpty) return;
+              Navigator.pop(ctx);
+              final success = await ref.read(sellerOrdersProvider.notifier).verifyPickupCode(_order!.id, code);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(success ? 'Commande remise au client ✅' : 'Code invalide ❌'),
+                    backgroundColor: success ? Colors.green : Colors.red,
+                  ),
+                );
+                if (success) _loadOrder();
+              }
+            },
+            child: const Text('Valider', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Dialog pour Hand Delivery : vendeur entre le delivery_code de l'acheteur
+  void _showDeliveryCodeDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmer la remise en main propre'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Entrez le code de livraison donné par l\'acheteur :'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                hintText: 'Ex: XYZ789',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+            onPressed: () async {
+              final code = controller.text.trim();
+              if (code.isEmpty) return;
+              Navigator.pop(ctx);
+              final success = await ref.read(sellerOrdersProvider.notifier).verifyDeliveryCode(_order!.id, code);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(success ? 'Remise confirmée ✅' : 'Code invalide ❌'),
+                    backgroundColor: success ? Colors.green : Colors.red,
+                  ),
+                );
+                if (success) _loadOrder();
+              }
+            },
+            child: const Text('Confirmer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
