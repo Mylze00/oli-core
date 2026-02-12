@@ -50,6 +50,8 @@ class _SellerOrderDetailsPageState
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     const oliBlue = Color(0xFF1E7DBA);
+    // Watch pour rebuild quand devise/taux change
+    ref.watch(exchangeRateProvider);
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F5),

@@ -22,25 +22,23 @@ class SellerOrderCard extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
+    // Watch pour rebuild quand devise/taux change
+    ref.watch(exchangeRateProvider);
     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+      color: cardColor,
+      borderRadius: BorderRadius.circular(12),
+      elevation: 1,
+      shadowColor: Colors.black.withOpacity(0.1),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header: ID + Status
@@ -79,7 +77,7 @@ class SellerOrderCard extends ConsumerWidget {
 
             // Items preview
             if (order.items.isNotEmpty) ...[
-              _buildItemsPreview(),
+              _buildItemsPreview(exchangeNotifier),
               const SizedBox(height: 12),
             ],
 
@@ -110,7 +108,9 @@ class SellerOrderCard extends ConsumerWidget {
             ),
           ],
         ),
+        ),
       ),
+    ),
     );
   }
 
@@ -161,7 +161,7 @@ class SellerOrderCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildItemsPreview() {
+  Widget _buildItemsPreview(ExchangeRateNotifier exchangeNotifier) {
     final displayItems = order.items.take(2).toList();
     final remaining = order.items.length - 2;
 
