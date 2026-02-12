@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/seller_orders_provider.dart';
 import '../models/seller_order.dart';
+import '../../../providers/exchange_rate_provider.dart';
 
 /// Page de détails d'une commande pour le vendeur
 class SellerOrderDetailsPage extends ConsumerStatefulWidget {
@@ -79,6 +80,7 @@ class _SellerOrderDetailsPageState
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -119,16 +121,16 @@ class _SellerOrderDetailsPageState
             [
               _buildInfoRow(
                 'Sous-total',
-                '${(order.totalAmount - order.deliveryFee).toStringAsFixed(0)} FC',
+                exchangeNotifier.formatProductPrice(order.totalAmount - order.deliveryFee),
               ),
               _buildInfoRow(
                 'Livraison',
-                '${order.deliveryFee.toStringAsFixed(0)} FC',
+                exchangeNotifier.formatProductPrice(order.deliveryFee),
               ),
               const Divider(),
               _buildInfoRow(
                 'Total',
-                '${order.totalAmount.toStringAsFixed(0)} FC',
+                exchangeNotifier.formatProductPrice(order.totalAmount),
                 isBold: true,
               ),
             ],
@@ -366,6 +368,7 @@ class _SellerOrderDetailsPageState
   }
 
   Widget _buildItemRow(SellerOrderItem item) {
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -401,14 +404,14 @@ class _SellerOrderDetailsPageState
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  '${item.price.toStringAsFixed(0)} FC × ${item.quantity}',
+                  '${exchangeNotifier.formatProductPrice(item.price)} × ${item.quantity}',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],
             ),
           ),
           Text(
-            '${(item.price * item.quantity).toStringAsFixed(0)} FC',
+            exchangeNotifier.formatProductPrice(item.price * item.quantity),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           ),
         ],

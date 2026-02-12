@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../providers/exchange_rate_provider.dart';
 import '../models/seller_order.dart';
 
 /// Widget carte pour afficher une commande vendeur
-class SellerOrderCard extends StatelessWidget {
+class SellerOrderCard extends ConsumerWidget {
   final SellerOrder order;
   final VoidCallback? onTap;
   final VoidCallback? onStatusAction;
@@ -16,10 +18,11 @@ class SellerOrderCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
     return GestureDetector(
       onTap: onTap,
@@ -88,7 +91,7 @@ class SellerOrderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${order.totalAmount.toStringAsFixed(0)} FC',
+                      exchangeNotifier.formatProductPrice(order.totalAmount),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -200,7 +203,7 @@ class SellerOrderCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '${item.price.toStringAsFixed(0)} FC × ${item.quantity}',
+                          '${exchangeNotifier.formatProductPrice(item.price)} × ${item.quantity}',
                           style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                         ),
                       ],
