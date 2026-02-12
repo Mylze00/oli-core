@@ -135,7 +135,7 @@ async function updatePaymentStatus(orderId, paymentStatus) {
   const result = await pool.query(`
     UPDATE orders 
     SET payment_status = $2, 
-        status = CASE WHEN $2 = 'completed' THEN 'paid' ELSE status END,
+        status = CASE WHEN $2::text = 'completed' THEN 'paid' ELSE status END,
         updated_at = NOW()
     WHERE id = $1
     RETURNING *
