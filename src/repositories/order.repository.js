@@ -3,7 +3,7 @@ const pool = require("../config/db");
 /**
  * Créer une nouvelle commande avec ses items
  */
-async function createOrder(userId, items, deliveryAddress, paymentMethod, deliveryFee = 0) {
+async function createOrder(userId, items, deliveryAddress, paymentMethod, deliveryFee = 0, deliveryMethodId = null) {
   const client = await pool.connect();
 
   try {
@@ -14,10 +14,10 @@ async function createOrder(userId, items, deliveryAddress, paymentMethod, delive
 
     // Créer la commande
     const orderResult = await client.query(`
-      INSERT INTO orders (user_id, total_amount, delivery_address, delivery_fee, payment_method, status, payment_status)
-      VALUES ($1, $2, $3, $4, $5, 'pending', 'pending')
+      INSERT INTO orders (user_id, total_amount, delivery_address, delivery_fee, payment_method, delivery_method_id, status, payment_status)
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'pending')
       RETURNING *
-    `, [userId, totalAmount, deliveryAddress, deliveryFee, paymentMethod]);
+    `, [userId, totalAmount, deliveryAddress, deliveryFee, paymentMethod, deliveryMethodId]);
 
     const order = orderResult.rows[0];
 

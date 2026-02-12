@@ -5,7 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const pool = require('./config/db');
 
 async function runMigration() {
-    const migrationPath = path.join(__dirname, 'migrations', '023_ensure_shops_and_import.sql');
+    const migrationPath = path.join(__dirname, 'migrations', '028_delivery_system.sql');
 
     try {
         const sql = fs.readFileSync(migrationPath, 'utf8');

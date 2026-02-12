@@ -177,6 +177,7 @@ app.use("/api/verification", require('./routes/verification.routes'));
 app.use("/api/behavior", require('./routes/behavior.routes'));
 app.use("/api/trust-score", require('./routes/trust-score.routes'));
 app.use("/api/exchange-rate", require('./routes/exchange-rate.routes')); // 💱 Taux de change
+app.use("/api/delivery-methods", require('./routes/delivery-methods.routes')); // 🚚 Méthodes de livraison
 app.use("/api/subscription", require('./routes/subscription.routes')); // 🆕 Abonnement & Certification
 app.use("/api/product-requests", require('./routes/product-requests.routes')); // 📦 Demandes de produit
 

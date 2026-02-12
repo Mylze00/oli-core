@@ -6,7 +6,7 @@ const pool = require('../config/db');
 
 class OrderService {
     async createOrder(userId, data, io = null) {
-        const { items, deliveryAddress, paymentMethod, deliveryFee } = data;
+        const { items, deliveryAddress, paymentMethod, deliveryFee, deliveryMethodId } = data;
 
         // Validation de base
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -49,7 +49,8 @@ class OrderService {
             items,
             deliveryAddress || null,
             paymentMethod || 'wallet',
-            parseFloat(deliveryFee) || 0
+            parseFloat(deliveryFee) || 0,
+            deliveryMethodId || null
         );
 
         // Si paiement instantané réussi → MAJ statut + notifications + delivery

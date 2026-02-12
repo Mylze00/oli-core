@@ -197,7 +197,7 @@ router.patch('/:id/status', requireAuth, requireSeller, async (req, res) => {
     const client = await db.connect();
 
     try {
-        const { status, tracking_number, carrier, estimated_delivery, notes } = req.body;
+        const { status, tracking_number, carrier, estimated_delivery, notes, delivery_method_id } = req.body;
 
         // Vérifier que la commande appartient au vendeur
         const checkQuery = `
@@ -236,6 +236,11 @@ router.patch('/:id/status', requireAuth, requireSeller, async (req, res) => {
         const updateParams = [status];
 
         // Champs spécifiques selon le statut
+        if (status === 'processing' && delivery_method_id) {
+            updateParams.push(delivery_method_id);
+            updateQuery += `, delivery_method_id = $${updateParams.length}`;
+        }
+
         if (status === 'shipped') {
             updateQuery += `, shipped_at = NOW()`;
             if (tracking_number) {
