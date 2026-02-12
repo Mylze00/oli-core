@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/order_model.dart';
 import '../providers/orders_provider.dart';
+import 'order_tracking_page.dart';
 
 /// Page "Mes Achats" - Historique des commandes (Reel)
 class PurchasesPage extends ConsumerStatefulWidget {
@@ -169,11 +170,22 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> with SingleTicker
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Total: \$${order.totalAmount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-                if (order.canCancel)
-                  TextButton(
-                    onPressed: () => _cancelOrder(order.id),
-                    child: const Text('Annuler', style: TextStyle(color: Colors.red, fontSize: 13)),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!['pending', 'cancelled'].contains(order.status))
+                      TextButton.icon(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderTrackingPage(orderId: order.id))),
+                        icon: const Icon(Icons.timeline, size: 16, color: Colors.blue),
+                        label: const Text('Suivre', style: TextStyle(color: Colors.blue, fontSize: 13)),
+                      ),
+                    if (order.canCancel)
+                      TextButton(
+                        onPressed: () => _cancelOrder(order.id),
+                        child: const Text('Annuler', style: TextStyle(color: Colors.red, fontSize: 13)),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),

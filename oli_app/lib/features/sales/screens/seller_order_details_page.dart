@@ -8,6 +8,7 @@ import '../models/seller_order.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../../../core/user/user_provider.dart';
 import '../../chat/chat_page.dart';
+import '../../orders/screens/order_tracking_page.dart';
 
 /// Page de détails d'une commande pour le vendeur
 class SellerOrderDetailsPage extends ConsumerStatefulWidget {
@@ -129,6 +130,26 @@ class _SellerOrderDetailsPageState
         children: [
           // Status Card
           _buildStatusCard(order, cardColor, textColor),
+          const SizedBox(height: 12),
+
+          // Bouton Suivi de commande
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => OrderTrackingPage(orderId: order.id)),
+              ),
+              icon: const Icon(Icons.timeline, size: 18),
+              label: const Text('Voir le suivi de commande'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.blue,
+                side: const BorderSide(color: Colors.blue),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
 
           // Buyer Info
