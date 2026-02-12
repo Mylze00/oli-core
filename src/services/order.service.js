@@ -160,26 +160,30 @@ class OrderService {
         console.log(`   ✅ Notification acheteur envoyée (User #${buyerId})`);
 
         // 3. IDENTIFIER ET NOTIFIER VENDEUR(S)
-        const itemsResult = await pool.query(
-            `SELECT oi.product_name, p.seller_id
-             FROM order_items oi
-             LEFT JOIN products p ON oi.product_id = p.id
-             WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL`,
-            [orderId]
-        );
-
-        const sellers = [...new Set(itemsResult.rows.map(item => item.seller_id))];
-
-        for (const sellerId of sellers) {
-            await notificationService.send(
-                sellerId,
-                'order',
-                'Nouvelle commande ! 💰',
-                `Vous avez reçu une nouvelle commande #${orderId}`,
-                { order_id: orderId, buyer_id: buyerId },
-                io
+        try {
+            const itemsResult = await pool.query(
+                `SELECT oi.product_name, p.seller_id
+                 FROM order_items oi
+                 LEFT JOIN products p ON oi.product_id::integer = p.id
+                 WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL`,
+                [orderId]
             );
-            console.log(`   ✅ Notification vendeur envoyée (Seller #${sellerId})`);
+
+            const sellers = [...new Set(itemsResult.rows.map(item => item.seller_id))];
+
+            for (const sellerId of sellers) {
+                await notificationService.send(
+                    sellerId,
+                    'order',
+                    'Nouvelle commande ! 💰',
+                    `Vous avez reçu une nouvelle commande #${orderId}`,
+                    { order_id: orderId, buyer_id: buyerId },
+                    io
+                );
+                console.log(`   ✅ Notification vendeur envoyée (Seller #${sellerId})`);
+            }
+        } catch (sellerErr) {
+            console.error('⚠️ Erreur notification vendeur (non-bloquante):', sellerErr.message);
         }
 
         // 4. 🚚 CRÉER L'ENTRÉE delivery_orders POUR LES LIVREURS
