@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/address_provider.dart';
 import '../models/address_model.dart';
+import '../../auth/providers/auth_controller.dart';
 
 class AddressManagementPage extends ConsumerStatefulWidget {
   const AddressManagementPage({super.key});
@@ -391,7 +392,6 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
   late TextEditingController _communeCtrl;
   late TextEditingController _villeCtrl;
   late TextEditingController _referenceCtrl;
-  late TextEditingController _phoneCtrl;
   bool _isDefault = false;
   bool _isSaving = false;
 
@@ -408,7 +408,6 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
     _communeCtrl = TextEditingController(text: e?.commune ?? '');
     _villeCtrl = TextEditingController(text: e?.ville ?? 'Kinshasa');
     _referenceCtrl = TextEditingController(text: e?.referencePoint ?? '');
-    _phoneCtrl = TextEditingController(text: e?.phone ?? '');
     _isDefault = e?.isDefault ?? false;
   }
 
@@ -420,7 +419,6 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
     _communeCtrl.dispose();
     _villeCtrl.dispose();
     _referenceCtrl.dispose();
-    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -511,8 +509,6 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
                     _buildField('Ville', _villeCtrl, icon: Icons.location_on),
                     const SizedBox(height: 12),
                     _buildField('Point de repère', _referenceCtrl, icon: Icons.flag_outlined, hint: 'Ex: En face de l\'église...'),
-                    const SizedBox(height: 12),
-                    _buildField('Téléphone de livraison', _phoneCtrl, icon: Icons.phone, keyboardType: TextInputType.phone),
                     const SizedBox(height: 16),
                     // Default toggle
                     SwitchListTile.adaptive(
@@ -601,7 +597,6 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
       commune: _communeCtrl.text.trim(),
       ville: _villeCtrl.text.trim().isEmpty ? 'Kinshasa' : _villeCtrl.text.trim(),
       referencePoint: _referenceCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
       isDefault: _isDefault,
     );
 

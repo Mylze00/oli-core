@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../orders/providers/orders_provider.dart';
+import '../../user/providers/address_provider.dart';
+import '../../user/models/address_model.dart';
+import '../../user/screens/address_management_page.dart';
 import 'stripe_payment_page.dart';
 import 'order_success_page.dart';
 
@@ -19,8 +22,6 @@ class CheckoutPage extends ConsumerStatefulWidget {
 
 class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   String _paymentMethod = 'wallet';
-  String _deliveryAddress = '';
-  final _addressController = TextEditingController();
   bool _isLoading = false;
   double _deliveryFee = 5.00;
   String _selectedDeliveryMethod = 'oli_standard';
@@ -55,6 +56,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (widget.directPurchaseItem != null) {
       _deliveryFee = widget.directPurchaseItem!.deliveryPrice;
     }
+    // Charger les adresses de l'utilisateur
+    Future.microtask(() => ref.read(addressProvider.notifier).loadAddresses());
   }
 
   @override
@@ -127,26 +130,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
             // --- ADRESSE DE LIVRAISON ---
             _buildSectionTitle('Adresse de livraison'),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                controller: _addressController,
-                maxLines: 3,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Ex: 123 rue..., Quartier, Ville',
-                  hintStyle: TextStyle(color: Colors.grey.shade600),
-                  filled: true,
-                  fillColor: Colors.white10,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                ),
-                onChanged: (value) => _deliveryAddress = value,
-              ),
-            ),
+            _buildAddressSection(),
 
             const SizedBox(height: 24),
 
@@ -191,6 +175,95 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildAddressSection() {
+    final defaultAddr = ref.watch(defaultAddressProvider);
+    
+    if (defaultAddr == null) {
+      // Pas d'adresse enregistrée — inviter à en ajouter
+      return GestureDetector(
+        onTap: () async {
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressManagementPage()));
+          // Recharger les adresses au retour
+          ref.read(addressProvider.notifier).loadAddresses();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.orange.withOpacity(0.5), width: 1),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.add_location_alt, color: Colors.orange[300], size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Aucune adresse enregistrée', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text('Appuyez pour ajouter une adresse de livraison', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: Colors.grey[600], size: 16),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Adresse par défaut trouvée
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.location_on, color: Colors.blue, size: 20),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(defaultAddr.label, style: const TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () async {
+                  await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressManagementPage()));
+                  ref.read(addressProvider.notifier).loadAddresses();
+                },
+                child: const Text('Modifier', style: TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            defaultAddr.fullAddress,
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+          ),
+          if (defaultAddr.referencePoint != null && defaultAddr.referencePoint!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              '📍 ${defaultAddr.referencePoint}',
+              style: TextStyle(color: Colors.grey[400], fontSize: 12, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -260,13 +333,15 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   Future<void> _confirmOrder(double total) async {
+    final defaultAddr = ref.read(defaultAddressProvider);
     final needsAddress = _selectedDeliveryMethod != 'hand_delivery' && _selectedDeliveryMethod != 'pick_go';
-    if (needsAddress && _deliveryAddress.isEmpty) {
+    if (needsAddress && defaultAddr == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez entrer une adresse de livraison'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Veuillez ajouter une adresse de livraison'), backgroundColor: Colors.red),
       );
       return;
     }
+    final deliveryAddress = defaultAddr?.fullAddress ?? '';
 
     // #20 — Dialog de confirmation pour wallet et mobile money
     if (_paymentMethod != 'card') {
@@ -291,7 +366,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Adresse : $_deliveryAddress',
+                'Adresse : $deliveryAddress',
                 style: const TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 16),
@@ -328,7 +403,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       
       final order = await orderService.createOrder(
         items: orderItems,
-        deliveryAddress: _deliveryAddress,
+        deliveryAddress: deliveryAddress,
         paymentMethod: _paymentMethod,
         deliveryFee: _deliveryFee,
         deliveryMethodId: _selectedDeliveryMethod,
