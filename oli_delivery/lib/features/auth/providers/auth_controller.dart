@@ -79,6 +79,7 @@ class AuthController extends StateNotifier<AuthState> {
           isAuthenticated: true,
           isCheckingSession: false,
           userData: {
+            'id': user['id'],
             'phone': user['phone'] ?? 'Livreur',
             'name': user['name'] ?? 'Livreur',
             'is_deliverer': true,
@@ -176,6 +177,7 @@ class AuthController extends StateNotifier<AuthState> {
           isLoading: false,
           isAuthenticated: true,
           userData: {
+            'id': user['id'],
             'phone': phone,
             'is_deliverer': true,
             'name': user['name'] ?? 'Livreur',

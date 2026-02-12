@@ -216,7 +216,6 @@ class ProductRepository {
                    u.account_type as seller_account_type,
                    u.has_certified_shop as seller_has_certified_shop,
                    u.total_sales as seller_total_sales,
-                   u.location as location,
                    s.name as shop_name, 
                    s.is_verified as shop_verified,
                    p.express_delivery_price,

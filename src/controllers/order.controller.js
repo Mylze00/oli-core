@@ -83,7 +83,8 @@ exports.pay = async (req, res) => {
     try {
         const orderId = parseInt(req.params.id);
         const { paymentMethod } = req.body;
-        const order = await orderService.simulatePayment(orderId, paymentMethod);
+        const io = req.app.get('io');
+        const order = await orderService.simulatePayment(orderId, paymentMethod, io);
         res.json({ message: "Paiement effectué", order });
     } catch (error) {
         console.error("Erreur paiement:", error);

@@ -47,14 +47,14 @@ class MarketProductCard extends ConsumerWidget {
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF2C2C2C),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                 child: Stack(
                   fit: StackFit.expand, // Ensure stack fills the parent
                   children: [

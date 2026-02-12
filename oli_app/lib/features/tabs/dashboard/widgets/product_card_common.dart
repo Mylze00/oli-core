@@ -20,7 +20,7 @@ class DashboardProductCard extends ConsumerWidget {
     this.badgeColor,
     this.badgeOnRight = false,
     this.subtitleWidget,
-    this.width = 130,
+    this.width = 104, // Reduced by 20%
   });
 
   @override
@@ -30,7 +30,7 @@ class DashboardProductCard extends ConsumerWidget {
       margin: const EdgeInsets.only(right: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF2C2C2C),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,7 +39,7 @@ class DashboardProductCard extends ConsumerWidget {
             child: Stack(
               children: [
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   child: product.images.isNotEmpty 
                     ? Image.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
                     : const Center(child: Icon(Icons.image, color: Colors.grey)),

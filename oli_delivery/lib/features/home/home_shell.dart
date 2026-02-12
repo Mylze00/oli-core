@@ -35,9 +35,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   void _initServices() {
     final authState = ref.read(authControllerProvider);
     if (authState.isAuthenticated && authState.userData != null) {
-      final phone = authState.userData!['phone'];
-      if (phone != null) {
-        ref.read(socketServiceProvider).connect(phone.toString());
+      final userId = authState.userData!['id'];
+      if (userId != null) {
+        ref.read(socketServiceProvider).connect(userId.toString());
       }
       // Init FCM push notifications
       ref.read(pushNotificationServiceProvider).init();

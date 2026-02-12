@@ -22,6 +22,9 @@ const DEFAULT_ORIGINS = [
     "https://oli-core.firebaseapp.com",
     "https://oli-app.web.app",
     "https://oli-app.firebaseapp.com",
+    // Delivery App Firebase
+    "https://olidelivery.web.app",
+    "https://olidelivery.firebaseapp.com",
     // Admin Dashboard Vercel
     "https://oli-admin-windx.vercel.app",
     "https://oli-admin-efls2c6tm-mylze00s-projects.vercel.app",

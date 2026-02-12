@@ -31,8 +31,9 @@ class _ProductRequestWidgetState extends ConsumerState<ProductRequestWidget> {
     setState(() => _isSubmitting = true);
 
     try {
-      final user = ref.read(authControllerProvider).value;
-      if (user == null) {
+      final authState = ref.read(authControllerProvider);
+      final userData = authState.userData;
+      if (userData == null) {
         throw Exception('User not authenticated');
       }
 
@@ -40,9 +41,9 @@ class _ProductRequestWidgetState extends ConsumerState<ProductRequestWidget> {
         Uri.parse('https://oli-core.onrender.com/api/product-requests'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'user_id': user.id,
-          'user_name': user.username,
-          'user_phone': user.phone ?? '',
+          'user_id': userData['id'] ?? 0,
+          'user_name': userData['name'] ?? 'Utilisateur',
+          'user_phone': userData['phone'] ?? '',
           'description': '${widget.searchQuery}\n\n${_descriptionController.text}',
         }),
       );
@@ -134,7 +135,7 @@ class _ProductRequestWidgetState extends ConsumerState<ProductRequestWidget> {
       child: Form(
         key: _formKey,
         child: Column(
-          crossAxisSize: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
