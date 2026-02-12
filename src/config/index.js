@@ -29,8 +29,9 @@ const DEFAULT_ORIGINS = [
     "https://oli-admin-windx.vercel.app",
     "https://oli-admin-efls2c6tm-mylze00s-projects.vercel.app",
     "https://oli-admin-smoky.vercel.app",
-    // Backend
+    // Backend & Seller Center (Render)
     "https://oli-core.onrender.com",
+    "https://oli-seller.onrender.com",
     // Local development
     "http://localhost:3000",
     "http://localhost:5000",
