@@ -141,7 +141,27 @@ router.get('/orders', requireAuth, requireSeller, async (req, res) => {
             parseInt(offset)
         );
 
-        res.json(orders);
+        // Compter par statut pour les badges
+        const countQuery = `
+            SELECT o.status, COUNT(DISTINCT o.id) as count
+            FROM orders o
+            JOIN order_items oi ON oi.order_id = o.id
+            JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
+            WHERE p.seller_id = $1
+            GROUP BY o.status
+        `;
+        const countResult = await db.query(countQuery, [parseInt(req.user.id)]);
+
+        const statusCounts = {};
+        countResult.rows.forEach(row => {
+            statusCounts[row.status] = parseInt(row.count);
+        });
+
+        res.json({
+            orders: orders,
+            status_counts: statusCounts,
+            total: orders.length
+        });
     } catch (error) {
         console.error('Error GET /seller/orders:', error);
         res.status(500).json({ error: 'Erreur serveur' });
