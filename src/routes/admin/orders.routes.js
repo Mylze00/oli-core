@@ -53,11 +53,11 @@ router.get('/', async (req, res) => {
                        SELECT json_agg(json_build_object(
                            'product_id', oi.product_id,
                            'quantity', oi.quantity,
-                           'price', oi.price,
-                           'product_name', p.name
+                           'price', oi.product_price,
+                           'product_name', COALESCE(p.name, oi.product_name)
                        ))
                        FROM order_items oi
-                       JOIN products p ON oi.product_id::integer = p.id
+                       LEFT JOIN products p ON oi.product_id::integer = p.id
                        WHERE oi.order_id = o.id
                    ) as items
             FROM orders o
