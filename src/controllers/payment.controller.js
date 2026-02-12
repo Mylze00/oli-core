@@ -42,41 +42,37 @@ exports.createPaymentIntent = async (req, res) => {
  * POST /api/payment/webhook
  */
 exports.handleWebhook = async (req, res) => {
-    // Dans une vraie implémentation, on vérifie la signature ici
     const event = req.body;
 
     console.log(`🔔 Webhook reçu: ${event.type}`);
 
-    // Simulation de traitement
     switch (event.type) {
         case 'payment_intent.succeeded':
             const paymentIntent = event.data.object;
             console.log(`💰 Paiement réussi pour ${paymentIntent.amount} ${paymentIntent.currency}`);
 
-            // Récupérer l'ID de la commande depuis les métadonnées
             const orderId = paymentIntent.metadata ? paymentIntent.metadata.orderId : null;
 
             if (orderId) {
                 console.log(`📦 Mise à jour de la commande #${orderId} -> PAID`);
                 try {
-                    // Récupérer l'instance Socket.IO pour les notifications temps réel
                     const io = req.app ? req.app.get('io') : null;
-
-                    // Utiliser le service de commande pour valider le paiement
-                    await orderService.simulatePayment(orderId, 'stripe', io);
+                    const result = await orderService.simulatePayment(orderId, 'stripe', io);
                     console.log(`✅ Commande #${orderId} mise à jour avec succès`);
+                    return res.json({ received: true, success: true, orderId, result });
                 } catch (err) {
-                    console.error(`❌ Erreur mise à jour commande #${orderId}:`, err.message);
+                    console.error(`❌ Erreur mise à jour commande #${orderId}:`, err.message, err.stack);
+                    return res.json({ received: true, success: false, orderId, error: err.message, stack: err.stack });
                 }
             } else {
                 console.warn("⚠️ Pas d'orderId dans les métadonnées du paiement");
+                return res.json({ received: true, warning: 'No orderId in metadata', metadata: paymentIntent.metadata });
             }
-            break;
         case 'payment_intent.payment_failed':
             console.log('❌ Paiement échoué');
             break;
         default:
-        // console.log(`Unhandled event type ${event.type}`);
+            break;
     }
 
     res.json({ received: true });
