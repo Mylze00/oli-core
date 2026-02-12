@@ -95,3 +95,90 @@ exports.pay = async (req, res) => {
         res.status(500).json({ error: "Erreur serveur" });
     }
 };
+
+// --- TRACKING ENDPOINTS ---
+
+/**
+ * POST /orders/:id/prepare — vendeur met en préparation
+ */
+exports.markProcessing = async (req, res) => {
+    try {
+        const orderId = parseInt(req.params.id);
+        const io = req.app.get('io');
+        const order = await orderService.markProcessing(orderId, req.user.id, io);
+        res.json({ message: "Commande en préparation", order });
+    } catch (error) {
+        console.error("Erreur markProcessing:", error);
+        res.status(error.message.includes('non trouvée') ? 404 : 400).json({ error: error.message });
+    }
+};
+
+/**
+ * POST /orders/:id/ready — vendeur marque comme prête
+ */
+exports.markReady = async (req, res) => {
+    try {
+        const orderId = parseInt(req.params.id);
+        const io = req.app.get('io');
+        const order = await orderService.markReady(orderId, req.user.id, io);
+        res.json({ message: "Commande prête pour expédition", order });
+    } catch (error) {
+        console.error("Erreur markReady:", error);
+        res.status(error.message.includes('non trouvée') ? 404 : 400).json({ error: error.message });
+    }
+};
+
+/**
+ * POST /orders/:id/verify-pickup — livreur valide la récupération
+ */
+exports.verifyPickup = async (req, res) => {
+    try {
+        const orderId = parseInt(req.params.id);
+        const { code } = req.body;
+        const io = req.app.get('io');
+        const order = await orderService.verifyPickup(orderId, code, req.user.id, io);
+        res.json({ message: "Pickup validé, colis en route", order });
+    } catch (error) {
+        console.error("Erreur verifyPickup:", error);
+        if (error.message.includes('invalide')) {
+            return res.status(400).json({ error: error.message });
+        }
+        res.status(error.message.includes('non trouvée') ? 404 : 500).json({ error: error.message });
+    }
+};
+
+/**
+ * POST /orders/:id/verify-delivery — acheteur valide la réception
+ */
+exports.verifyDelivery = async (req, res) => {
+    try {
+        const orderId = parseInt(req.params.id);
+        const { code } = req.body;
+        const io = req.app.get('io');
+        const order = await orderService.verifyDelivery(orderId, code, req.user.id, io);
+        res.json({ message: "Livraison confirmée", order });
+    } catch (error) {
+        console.error("Erreur verifyDelivery:", error);
+        if (error.message.includes('invalide')) {
+            return res.status(400).json({ error: error.message });
+        }
+        res.status(error.message.includes('non trouvée') ? 404 : 500).json({ error: error.message });
+    }
+};
+
+/**
+ * GET /orders/:id/tracking — timeline complète
+ */
+exports.getTracking = async (req, res) => {
+    try {
+        const orderId = parseInt(req.params.id);
+        const tracking = await orderService.getOrderTracking(orderId, req.user.id);
+        res.json(tracking);
+    } catch (error) {
+        console.error("Erreur tracking:", error);
+        if (error.message.includes('non autorisé')) {
+            return res.status(403).json({ error: error.message });
+        }
+        res.status(error.message.includes('non trouvée') ? 404 : 500).json({ error: error.message });
+    }
+};

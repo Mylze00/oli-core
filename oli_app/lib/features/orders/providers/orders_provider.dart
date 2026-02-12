@@ -84,9 +84,79 @@ class OrderService {
       return false;
     }
   }
+
+  /// Récupérer le tracking complet d'une commande
+  Future<Map<String, dynamic>?> getTracking(int orderId) async {
+    try {
+      final response = await _dio.get(ApiConfig.orderTracking(orderId));
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ Erreur tracking: $e');
+      return null;
+    }
+  }
+
+  /// Vendeur: marquer en préparation
+  Future<bool> markProcessing(int orderId) async {
+    try {
+      final response = await _dio.post(ApiConfig.orderPrepare(orderId));
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ Erreur markProcessing: $e');
+      return false;
+    }
+  }
+
+  /// Vendeur: marquer comme prête
+  Future<bool> markReady(int orderId) async {
+    try {
+      final response = await _dio.post(ApiConfig.orderReady(orderId));
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ Erreur markReady: $e');
+      return false;
+    }
+  }
+
+  /// Livreur: valider pickup avec code
+  Future<bool> verifyPickup(int orderId, String code) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.orderVerifyPickup(orderId),
+        data: {'code': code},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ Erreur verifyPickup: $e');
+      return false;
+    }
+  }
+
+  /// Acheteur: valider livraison avec code
+  Future<bool> verifyDelivery(int orderId, String code) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.orderVerifyDelivery(orderId),
+        data: {'code': code},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ Erreur verifyDelivery: $e');
+      return false;
+    }
+  }
 }
 
 /// Provider du service de commandes
 final orderServiceProvider = Provider<OrderService>((ref) {
   return OrderService(ref.read(dioProvider));
+});
+
+/// Provider pour récupérer le tracking d'une commande
+final orderTrackingProvider = FutureProvider.family<Map<String, dynamic>?, int>((ref, orderId) async {
+  final service = ref.read(orderServiceProvider);
+  return service.getTracking(orderId);
 });

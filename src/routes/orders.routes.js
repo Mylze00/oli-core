@@ -1,5 +1,5 @@
 /**
- * Routes Commandes (Orders)
+ * Routes Commandes (Orders) — avec Tracking System
  */
 const express = require("express");
 const router = express.Router();
@@ -26,9 +26,34 @@ router.get("/", orderController.getAll);
 router.get("/:id", orderController.getById);
 
 /**
- * PATCH /orders/:id/status - Mettre à jour le statut
+ * GET /orders/:id/tracking - Timeline complète de suivi
+ */
+router.get("/:id/tracking", orderController.getTracking);
+
+/**
+ * PATCH /orders/:id/status - Mettre à jour le statut (générique)
  */
 router.patch("/:id/status", orderController.updateStatus);
+
+/**
+ * POST /orders/:id/prepare - Vendeur: marquer en préparation
+ */
+router.post("/:id/prepare", orderController.markProcessing);
+
+/**
+ * POST /orders/:id/ready - Vendeur: marquer comme prête
+ */
+router.post("/:id/ready", orderController.markReady);
+
+/**
+ * POST /orders/:id/verify-pickup - Livreur: valider récupération (code pickup)
+ */
+router.post("/:id/verify-pickup", orderController.verifyPickup);
+
+/**
+ * POST /orders/:id/verify-delivery - Acheteur: valider réception (code delivery)
+ */
+router.post("/:id/verify-delivery", orderController.verifyDelivery);
 
 /**
  * POST /orders/:id/cancel - Annuler une commande

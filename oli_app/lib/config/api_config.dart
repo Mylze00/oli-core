@@ -23,6 +23,11 @@ class ApiConfig {
   static const String orders = '$baseUrl/orders';
   static String orderCancel(int id) => '$baseUrl/orders/$id/cancel';
   static String orderPay(int id) => '$baseUrl/orders/$id/pay';
+  static String orderTracking(int id) => '$baseUrl/orders/$id/tracking';
+  static String orderPrepare(int id) => '$baseUrl/orders/$id/prepare';
+  static String orderReady(int id) => '$baseUrl/orders/$id/ready';
+  static String orderVerifyPickup(int id) => '$baseUrl/orders/$id/verify-pickup';
+  static String orderVerifyDelivery(int id) => '$baseUrl/orders/$id/verify-delivery';
   
   // --- Wallet ---
   static const String wallet = '$baseUrl/wallet';
