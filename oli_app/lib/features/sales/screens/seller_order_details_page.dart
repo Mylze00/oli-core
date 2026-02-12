@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/seller_orders_provider.dart';
 import '../models/seller_order.dart';
 import '../../../providers/exchange_rate_provider.dart';
+import '../../../core/user/user_provider.dart';
+import '../../chat/chat_page.dart';
 
 /// Page de détails d'une commande pour le vendeur
 class SellerOrderDetailsPage extends ConsumerStatefulWidget {
@@ -46,6 +49,41 @@ class _SellerOrderDetailsPageState
     });
   }
 
+  void _openChat(SellerOrder order) {
+    final user = ref.read(userProvider).value;
+    if (user == null) return;
+
+    // Use the first product in the order as context for the chat
+    final firstItem = order.items.isNotEmpty ? order.items.first : null;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatPage(
+          myId: user.id.toString(),
+          otherId: order.userId.toString(),
+          otherName: order.buyerName ?? 'Acheteur',
+          productId: firstItem?.productId,
+          productName: firstItem?.productName,
+          productImage: firstItem?.productImageUrl,
+          productPrice: firstItem?.price,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _callBuyer(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible d\'ouvrir le téléphone')),
+        );
+      }
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -102,6 +140,45 @@ class _SellerOrderDetailsPageState
               _buildInfoRow('Nom', order.buyerName ?? 'Non renseigné'),
               _buildInfoRow('Téléphone', order.buyerPhone ?? 'Non renseigné'),
               _buildInfoRow('Adresse', order.deliveryAddress ?? 'Non renseignée'),
+              const SizedBox(height: 12),
+              // Contact buyer buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openChat(order),
+                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                      label: const Text('Envoyer un message'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1E7DBA),
+                        side: const BorderSide(color: Color(0xFF1E7DBA)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
+                  if (order.buyerPhone != null) ...[
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 40,
+                      child: OutlinedButton(
+                        onPressed: () => _callBuyer(order.buyerPhone!),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.green,
+                          side: const BorderSide(color: Colors.green),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                        child: const Icon(Icons.phone, size: 18),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 16),
