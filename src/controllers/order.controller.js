@@ -2,7 +2,8 @@ const orderService = require('../services/order.service');
 
 exports.create = async (req, res) => {
     try {
-        const order = await orderService.createOrder(req.user.id, req.body);
+        const io = req.app.get('io');
+        const order = await orderService.createOrder(req.user.id, req.body, io);
         res.status(201).json({ message: "Commande créée", order });
     } catch (error) {
         console.error("Erreur création commande:", error);

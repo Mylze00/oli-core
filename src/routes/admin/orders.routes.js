@@ -11,7 +11,7 @@ router.get('/recent', async (req, res) => {
         const result = await pool.query(`
             SELECT o.id, o.total_amount, o.status, o.created_at, u.name as buyer_name, u.avatar_url
             FROM orders o
-            JOIN users u ON o.buyer_id = u.id
+            JOIN users u ON o.user_id = u.id
             ORDER BY o.created_at DESC
             LIMIT 5
         `);
@@ -61,7 +61,7 @@ router.get('/', async (req, res) => {
                        WHERE oi.order_id = o.id
                    ) as items
             FROM orders o
-            JOIN users u ON o.buyer_id = u.id
+            JOIN users u ON o.user_id = u.id
             WHERE 1=1
         `;
         const params = [];
@@ -96,7 +96,7 @@ router.get('/:id', async (req, res) => {
                    u.name as buyer_name,
                    u.phone as buyer_phone
             FROM orders o
-            JOIN users u ON o.buyer_id = u.id
+            JOIN users u ON o.user_id = u.id
             WHERE o.id = $1
         `, [id]);
 

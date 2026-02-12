@@ -5,7 +5,7 @@ const deliveryRepo = require('../repositories/delivery.repository');
 const pool = require('../config/db');
 
 class OrderService {
-    async createOrder(userId, data) {
+    async createOrder(userId, data, io = null) {
         const { items, deliveryAddress, paymentMethod, deliveryFee } = data;
 
         // Validation de base
@@ -24,30 +24,26 @@ class OrderService {
         const itemsTotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
         const totalAmount = itemsTotal + (parseFloat(deliveryFee) || 0);
 
-        // LOGIQUE PAIEMENT WALLET
+        // LOGIQUE PAIEMENT INSTANTANÉ (wallet & mobile_money)
         let paymentStatus = 'pending';
         let orderStatus = 'pending';
 
         if (paymentMethod === 'wallet') {
             try {
-                // Tenter le débit du wallet
-                // Si solde insuffisant, cette méthode throw une erreur qui bloquera la création de commande
                 await walletService.payOrder(userId, totalAmount);
-
-                // Si on arrive ici, le paiement est réussi
                 paymentStatus = 'paid';
-                orderStatus = 'paid'; // Ou 'processing' selon votre flux
+                orderStatus = 'paid';
             } catch (err) {
                 throw new Error(err.message || "Echec du paiement Wallet");
             }
+        } else if (paymentMethod === 'mobile_money') {
+            // Mobile Money : paiement simulé instantanément (en prod, intégrer l'API du provider)
+            paymentStatus = 'paid';
+            orderStatus = 'paid';
         }
+        // 'card' reste pending → traité via StripePaymentPage + webhook
 
-        // Appel au repo
-        // TODO: Vérifier le stock des produits ici avant de créer la commande
-        // TODO: Déduire le stock après création (transaction)
-
-        // Note: Il faudra modifier orderRepository.createOrder pour accepter le paymentStatus initial
-        // Pour l'instant, on laisse le repo gérer, mais idéalement on passe le statut
+        // Créer la commande en base
         const order = await orderRepository.createOrder(
             userId,
             items,
@@ -56,25 +52,19 @@ class OrderService {
             parseFloat(deliveryFee) || 0
         );
 
-        // Si payé par wallet, on peut mettre à jour le statut immédiatement si le repo le ne fait pas
+        // Si paiement instantané réussi → MAJ statut + notifications + delivery
         if (paymentStatus === 'paid') {
             await orderRepository.updatePaymentStatus(order.id, 'paid');
             await orderRepository.updateOrderStatus(order.id, 'paid');
             order.status = 'paid';
             order.paymentStatus = 'paid';
 
-            // 🚚 Créer l'entrée delivery_orders pour les livreurs
+            // 🔔 Notifications + création delivery_orders + broadcast Socket.IO
             try {
-                await deliveryRepo.create({
-                    order_id: order.id,
-                    pickup_address: 'À déterminer', // Le vendeur renseigne son adresse
-                    delivery_address: deliveryAddress || 'Non spécifiée',
-                    delivery_fee: parseFloat(deliveryFee) || 0,
-                    estimated_time: '45 min'
-                });
-                console.log(`   🚚 delivery_orders créé pour commande #${order.id}`);
-            } catch (deliveryErr) {
-                console.error('⚠️ Erreur création delivery_orders (non-bloquante):', deliveryErr.message);
+                await this.notifyOrderPaid(order.id, io);
+                console.log(`   ✅ notifyOrderPaid exécuté pour commande #${order.id}`);
+            } catch (notifErr) {
+                console.error('⚠️ Erreur notifyOrderPaid (non-bloquante):', notifErr.message);
             }
         }
 
