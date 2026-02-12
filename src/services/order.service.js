@@ -116,13 +116,15 @@ class OrderService {
         }
 
         // 🔔 NOTIFICATIONS APRÈS PAIEMENT
+        let notificationError = null;
         try {
             await this.notifyOrderPaid(orderId, io);
         } catch (err) {
-            console.error('Erreur notification paiement:', err.message);
-            // Ne pas bloquer le paiement si notification échoue
+            notificationError = err.message + ' | Stack: ' + err.stack;
+            console.error('Erreur notification paiement:', err.message, err.stack);
         }
 
+        order.notificationError = notificationError;
         return order;
     }
 

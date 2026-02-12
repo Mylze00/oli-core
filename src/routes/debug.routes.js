@@ -54,11 +54,21 @@ router.get('/order-status/:id', async (req, res) => {
         const delivery = await pool.query('SELECT * FROM delivery_orders WHERE order_id = $1', [id]);
         const allDeliveries = await pool.query('SELECT id, order_id, status, created_at FROM delivery_orders ORDER BY created_at DESC LIMIT 10');
         const allOrders = await pool.query('SELECT id, status, payment_status, payment_method, total_amount FROM orders ORDER BY id DESC LIMIT 10');
+
+        // Also get delivery_orders table columns
+        const cols = await pool.query(`
+            SELECT column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns 
+            WHERE table_name = 'delivery_orders'
+            ORDER BY ordinal_position
+        `);
+
         res.json({
             order: order.rows[0] || null,
             delivery_order: delivery.rows[0] || null,
             recent_orders: allOrders.rows,
             recent_deliveries: allDeliveries.rows,
+            delivery_orders_columns: cols.rows,
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
