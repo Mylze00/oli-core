@@ -30,15 +30,16 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
   
   // Livraison (Dynamic)
   List<ShippingOption> _shippingOptions = [
-    ShippingOption(methodId: 'oli_standard', label: 'Livraison Oli (Standard)', time: '7', cost: 0.0)
+    ShippingOption(methodId: 'oli_standard', label: 'Oli Standard', time: '2-5 jours', cost: 0.0)
   ];
 
   final List<Map<String, String>> _availableMethods = [
-    {'id': 'oli_standard', 'label': 'Livraison Oli (Standard)', 'time': '7'},
-    {'id': 'oli_express', 'label': 'Express Oli', 'time': '2'},
-    {'id': 'custom', 'label': 'Autre mode de livraison', 'time': '3'},
-    {'id': 'free', 'label': 'Livraison Gratuite', 'time': '10'},
-    {'id': 'pickup', 'label': 'Remise en main propre', 'time': '0'}
+    {'id': 'oli_express', 'label': 'Oli Express', 'time': '1-2h'},
+    {'id': 'oli_standard', 'label': 'Oli Standard', 'time': '2-5 jours'},
+    {'id': 'partner', 'label': 'Livreur Partenaire', 'time': 'Variable'},
+    {'id': 'hand_delivery', 'label': 'Remise en Main Propre', 'time': 'À convenir'},
+    {'id': 'pick_go', 'label': 'Pick & Go', 'time': 'Retrait'},
+    {'id': 'free', 'label': 'Livraison Gratuite', 'time': '3-7 jours'},
   ];
 
   String _condition = 'Neuf';
@@ -288,12 +289,12 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                         methodId: val,
                         label: selected['label']!,
                         time: selected['time']!,
-                        cost: (val == 'free' || val == 'pickup') ? 0.0 : option.cost,
+                        cost: (val == 'free' || val == 'hand_delivery' || val == 'pick_go') ? 0.0 : option.cost,
                       );
                     });
                   },
                 ),
-                if (option.methodId != 'free' && option.methodId != 'pickup') ...[
+                if (option.methodId != 'free' && option.methodId != 'hand_delivery' && option.methodId != 'pick_go' && option.methodId != 'partner') ...[
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -352,7 +353,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                       ),
                     ],
                   ),
-                ] else ...[ // Cas gratuit / pickup : Display Time only
+                ] else ...[ // Cas gratuit / hand_delivery / pick_go / partner : Display Time only
                    const SizedBox(height: 10),
                    TextFormField( 
                     initialValue: option.time,
@@ -390,9 +391,9 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
             onPressed: () {
               setState(() {
                 _shippingOptions.add(ShippingOption(
-                  methodId: 'custom', 
-                  label: 'Autre mode', 
-                  time: 'Variable', 
+                  methodId: 'oli_standard', 
+                  label: 'Oli Standard', 
+                  time: '2-5 jours', 
                   cost: 0.0
                 ));
               });
