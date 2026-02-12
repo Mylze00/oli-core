@@ -45,3 +45,22 @@ router.get('/db-schema', async (req, res) => {
 });
 
 module.exports = router;
+
+// Debug: check order + delivery status
+router.get('/order-status/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const order = await pool.query('SELECT id, status, payment_status, payment_method, total_amount, delivery_address, created_at FROM orders WHERE id = $1', [id]);
+        const delivery = await pool.query('SELECT * FROM delivery_orders WHERE order_id = $1', [id]);
+        const allDeliveries = await pool.query('SELECT id, order_id, status, created_at FROM delivery_orders ORDER BY created_at DESC LIMIT 10');
+        const allOrders = await pool.query('SELECT id, status, payment_status, payment_method, total_amount FROM orders ORDER BY id DESC LIMIT 10');
+        res.json({
+            order: order.rows[0] || null,
+            delivery_order: delivery.rows[0] || null,
+            recent_orders: allOrders.rows,
+            recent_deliveries: allDeliveries.rows,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
