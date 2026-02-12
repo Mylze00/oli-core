@@ -11,28 +11,36 @@ export default function ProductEditor() {
 
     // --- Modes de livraison disponibles ---
     const availableMethods = [
-        { id: 'oli_standard', label: 'Livraison Oli (Standard)', time: '5-7 jours' },
-        { id: 'oli_express', label: 'Express Oli', time: '24-48h' },
-        { id: 'custom', label: 'Mon propre mode de livraison', time: 'Variable' },
-        { id: 'free', label: 'Livraison Gratuite', time: '7-10 jours' },
-        { id: 'pickup', label: 'Remise en main propre', time: 'Immédiat' }
+        { id: 'oli_express', label: 'Oli Express', time: '1-2h', description: 'Livraison rapide gérée par Oli' },
+        { id: 'oli_standard', label: 'Oli Standard', time: '2-5 jours', description: 'Livraison standard gérée par Oli' },
+        { id: 'partner', label: 'Livreur Partenaire', time: 'Variable', description: 'Prix calculé automatiquement selon la distance' },
+        { id: 'hand_delivery', label: 'Remise en Main Propre', time: 'À convenir', description: 'Le vendeur et l\'acheteur s\'arrangent' },
+        { id: 'pick_go', label: 'Pick & Go', time: 'Retrait immédiat', description: 'L\'acheteur récupère au guérite du magasin' },
+        { id: 'free', label: 'Livraison Gratuite', time: '3-7 jours', description: 'Offerte par le vendeur' }
     ];
 
     // --- État pour les options de livraison multiples ---
     const [shippingOptions, setShippingOptions] = useState([
-        { methodId: 'oli_standard', cost: '' }
+        { methodId: 'oli_standard', cost: '', time: '2-5 jours' }
     ]);
 
     const addShippingOption = () => {
-        setShippingOptions([...shippingOptions, { methodId: '', cost: '' }]);
+        setShippingOptions([...shippingOptions, { methodId: '', cost: '', time: '' }]);
     };
 
     const updateShippingOption = (index, field, value) => {
         const newOptions = [...shippingOptions];
 
-        // Si c'est gratuit ou remise en main propre, le coût est forcément 0
-        if (field === 'methodId' && (value === 'free' || value === 'pickup')) {
-            newOptions[index].cost = 0;
+        // Si c'est gratuit, remise en main propre ou partenaire, le coût est géré automatiquement
+        if (field === 'methodId') {
+            if (value === 'free' || value === 'hand_delivery') {
+                newOptions[index].cost = 0;
+            } else if (value === 'partner') {
+                newOptions[index].cost = '';
+            }
+            // Pré-remplir le délai
+            const method = availableMethods.find(m => m.id === value);
+            if (method) newOptions[index].time = method.time;
         }
 
         newOptions[index][field] = value;
@@ -228,47 +236,66 @@ export default function ProductEditor() {
                     </p>
 
                     <div className="space-y-3">
-                        {shippingOptions.map((option, index) => (
-                            <div key={index} className="flex gap-4 items-end bg-gray-50 p-4 rounded-lg border border-gray-100 relative group">
-                                <div className="flex-1">
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Mode de transport</label>
-                                    <select
-                                        className="w-full border p-2 rounded-md bg-white shadow-sm"
-                                        value={option.methodId}
-                                        onChange={(e) => updateShippingOption(index, 'methodId', e.target.value)}
-                                        required
-                                    >
-                                        <option value="">Sélectionner...</option>
-                                        {availableMethods.map(m => (
-                                            <option key={m.id} value={m.id}>{m.label} ({m.time})</option>
-                                        ))}
-                                    </select>
+                        {shippingOptions.map((option, index) => {
+                            const method = availableMethods.find(m => m.id === option.methodId);
+                            const isCostDisabled = option.methodId === 'free' || option.methodId === 'hand_delivery' || option.methodId === 'partner';
+                            return (
+                                <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-100 relative group">
+                                    <div className="flex gap-4 items-end">
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Mode de transport</label>
+                                            <select
+                                                className="w-full border p-2 rounded-md bg-white shadow-sm"
+                                                value={option.methodId}
+                                                onChange={(e) => updateShippingOption(index, 'methodId', e.target.value)}
+                                                required
+                                            >
+                                                <option value="">Sélectionner...</option>
+                                                {availableMethods.map(m => (
+                                                    <option key={m.id} value={m.id}>{m.label} ({m.time})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="w-28">
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Délai</label>
+                                            <input
+                                                type="text"
+                                                placeholder="ex: 1-2h"
+                                                className="w-full border p-2 rounded-md bg-white shadow-sm text-sm"
+                                                value={option.time || ''}
+                                                onChange={(e) => updateShippingOption(index, 'time', e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="w-32">
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Coût ($)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                placeholder={option.methodId === 'partner' ? 'Auto' : '0.00'}
+                                                className={`w-full border p-2 rounded-md bg-white shadow-sm ${isCostDisabled ? 'bg-gray-200 text-gray-400' : ''}`}
+                                                value={option.cost}
+                                                onChange={(e) => updateShippingOption(index, 'cost', e.target.value)}
+                                                disabled={isCostDisabled}
+                                                required={!isCostDisabled}
+                                            />
+                                        </div>
+                                        {shippingOptions.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeShippingOption(index)}
+                                                className="p-2 text-red-400 hover:text-red-600 transition-colors"
+                                            >
+                                                <Trash size={18} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {method && (
+                                        <p className="text-xs text-gray-400 mt-2 italic">{method.description}</p>
+                                    )}
                                 </div>
-                                <div className="w-32">
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Coût ($)</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        placeholder="0.00"
-                                        className={`w-full border p-2 rounded-md bg-white shadow-sm ${(option.methodId === 'free' || option.methodId === 'pickup') ? 'bg-gray-200' : ''}`}
-                                        value={option.cost}
-                                        onChange={(e) => updateShippingOption(index, 'cost', e.target.value)}
-                                        disabled={option.methodId === 'free' || option.methodId === 'pickup'}
-                                        required
-                                    />
-                                </div>
-                                {shippingOptions.length > 1 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => removeShippingOption(index)}
-                                        className="p-2 text-red-400 hover:text-red-600 transition-colors"
-                                    >
-                                        <Trash size={18} />
-                                    </button>
-                                )}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 
