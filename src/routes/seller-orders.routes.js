@@ -13,12 +13,37 @@ const notificationRepo = require('../repositories/notification.repository');
 
 /**
  * Middleware pour vérifier que l'utilisateur est vendeur
+ * Vérifie en DB (pas seulement le JWT qui peut être stale)
  */
-const requireSeller = (req, res, next) => {
-    if (!req.user.is_seller) {
-        return res.status(403).json({ error: 'Accès réservé aux vendeurs' });
+const requireSeller = async (req, res, next) => {
+    try {
+        // Vérifier is_seller en DB OU si l'utilisateur a des produits publiés
+        const result = await db.query(
+            `SELECT u.is_seller, (SELECT COUNT(*) FROM products WHERE seller_id = u.id) as product_count
+             FROM users u WHERE u.id = $1`,
+            [req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(403).json({ error: 'Utilisateur introuvable' });
+        }
+
+        const user = result.rows[0];
+        if (!user.is_seller && parseInt(user.product_count) === 0) {
+            return res.status(403).json({ error: 'Accès réservé aux vendeurs' });
+        }
+
+        // Auto-promouvoir en vendeur si l'utilisateur a des produits mais n'est pas marqué vendeur
+        if (!user.is_seller && parseInt(user.product_count) > 0) {
+            await db.query('UPDATE users SET is_seller = true WHERE id = $1', [req.user.id]);
+            console.log(`✅ User #${req.user.id} auto-promu vendeur (${user.product_count} produits)`);
+        }
+
+        next();
+    } catch (err) {
+        console.error('Erreur requireSeller:', err.message);
+        return res.status(500).json({ error: 'Erreur vérification vendeur' });
     }
-    next();
 };
 
 /**

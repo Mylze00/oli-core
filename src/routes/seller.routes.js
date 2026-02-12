@@ -12,12 +12,36 @@ const { requireAuth } = require('../middlewares/auth.middleware');
 
 /**
  * Middleware pour vérifier que l'utilisateur est vendeur
+ * Vérifie en DB (le JWT peut être stale)
  */
-const requireSeller = (req, res, next) => {
-    if (!req.user.is_seller) {
-        return res.status(403).json({ error: 'Accès réservé aux vendeurs' });
+const db = require('../config/db');
+const requireSeller = async (req, res, next) => {
+    try {
+        const result = await db.query(
+            `SELECT u.is_seller, (SELECT COUNT(*) FROM products WHERE seller_id = u.id) as product_count
+             FROM users u WHERE u.id = $1`,
+            [req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(403).json({ error: 'Utilisateur introuvable' });
+        }
+
+        const user = result.rows[0];
+        if (!user.is_seller && parseInt(user.product_count) === 0) {
+            return res.status(403).json({ error: 'Accès réservé aux vendeurs' });
+        }
+
+        if (!user.is_seller && parseInt(user.product_count) > 0) {
+            await db.query('UPDATE users SET is_seller = true WHERE id = $1', [req.user.id]);
+            console.log(`✅ User #${req.user.id} auto-promu vendeur (${user.product_count} produits)`);
+        }
+
+        next();
+    } catch (err) {
+        console.error('Erreur requireSeller:', err.message);
+        return res.status(500).json({ error: 'Erreur vérification vendeur' });
     }
-    next();
 };
 
 /**
