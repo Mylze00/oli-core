@@ -119,16 +119,16 @@ class _SellerOrderDetailsPageState
             [
               _buildInfoRow(
                 'Sous-total',
-                '${(order.totalAmount - order.deliveryFee).toStringAsFixed(0)} FCFA',
+                '${(order.totalAmount - order.deliveryFee).toStringAsFixed(0)} FC',
               ),
               _buildInfoRow(
                 'Livraison',
-                '${order.deliveryFee.toStringAsFixed(0)} FCFA',
+                '${order.deliveryFee.toStringAsFixed(0)} FC',
               ),
               const Divider(),
               _buildInfoRow(
                 'Total',
-                '${order.totalAmount.toStringAsFixed(0)} FCFA',
+                '${order.totalAmount.toStringAsFixed(0)} FC',
                 isBold: true,
               ),
             ],
@@ -401,14 +401,14 @@ class _SellerOrderDetailsPageState
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  '${item.price.toStringAsFixed(0)} FCFA × ${item.quantity}',
+                  '${item.price.toStringAsFixed(0)} FC × ${item.quantity}',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],
             ),
           ),
           Text(
-            '${(item.price * item.quantity).toStringAsFixed(0)} FCFA',
+            '${(item.price * item.quantity).toStringAsFixed(0)} FC',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           ),
         ],

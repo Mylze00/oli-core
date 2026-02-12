@@ -88,7 +88,7 @@ class SellerOrderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${order.totalAmount.toStringAsFixed(0)} FCFA',
+                      '${order.totalAmount.toStringAsFixed(0)} FC',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -200,7 +200,7 @@ class SellerOrderCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '${item.price.toStringAsFixed(0)} FCFA × ${item.quantity}',
+                          '${item.price.toStringAsFixed(0)} FC × ${item.quantity}',
                           style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                         ),
                       ],
