@@ -124,15 +124,26 @@ io.on('connection', (socket) => {
 
 
 // --- MIDDLEWARES GÉNÉRAUX ---
-app.use(cors({
-    origin: config.ALLOWED_ORIGINS,
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, etc)
+        if (!origin) return callback(null, true);
+        if (config.ALLOWED_ORIGINS.includes('*') || config.ALLOWED_ORIGINS.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.error(`❌ CORS blocked origin: ${origin}`);
+            console.error(`   Allowed origins: ${JSON.stringify(config.ALLOWED_ORIGINS)}`);
+            callback(new Error(`CORS not allowed for origin: ${origin}`));
+        }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "authorization", "X-Requested-With", "Accept"],
     exposedHeaders: ["Content-Type", "Authorization"]
-}));
+};
+app.use(cors(corsOptions));
 
-app.options('*', cors());
+app.options('*', cors(corsOptions));
 
 // Logging middleware
 if (config.NODE_ENV !== 'production') {
