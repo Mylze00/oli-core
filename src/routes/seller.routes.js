@@ -157,10 +157,18 @@ router.get('/orders', requireAuth, requireSeller, async (req, res) => {
             statusCounts[row.status] = parseInt(row.count);
         });
 
+        // Convertir les champs DECIMAL (string) en nombres pour Flutter
+        const sanitizedOrders = orders.map(order => ({
+            ...order,
+            total_amount: order.total_amount != null ? parseFloat(order.total_amount) : 0,
+            delivery_fee: order.delivery_fee != null ? parseFloat(order.delivery_fee) : 0,
+            items_count: order.items_count != null ? parseInt(order.items_count) : 0,
+        }));
+
         res.json({
-            orders: orders,
+            orders: sanitizedOrders,
             status_counts: statusCounts,
-            total: orders.length
+            total: sanitizedOrders.length
         });
     } catch (error) {
         console.error('Error GET /seller/orders:', error);
