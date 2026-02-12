@@ -4,6 +4,7 @@ import '../../../orders/screens/purchases_page.dart';
 import '../../../cart/screens/cart_page.dart';
 import '../../../cart/providers/cart_provider.dart';
 import '../../../sales/screens/my_sales_page.dart';
+import '../../../user/screens/address_management_page.dart';
 
 class OrderStatusBar extends ConsumerWidget {
   final Color cardColor;
@@ -68,12 +69,7 @@ class OrderStatusBar extends ConsumerWidget {
                 Icons.location_on_outlined,
                 "Adresses",
                 textColor,
-                onTap: () {
-                  // TODO: Navigate to delivery address management page
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Gestion des adresses bientôt disponible')),
-                  );
-                },
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressManagementPage())),
               ),
               _buildOrderIcon(
                 Icons.sell_outlined,
