@@ -214,9 +214,11 @@ class OrderService {
     }
 
     /**
-     * Livreur valide le retrait chez le vendeur avec le pickup_code
+     * Valide le retrait avec le pickup_code
+     * Circuit A (livreur) : ready → shipped + sync delivery_orders
+     * Circuit B (Pick & Go) : ready → delivered directement (pas de livreur)
      */
-    async verifyPickup(orderId, code, delivererId, io = null) {
+    async verifyPickup(orderId, code, verifierId, io = null) {
         const result = await pool.query(
             'SELECT * FROM orders WHERE id = $1', [orderId]
         );
@@ -231,6 +233,28 @@ class OrderService {
             throw new Error('Code de pickup invalide');
         }
 
+        const isPickAndGo = order.delivery_method_id === 'pick_go';
+
+        if (isPickAndGo) {
+            // Circuit B — Pick & Go : directement DELIVERED
+            await pool.query(
+                "UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1",
+                [orderId]
+            );
+            await this._logStatusChange(orderId, 'ready', 'delivered', verifierId, 'seller');
+
+            // Notifier l'acheteur
+            await notificationService.send(
+                order.user_id, 'order',
+                'Commande récupérée ✅',
+                `Votre commande #${orderId} a été récupérée avec succès au guichet.`,
+                { order_id: orderId, status: 'delivered' }, io
+            );
+
+            return { ...order, status: 'delivered', verified_pickup: true, circuit: 'pick_go' };
+        }
+
+        // Circuit A — Livreur : ready → shipped
         await pool.query(
             "UPDATE orders SET status = 'shipped', shipped_at = NOW() WHERE id = $1",
             [orderId]
@@ -242,7 +266,7 @@ class OrderService {
             [orderId]
         );
 
-        await this._logStatusChange(orderId, 'ready', 'shipped', delivererId, 'deliverer');
+        await this._logStatusChange(orderId, 'ready', 'shipped', verifierId, 'deliverer');
 
         // Notifier l'acheteur : le colis est en route + lui envoyer le delivery_code
         await notificationService.send(
@@ -252,21 +276,48 @@ class OrderService {
             { order_id: orderId, status: 'shipped', delivery_code: order.delivery_code }, io
         );
 
-        return { ...order, status: 'shipped', verified_pickup: true };
+        return { ...order, status: 'shipped', verified_pickup: true, circuit: 'deliverer' };
     }
 
     /**
-     * Acheteur valide la réception avec le delivery_code
+     * Valide la livraison/remise avec le delivery_code
+     * Circuit A (livreur) : acheteur confirme réception (status: shipped → delivered)
+     * Circuit C (Hand Delivery) : vendeur confirme remise (status: processing → delivered)
      */
-    async verifyDelivery(orderId, code, buyerId, io = null) {
+    async verifyDelivery(orderId, code, userId, io = null) {
+        // Permettre au vendeur OU à l'acheteur de vérifier
         const result = await pool.query(
-            'SELECT * FROM orders WHERE id = $1 AND user_id = $2', [orderId, buyerId]
+            'SELECT * FROM orders WHERE id = $1', [orderId]
         );
         if (result.rows.length === 0) throw new Error('Commande non trouvée');
         const order = result.rows[0];
 
-        if (order.status !== 'shipped') {
-            throw new Error("La commande doit être au statut 'shipped' pour valider la livraison");
+        const isHandDelivery = order.delivery_method_id === 'hand_delivery';
+        const isBuyer = order.user_id === userId;
+
+        // Vérifier que l'appelant est autorisé
+        if (!isBuyer && !isHandDelivery) {
+            // Pour Circuit A, seul l'acheteur peut confirmer
+            throw new Error('Seul l\'acheteur peut confirmer la réception');
+        }
+
+        // Pour Hand Delivery, vérifier que c'est le vendeur
+        if (isHandDelivery && !isBuyer) {
+            const sellerCheck = await pool.query(
+                `SELECT DISTINCT p.seller_id FROM order_items oi
+                 JOIN products p ON oi.product_id::integer = p.id
+                 WHERE oi.order_id = $1 AND p.seller_id = $2`,
+                [orderId, userId]
+            );
+            if (sellerCheck.rows.length === 0) {
+                throw new Error('Accès non autorisé');
+            }
+        }
+
+        // Vérifier le statut autorisé
+        const allowedStatuses = isHandDelivery ? ['processing', 'shipped'] : ['shipped'];
+        if (!allowedStatuses.includes(order.status)) {
+            throw new Error(`La commande doit être au statut '${allowedStatuses.join("' ou '")}' pour valider la livraison`);
         }
 
         if (order.delivery_code !== code.toUpperCase()) {
@@ -278,31 +329,44 @@ class OrderService {
             [orderId]
         );
 
-        // Sync delivery_orders → delivered
+        // Sync delivery_orders → delivered (seulement si existe)
         await pool.query(
             "UPDATE delivery_orders SET status = 'delivered', updated_at = NOW() WHERE order_id = $1",
             [orderId]
         );
 
-        await this._logStatusChange(orderId, 'shipped', 'delivered', buyerId, 'buyer');
+        const previousStatus = order.status;
+        const role = isBuyer ? 'buyer' : 'seller';
+        await this._logStatusChange(orderId, previousStatus, 'delivered', userId, role);
 
-        // Notifier le vendeur
-        const sellerResult = await pool.query(
-            `SELECT DISTINCT p.seller_id FROM order_items oi
-             JOIN products p ON oi.product_id::integer = p.id
-             WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL`,
-            [orderId]
-        );
-        for (const row of sellerResult.rows) {
+        // Notifier le vendeur (si l'acheteur confirme) ou l'acheteur (si le vendeur confirme)
+        if (isBuyer) {
+            // Notifier le vendeur
+            const sellerResult = await pool.query(
+                `SELECT DISTINCT p.seller_id FROM order_items oi
+                 JOIN products p ON oi.product_id::integer = p.id
+                 WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL`,
+                [orderId]
+            );
+            for (const row of sellerResult.rows) {
+                await notificationService.send(
+                    row.seller_id, 'order',
+                    'Commande livrée ✅',
+                    `La commande #${orderId} a été livrée avec succès.`,
+                    { order_id: orderId, status: 'delivered' }, io
+                );
+            }
+        } else {
+            // Hand Delivery: notifier l'acheteur
             await notificationService.send(
-                row.seller_id, 'order',
-                'Commande livrée ✅',
-                `La commande #${orderId} a été livrée avec succès.`,
+                order.user_id, 'order',
+                'Commande reçue ✅',
+                `Votre commande #${orderId} a été remise en main propre avec succès.`,
                 { order_id: orderId, status: 'delivered' }, io
             );
         }
 
-        return { ...order, status: 'delivered', verified_delivery: true };
+        return { ...order, status: 'delivered', verified_delivery: true, circuit: isHandDelivery ? 'hand_delivery' : 'deliverer' };
     }
 
     /**
@@ -499,30 +563,40 @@ class OrderService {
         }
 
         // CRÉER L'ENTRÉE delivery_orders POUR LES LIVREURS
-        let deliveryOrder = null;
-        try {
-            deliveryOrder = await deliveryRepo.create({
-                order_id: orderId,
-                pickup_address: 'À déterminer',
-                delivery_address: order.delivery_address || 'Non spécifiée',
-                delivery_fee: 0,
-                estimated_time: '45 min'
-            });
-            console.log(`   🚚 delivery_orders créé: ID ${deliveryOrder.id} pour commande #${orderId}`);
-        } catch (deliveryErr) {
-            console.error('⚠️ Erreur création delivery_orders:', deliveryErr.message);
-        }
+        // Uniquement pour Circuit A (modes avec livreur Oli)
+        const CIRCUIT_A_MODES = ['oli_express', 'oli_standard', 'partner', 'free'];
+        const deliveryMethod = order.delivery_method_id;
+        const needsDeliverer = !deliveryMethod || CIRCUIT_A_MODES.includes(deliveryMethod);
 
-        // BROADCAST POUR LIVREURS (via Socket.IO)
-        if (io) {
-            io.emit('new_delivery_available', {
-                order_id: orderId,
-                delivery_id: deliveryOrder?.id,
-                delivery_address: order.delivery_address,
-                total_amount: order.total_amount,
-                created_at: new Date()
-            });
-            console.log(`   📡 Broadcast new_delivery_available émis`);
+        let deliveryOrder = null;
+        if (needsDeliverer) {
+            try {
+                deliveryOrder = await deliveryRepo.create({
+                    order_id: orderId,
+                    pickup_address: 'À déterminer',
+                    delivery_address: order.delivery_address || 'Non spécifiée',
+                    delivery_fee: parseFloat(order.delivery_fee) || 0,
+                    estimated_time: deliveryMethod === 'oli_express' ? '1-2h' : '45 min'
+                });
+                console.log(`   🚚 delivery_orders créé: ID ${deliveryOrder.id} pour commande #${orderId} (mode: ${deliveryMethod})`);
+            } catch (deliveryErr) {
+                console.error('⚠️ Erreur création delivery_orders:', deliveryErr.message);
+            }
+
+            // BROADCAST POUR LIVREURS (via Socket.IO)
+            if (io) {
+                io.emit('new_delivery_available', {
+                    order_id: orderId,
+                    delivery_id: deliveryOrder?.id,
+                    delivery_address: order.delivery_address,
+                    total_amount: order.total_amount,
+                    delivery_method: deliveryMethod,
+                    created_at: new Date()
+                });
+                console.log(`   📡 Broadcast new_delivery_available émis`);
+            }
+        } else {
+            console.log(`   ℹ️ Pas de delivery_orders pour mode "${deliveryMethod}" (Circuit B/C)`);
         }
     }
 

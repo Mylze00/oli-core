@@ -76,6 +76,7 @@ class SellerOrder {
     'pending': 'En attente',
     'paid': 'Payée',
     'processing': 'En préparation',
+    'ready': 'Prête',
     'shipped': 'Expédiée',
     'delivered': 'Livrée',
     'cancelled': 'Annulée',
@@ -84,14 +85,13 @@ class SellerOrder {
   String get statusLabel => statusLabels[status] ?? status;
 
   /// Transitions autorisées pour le vendeur
+  /// shipped/delivered sont gérés par le livreur ou l'acheteur via codes
   List<String> get allowedTransitions {
     switch (status) {
       case 'paid':
         return ['processing'];
       case 'processing':
-        return ['shipped'];
-      case 'shipped':
-        return ['delivered'];
+        return ['ready'];
       default:
         return [];
     }

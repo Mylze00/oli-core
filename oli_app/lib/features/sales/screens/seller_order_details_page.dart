@@ -334,6 +334,10 @@ class _SellerOrderDetailsPageState
         icon = Icons.inventory_2;
         color = Colors.blue;
         break;
+      case 'ready':
+        icon = Icons.check_box;
+        color = Colors.teal;
+        break;
       case 'shipped':
         icon = Icons.local_shipping;
         color = Colors.purple;
@@ -366,7 +370,9 @@ class _SellerOrderDetailsPageState
       case 'paid':
         return 'Le client a payé. Préparez la commande.';
       case 'processing':
-        return 'En cours de préparation. Expédiez quand prêt.';
+        return 'En cours de préparation.';
+      case 'ready':
+        return 'Prête ! En attente du livreur ou du retrait client.';
       case 'shipped':
         return "En route vers le client.";
       case 'delivered':
@@ -557,6 +563,8 @@ class _SellerOrderDetailsPageState
     switch (status) {
       case 'processing':
         return Icons.inventory_2_outlined;
+      case 'ready':
+        return Icons.check_box_outlined;
       case 'shipped':
         return Icons.local_shipping_outlined;
       case 'delivered':
@@ -570,6 +578,8 @@ class _SellerOrderDetailsPageState
     switch (status) {
       case 'processing':
         return 'Commencer la préparation';
+      case 'ready':
+        return 'Marquer comme prête';
       case 'shipped':
         return 'Marquer comme expédiée';
       case 'delivered':
