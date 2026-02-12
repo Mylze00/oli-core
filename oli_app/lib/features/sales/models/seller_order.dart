@@ -44,9 +44,9 @@ class SellerOrder {
       userId: json['user_id'],
       status: json['status'] ?? 'pending',
       paymentStatus: json['payment_status'] ?? 'pending',
-      totalAmount: (json['total_amount'] ?? 0).toDouble(),
+      totalAmount: double.tryParse(json['total_amount']?.toString() ?? '0') ?? 0,
       deliveryAddress: json['delivery_address'],
-      deliveryFee: (json['delivery_fee'] ?? 0).toDouble(),
+      deliveryFee: double.tryParse(json['delivery_fee']?.toString() ?? '0') ?? 0,
       trackingNumber: json['tracking_number'],
       carrier: json['carrier'],
       estimatedDelivery: json['estimated_delivery'] != null
@@ -124,7 +124,7 @@ class SellerOrderItem {
       productId: json['product_id']?.toString() ?? '',
       productName: json['product_name'] ?? 'Produit',
       productImageUrl: json['product_image_url'],
-      price: (json['price'] ?? 0).toDouble(),
+      price: double.tryParse(json['price']?.toString() ?? '0') ?? 0,
       quantity: json['quantity'] ?? 1,
       sellerName: json['seller_name'],
     );

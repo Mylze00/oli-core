@@ -57,7 +57,7 @@ router.get('/', async (req, res) => {
                            'product_name', p.name
                        ))
                        FROM order_items oi
-                       JOIN products p ON oi.product_id = p.id
+                       JOIN products p ON oi.product_id::integer = p.id
                        WHERE oi.order_id = o.id
                    ) as items
             FROM orders o
