@@ -177,9 +177,10 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
   }
 
   Future<void> _scanQR() async {
+    final realOrderId = _order?['order_id'] ?? widget.orderId;
     final verified = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => QrScannerPage(orderId: widget.orderId),
+        builder: (_) => QrScannerPage(orderId: realOrderId),
       ),
     );
 
@@ -250,8 +251,9 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
 
     setState(() => _isPickingUp = true);
 
+    final realOrderId = _order?['order_id'] ?? widget.orderId;
     final success = await ref.read(deliveryServiceProvider).verifyPickupCode(
-      widget.orderId,
+      realOrderId,
       code,
     );
 
@@ -270,10 +272,11 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
 
   /// Scanner QR pour le retrait chez le vendeur
   Future<void> _scanPickupQR() async {
+    final realOrderId = _order?['order_id'] ?? widget.orderId;
     final verified = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => QrScannerPage(
-          orderId: widget.orderId,
+          orderId: realOrderId,
           isPickup: true,
         ),
       ),
@@ -322,8 +325,10 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
     }
 
     final status = _order!['status'] ?? 'pending';
+    final orderStatus = _order!['order_status'] ?? _order!['status'] ?? 'pending';
     final isAccepted = status == 'assigned' || status == 'shipped' ||
-        status == 'picked_up' || status == 'in_transit';
+        status == 'picked_up' || status == 'in_transit' ||
+        status == 'ready';
 
     return Scaffold(
       appBar: AppBar(

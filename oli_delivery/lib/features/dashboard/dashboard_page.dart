@@ -142,24 +142,30 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     IconData statusIcon;
 
     switch (status) {
-      case 'shipped':
+      case 'assigned':
         statusColor = Colors.blue;
+        statusLabel = 'Acceptée';
+        statusIcon = Icons.person_pin;
+        break;
+      case 'picked_up':
+        statusColor = Colors.orange;
+        statusLabel = 'Récupérée';
+        statusIcon = Icons.inventory;
+        break;
+      case 'in_transit':
+        statusColor = Colors.deepPurple;
         statusLabel = 'En livraison';
         statusIcon = Icons.local_shipping;
-        break;
-      case 'processing':
-        statusColor = Colors.orange;
-        statusLabel = 'En préparation';
-        statusIcon = Icons.hourglass_top;
         break;
       case 'delivered':
         statusColor = Colors.green;
         statusLabel = 'Livrée';
         statusIcon = Icons.check_circle;
         break;
+      case 'pending':
       default:
         statusColor = Colors.grey;
-        statusLabel = 'En attente';
+        statusLabel = 'Disponible';
         statusIcon = Icons.pending;
     }
 

@@ -236,6 +236,12 @@ class OrderService {
             [orderId]
         );
 
+        // Sync delivery_orders → picked_up
+        await pool.query(
+            "UPDATE delivery_orders SET status = 'picked_up', updated_at = NOW() WHERE order_id = $1",
+            [orderId]
+        );
+
         await this._logStatusChange(orderId, 'ready', 'shipped', delivererId, 'deliverer');
 
         // Notifier l'acheteur : le colis est en route + lui envoyer le delivery_code
@@ -269,6 +275,12 @@ class OrderService {
 
         await pool.query(
             "UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1",
+            [orderId]
+        );
+
+        // Sync delivery_orders → delivered
+        await pool.query(
+            "UPDATE delivery_orders SET status = 'delivered', updated_at = NOW() WHERE order_id = $1",
             [orderId]
         );
 
@@ -308,9 +320,10 @@ class OrderService {
         if (orderResult.rows.length === 0) throw new Error('Commande non trouvée');
         const order = orderResult.rows[0];
 
-        // Vérifier permission : acheteur ou vendeur
+        // Vérifier permission : acheteur, vendeur, ou livreur
         const isBuyer = order.user_id === userId;
         let isSeller = false;
+        let isDeliverer = false;
         if (!isBuyer) {
             const sellerCheck = await pool.query(
                 `SELECT 1 FROM order_items oi
@@ -320,8 +333,15 @@ class OrderService {
             );
             isSeller = sellerCheck.rows.length > 0;
         }
-
         if (!isBuyer && !isSeller) {
+            const delivererCheck = await pool.query(
+                `SELECT 1 FROM delivery_orders WHERE order_id = $1 AND deliverer_id = $2 LIMIT 1`,
+                [orderId, userId]
+            );
+            isDeliverer = delivererCheck.rows.length > 0;
+        }
+
+        if (!isBuyer && !isSeller && !isDeliverer) {
             throw new Error('Accès non autorisé à cette commande');
         }
 
@@ -377,8 +397,8 @@ class OrderService {
             delivery_method: order.delivery_method_id,
             delivery_address: order.delivery_address,
             buyer_name: order.buyer_name,
-            // Codes : acheteur voit delivery_code, vendeur voit pickup_code
-            pickup_code: isSeller ? order.pickup_code : null,
+            // Codes : acheteur voit delivery_code, vendeur/livreur voient pickup_code
+            pickup_code: (isSeller || isDeliverer) ? order.pickup_code : null,
             delivery_code: isBuyer ? order.delivery_code : null,
             steps,
             history: historyResult.rows,

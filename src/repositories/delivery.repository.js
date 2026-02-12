@@ -1,11 +1,7 @@
 const pool = require('../config/db');
 
-/**
- * Génère un code unique pour la livraison
- */
-function generateDeliveryCode() {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
+// Code de livraison désormais géré par order.service.js sur la table orders
+// Plus de génération indépendante ici
 
 /**
  * Créer une commande de livraison
@@ -17,16 +13,14 @@ async function create(deliveryData) {
         delivery_fee, estimated_time
     } = deliveryData;
 
-    const delivery_code = generateDeliveryCode();
-
     const res = await pool.query(`
         INSERT INTO delivery_orders (
             order_id, pickup_address, delivery_address,
             pickup_lat, pickup_lng, delivery_lat, delivery_lng,
-            delivery_fee, estimated_time, status, created_at, delivery_code
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW(), $10)
+            delivery_fee, estimated_time, status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW())
         RETURNING *
-    `, [order_id, pickup_address, delivery_address, pickup_lat, pickup_lng, delivery_lat, delivery_lng, delivery_fee, estimated_time, delivery_code]);
+    `, [order_id, pickup_address, delivery_address, pickup_lat, pickup_lng, delivery_lat, delivery_lng, delivery_fee, estimated_time]);
 
     return res.rows[0];
 }
@@ -37,7 +31,9 @@ async function create(deliveryData) {
  */
 async function findAvailable() {
     const res = await pool.query(`
-        SELECT d.*, o.total_amount, u.name as customer_name, u.phone as customer_phone
+        SELECT d.*, o.total_amount, o.status as order_status,
+               o.pickup_code, o.delivery_code,
+               u.name as customer_name, u.phone as customer_phone
         FROM delivery_orders d
         JOIN orders o ON d.order_id = o.id
         JOIN users u ON o.user_id = u.id
@@ -80,7 +76,9 @@ async function updateStatus(deliveryId, status, currentLat, currentLng) {
  */
 async function findByDeliverer(delivererId) {
     const res = await pool.query(`
-        SELECT d.*, o.total_amount, u.name as customer_name, u.phone as customer_phone 
+        SELECT d.*, o.total_amount, o.status as order_status,
+               o.pickup_code, o.delivery_code,
+               u.name as customer_name, u.phone as customer_phone 
         FROM delivery_orders d
         JOIN orders o ON d.order_id = o.id
         JOIN users u ON o.user_id = u.id

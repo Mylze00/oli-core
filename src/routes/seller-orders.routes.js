@@ -48,17 +48,19 @@ const requireSeller = async (req, res, next) => {
 
 /**
  * Transitions de statut autorisées pour les vendeurs
+ * Le statut 'shipped' est géré par le livreur (verify-pickup)
+ * Le statut 'delivered' est géré par l'acheteur (verify-delivery) ou le livreur
  */
 const SELLER_TRANSITIONS = {
     'paid': ['processing'],           // Commande payée → En préparation
-    'processing': ['shipped'],        // En préparation → Expédiée
-    'shipped': ['delivered']          // Expédiée → Livrée (confirmation vendeur)
+    'processing': ['ready'],          // En préparation → Prête (livreur notifié)
 };
 
 const STATUS_LABELS = {
     'pending': 'En attente',
     'paid': 'Payée',
     'processing': 'En préparation',
+    'ready': 'Prête pour expédition',
     'shipped': 'Expédiée',
     'delivered': 'Livrée',
     'cancelled': 'Annulée'
