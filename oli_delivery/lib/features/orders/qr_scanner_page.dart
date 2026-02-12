@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../services/delivery_service.dart';
 
-/// Page de scan QR pour vérifier la livraison
+/// Page de scan QR pour vérifier la livraison ou le retrait
 class QrScannerPage extends ConsumerStatefulWidget {
   final int orderId;
-  const QrScannerPage({super.key, required this.orderId});
+  final bool isPickup;
+  const QrScannerPage({super.key, required this.orderId, this.isPickup = false});
 
   @override
   ConsumerState<QrScannerPage> createState() => _QrScannerPageState();
@@ -45,10 +46,18 @@ class _QrScannerPageState extends ConsumerState<QrScannerPage> {
     // Vibration feedback
     // HapticFeedback.mediumImpact();
 
-    final success = await ref.read(deliveryServiceProvider).verifyDeliveryCode(
-      widget.orderId,
-      code,
-    );
+    final bool success;
+    if (widget.isPickup) {
+      success = await ref.read(deliveryServiceProvider).verifyPickupCode(
+        widget.orderId,
+        code,
+      );
+    } else {
+      success = await ref.read(deliveryServiceProvider).verifyDeliveryCode(
+        widget.orderId,
+        code,
+      );
+    }
 
     if (mounted) {
       setState(() {
@@ -81,7 +90,7 @@ class _QrScannerPageState extends ConsumerState<QrScannerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Scanner — Commande #${widget.orderId}'),
+        title: Text('Scanner — ${widget.isPickup ? 'Retrait' : 'Livraison'} #${widget.orderId}'),
         actions: [
           // Switch camera
           IconButton(
@@ -193,7 +202,7 @@ class _QrScannerPageState extends ConsumerState<QrScannerPage> {
               left: 0,
               right: 0,
               child: const Text(
-                'Scannez le QR code du client\npour confirmer la livraison',
+                'Scannez le QR code ${widget.isPickup ? 'du vendeur\npour confirmer le retrait' : 'du client\npour confirmer la livraison'}',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,

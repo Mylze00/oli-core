@@ -88,4 +88,32 @@ class DeliveryService {
       return false;
     }
   }
+
+  /// POST /orders/:id/verify-pickup — Vérifier le code de retrait chez le vendeur
+  Future<bool> verifyPickupCode(int orderId, String code) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.orderVerifyPickup(orderId),
+        data: {'code': code},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ Error verifying pickup code: $e');
+      return false;
+    }
+  }
+
+  /// GET /orders/:id/tracking — Timeline de suivi
+  Future<Map<String, dynamic>?> getOrderTracking(int orderId) async {
+    try {
+      final response = await _dio.get(ApiConfig.orderTracking(orderId));
+      if (response.statusCode == 200) {
+        return response.data as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ Error fetching tracking: $e');
+      return null;
+    }
+  }
 }

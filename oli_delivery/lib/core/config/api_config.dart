@@ -20,6 +20,15 @@ class ApiConfig {
   /// POST /delivery/:id/verify  (body: {code})
   static String deliveryVerify(dynamic id) => '$deliveryBase/$id/verify';
 
+  // Orders — tracking endpoints (shared with main app)
+  static const String ordersBase = '$baseUrl/orders';
+
+  /// GET /orders/:id/tracking
+  static String orderTracking(dynamic id) => '$ordersBase/$id/tracking';
+
+  /// POST /orders/:id/verify-pickup  (body: {code})
+  static String orderVerifyPickup(dynamic id) => '$ordersBase/$id/verify-pickup';
+
   // Device tokens (FCM)
   static const String deviceTokens = '$baseUrl/device-tokens';
 }

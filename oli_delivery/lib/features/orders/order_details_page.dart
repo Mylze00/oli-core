@@ -19,6 +19,7 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
   bool _isLoading = true;
   bool _isAccepting = false;
   bool _isDelivering = false;
+  bool _isPickingUp = false;
   double? _distanceKm;
   bool _gpsAvailable = false;
 
@@ -183,7 +184,6 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
     );
 
     if (verified == true && mounted) {
-      // QR vérifié avec succès → marquer comme livrée automatiquement
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ QR vérifié ! Livraison confirmée.'),
@@ -191,6 +191,102 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
         ),
       );
       _markAsDelivered();
+    }
+  }
+
+  /// Vérifier le code de retrait chez le vendeur (pickup)
+  Future<void> _verifyPickup() async {
+    final controller = TextEditingController();
+
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Code de retrait'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Entrez le code de retrait fourni par le vendeur pour confirmer la récupération du colis.',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(fontSize: 22, letterSpacing: 4, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+              maxLength: 6,
+              decoration: InputDecoration(
+                hintText: 'CODE',
+                counterText: '',
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final v = controller.text.trim();
+              if (v.length == 6) Navigator.pop(ctx, v);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Valider', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (code == null || !mounted) return;
+
+    setState(() => _isPickingUp = true);
+
+    final success = await ref.read(deliveryServiceProvider).verifyPickupCode(
+      widget.orderId,
+      code,
+    );
+
+    setState(() => _isPickingUp = false);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? '✅ Colis récupéré ! En route vers le client.' : '❌ Code invalide, réessayez.'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
+      if (success) _loadOrder();
+    }
+  }
+
+  /// Scanner QR pour le retrait chez le vendeur
+  Future<void> _scanPickupQR() async {
+    final verified = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => QrScannerPage(
+          orderId: widget.orderId,
+          isPickup: true,
+        ),
+      ),
+    );
+
+    if (verified == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Pickup vérifié ! Colis récupéré.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadOrder();
     }
   }
 
@@ -275,8 +371,9 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
               const SizedBox(height: 24),
             ],
 
-            // 🔘 Actions
+            // 🔘 Actions selon la phase
             if (!isAccepted) ...[
+              // Phase 1 : Pas encore acceptée
               ElevatedButton.icon(
                 onPressed: _isAccepting ? null : _acceptOrder,
                 icon: _isAccepting
@@ -292,8 +389,94 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
               ),
+            ] else if (status == 'assigned' || status == 'ready') ...[
+              // Phase 2 : Acceptée → doit récupérer le colis chez le vendeur
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.storefront, color: Colors.orange.shade700, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Récupérer le colis', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
+                          const SizedBox(height: 2),
+                          Text('Rendez-vous chez le vendeur et entrez le code de retrait', style: TextStyle(fontSize: 12, color: Colors.orange.shade600)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _isPickingUp ? null : _verifyPickup,
+                      icon: _isPickingUp
+                          ? const SizedBox(
+                              width: 20, height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.dialpad),
+                      label: const Text('ENTRER CODE'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _scanPickupQR,
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('SCANNER QR'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E7DBA),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ] else ...[
-              // Scanner QR pour vérifier la livraison
+              // Phase 3 : Colis récupéré → en route vers le client
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.local_shipping, color: Colors.blue.shade700, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Livraison en cours', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
+                          const SizedBox(height: 2),
+                          Text('Dirigez-vous vers le client et confirmez la livraison', style: TextStyle(fontSize: 12, color: Colors.blue.shade600)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: _scanQR,
                 icon: const Icon(Icons.qr_code_scanner),
