@@ -32,6 +32,8 @@ const DEFAULT_ORIGINS = [
     // Backend & Seller Center (Render)
     "https://oli-core.onrender.com",
     "https://oli-seller.onrender.com",
+    // Seller Center (Vercel)
+    "https://oli-seller.vercel.app",
     // Local development
     "http://localhost:3000",
     "http://localhost:5000",
