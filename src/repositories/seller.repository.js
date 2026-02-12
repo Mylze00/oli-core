@@ -185,18 +185,18 @@ async function getSellerOrderDetails(sellerId, orderId) {
         const query = `
             SELECT 
                 o.*,
-                u.name as customer_name,
-                u.phone as customer_phone,
-                u.avatar_url as customer_avatar,
+                u.name as buyer_name,
+                u.phone as buyer_phone,
+                u.avatar_url as buyer_avatar,
                 json_agg(
                     json_build_object(
                         'id', oi.id,
                         'product_id', p.id,
-                        'product_name', p.name,
-                        'product_image', p.image_url,
+                        'product_name', oi.product_name,
+                        'product_image_url', p.images[1],
                         'quantity', oi.quantity,
-                        'price', oi.price,
-                        'subtotal', oi.quantity * oi.price
+                        'price', oi.product_price,
+                        'subtotal', oi.quantity * oi.product_price
                     )
                 ) as items
             FROM orders o
