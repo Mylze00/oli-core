@@ -37,6 +37,7 @@ class OrderService {
     String? deliveryAddress,
     String paymentMethod = 'wallet',
     double deliveryFee = 0,
+    String? deliveryMethodId,
   }) async {
     try {
       final response = await _dio.post(
@@ -46,6 +47,7 @@ class OrderService {
           'deliveryAddress': deliveryAddress,
           'paymentMethod': paymentMethod,
           'deliveryFee': deliveryFee,
+          if (deliveryMethodId != null) 'deliveryMethodId': deliveryMethodId,
         },
       );
       

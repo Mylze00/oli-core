@@ -23,6 +23,17 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   final _addressController = TextEditingController();
   bool _isLoading = false;
   double _deliveryFee = 5.00;
+  String _selectedDeliveryMethod = 'oli_standard';
+
+  /// Méthodes de livraison disponibles
+  final List<Map<String, dynamic>> _deliveryMethods = [
+    {'id': 'oli_express', 'label': 'Oli Express', 'icon': Icons.flash_on, 'time': '1-2h', 'cost': 8.00, 'color': Colors.amber},
+    {'id': 'oli_standard', 'label': 'Oli Standard', 'icon': Icons.local_shipping, 'time': '2-5 jours', 'cost': 5.00, 'color': Colors.blue},
+    {'id': 'partner', 'label': 'Livreur Partenaire', 'icon': Icons.delivery_dining, 'time': 'Variable', 'cost': 3.00, 'color': Colors.purple},
+    {'id': 'hand_delivery', 'label': 'Remise en Main Propre', 'icon': Icons.handshake, 'time': 'À convenir', 'cost': 0.0, 'color': Colors.teal},
+    {'id': 'pick_go', 'label': 'Pick & Go', 'icon': Icons.store, 'time': 'Retrait', 'cost': 0.0, 'color': Colors.green},
+    {'id': 'free', 'label': 'Livraison Gratuite', 'icon': Icons.card_giftcard, 'time': '3-7 jours', 'cost': 0.0, 'color': Colors.pink},
+  ];
 
   /// Retourne les items à checkout (achat direct ou panier)
   List<CartItem> get _checkoutItems {
@@ -139,6 +150,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
             const SizedBox(height: 24),
 
+            // --- MODE DE LIVRAISON ---
+            _buildSectionTitle('Mode de livraison'),
+            ..._deliveryMethods.map((method) => _buildDeliveryMethodOption(method)),
+
+            const SizedBox(height: 24),
+
             // --- MÉTHODE DE PAIEMENT ---
             _buildSectionTitle('Méthode de paiement'),
             _buildPaymentOption('wallet', 'Wallet OLI', Icons.account_balance_wallet, Colors.green),
@@ -201,8 +218,50 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
+  Widget _buildDeliveryMethodOption(Map<String, dynamic> method) {
+    final isSelected = _selectedDeliveryMethod == method['id'];
+    final Color color = method['color'];
+    return GestureDetector(
+      onTap: () => setState(() {
+        _selectedDeliveryMethod = method['id'];
+        _deliveryFee = (method['cost'] as num).toDouble();
+      }),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected ? Border.all(color: color, width: 2) : null,
+        ),
+        child: Row(
+          children: [
+            Icon(method['icon'], color: color, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(method['label'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  Text(method['time'], style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                ],
+              ),
+            ),
+            Text(
+              method['cost'] == 0.0 ? 'Gratuit' : '\$${(method['cost'] as num).toStringAsFixed(2)}',
+              style: TextStyle(color: method['cost'] == 0.0 ? Colors.green : Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(width: 8),
+            if (isSelected) Icon(Icons.check_circle, color: color, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _confirmOrder(double total) async {
-    if (_deliveryAddress.isEmpty) {
+    final needsAddress = _selectedDeliveryMethod != 'hand_delivery' && _selectedDeliveryMethod != 'pick_go';
+    if (needsAddress && _deliveryAddress.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Veuillez entrer une adresse de livraison'), backgroundColor: Colors.red),
       );
@@ -272,6 +331,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         deliveryAddress: _deliveryAddress,
         paymentMethod: _paymentMethod,
         deliveryFee: _deliveryFee,
+        deliveryMethodId: _selectedDeliveryMethod,
       );
 
       if (order != null) {
