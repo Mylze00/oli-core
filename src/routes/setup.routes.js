@@ -160,4 +160,22 @@ router.get('/migrate-device-tokens', async (req, res) => {
     }
 });
 
+/**
+ * GET /setup/migrate-delivery-code
+ * Ajouter delivery_code et verified_at à delivery_orders
+ */
+router.get('/migrate-delivery-code', async (req, res) => {
+    try {
+        await pool.query(`
+            ALTER TABLE delivery_orders 
+            ADD COLUMN IF NOT EXISTS delivery_code VARCHAR(10) UNIQUE,
+            ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_delivery_code ON delivery_orders(delivery_code);`);
+        res.json({ success: true, message: 'Colonnes delivery_code et verified_at ajoutées ! 🚚' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
