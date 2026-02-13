@@ -52,8 +52,8 @@ const requireSeller = async (req, res, next) => {
  * Le statut 'delivered' est géré par l'acheteur (verify-delivery) ou le livreur
  */
 const SELLER_TRANSITIONS = {
-    'paid': ['processing'],           // Commande payée → En préparation
-    'processing': ['ready'],          // En préparation → Prête (livreur notifié)
+    'paid': ['processing'],           // Commande payée → En préparation (code généré, livreur notifié)
+    // 'processing' n'a plus de transition vendeur — c'est le livreur qui entre le code pour passer à shipped
 };
 
 const STATUS_LABELS = {

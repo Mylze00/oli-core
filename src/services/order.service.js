@@ -149,6 +149,8 @@ class OrderService {
 
     /**
      * Vendeur marque la commande comme "en préparation"
+     * Génère les codes pickup + delivery, et notifie le livreur
+     * Le vendeur voit le pickup_code, l'acheteur recevra le delivery_code plus tard
      */
     async markProcessing(orderId, sellerId, io = null) {
         const order = await this._getOrderForSeller(orderId, sellerId);
@@ -157,10 +159,20 @@ class OrderService {
             throw new Error("La commande doit être au statut 'paid' pour être mise en préparation");
         }
 
+        // Générer les codes de vérification
+        const pickupCode = order.pickup_code || this.generateVerificationCode();
+        const deliveryCode = order.delivery_code || this.generateVerificationCode();
+
         await pool.query(
-            "UPDATE orders SET status = 'processing', processing_at = NOW() WHERE id = $1",
-            [orderId]
+            `UPDATE orders SET 
+                status = 'processing', 
+                processing_at = NOW(),
+                pickup_code = $2,
+                delivery_code = $3
+             WHERE id = $1`,
+            [orderId, pickupCode, deliveryCode]
         );
+        console.log(`   🔑 Codes: pickup=${pickupCode}, delivery=${deliveryCode} pour commande #${orderId}`);
 
         await this._logStatusChange(orderId, order.status, 'processing', sellerId, 'seller');
 
@@ -172,18 +184,62 @@ class OrderService {
             { order_id: orderId, status: 'processing' }, io
         );
 
-        // Notifier les livreurs (broadcast) que la commande est en cours de préparation
-        if (io) {
-            io.emit('order_preparing', {
-                order_id: orderId,
-                delivery_address: order.delivery_address,
-                delivery_method: order.delivery_method_id,
-                message: `Commande #${orderId} en préparation, bientôt prête pour collecte.`
-            });
-            console.log(`   📡 Broadcast order_preparing émis pour commande #${orderId}`);
+        // Créer l'entrée delivery_orders + broadcast aux livreurs
+        const CIRCUIT_A_MODES = ['oli_express', 'oli_standard', 'partner', 'free'];
+        const deliveryMethod = order.delivery_method_id;
+        const needsDeliverer = !deliveryMethod || CIRCUIT_A_MODES.includes(deliveryMethod);
+
+        if (needsDeliverer) {
+            // Récupérer l'adresse du vendeur
+            let pickupAddress = 'À déterminer';
+            try {
+                const sellerAddr = await pool.query(
+                    `SELECT COALESCE(
+                        CONCAT_WS(', ', NULLIF(a.avenue, ''), NULLIF(a.numero, ''), NULLIF(a.quartier, ''), NULLIF(a.commune, ''), NULLIF(a.ville, '')),
+                        a.address, u.name
+                    ) as full_address
+                    FROM order_items oi
+                    JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
+                    LEFT JOIN users u ON u.id = p.seller_id
+                    LEFT JOIN addresses a ON a.user_id = p.seller_id
+                    WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL
+                    ORDER BY a.created_at DESC LIMIT 1`,
+                    [orderId]
+                );
+                if (sellerAddr.rows.length > 0 && sellerAddr.rows[0].full_address) {
+                    pickupAddress = sellerAddr.rows[0].full_address;
+                }
+            } catch (addrErr) {
+                console.error('⚠️ Erreur adresse vendeur:', addrErr.message);
+            }
+
+            try {
+                const deliveryRepo = require('../repositories/delivery.repository');
+                await deliveryRepo.create({
+                    order_id: orderId,
+                    pickup_address: pickupAddress,
+                    delivery_address: order.delivery_address || 'Non spécifiée',
+                    delivery_fee: parseFloat(order.delivery_fee) || 0,
+                    estimated_time: deliveryMethod === 'oli_express' ? '1-2h' : '45 min'
+                });
+                console.log(`   🚚 delivery_orders créé pour commande #${orderId}`);
+            } catch (deliveryErr) {
+                console.error('⚠️ Erreur création delivery_orders:', deliveryErr.message);
+            }
+
+            if (io) {
+                io.emit('new_delivery_available', {
+                    order_id: orderId,
+                    delivery_address: order.delivery_address,
+                    total_amount: order.total_amount,
+                    delivery_method: deliveryMethod,
+                    message: `Nouvelle commande #${orderId} disponible pour livraison !`
+                });
+                console.log(`   📡 Broadcast new_delivery_available émis pour commande #${orderId}`);
+            }
         }
 
-        return { ...order, status: 'processing' };
+        return { ...order, status: 'processing', pickup_code: pickupCode, delivery_code: deliveryCode };
     }
 
     /**
@@ -241,8 +297,8 @@ class OrderService {
 
     /**
      * Valide le retrait avec le pickup_code
-     * Circuit A (livreur) : ready → shipped + sync delivery_orders
-     * Circuit B (Pick & Go) : ready → delivered directement (pas de livreur)
+     * Circuit A (livreur) : processing → shipped + sync delivery_orders
+     * Circuit B (Pick & Go) : processing → delivered directement (pas de livreur)
      */
     async verifyPickup(orderId, code, verifierId, io = null) {
         const result = await pool.query(
@@ -251,8 +307,8 @@ class OrderService {
         if (result.rows.length === 0) throw new Error('Commande non trouvée');
         const order = result.rows[0];
 
-        if (order.status !== 'ready') {
-            throw new Error("La commande doit être au statut 'ready' pour valider le pickup");
+        if (!['processing', 'ready'].includes(order.status)) {
+            throw new Error("La commande doit être au statut 'processing' pour valider le pickup");
         }
 
         if (order.pickup_code !== code.toUpperCase()) {
