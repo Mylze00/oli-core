@@ -76,6 +76,7 @@ router.get('/', requireAuth, requireSeller, async (req, res) => {
         let query = `
             SELECT DISTINCT o.id, o.user_id, o.status, o.payment_status,
                    o.total_amount, o.delivery_address, o.delivery_fee,
+                   o.delivery_method_id, o.pickup_code,
                    o.tracking_number, o.carrier, o.estimated_delivery,
                    o.shipped_at, o.delivered_at, o.created_at, o.updated_at,
                    u.name as buyer_name, u.phone as buyer_phone,
