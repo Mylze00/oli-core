@@ -189,12 +189,27 @@ class OrderService {
     /**
      * Vendeur marque la commande comme "prête pour expédition"
      * Le pickup_code est révélé au livreur à ce moment
+     * Génère les codes s'ils n'existent pas encore (commandes créées avant le système de codes)
      */
     async markReady(orderId, sellerId, io = null) {
         const order = await this._getOrderForSeller(orderId, sellerId);
 
         if (!['processing'].includes(order.status)) {
             throw new Error("La commande doit être en 'processing' pour être marquée prête");
+        }
+
+        // Générer les codes de vérification s'ils n'existent pas
+        let pickupCode = order.pickup_code;
+        let deliveryCode = order.delivery_code;
+
+        if (!pickupCode || !deliveryCode) {
+            pickupCode = pickupCode || this.generateVerificationCode();
+            deliveryCode = deliveryCode || this.generateVerificationCode();
+            await pool.query(
+                'UPDATE orders SET pickup_code = $1, delivery_code = $2 WHERE id = $3',
+                [pickupCode, deliveryCode, orderId]
+            );
+            console.log(`   🔑 Codes générés pour commande #${orderId}: pickup=${pickupCode}, delivery=${deliveryCode}`);
         }
 
         await pool.query(
@@ -216,12 +231,12 @@ class OrderService {
         if (io) {
             io.emit('order_ready_for_pickup', {
                 order_id: orderId,
-                pickup_code: order.pickup_code,
+                pickup_code: pickupCode,
                 delivery_address: order.delivery_address
             });
         }
 
-        return { ...order, status: 'ready' };
+        return { ...order, status: 'ready', pickup_code: pickupCode, delivery_code: deliveryCode };
     }
 
     /**
