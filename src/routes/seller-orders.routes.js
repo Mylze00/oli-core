@@ -194,13 +194,14 @@ router.get('/:id', requireAuth, requireSeller, async (req, res) => {
 
 /**
  * PATCH /seller/orders/:id/status - Changer le statut d'une commande
+ * Délègue à order.service.js pour markProcessing et markReady 
+ * afin d'envoyer les notifications aux livreurs et acheteurs
  */
 router.patch('/:id/status', requireAuth, requireSeller, async (req, res) => {
-    const client = await db.connect();
+    const { status, tracking_number, carrier, estimated_delivery, notes, delivery_method_id } = req.body;
+    const io = req.app.get('io');
 
     try {
-        const { status, tracking_number, carrier, estimated_delivery, notes, delivery_method_id } = req.body;
-
         // Vérifier que la commande appartient au vendeur
         const checkQuery = `
             SELECT DISTINCT o.id, o.status, o.user_id
@@ -209,14 +210,13 @@ router.patch('/:id/status', requireAuth, requireSeller, async (req, res) => {
             JOIN products p ON p.id::text = oi.product_id
             WHERE o.id = $1 AND p.seller_id = $2
         `;
-        const checkResult = await client.query(checkQuery, [req.params.id, req.user.id]);
+        const checkResult = await db.query(checkQuery, [req.params.id, req.user.id]);
 
         if (checkResult.rows.length === 0) {
             return res.status(404).json({ error: 'Commande non trouvée' });
         }
 
         const currentStatus = checkResult.rows[0].status;
-        const buyerId = checkResult.rows[0].user_id;
 
         // Vérifier la transition
         const allowedTransitions = SELLER_TRANSITIONS[currentStatus] || [];
@@ -227,92 +227,88 @@ router.patch('/:id/status', requireAuth, requireSeller, async (req, res) => {
             });
         }
 
-        await client.query('BEGIN');
+        // Utiliser les méthodes du service pour les transitions standards
+        // Elles gèrent notifications acheteur + livreur + Socket.IO
+        const orderService = require('../services/order.service');
+        let updatedOrder;
 
-        // Mettre à jour la commande
-        let updateQuery = `
-            UPDATE orders SET 
-                status = $1, 
-                updated_at = NOW()
-        `;
-        const updateParams = [status];
+        if (status === 'processing') {
+            updatedOrder = await orderService.markProcessing(req.params.id, req.user.id, io);
+            console.log(`✅ Commande #${req.params.id}: paid → processing (via seller #${req.user.id})`);
+        } else if (status === 'ready') {
+            updatedOrder = await orderService.markReady(req.params.id, req.user.id, io);
+            console.log(`✅ Commande #${req.params.id}: processing → ready (via seller #${req.user.id}), livreurs notifiés`);
+        } else {
+            // Fallback pour les autres transitions (shipped via tracking etc.)
+            const client = await db.connect();
+            try {
+                await client.query('BEGIN');
 
-        // Champs spécifiques selon le statut
-        if (status === 'processing' && delivery_method_id) {
-            updateParams.push(delivery_method_id);
-            updateQuery += `, delivery_method_id = $${updateParams.length}`;
+                let updateQuery = `UPDATE orders SET status = $1, updated_at = NOW()`;
+                const updateParams = [status];
+
+                if (status === 'shipped') {
+                    updateQuery += `, shipped_at = NOW()`;
+                    if (tracking_number) {
+                        updateParams.push(tracking_number);
+                        updateQuery += `, tracking_number = $${updateParams.length}`;
+                    }
+                    if (carrier) {
+                        updateParams.push(carrier);
+                        updateQuery += `, carrier = $${updateParams.length}`;
+                    }
+                    if (estimated_delivery) {
+                        updateParams.push(estimated_delivery);
+                        updateQuery += `, estimated_delivery = $${updateParams.length}`;
+                    }
+                } else if (status === 'delivered') {
+                    updateQuery += `, delivered_at = NOW()`;
+                }
+
+                updateParams.push(req.params.id);
+                updateQuery += ` WHERE id = $${updateParams.length} RETURNING *`;
+
+                const updateResult = await client.query(updateQuery, updateParams);
+
+                await client.query(`
+                    INSERT INTO order_status_history 
+                    (order_id, previous_status, new_status, changed_by, changed_by_role, notes)
+                    VALUES ($1, $2, $3, $4, 'seller', $5)
+                `, [req.params.id, currentStatus, status, req.user.id, notes || null]);
+
+                // Notification acheteur
+                const buyerId = checkResult.rows[0].user_id;
+                const notifMessage = status === 'shipped'
+                    ? `Votre commande #${req.params.id} a été expédiée${tracking_number ? ` - Suivi: ${tracking_number}` : ''}`
+                    : `Statut de votre commande #${req.params.id}: ${STATUS_LABELS[status]}`;
+
+                try {
+                    await notificationRepo.create(buyerId, 'order_status', 'Commande mise à jour', notifMessage, { order_id: parseInt(req.params.id), status });
+                    if (io) {
+                        io.to(`user_${buyerId}`).emit('order_status_updated', { order_id: parseInt(req.params.id), status, message: notifMessage });
+                    }
+                } catch (notifError) {
+                    console.error('⚠️ Erreur notification acheteur (non-bloquante):', notifError.message);
+                }
+
+                await client.query('COMMIT');
+                updatedOrder = updateResult.rows[0];
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
         }
-
-        if (status === 'shipped') {
-            updateQuery += `, shipped_at = NOW()`;
-            if (tracking_number) {
-                updateParams.push(tracking_number);
-                updateQuery += `, tracking_number = $${updateParams.length}`;
-            }
-            if (carrier) {
-                updateParams.push(carrier);
-                updateQuery += `, carrier = $${updateParams.length}`;
-            }
-            if (estimated_delivery) {
-                updateParams.push(estimated_delivery);
-                updateQuery += `, estimated_delivery = $${updateParams.length}`;
-            }
-        } else if (status === 'delivered') {
-            updateQuery += `, delivered_at = NOW()`;
-        }
-
-        updateParams.push(req.params.id);
-        updateQuery += ` WHERE id = $${updateParams.length} RETURNING *`;
-
-        const updateResult = await client.query(updateQuery, updateParams);
-
-        // Enregistrer dans l'historique
-        await client.query(`
-            INSERT INTO order_status_history 
-            (order_id, previous_status, new_status, changed_by, changed_by_role, notes)
-            VALUES ($1, $2, $3, $4, 'seller', $5)
-        `, [req.params.id, currentStatus, status, req.user.id, notes || null]);
-
-        // Créer une notification pour l'acheteur (table notifications, liée à user_id)
-        const notifMessage = status === 'shipped'
-            ? `Votre commande #${req.params.id} a été expédiée${tracking_number ? ` - Suivi: ${tracking_number}` : ''}`
-            : `Statut de votre commande #${req.params.id}: ${STATUS_LABELS[status]}`;
-
-        try {
-            await notificationRepo.create(
-                buyerId,
-                'order_status',
-                'Commande mise à jour',
-                notifMessage,
-                { order_id: parseInt(req.params.id), status }
-            );
-
-            // Émettre via Socket.IO pour notification en temps réel
-            const io = req.app.get('io');
-            if (io) {
-                io.to(`user_${buyerId}`).emit('order_status_updated', {
-                    order_id: parseInt(req.params.id),
-                    status,
-                    message: notifMessage
-                });
-            }
-        } catch (notifError) {
-            console.error('⚠️ Erreur notification acheteur (non-bloquante):', notifError.message);
-        }
-
-        await client.query('COMMIT');
 
         res.json({
             success: true,
-            order: updateResult.rows[0],
+            order: updatedOrder,
             message: `Statut mis à jour: ${STATUS_LABELS[status]}`
         });
     } catch (error) {
-        await client.query('ROLLBACK');
         console.error('Error PATCH /seller/orders/:id/status:', error);
-        res.status(500).json({ error: 'Erreur mise à jour statut' });
-    } finally {
-        client.release();
+        res.status(500).json({ error: error.message || 'Erreur mise à jour statut' });
     }
 });
 

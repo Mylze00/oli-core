@@ -172,6 +172,17 @@ class OrderService {
             { order_id: orderId, status: 'processing' }, io
         );
 
+        // Notifier les livreurs (broadcast) que la commande est en cours de préparation
+        if (io) {
+            io.emit('order_preparing', {
+                order_id: orderId,
+                delivery_address: order.delivery_address,
+                delivery_method: order.delivery_method_id,
+                message: `Commande #${orderId} en préparation, bientôt prête pour collecte.`
+            });
+            console.log(`   📡 Broadcast order_preparing émis pour commande #${orderId}`);
+        }
+
         return { ...order, status: 'processing' };
     }
 
