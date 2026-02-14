@@ -179,7 +179,7 @@ class OrderService {
             console.log(`   🔑 Codes: pickup=${pickupCode}, delivery=${deliveryCode} pour commande #${orderId}`);
 
             await client.query(
-                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, changed_by_role)
                  VALUES ($1, $2, $3, $4, $5)`,
                 [orderId, order.status, 'processing', sellerId, 'seller']
             );
@@ -294,7 +294,7 @@ class OrderService {
             );
 
             await client.query(
-                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, changed_by_role)
                  VALUES ($1, $2, $3, $4, $5)`,
                 [orderId, order.status, 'ready', sellerId, 'seller']
             );
@@ -363,7 +363,7 @@ class OrderService {
                     [orderId]
                 );
                 await client.query(
-                    `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                    `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, changed_by_role)
                      VALUES ($1, $2, $3, $4, $5)`,
                     [orderId, order.status, 'delivered', verifierId, 'seller']
                 );
@@ -398,7 +398,7 @@ class OrderService {
             );
 
             await client.query(
-                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, changed_by_role)
                  VALUES ($1, $2, $3, $4, $5)`,
                 [orderId, order.status, 'shipped', verifierId, 'deliverer']
             );
@@ -489,7 +489,7 @@ class OrderService {
             const previousStatus = order.status;
             const role = isBuyer ? 'buyer' : 'seller';
             await client.query(
-                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, changed_by_role)
                  VALUES ($1, $2, $3, $4, $5)`,
                 [orderId, previousStatus, 'delivered', userId, role]
             );
