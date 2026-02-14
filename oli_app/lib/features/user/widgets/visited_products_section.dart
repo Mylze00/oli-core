@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/visited_product_model.dart';
 import '../providers/user_activity_provider.dart';
+import '../../../providers/exchange_rate_provider.dart';
 
 class VisitedProductsSection extends ConsumerWidget {
   const VisitedProductsSection({super.key});
@@ -91,13 +92,13 @@ class VisitedProductsSection extends ConsumerWidget {
   }
 }
 
-class _VisitedProductCard extends StatelessWidget {
+class _VisitedProductCard extends ConsumerWidget {
   final VisitedProduct product;
 
   const _VisitedProductCard({required this.product});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
       onTap: () {
         // Navigate to product detail page
@@ -157,7 +158,7 @@ class _VisitedProductCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '\$${product.price.toStringAsFixed(2)}',
+                        ref.read(exchangeRateProvider.notifier).formatProductPrice(product.price),
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,

@@ -94,13 +94,13 @@ class SellerOrder {
   String get statusLabel => statusLabels[status] ?? status;
 
   /// Transitions autorisées pour le vendeur
-  /// shipped/delivered sont gérés par le livreur ou l'acheteur via codes
+  /// Seul le passage paid→processing est géré par le vendeur
+  /// shipped est géré par le livreur via le pickup_code
+  /// delivered est géré par le livreur via le delivery_code
   List<String> get allowedTransitions {
     switch (status) {
       case 'paid':
         return ['processing'];
-      case 'processing':
-        return ['ready'];
       default:
         return [];
     }

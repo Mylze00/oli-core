@@ -12,12 +12,24 @@ async function createOrder(userId, items, deliveryAddress, paymentMethod, delive
     // Calculer le total
     const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0) + deliveryFee;
 
+    // Résoudre le seller_id depuis le premier produit
+    let sellerId = null;
+    if (items[0] && items[0].productId) {
+      const sellerResult = await client.query(
+        'SELECT seller_id FROM products WHERE id = $1',
+        [parseInt(items[0].productId)]
+      );
+      if (sellerResult.rows.length > 0) {
+        sellerId = sellerResult.rows[0].seller_id;
+      }
+    }
+
     // Créer la commande
     const orderResult = await client.query(`
-      INSERT INTO orders (user_id, total_amount, delivery_address, delivery_fee, payment_method, delivery_method_id, status, payment_status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'pending')
+      INSERT INTO orders (user_id, total_amount, delivery_address, delivery_fee, payment_method, delivery_method_id, seller_id, status, payment_status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', 'pending')
       RETURNING *
-    `, [userId, totalAmount, deliveryAddress, deliveryFee, paymentMethod, deliveryMethodId]);
+    `, [userId, totalAmount, deliveryAddress, deliveryFee, paymentMethod, deliveryMethodId, sellerId]);
 
     const order = orderResult.rows[0];
 

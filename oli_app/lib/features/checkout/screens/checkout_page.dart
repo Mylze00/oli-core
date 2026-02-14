@@ -10,6 +10,7 @@ import '../../../config/api_config.dart';
 import '../../../core/router/network/dio_provider.dart';
 import 'stripe_payment_page.dart';
 import 'order_success_page.dart';
+import '../../../providers/exchange_rate_provider.dart';
 
 /// Page de Checkout / Validation de commande
 /// Peut être utilisée avec le panier (défaut) ou avec un achat direct (directPurchaseItem)
@@ -152,6 +153,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final cartItems = _checkoutItems;
     final subtotal = _subtotal;
     final total = subtotal + (widget.directPurchaseItem == null ? _deliveryFee : 0); // Livraison déjà incluse dans directPurchaseItem
+    ref.watch(exchangeRateProvider);
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -181,7 +184,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(child: Text('${item.productName} x${item.quantity}', style: const TextStyle(color: Colors.white), overflow: TextOverflow.ellipsis)),
-                        Text('\$${item.total.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey)),
+                        Text(exchangeNotifier.formatProductPrice(item.total), style: const TextStyle(color: Colors.grey)),
                       ],
                     ),
                   )),
@@ -190,7 +193,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Sous-total', style: TextStyle(color: Colors.grey)),
-                      Text('\$${subtotal.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
+                      Text(exchangeNotifier.formatProductPrice(subtotal), style: const TextStyle(color: Colors.white)),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -198,7 +201,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Livraison', style: TextStyle(color: Colors.grey)),
-                      Text('\$${_deliveryFee.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
+                      Text(exchangeNotifier.formatProductPrice(_deliveryFee), style: const TextStyle(color: Colors.white)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -206,7 +209,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Total', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text('\$${total.toStringAsFixed(2)}', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text(exchangeNotifier.formatProductPrice(total), style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 18)),
                     ],
                   ),
                 ],
@@ -253,7 +256,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 ),
                 child: _isLoading
                     ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : Text('Confirmer (\$${total.toStringAsFixed(2)})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    : Text('Confirmer (${exchangeNotifier.formatProductPrice(total)})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
 
@@ -414,7 +417,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               ),
             ),
             Text(
-              method['cost'] == 0.0 ? 'Gratuit' : '\$${(method['cost'] as num).toStringAsFixed(2)}',
+              method['cost'] == 0.0 ? 'Gratuit' : exchangeNotifier.formatProductPrice((method['cost'] as num).toDouble()),
               style: TextStyle(color: method['cost'] == 0.0 ? Colors.green : Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
             ),
             const SizedBox(width: 8),
@@ -449,7 +452,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Montant total : ${total.toStringAsFixed(2)} \$',
+                'Montant total : ${exchangeNotifier.formatProductPrice(total)}',
                 style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),

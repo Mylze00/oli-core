@@ -159,75 +159,86 @@ class OrderService {
             throw new Error("La commande doit être au statut 'paid' pour être mise en préparation");
         }
 
-        // Générer les codes de vérification
-        const pickupCode = order.pickup_code || this.generateVerificationCode();
-        const deliveryCode = order.delivery_code || this.generateVerificationCode();
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-        await pool.query(
-            `UPDATE orders SET 
-                status = 'processing', 
-                processing_at = NOW(),
-                pickup_code = $2,
-                delivery_code = $3
-             WHERE id = $1`,
-            [orderId, pickupCode, deliveryCode]
-        );
-        console.log(`   🔑 Codes: pickup=${pickupCode}, delivery=${deliveryCode} pour commande #${orderId}`);
+            // Générer les codes de vérification
+            const pickupCode = order.pickup_code || this.generateVerificationCode();
+            const deliveryCode = order.delivery_code || this.generateVerificationCode();
 
-        await this._logStatusChange(orderId, order.status, 'processing', sellerId, 'seller');
+            await client.query(
+                `UPDATE orders SET 
+                    status = 'processing', 
+                    processing_at = NOW(),
+                    pickup_code = $2,
+                    delivery_code = $3
+                 WHERE id = $1`,
+                [orderId, pickupCode, deliveryCode]
+            );
+            console.log(`   🔑 Codes: pickup=${pickupCode}, delivery=${deliveryCode} pour commande #${orderId}`);
 
-        // Notifier l'acheteur
-        await notificationService.send(
-            order.user_id, 'order',
-            'Commande en préparation 📦',
-            `Le vendeur prépare votre commande #${orderId}.`,
-            { order_id: orderId, status: 'processing' }, io
-        );
+            await client.query(
+                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [orderId, order.status, 'processing', sellerId, 'seller']
+            );
 
-        // Créer l'entrée delivery_orders + broadcast aux livreurs
-        const CIRCUIT_A_MODES = ['oli_express', 'oli_standard', 'partner', 'free'];
-        const deliveryMethod = order.delivery_method_id;
-        const needsDeliverer = !deliveryMethod || CIRCUIT_A_MODES.includes(deliveryMethod);
+            // Créer l'entrée delivery_orders + broadcast aux livreurs
+            const CIRCUIT_A_MODES = ['oli_express', 'oli_standard', 'partner', 'free'];
+            const deliveryMethod = order.delivery_method_id;
+            const needsDeliverer = !deliveryMethod || CIRCUIT_A_MODES.includes(deliveryMethod);
 
-        if (needsDeliverer) {
-            // Récupérer l'adresse du vendeur
-            let pickupAddress = 'À déterminer';
-            try {
-                const sellerAddr = await pool.query(
-                    `SELECT COALESCE(
-                        CONCAT_WS(', ', NULLIF(a.avenue, ''), NULLIF(a.numero, ''), NULLIF(a.quartier, ''), NULLIF(a.commune, ''), NULLIF(a.ville, '')),
-                        a.address, u.name
-                    ) as full_address
-                    FROM order_items oi
-                    JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
-                    LEFT JOIN users u ON u.id = p.seller_id
-                    LEFT JOIN addresses a ON a.user_id = p.seller_id
-                    WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL
-                    ORDER BY a.created_at DESC LIMIT 1`,
-                    [orderId]
-                );
-                if (sellerAddr.rows.length > 0 && sellerAddr.rows[0].full_address) {
-                    pickupAddress = sellerAddr.rows[0].full_address;
+            if (needsDeliverer) {
+                // Récupérer l'adresse du vendeur
+                let pickupAddress = 'À déterminer';
+                try {
+                    const sellerAddr = await client.query(
+                        `SELECT COALESCE(
+                            CONCAT_WS(', ', NULLIF(a.avenue, ''), NULLIF(a.numero, ''), NULLIF(a.quartier, ''), NULLIF(a.commune, ''), NULLIF(a.ville, '')),
+                            a.address, u.name
+                        ) as full_address
+                        FROM order_items oi
+                        JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
+                        LEFT JOIN users u ON u.id = p.seller_id
+                        LEFT JOIN addresses a ON a.user_id = p.seller_id
+                        WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL
+                        ORDER BY a.created_at DESC LIMIT 1`,
+                        [orderId]
+                    );
+                    if (sellerAddr.rows.length > 0 && sellerAddr.rows[0].full_address) {
+                        pickupAddress = sellerAddr.rows[0].full_address;
+                    }
+                } catch (addrErr) {
+                    console.error('⚠️ Erreur adresse vendeur:', addrErr.message);
                 }
-            } catch (addrErr) {
-                console.error('⚠️ Erreur adresse vendeur:', addrErr.message);
-            }
 
-            try {
-                const deliveryRepo = require('../repositories/delivery.repository');
-                await deliveryRepo.create({
-                    order_id: orderId,
-                    pickup_address: pickupAddress,
-                    delivery_address: order.delivery_address || 'Non spécifiée',
-                    delivery_fee: parseFloat(order.delivery_fee) || 0,
-                    estimated_time: deliveryMethod === 'oli_express' ? '1-2h' : '45 min'
-                });
+                await client.query(`
+                    INSERT INTO delivery_orders (
+                        order_id, pickup_address, delivery_address,
+                        delivery_fee, estimated_time, status, created_at
+                    ) VALUES ($1, $2, $3, $4, $5, 'pending', NOW())
+                `, [orderId, pickupAddress, order.delivery_address || 'Non spécifiée',
+                    parseFloat(order.delivery_fee) || 0,
+                    deliveryMethod === 'oli_express' ? '45 min' : '1-2h']);
                 console.log(`   🚚 delivery_orders créé pour commande #${orderId}`);
-            } catch (deliveryErr) {
-                console.error('⚠️ Erreur création delivery_orders:', deliveryErr.message);
             }
 
-            if (io) {
+            await client.query('COMMIT');
+
+            // Non-transactional: notifications + Socket.IO (ne doivent pas bloquer)
+            try {
+                await notificationService.send(
+                    order.user_id, 'order',
+                    'Commande en préparation 📦',
+                    `Le vendeur prépare votre commande #${orderId}.`,
+                    { order_id: orderId, status: 'processing' }, io
+                );
+            } catch (notifErr) {
+                console.error('⚠️ Erreur notification (non-bloquante):', notifErr.message);
+            }
+
+            if (needsDeliverer && io) {
                 io.emit('new_delivery_available', {
                     order_id: orderId,
                     delivery_address: order.delivery_address,
@@ -237,9 +248,14 @@ class OrderService {
                 });
                 console.log(`   📡 Broadcast new_delivery_available émis pour commande #${orderId}`);
             }
-        }
 
-        return { ...order, status: 'processing', pickup_code: pickupCode, delivery_code: deliveryCode };
+            return { ...order, status: 'processing', pickup_code: pickupCode, delivery_code: deliveryCode };
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     }
 
     /**
@@ -254,45 +270,64 @@ class OrderService {
             throw new Error("La commande doit être en 'processing' pour être marquée prête");
         }
 
-        // Générer les codes de vérification s'ils n'existent pas
-        let pickupCode = order.pickup_code;
-        let deliveryCode = order.delivery_code;
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-        if (!pickupCode || !deliveryCode) {
-            pickupCode = pickupCode || this.generateVerificationCode();
-            deliveryCode = deliveryCode || this.generateVerificationCode();
-            await pool.query(
-                'UPDATE orders SET pickup_code = $1, delivery_code = $2 WHERE id = $3',
-                [pickupCode, deliveryCode, orderId]
+            // Générer les codes de vérification s'ils n'existent pas
+            let pickupCode = order.pickup_code;
+            let deliveryCode = order.delivery_code;
+
+            if (!pickupCode || !deliveryCode) {
+                pickupCode = pickupCode || this.generateVerificationCode();
+                deliveryCode = deliveryCode || this.generateVerificationCode();
+                await client.query(
+                    'UPDATE orders SET pickup_code = $1, delivery_code = $2 WHERE id = $3',
+                    [pickupCode, deliveryCode, orderId]
+                );
+                console.log(`   🔑 Codes générés pour commande #${orderId}: pickup=${pickupCode}, delivery=${deliveryCode}`);
+            }
+
+            await client.query(
+                "UPDATE orders SET status = 'ready', ready_at = NOW() WHERE id = $1",
+                [orderId]
             );
-            console.log(`   🔑 Codes générés pour commande #${orderId}: pickup=${pickupCode}, delivery=${deliveryCode}`);
+
+            await client.query(
+                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [orderId, order.status, 'ready', sellerId, 'seller']
+            );
+
+            await client.query('COMMIT');
+
+            // Non-transactional: notifications
+            try {
+                await notificationService.send(
+                    order.user_id, 'order',
+                    'Commande prête ! 🎉',
+                    `Votre commande #${orderId} est prête et en attente du livreur.`,
+                    { order_id: orderId, status: 'ready' }, io
+                );
+            } catch (notifErr) {
+                console.error('⚠️ Erreur notification (non-bloquante):', notifErr.message);
+            }
+
+            if (io) {
+                io.emit('order_ready_for_pickup', {
+                    order_id: orderId,
+                    pickup_code: pickupCode,
+                    delivery_address: order.delivery_address
+                });
+            }
+
+            return { ...order, status: 'ready', pickup_code: pickupCode, delivery_code: deliveryCode };
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
         }
-
-        await pool.query(
-            "UPDATE orders SET status = 'ready', ready_at = NOW() WHERE id = $1",
-            [orderId]
-        );
-
-        await this._logStatusChange(orderId, order.status, 'ready', sellerId, 'seller');
-
-        // Notifier l'acheteur
-        await notificationService.send(
-            order.user_id, 'order',
-            'Commande prête ! 🎉',
-            `Votre commande #${orderId} est prête et en attente du livreur.`,
-            { order_id: orderId, status: 'ready' }, io
-        );
-
-        // Notifier les livreurs (broadcast)
-        if (io) {
-            io.emit('order_ready_for_pickup', {
-                order_id: orderId,
-                pickup_code: pickupCode,
-                delivery_address: order.delivery_address
-            });
-        }
-
-        return { ...order, status: 'ready', pickup_code: pickupCode, delivery_code: deliveryCode };
     }
 
     /**
@@ -317,48 +352,78 @@ class OrderService {
 
         const isPickAndGo = order.delivery_method_id === 'pick_go';
 
-        if (isPickAndGo) {
-            // Circuit B — Pick & Go : directement DELIVERED
-            await pool.query(
-                "UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1",
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            if (isPickAndGo) {
+                // Circuit B — Pick & Go : directement DELIVERED
+                await client.query(
+                    "UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1",
+                    [orderId]
+                );
+                await client.query(
+                    `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [orderId, order.status, 'delivered', verifierId, 'seller']
+                );
+
+                await client.query('COMMIT');
+
+                // Non-transactional: notification
+                try {
+                    await notificationService.send(
+                        order.user_id, 'order',
+                        'Commande récupérée ✅',
+                        `Votre commande #${orderId} a été récupérée avec succès au guichet.`,
+                        { order_id: orderId, status: 'delivered' }, io
+                    );
+                } catch (notifErr) {
+                    console.error('⚠️ Erreur notification (non-bloquante):', notifErr.message);
+                }
+
+                return { ...order, status: 'delivered', verified_pickup: true, circuit: 'pick_go' };
+            }
+
+            // Circuit A — Livreur : ready → shipped
+            await client.query(
+                "UPDATE orders SET status = 'shipped', shipped_at = NOW() WHERE id = $1",
                 [orderId]
             );
-            await this._logStatusChange(orderId, 'ready', 'delivered', verifierId, 'seller');
 
-            // Notifier l'acheteur
-            await notificationService.send(
-                order.user_id, 'order',
-                'Commande récupérée ✅',
-                `Votre commande #${orderId} a été récupérée avec succès au guichet.`,
-                { order_id: orderId, status: 'delivered' }, io
+            // Sync delivery_orders → picked_up
+            await client.query(
+                "UPDATE delivery_orders SET status = 'picked_up', updated_at = NOW() WHERE order_id = $1",
+                [orderId]
             );
 
-            return { ...order, status: 'delivered', verified_pickup: true, circuit: 'pick_go' };
+            await client.query(
+                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [orderId, order.status, 'shipped', verifierId, 'deliverer']
+            );
+
+            await client.query('COMMIT');
+
+            // Non-transactional: notification
+            try {
+                await notificationService.send(
+                    order.user_id, 'order',
+                    'Colis en route ! 🚚',
+                    `Votre commande #${orderId} est en cours de livraison. Votre code de réception : ${order.delivery_code}`,
+                    { order_id: orderId, status: 'shipped', delivery_code: order.delivery_code }, io
+                );
+            } catch (notifErr) {
+                console.error('⚠️ Erreur notification (non-bloquante):', notifErr.message);
+            }
+
+            return { ...order, status: 'shipped', verified_pickup: true, circuit: 'deliverer' };
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
         }
-
-        // Circuit A — Livreur : ready → shipped
-        await pool.query(
-            "UPDATE orders SET status = 'shipped', shipped_at = NOW() WHERE id = $1",
-            [orderId]
-        );
-
-        // Sync delivery_orders → picked_up
-        await pool.query(
-            "UPDATE delivery_orders SET status = 'picked_up', updated_at = NOW() WHERE order_id = $1",
-            [orderId]
-        );
-
-        await this._logStatusChange(orderId, 'ready', 'shipped', verifierId, 'deliverer');
-
-        // Notifier l'acheteur : le colis est en route + lui envoyer le delivery_code
-        await notificationService.send(
-            order.user_id, 'order',
-            'Colis en route ! 🚚',
-            `Votre commande #${orderId} est en cours de livraison. Votre code de réception : ${order.delivery_code}`,
-            { order_id: orderId, status: 'shipped', delivery_code: order.delivery_code }, io
-        );
-
-        return { ...order, status: 'shipped', verified_pickup: true, circuit: 'deliverer' };
     }
 
     /**
@@ -406,49 +471,68 @@ class OrderService {
             throw new Error('Code de livraison invalide');
         }
 
-        await pool.query(
-            "UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1",
-            [orderId]
-        );
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-        // Sync delivery_orders → delivered (seulement si existe)
-        await pool.query(
-            "UPDATE delivery_orders SET status = 'delivered', updated_at = NOW() WHERE order_id = $1",
-            [orderId]
-        );
-
-        const previousStatus = order.status;
-        const role = isBuyer ? 'buyer' : 'seller';
-        await this._logStatusChange(orderId, previousStatus, 'delivered', userId, role);
-
-        // Notifier le vendeur (si l'acheteur confirme) ou l'acheteur (si le vendeur confirme)
-        if (isBuyer) {
-            // Notifier le vendeur
-            const sellerResult = await pool.query(
-                `SELECT DISTINCT p.seller_id FROM order_items oi
-                 JOIN products p ON oi.product_id::integer = p.id
-                 WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL`,
+            await client.query(
+                "UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1",
                 [orderId]
             );
-            for (const row of sellerResult.rows) {
-                await notificationService.send(
-                    row.seller_id, 'order',
-                    'Commande livrée ✅',
-                    `La commande #${orderId} a été livrée avec succès.`,
-                    { order_id: orderId, status: 'delivered' }, io
-                );
-            }
-        } else {
-            // Hand Delivery: notifier l'acheteur
-            await notificationService.send(
-                order.user_id, 'order',
-                'Commande reçue ✅',
-                `Votre commande #${orderId} a été remise en main propre avec succès.`,
-                { order_id: orderId, status: 'delivered' }, io
-            );
-        }
 
-        return { ...order, status: 'delivered', verified_delivery: true, circuit: isHandDelivery ? 'hand_delivery' : 'deliverer' };
+            // Sync delivery_orders → delivered (seulement si existe)
+            await client.query(
+                "UPDATE delivery_orders SET status = 'delivered', updated_at = NOW() WHERE order_id = $1",
+                [orderId]
+            );
+
+            const previousStatus = order.status;
+            const role = isBuyer ? 'buyer' : 'seller';
+            await client.query(
+                `INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, role)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [orderId, previousStatus, 'delivered', userId, role]
+            );
+
+            await client.query('COMMIT');
+
+            // Non-transactional: notifications
+            try {
+                if (isBuyer) {
+                    const sellerResult = await pool.query(
+                        `SELECT DISTINCT p.seller_id FROM order_items oi
+                         JOIN products p ON oi.product_id::integer = p.id
+                         WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL`,
+                        [orderId]
+                    );
+                    for (const row of sellerResult.rows) {
+                        await notificationService.send(
+                            row.seller_id, 'order',
+                            'Commande livrée ✅',
+                            `La commande #${orderId} a été livrée avec succès.`,
+                            { order_id: orderId, status: 'delivered' }, io
+                        );
+                    }
+                } else {
+                    // Hand Delivery: notifier l'acheteur
+                    await notificationService.send(
+                        order.user_id, 'order',
+                        'Commande reçue ✅',
+                        `Votre commande #${orderId} a été remise en main propre avec succès.`,
+                        { order_id: orderId, status: 'delivered' }, io
+                    );
+                }
+            } catch (notifErr) {
+                console.error('⚠️ Erreur notification (non-bloquante):', notifErr.message);
+            }
+
+            return { ...order, status: 'delivered', verified_delivery: true, circuit: isHandDelivery ? 'hand_delivery' : 'deliverer' };
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     }
 
     /**
@@ -689,7 +773,7 @@ class OrderService {
                     pickup_address: pickupAddress,
                     delivery_address: order.delivery_address || 'Non spécifiée',
                     delivery_fee: parseFloat(order.delivery_fee) || 0,
-                    estimated_time: deliveryMethod === 'oli_express' ? '1-2h' : '45 min'
+                    estimated_time: deliveryMethod === 'oli_express' ? '45 min' : '1-2h'
                 });
                 console.log(`   🚚 delivery_orders créé: ID ${deliveryOrder.id} pour commande #${orderId} (mode: ${deliveryMethod}, pickup: ${pickupAddress})`);
             } catch (deliveryErr) {

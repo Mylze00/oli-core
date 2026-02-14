@@ -12,6 +12,7 @@ import 'widgets/profile_header.dart';
 import 'widgets/wallet_summary_card.dart';
 import 'widgets/order_status_bar.dart';
 import 'widgets/profile_tools_grid.dart';
+import 'widgets/transaction_summary_card.dart';
 import '../../user/widgets/visited_products_section.dart';
 
 class ProfileAndWalletPage extends ConsumerWidget {
@@ -94,8 +95,11 @@ class ProfileAndWalletPage extends ConsumerWidget {
                 ),
               ),
 
-              // 2.5 VISITED PRODUCTS SECTION
-              const VisitedProductsSection(),
+              // 2.5 TRANSACTION SUMMARY
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TransactionSummaryCard(cardColor: cardColor, textColor: textColor),
+              ),
               const SizedBox(height: 16),
 
               // 3. TOOLS GRID
@@ -103,6 +107,10 @@ class ProfileAndWalletPage extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: ProfileToolsGrid(cardColor: cardColor, textColor: textColor),
               ),
+              const SizedBox(height: 16),
+
+              // 4. VISITED PRODUCTS (moved below tools)
+              const VisitedProductsSection(),
               const SizedBox(height: 30),
             ],
           ),

@@ -156,6 +156,7 @@ if (config.NODE_ENV !== 'production') {
 }
 
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use("/api/payment", require('./routes/stripe-webhook.routes')); // 🔔 Stripe Webhook (raw body, avant express.json)
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 

@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/order_model.dart';
 import '../../orders/screens/purchases_page.dart';
+import '../../../providers/exchange_rate_provider.dart';
 
 /// Page de Confirmation de Commande
 /// Affichée après un paiement réussi (wallet, mobile money, ou carte)
-class OrderSuccessPage extends StatelessWidget {
+class OrderSuccessPage extends ConsumerWidget {
   final Order order;
 
   const OrderSuccessPage({super.key, required this.order});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(exchangeRateProvider);
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       body: SafeArea(
@@ -74,14 +78,14 @@ class OrderSuccessPage extends StatelessWidget {
                     const SizedBox(height: 12),
                     _buildInfoRow(
                       'Montant total',
-                      '\$${order.totalAmount.toStringAsFixed(2)}',
+                      exchangeNotifier.formatProductPrice(order.totalAmount),
                       Colors.white,
                     ),
                     if (order.deliveryFee > 0) ...[
                       const SizedBox(height: 12),
                       _buildInfoRow(
                         'Frais livraison',
-                        '\$${order.deliveryFee.toStringAsFixed(2)}',
+                        exchangeNotifier.formatProductPrice(order.deliveryFee),
                         Colors.grey,
                       ),
                     ],
@@ -138,7 +142,7 @@ class OrderSuccessPage extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              '\$${item.total.toStringAsFixed(2)}',
+                              exchangeNotifier.formatProductPrice(item.total),
                               style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
                             ),
                           ],

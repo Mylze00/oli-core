@@ -47,14 +47,35 @@ async function findAvailable() {
  * Assigner un livreur à une commande
  */
 async function assignDeliverer(deliveryId, delivererId) {
-    const res = await pool.query(`
-        UPDATE delivery_orders 
-        SET deliverer_id = $1, status = 'assigned', updated_at = NOW()
-        WHERE id = $2 AND status = 'pending'
-        RETURNING *
-    `, [delivererId, deliveryId]);
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
 
-    return res.rows[0];
+        // Lock the row to prevent concurrent assignment (race condition)
+        const lock = await client.query(
+            `SELECT id FROM delivery_orders WHERE id = $1 AND status = 'pending' FOR UPDATE SKIP LOCKED`,
+            [deliveryId]
+        );
+        if (lock.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return null; // Already taken or doesn't exist
+        }
+
+        const res = await client.query(`
+            UPDATE delivery_orders 
+            SET deliverer_id = $1, status = 'assigned', updated_at = NOW()
+            WHERE id = $2
+            RETURNING *
+        `, [delivererId, deliveryId]);
+
+        await client.query('COMMIT');
+        return res.rows[0];
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
 }
 
 /**

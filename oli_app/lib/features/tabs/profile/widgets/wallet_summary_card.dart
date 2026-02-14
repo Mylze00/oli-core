@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../wallet/providers/wallet_provider.dart';
 import '../../../wallet/screens/wallet_screen.dart';
+import '../../../../providers/exchange_rate_provider.dart';
 
 class WalletSummaryCard extends ConsumerWidget {
   const WalletSummaryCard({super.key});
@@ -9,6 +10,9 @@ class WalletSummaryCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final walletState = ref.watch(walletProvider);
+    // Watch pour rebuild quand devise/taux change
+    ref.watch(exchangeRateProvider);
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
     const oliBlue = Color(0xFF1E7DBA);
 
     return Container(
@@ -38,7 +42,7 @@ class WalletSummaryCard extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '\$${walletState.balance.toStringAsFixed(2)}',
+            exchangeNotifier.formatProductPrice(walletState.balance),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 42,
