@@ -172,11 +172,26 @@ class _StripePaymentPageState extends State<StripePaymentPage> {
   }
 
   Widget _buildSuccessView() {
+    // Créer un ordre mis à jour avec le statut payé
+    final paidOrder = Order(
+      id: widget.order.id,
+      userId: widget.order.userId,
+      status: 'paid',
+      paymentStatus: 'completed',
+      totalAmount: widget.order.totalAmount,
+      deliveryAddress: widget.order.deliveryAddress,
+      deliveryFee: widget.order.deliveryFee,
+      paymentMethod: widget.order.paymentMethod,
+      items: widget.order.items,
+      createdAt: widget.order.createdAt,
+      updatedAt: DateTime.now(),
+    );
+
     // Rediriger automatiquement vers la page de confirmation
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => OrderSuccessPage(order: widget.order)),
+        MaterialPageRoute(builder: (_) => OrderSuccessPage(order: paidOrder)),
       );
     });
 

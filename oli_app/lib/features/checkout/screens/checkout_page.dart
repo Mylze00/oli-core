@@ -417,7 +417,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               ),
             ),
             Text(
-              method['cost'] == 0.0 ? 'Gratuit' : exchangeNotifier.formatProductPrice((method['cost'] as num).toDouble()),
+              method['cost'] == 0.0 ? 'Gratuit' : ref.read(exchangeRateProvider.notifier).formatProductPrice((method['cost'] as num).toDouble()),
               style: TextStyle(color: method['cost'] == 0.0 ? Colors.green : Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
             ),
             const SizedBox(width: 8),
@@ -452,7 +452,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Montant total : ${exchangeNotifier.formatProductPrice(total)}',
+                'Montant total : ${ref.read(exchangeRateProvider.notifier).formatProductPrice(total)}',
                 style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),

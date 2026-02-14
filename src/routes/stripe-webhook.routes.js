@@ -1,40 +1,56 @@
 /**
- * Stripe Webhook Stub
+ * Stripe Webhook
  * POST /api/payment/webhook
  * 
- * Placeholder for future Stripe webhook integration.
- * In production, this should:
- * 1. Verify the Stripe signature (stripe.webhooks.constructEvent)
- * 2. Handle 'payment_intent.succeeded' events
- * 3. Call orderService.simulatePayment() or equivalent to confirm the order
+ * Handles payment confirmation events.
+ * Currently in simulation mode: called directly by StripePaymentPage
+ * after a successful test card payment.
+ * 
+ * In production, this should verify the Stripe signature
+ * using stripe.webhooks.constructEvent().
  * 
  * @see https://stripe.com/docs/webhooks
  */
 const express = require('express');
 const router = express.Router();
 
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/webhook', express.json(), async (req, res) => {
     try {
-        // TODO: Verify Stripe signature
+        // TODO (Production): Verify Stripe signature
         // const sig = req.headers['stripe-signature'];
         // const event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
 
         const event = req.body;
         console.log(`📩 Stripe webhook received: ${event?.type || 'unknown'}`);
 
-        // TODO: Handle specific events
-        // switch (event.type) {
-        //     case 'payment_intent.succeeded':
-        //         const orderId = event.data.object.metadata?.order_id;
-        //         if (orderId) {
-        //             const orderService = require('../services/order.service');
-        //             await orderService.simulatePayment(parseInt(orderId), 'card');
-        //         }
-        //         break;
-        //     case 'payment_intent.payment_failed':
-        //         console.log('❌ Payment failed:', event.data.object.id);
-        //         break;
-        // }
+        switch (event.type) {
+            case 'payment_intent.succeeded': {
+                // Extract orderId from metadata (sent by StripePaymentPage)
+                const paymentIntent = event.data?.object;
+                const orderId = paymentIntent?.metadata?.orderId
+                    || paymentIntent?.metadata?.order_id;
+
+                if (orderId) {
+                    const orderService = require('../services/order.service');
+                    const io = req.app.get('io');
+
+                    await orderService.simulatePayment(parseInt(orderId), 'card', io);
+                    console.log(`✅ Commande #${orderId}: paiement carte confirmé (pending → paid)`);
+                } else {
+                    console.warn('⚠️ payment_intent.succeeded reçu sans orderId dans metadata');
+                }
+                break;
+            }
+            case 'payment_intent.payment_failed': {
+                const failedIntent = event.data?.object;
+                const failedOrderId = failedIntent?.metadata?.orderId
+                    || failedIntent?.metadata?.order_id;
+                console.log(`❌ Payment failed for order #${failedOrderId || 'unknown'}:`, failedIntent?.id);
+                break;
+            }
+            default:
+                console.log(`ℹ️ Unhandled webhook event type: ${event.type}`);
+        }
 
         res.json({ received: true });
     } catch (err) {
