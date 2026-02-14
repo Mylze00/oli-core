@@ -53,7 +53,7 @@ const requireSeller = async (req, res, next) => {
  */
 const SELLER_TRANSITIONS = {
     'paid': ['processing'],           // Commande payée → En préparation (code généré, livreur notifié)
-    // 'processing' n'a plus de transition vendeur — c'est le livreur qui entre le code pour passer à shipped
+    'processing': ['ready'],          // En préparation → Prête (le pickup_code est révélé au livreur)
 };
 
 const STATUS_LABELS = {

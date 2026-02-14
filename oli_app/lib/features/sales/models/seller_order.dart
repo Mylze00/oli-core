@@ -101,6 +101,8 @@ class SellerOrder {
     switch (status) {
       case 'paid':
         return ['processing'];
+      case 'processing':
+        return ['ready'];
       default:
         return [];
     }
