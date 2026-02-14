@@ -79,12 +79,12 @@ class SocketService {
   }
 
   void on(String event, Function handler) {
-    if (_socket == null) {
-      debugPrint('⚠️ Socket non initialisé pour event: $event');
-      return;
-    }
     _eventHandlers[event] = handler;
-    _socket!.on(event, (data) => handler(data));
+    if (_socket != null) {
+      _socket!.on(event, (data) => handler(data));
+    } else {
+      debugPrint('⏳ Handler pour "$event" enregistré (sera attaché à la connexion)');
+    }
   }
 
   void off(String event) {

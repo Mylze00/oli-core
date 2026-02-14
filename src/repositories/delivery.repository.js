@@ -38,7 +38,7 @@ async function findAvailable() {
         JOIN orders o ON d.order_id = o.id
         JOIN users u ON o.user_id = u.id
         WHERE d.status = 'pending'
-        ORDER BY d.created_at ASC
+        ORDER BY d.created_at DESC
     `);
     return res.rows;
 }

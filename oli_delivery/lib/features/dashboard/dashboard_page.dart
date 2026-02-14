@@ -136,6 +136,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final address = order['delivery_address'] ?? 'Adresse inconnue';
     final status = order['status'] ?? 'pending';
     final total = order['total_amount'] ?? 0;
+    final orderId = order['order_id'] ?? order['id'];
+    final deliveryId = order['id'];
 
     Color statusColor;
     String statusLabel;
@@ -174,7 +176,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () => context.push('/order/${order['id']}'),
+        onTap: () => context.push('/order/$deliveryId'),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -190,7 +192,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       CircleAvatar(
                         backgroundColor: const Color(0xFF1E7DBA),
                         child: Text(
-                          '#${order['id']}',
+                          '#$orderId',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -200,7 +202,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'Commande #${order['id']}',
+                        'Commande #$orderId',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -269,7 +271,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                   ),
                   ElevatedButton.icon(
-                    onPressed: () => context.push('/order/${order['id']}'),
+                    onPressed: () => context.push('/order/$deliveryId'),
                     icon: const Icon(Icons.arrow_forward),
                     label: const Text('Détails'),
                     style: ElevatedButton.styleFrom(

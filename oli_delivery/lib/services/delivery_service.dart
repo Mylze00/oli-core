@@ -16,10 +16,17 @@ class DeliveryService {
   /// GET /delivery/available — Commandes en attente de prise en charge
   Future<List<dynamic>> getAvailableOrders() async {
     try {
+      debugPrint('📡 Fetching available orders from: ${ApiConfig.deliveryAvailable}');
       final response = await _dio.get(ApiConfig.deliveryAvailable);
+      debugPrint('✅ Response ${response.statusCode}: ${response.data?.length ?? 0} orders');
       if (response.statusCode == 200) {
         return response.data as List<dynamic>;
       }
+      debugPrint('⚠️ Unexpected status: ${response.statusCode}');
+      return [];
+    } on DioException catch (e) {
+      debugPrint('❌ DioException: ${e.type} — ${e.response?.statusCode} — ${e.response?.data}');
+      debugPrint('❌ Message: ${e.message}');
       return [];
     } catch (e) {
       debugPrint('❌ Error fetching available orders: $e');

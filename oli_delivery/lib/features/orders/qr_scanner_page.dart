@@ -201,7 +201,7 @@ class _QrScannerPageState extends ConsumerState<QrScannerPage> {
               top: top + scanSize + 24,
               left: 0,
               right: 0,
-              child: const Text(
+              child: Text(
                 'Scannez le QR code ${widget.isPickup ? 'du vendeur\npour confirmer le retrait' : 'du client\npour confirmer la livraison'}',
                 textAlign: TextAlign.center,
                 style: TextStyle(
