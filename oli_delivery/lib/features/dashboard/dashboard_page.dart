@@ -132,6 +132,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     );
   }
 
+  /// Convertir USD → FC avec formatage (taux: 2800 FC/USD)
+  String _formatPriceFC(dynamic amount) {
+    final usd = (amount is num) ? amount.toDouble() : double.tryParse('$amount') ?? 0.0;
+    final fc = (usd * 2800).round();
+    final formatted = fc.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]} ',
+    );
+    return '$formatted FC';
+  }
+
   Widget _buildOrderCard(Map<String, dynamic> order) {
     final address = order['delivery_address'] ?? 'Adresse inconnue';
     final status = order['status'] ?? 'pending';
@@ -263,7 +274,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '\$$total',
+                    _formatPriceFC(total),
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
