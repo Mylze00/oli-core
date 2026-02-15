@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class LocationMessageBubble extends StatelessWidget {
@@ -14,11 +15,9 @@ class LocationMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Parse lat/lng from metadata. Ensure we handle strings or doubles.
     final double? lat = _parseCoordinate(metadata['lat']);
     final double? lng = _parseCoordinate(metadata['lng']);
-    
-    // Fallback if coordinates are missing (should not happen if logic is correct)
+
     if (lat == null || lng == null) {
       return Container(
         padding: const EdgeInsets.all(12),
@@ -46,26 +45,39 @@ class LocationMessageBubble extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            // Google Map in Lite Mode (Static snapshot feel, optimized for lists)
-            GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: position,
-                zoom: 16, // Zoom légèrement plus rapproché
-              ),
-              markers: {
-                Marker(
-                  markerId: MarkerId('pos_${lat}_$lng'),
-                  position: position,
-                  // infoWindow: const InfoWindow(title: "Position partagée"), // Pas toujours visible en LiteMode
+            // OpenStreetMap via flutter_map
+            AbsorbPointer(
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: position,
+                  initialZoom: 16,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.none,
+                  ),
                 ),
-              },
-              liteModeEnabled: true,
-              mapToolbarEnabled: false,
-              zoomControlsEnabled: false,
-              myLocationButtonEnabled: false,
-              onTap: (_) => _launchMaps(lat, lng), // Catch map taps
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.mylze.oli',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: position,
+                        width: 30,
+                        height: 30,
+                        child: const Icon(
+                          Icons.location_on,
+                          color: Colors.red,
+                          size: 30,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            // Overlay for "Open in Maps" hint
+            // Overlay "Ouvrir dans Maps"
             Positioned(
               bottom: 0,
               left: 0,
@@ -100,9 +112,10 @@ class LocationMessageBubble extends StatelessWidget {
   }
 
   Future<void> _launchMaps(double lat, double lng) async {
-    final Uri googleMapsUrl = Uri.parse("https://www.google.com/maps/search/?api=1&query=$lat,$lng");
+    // Ouvrir dans OpenStreetMap au lieu de Google Maps
+    final Uri osmUrl = Uri.parse("https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=17/$lat/$lng");
     try {
-      if (!await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication)) {
+      if (!await launchUrl(osmUrl, mode: LaunchMode.externalApplication)) {
         debugPrint("Could not launch maps url");
       }
     } catch (e) {
