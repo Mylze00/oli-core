@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import {
     Package, Truck, CheckCircle, Clock, XCircle,
     ChevronDown, ChevronUp, Search, Filter,
-    RefreshCw, Bell, Eye, Send
+    RefreshCw, Bell, Eye, Send,
+    User, Phone, MapPin, CreditCard, QrCode,
+    Calendar, ShoppingBag, Hash
 } from 'lucide-react';
 import { sellerAPI } from '../services/api';
 
@@ -19,6 +21,21 @@ const TRANSITIONS = {
     paid: [{ to: 'processing', label: 'Préparer la commande', color: 'bg-yellow-500' }],
     processing: [{ to: 'shipped', label: 'Marquer comme expédiée', color: 'bg-purple-500' }],
     shipped: [{ to: 'delivered', label: 'Confirmer livraison', color: 'bg-green-500' }]
+};
+
+const DELIVERY_METHODS = {
+    oli_delivery: 'Oli Express',
+    pick_go: 'Pick & Go',
+    hand_delivery: 'Remise en main propre',
+};
+
+const PAYMENT_METHODS = {
+    card: 'Carte bancaire',
+    mobile_money: 'Mobile Money',
+    cash: 'Cash',
+    airtel_money: 'Airtel Money',
+    orange_money: 'Orange Money',
+    mpesa: 'M-Pesa',
 };
 
 export default function OrderManagement() {
@@ -217,80 +234,211 @@ export default function OrderManagement() {
 
                                 {/* Détails expandés */}
                                 {isExpanded && (
-                                    <div className="border-t border-gray-100 p-4 bg-gray-50">
-                                        {/* Produits */}
-                                        <div className="mb-4">
-                                            <h4 className="text-sm font-medium text-gray-600 mb-2">Produits</h4>
-                                            <div className="space-y-2">
-                                                {order.items?.map((item, idx) => (
-                                                    <div key={idx} className="flex items-center gap-3 bg-white p-2 rounded-lg">
-                                                        {item.product_image_url && (
-                                                            <img
-                                                                src={item.product_image_url}
-                                                                alt={item.product_name}
-                                                                className="w-12 h-12 rounded-lg object-cover"
-                                                            />
-                                                        )}
-                                                        <div className="flex-1">
-                                                            <p className="font-medium text-gray-900">{item.product_name}</p>
-                                                            <p className="text-sm text-gray-500">
-                                                                {formatPrice(item.price)} x {item.quantity}
+                                    <div className="border-t border-gray-100 bg-gray-50">
+                                        <div className="p-5 space-y-5">
+
+                                            {/* ── Client & Livraison ── */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="bg-white rounded-xl p-4 border border-gray-100">
+                                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                                        <User size={14} /> Client
+                                                    </h4>
+                                                    <p className="font-medium text-gray-900">{order.buyer_name || 'Inconnu'}</p>
+                                                    {order.buyer_phone && (
+                                                        <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
+                                                            <Phone size={13} /> {order.buyer_phone}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="bg-white rounded-xl p-4 border border-gray-100">
+                                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                                        <MapPin size={14} /> Livraison
+                                                    </h4>
+                                                    <p className="text-sm text-gray-800">
+                                                        {order.delivery_address || 'Pas d\'adresse'}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Mode: {DELIVERY_METHODS[order.delivery_method_id] || order.delivery_method_id || '—'}
+                                                    </p>
+                                                    {order.delivery_fee > 0 && (
+                                                        <p className="text-xs text-gray-500 mt-0.5">
+                                                            Frais: {formatPrice(order.delivery_fee)}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* ── Paiement ── */}
+                                            <div className="bg-white rounded-xl p-4 border border-gray-100">
+                                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                                    <CreditCard size={14} /> Paiement
+                                                </h4>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                    <div>
+                                                        <p className="text-xs text-gray-500">Montant total</p>
+                                                        <p className="text-lg font-bold text-gray-900">{formatPrice(order.total_amount)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500">Méthode</p>
+                                                        <p className="text-sm font-medium">{PAYMENT_METHODS[order.payment_method] || order.payment_method || '—'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500">Référence</p>
+                                                        <p className="text-sm font-mono text-gray-700">{order.payment_reference || '—'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500">Payée le</p>
+                                                        <p className="text-sm">{formatDate(order.paid_at)}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* ── Codes (pickup & delivery) ── */}
+                                            {(order.pickup_code || order.delivery_code) && (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {order.pickup_code && (
+                                                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                                                            <h4 className="text-xs font-semibold text-orange-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                                <QrCode size={14} /> Code Pickup (Livreur)
+                                                            </h4>
+                                                            <p className="text-2xl font-bold font-mono text-orange-900 tracking-[4px] text-center">
+                                                                {order.pickup_code}
                                                             </p>
                                                         </div>
-                                                        <p className="font-semibold">
-                                                            {formatPrice(item.price * item.quantity)}
-                                                        </p>
+                                                    )}
+                                                    {order.delivery_code && (
+                                                        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                                            <h4 className="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                                <QrCode size={14} /> Code Livraison (Client)
+                                                            </h4>
+                                                            <p className="text-2xl font-bold font-mono text-green-900 tracking-[4px] text-center">
+                                                                {order.delivery_code}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* ── Produits ── */}
+                                            <div>
+                                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                                    <ShoppingBag size={14} /> Produits ({order.items?.length || 0})
+                                                </h4>
+                                                <div className="border border-gray-100 rounded-xl divide-y overflow-hidden">
+                                                    {order.items?.map((item, idx) => (
+                                                        <div key={idx} className="flex items-center gap-3 bg-white p-3 hover:bg-gray-50">
+                                                            {item.product_image_url && (
+                                                                <img
+                                                                    src={item.product_image_url}
+                                                                    alt={item.product_name}
+                                                                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                                                                />
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-medium text-gray-900 text-sm truncate">{item.product_name}</p>
+                                                                <p className="text-xs text-gray-500">
+                                                                    {formatPrice(item.price)} × {item.quantity}
+                                                                </p>
+                                                            </div>
+                                                            <p className="font-semibold text-gray-900 text-sm">
+                                                                {formatPrice(item.price * item.quantity)}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                    <div className="flex justify-between p-3 bg-gray-50 font-bold text-sm">
+                                                        <span>Total</span>
+                                                        <span>{formatPrice(order.total_amount)}</span>
                                                     </div>
-                                                ))}
+                                                </div>
                                             </div>
+
+                                            {/* ── Suivi ── */}
+                                            {order.tracking_number && (
+                                                <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                                                    <h4 className="text-xs font-semibold text-purple-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                        <Truck size={14} /> Suivi de colis
+                                                    </h4>
+                                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                                        <div>
+                                                            <p className="text-xs text-purple-600">N° de suivi</p>
+                                                            <p className="font-mono font-medium">{order.tracking_number}</p>
+                                                        </div>
+                                                        {order.carrier && (
+                                                            <div>
+                                                                <p className="text-xs text-purple-600">Transporteur</p>
+                                                                <p className="font-medium">{order.carrier}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {order.estimated_delivery && (
+                                                        <p className="text-sm text-purple-600 mt-2">
+                                                            Livraison estimée: {new Date(order.estimated_delivery).toLocaleDateString('fr-FR')}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* ── Timeline ── */}
+                                            <div className="bg-white rounded-xl p-4 border border-gray-100">
+                                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                                    <Calendar size={14} /> Historique
+                                                </h4>
+                                                <div className="space-y-2 text-sm">
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-600">Créée</span>
+                                                        <span className="font-medium">{formatDate(order.created_at)}</span>
+                                                    </div>
+                                                    {order.paid_at && (
+                                                        <div className="flex justify-between">
+                                                            <span className="text-blue-600">Payée</span>
+                                                            <span className="font-medium">{formatDate(order.paid_at)}</span>
+                                                        </div>
+                                                    )}
+                                                    {order.shipped_at && (
+                                                        <div className="flex justify-between">
+                                                            <span className="text-purple-600">Expédiée</span>
+                                                            <span className="font-medium">{formatDate(order.shipped_at)}</span>
+                                                        </div>
+                                                    )}
+                                                    {order.delivered_at && (
+                                                        <div className="flex justify-between">
+                                                            <span className="text-green-600">Livrée</span>
+                                                            <span className="font-medium">{formatDate(order.delivered_at)}</span>
+                                                        </div>
+                                                    )}
+                                                    {order.updated_at && (
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-400">Dernière MAJ</span>
+                                                            <span className="text-gray-500">{formatDate(order.updated_at)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* ── Actions ── */}
+                                            {transitions.length > 0 && (
+                                                <div className="flex gap-2 pt-2 border-t border-gray-200">
+                                                    {transitions.map(t => (
+                                                        <button
+                                                            key={t.to}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (t.to === 'shipped') {
+                                                                    handleShipOrder(order.id);
+                                                                } else {
+                                                                    handleStatusChange(order.id, t.to);
+                                                                }
+                                                            }}
+                                                            className={`${t.color} text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity flex items-center gap-2`}
+                                                        >
+                                                            <Send size={16} />
+                                                            {t.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+
                                         </div>
-
-                                        {/* Adresse de livraison */}
-                                        {order.delivery_address && (
-                                            <div className="mb-4">
-                                                <h4 className="text-sm font-medium text-gray-600 mb-1">Adresse de livraison</h4>
-                                                <p className="text-gray-700">{order.delivery_address}</p>
-                                            </div>
-                                        )}
-
-                                        {/* Infos suivi si expédié */}
-                                        {order.tracking_number && (
-                                            <div className="mb-4 p-3 bg-purple-50 rounded-lg">
-                                                <h4 className="text-sm font-medium text-purple-700 mb-1">Suivi de colis</h4>
-                                                <p className="text-purple-900">
-                                                    {order.carrier && <span className="font-medium">{order.carrier}: </span>}
-                                                    {order.tracking_number}
-                                                </p>
-                                                {order.estimated_delivery && (
-                                                    <p className="text-sm text-purple-600 mt-1">
-                                                        Livraison estimée: {new Date(order.estimated_delivery).toLocaleDateString('fr-FR')}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* Actions */}
-                                        {transitions.length > 0 && (
-                                            <div className="flex gap-2 pt-2 border-t border-gray-200">
-                                                {transitions.map(t => (
-                                                    <button
-                                                        key={t.to}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (t.to === 'shipped') {
-                                                                handleShipOrder(order.id);
-                                                            } else {
-                                                                handleStatusChange(order.id, t.to);
-                                                            }
-                                                        }}
-                                                        className={`${t.color} text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity flex items-center gap-2`}
-                                                    >
-                                                        <Send size={16} />
-                                                        {t.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                             </div>
