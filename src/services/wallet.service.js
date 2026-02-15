@@ -118,6 +118,30 @@ class WalletService {
         };
     }
 
+    /**
+     * Créditer le vendeur après livraison validée
+     * 100% du montant des produits vendus va au vendeur
+     */
+    async creditSeller(sellerId, amount, orderId) {
+        const transactionId = `SALE_ORDER_${orderId}`;
+
+        const result = await walletRepository.performDeposit(
+            sellerId,
+            amount,
+            'SALE_CREDIT',
+            transactionId,
+            `Vente commande #${orderId}`
+        );
+
+        console.log(`   💰 Vendeur #${sellerId} crédité de ${amount}$ (commande #${orderId}). Nouveau solde: ${result.balanceAfter}$`);
+
+        return {
+            success: true,
+            newBalance: result.balanceAfter,
+            transactionId: result.id
+        };
+    }
+
     _validateCard(cardInfo) {
         if (!cardInfo || !cardInfo.cardNumber || !cardInfo.expiryDate || !cardInfo.cvv) {
             throw new Error('Informations de carte incomplètes');

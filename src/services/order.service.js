@@ -380,6 +380,13 @@ class OrderService {
 
                 await client.query('COMMIT');
 
+                // 💰 Créditer le(s) vendeur(s) — 100% du montant
+                try {
+                    await this._creditSellersForOrder(orderId);
+                } catch (creditErr) {
+                    console.error('⚠️ Erreur crédit vendeur (non-bloquante):', creditErr.message);
+                }
+
                 // Non-transactional: notification
                 try {
                     await notificationService.send(
@@ -505,6 +512,13 @@ class OrderService {
             );
 
             await client.query('COMMIT');
+
+            // 💰 Créditer le(s) vendeur(s) — 100% du montant
+            try {
+                await this._creditSellersForOrder(orderId);
+            } catch (creditErr) {
+                console.error('⚠️ Erreur crédit vendeur (non-bloquante):', creditErr.message);
+            }
 
             // Non-transactional: notifications
             try {
@@ -833,6 +847,39 @@ class OrderService {
             );
         } catch (e) {
             console.error('⚠️ Erreur log statut:', e.message);
+        }
+    }
+
+    /**
+     * Crédite le(s) vendeur(s) pour une commande livrée
+     * Calcule le montant par vendeur et crédite 100%
+     */
+    async _creditSellersForOrder(orderId) {
+        const itemsResult = await pool.query(
+            `SELECT p.seller_id, SUM(oi.product_price * oi.quantity) as seller_total
+             FROM order_items oi
+             JOIN products p ON oi.product_id::integer = p.id
+             WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL
+             GROUP BY p.seller_id`,
+            [orderId]
+        );
+
+        if (itemsResult.rows.length === 0) {
+            console.log(`   ⚠️ Aucun vendeur trouvé pour commande #${orderId}`);
+            return;
+        }
+
+        for (const row of itemsResult.rows) {
+            const sellerId = row.seller_id;
+            const amount = parseFloat(row.seller_total);
+
+            if (amount <= 0) continue;
+
+            try {
+                await walletService.creditSeller(sellerId, amount, orderId);
+            } catch (err) {
+                console.error(`⚠️ Erreur crédit vendeur #${sellerId} pour commande #${orderId}:`, err.message);
+            }
         }
     }
 }

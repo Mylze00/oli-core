@@ -131,6 +131,29 @@ router.patch('/:id/status', async (req, res) => {
             WHERE id = $2
         `, [status, id]);
 
+        // 💰 Si statut passe à 'delivered', créditer le(s) vendeur(s)
+        if (status === 'delivered') {
+            try {
+                const walletService = require('../../services/wallet.service');
+                const itemsResult = await pool.query(
+                    `SELECT p.seller_id, SUM(oi.product_price * oi.quantity) as seller_total
+                     FROM order_items oi
+                     JOIN products p ON oi.product_id::integer = p.id
+                     WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL
+                     GROUP BY p.seller_id`,
+                    [id]
+                );
+                for (const row of itemsResult.rows) {
+                    const amount = parseFloat(row.seller_total);
+                    if (amount > 0) {
+                        await walletService.creditSeller(row.seller_id, amount, id);
+                    }
+                }
+            } catch (creditErr) {
+                console.error('⚠️ Erreur crédit vendeur (admin):', creditErr.message);
+            }
+        }
+
         res.json({ message: 'Statut mis à jour' });
     } catch (err) {
         console.error('Erreur PATCH /admin/orders/:id/status:', err);
