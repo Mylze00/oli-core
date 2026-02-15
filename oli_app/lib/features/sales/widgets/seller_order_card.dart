@@ -6,6 +6,7 @@ import '../../../providers/exchange_rate_provider.dart';
 import '../../../core/user/user_provider.dart';
 import '../models/seller_order.dart';
 import '../providers/seller_orders_provider.dart';
+import '../screens/seller_order_details_page.dart';
 import '../../chat/chat_page.dart';
 import '../../orders/widgets/order_progress_bar.dart';
 
@@ -40,7 +41,17 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
         elevation: 1,
         shadowColor: Colors.black.withOpacity(0.1),
         child: InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SellerOrderDetailsPage(
+                  orderId: order.id,
+                  initialOrder: order,
+                ),
+              ),
+            );
+          },
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -83,42 +94,78 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
                 ),
                 const SizedBox(height: 8),
 
-                // Items preview
+                // Articles détaillés — toujours visibles
                 if (order.items.isNotEmpty) ...[
-                  _buildItemsPreview(exchangeNotifier),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
+                  ...order.items.map((item) => Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[800] : Colors.grey[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 45, height: 45,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(6),
+                            color: Colors.grey[300],
+                          ),
+                          child: item.productImageUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Image.network(item.productImageUrl!, fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Icon(Icons.image, color: Colors.grey[400])),
+                                )
+                              : Icon(Icons.inventory_2, color: Colors.grey[400]),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item.productName, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: textColor), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 2),
+                            Text('${exchangeNotifier.formatProductPrice(item.price)} × ${item.quantity}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          ],
+                        )),
+                      ],
+                    ),
+                  )),
                 ],
+
+                const SizedBox(height: 6),
 
                 // Barre de progression
                 OrderProgressBar(status: order.status),
                 const SizedBox(height: 8),
 
-                // Pickup code visible sans expandre
+                // PICKUP CODE — bien visible
                 if ((order.status == 'processing' || order.status == 'ready') && order.pickupCode != null)
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.orange.shade300),
+                      gradient: LinearGradient(colors: [Colors.orange.shade100, Colors.amber.shade50]),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.shade400, width: 2),
                     ),
-                    child: Row(
+                    child: Column(
                       children: [
-                        Icon(Icons.key, color: Colors.orange.shade700, size: 18),
-                        const SizedBox(width: 8),
-                        Text('Code livreur : ', style: TextStyle(fontSize: 12, color: Colors.orange.shade700)),
-                        Text(
-                          order.pickupCode!,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 3,
-                            color: Colors.orange.shade900,
-                            fontFamily: 'monospace',
-                          ),
+                        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(Icons.key, color: Colors.orange.shade800, size: 20),
+                          const SizedBox(width: 8),
+                          Text('CODE POUR LE LIVREUR', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade800, letterSpacing: 1)),
+                        ]),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade300)),
+                          child: Text(order.pickupCode!, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6, color: Colors.orange.shade900, fontFamily: 'monospace')),
                         ),
+                        const SizedBox(height: 6),
+                        Text('Communiquez ce code au livreur', style: TextStyle(fontSize: 11, color: Colors.orange.shade700)),
                       ],
                     ),
                   ),

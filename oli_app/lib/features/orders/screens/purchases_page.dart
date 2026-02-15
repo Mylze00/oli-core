@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../../models/order_model.dart';
 import '../providers/orders_provider.dart';
 import '../../../providers/exchange_rate_provider.dart';
@@ -15,6 +17,22 @@ class PurchasesPage extends ConsumerStatefulWidget {
 
 class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   int? _expandedOrderId;
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-refresh toutes les 10s
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) ref.invalidate(ordersProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -145,6 +163,80 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                 child: Text(
                   '+ ${order.items.length - 1} autre${order.items.length > 2 ? 's' : ''} article${order.items.length > 2 ? 's' : ''} · Cliquez pour détails',
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                ),
+              ),
+
+            // CODE DE LIVRAISON — visible pour l'acheteur quand la commande est en route
+            if (order.deliveryCode != null &&
+                (order.status == 'shipped' || order.status == 'processing' || order.status == 'ready'))
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [Colors.green.shade900, Colors.green.shade800]),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade400, width: 1.5),
+                ),
+                child: Column(
+                  children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.verified_user, color: Colors.green.shade300, size: 20),
+                      const SizedBox(width: 8),
+                      Text('CODE DE RÉCEPTION',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade300,
+                              letterSpacing: 1)),
+                    ]),
+                    const SizedBox(height: 12),
+                    // QR Code scannable par le livreur
+                    Container(
+                      width: 140,
+                      height: 140,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: QrImageView(
+                        data: order.deliveryCode!,
+                        version: QrVersions.auto,
+                        size: 124,
+                        backgroundColor: Colors.white,
+                        eyeStyle: const QrEyeStyle(
+                          eyeShape: QrEyeShape.square,
+                          color: Colors.black,
+                        ),
+                        dataModuleStyle: const QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.green.shade600),
+                      ),
+                      child: Text(order.deliveryCode!,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 6,
+                            color: Colors.white,
+                            fontFamily: 'monospace',
+                          )),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Communiquez ce code au livreur quand il arrive',
+                        style: TextStyle(fontSize: 11, color: Colors.green.shade400),
+                        textAlign: TextAlign.center),
+                  ],
                 ),
               ),
 

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
-/// Widget pour afficher un code de vérification avec QR code simulé
+/// Widget pour afficher un code de vérification avec vrai QR code scannable
 /// Utilisé pour le pickup_code (vendeur → livreur) et delivery_code (acheteur → livreur)
 class VerificationCodeWidget extends StatelessWidget {
   final String code;
@@ -53,16 +54,28 @@ class VerificationCodeWidget extends StatelessWidget {
           ],
           const SizedBox(height: 20),
 
-          // QR Code area (visual representation)
+          // Vrai QR Code scannable
           Container(
-            width: 160,
-            height: 160,
+            width: 180,
+            height: 180,
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Center(
-              child: _buildQRPattern(code),
+            child: QrImageView(
+              data: code,
+              version: QrVersions.auto,
+              size: 156,
+              backgroundColor: Colors.white,
+              eyeStyle: const QrEyeStyle(
+                eyeShape: QrEyeShape.square,
+                color: Colors.black,
+              ),
+              dataModuleStyle: const QrDataModuleStyle(
+                dataModuleShape: QrDataModuleShape.square,
+                color: Colors.black,
+              ),
             ),
           ),
 
@@ -109,49 +122,10 @@ class VerificationCodeWidget extends StatelessWidget {
 
           const SizedBox(height: 8),
           Text(
-            'Appuyez pour copier le code',
+            'Appuyez pour copier · Scannez le QR pour vérifier',
             style: TextStyle(color: Colors.grey[600], fontSize: 11),
           ),
         ],
-      ),
-    );
-  }
-
-  /// Génère un pattern visuel QR simplifié basé sur le code
-  Widget _buildQRPattern(String code) {
-    // Pattern de grille basé sur le hash du code
-    final hash = code.codeUnits.fold<int>(0, (prev, c) => prev * 31 + c);
-    const gridSize = 9;
-    
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(gridSize, (row) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(gridSize, (col) {
-              // Coins fixes (finder patterns style QR)
-              final isCorner = (row < 3 && col < 3) ||
-                               (row < 3 && col >= gridSize - 3) ||
-                               (row >= gridSize - 3 && col < 3);
-              
-              // Pattern central basé sur le code
-              final cellHash = (hash + row * gridSize + col) % 7;
-              final isFilled = isCorner || cellHash < 3;
-
-              return Container(
-                width: 12,
-                height: 12,
-                margin: const EdgeInsets.all(1),
-                decoration: BoxDecoration(
-                  color: isFilled ? Colors.black : Colors.white,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              );
-            }),
-          );
-        }),
       ),
     );
   }

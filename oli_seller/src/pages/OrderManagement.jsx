@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Package, Truck, CheckCircle, Clock, XCircle,
     ChevronDown, ChevronUp, Search, Filter,
@@ -38,6 +38,14 @@ export default function OrderManagement() {
         loadOrders();
     }, [activeFilter]);
 
+    // Auto-refresh toutes les 10s (silencieux, sans loader)
+    useEffect(() => {
+        const interval = setInterval(() => {
+            silentRefresh();
+        }, 10000);
+        return () => clearInterval(interval);
+    }, [activeFilter]);
+
     const loadOrders = async () => {
         try {
             setLoading(true);
@@ -49,6 +57,17 @@ export default function OrderManagement() {
             console.error('Erreur chargement commandes:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const silentRefresh = async () => {
+        try {
+            const filters = activeFilter !== 'all' ? { status: activeFilter } : {};
+            const data = await sellerAPI.getOrders(filters);
+            setOrders(data.orders || []);
+            setStatusCounts(data.status_counts || {});
+        } catch (err) {
+            // Silencieux — pas de log intrusif
         }
     };
 
@@ -128,8 +147,8 @@ export default function OrderManagement() {
                         key={tab.key}
                         onClick={() => setActiveFilter(tab.key)}
                         className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeFilter === tab.key
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
                     >
                         {tab.label}

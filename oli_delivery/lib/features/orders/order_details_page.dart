@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,11 +23,40 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
   bool _isPickingUp = false;
   double? _distanceKm;
   bool _gpsAvailable = false;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadOrder();
+    // Auto-refresh toutes les 10s pour refléter les changements de statut
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _silentRefresh());
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Refresh silencieux (pas de loader visible)
+  Future<void> _silentRefresh() async {
+    final service = ref.read(deliveryServiceProvider);
+    final available = await service.getAvailableOrders();
+    var order = available.firstWhere(
+      (o) => (o['id'] == widget.orderId || o['order_id'] == widget.orderId),
+      orElse: () => null,
+    );
+    if (order == null) {
+      final tasks = await service.getMyTasks();
+      order = tasks.firstWhere(
+        (o) => (o['id'] == widget.orderId || o['order_id'] == widget.orderId),
+        orElse: () => null,
+      );
+    }
+    if (mounted && order != null) {
+      setState(() => _order = order);
+    }
   }
 
   Future<void> _loadOrder() async {
@@ -117,30 +147,75 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
     }
   }
 
-  Future<void> _markAsDelivered() async {
+  /// Vérifier le code de livraison fourni par l'acheteur
+  Future<void> _verifyDeliveryCode() async {
+    final controller = TextEditingController();
+
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Code de livraison'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Entrez le code de réception fourni par le client pour confirmer la livraison.',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(fontSize: 22, letterSpacing: 4, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+              maxLength: 6,
+              decoration: InputDecoration(
+                hintText: 'CODE',
+                counterText: '',
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final v = controller.text.trim();
+              if (v.length == 6) Navigator.pop(ctx, v);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Valider', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (code == null || !mounted) return;
+
     setState(() => _isDelivering = true);
 
-    // Obtenir la position GPS au moment de la livraison
-    final position = await LocationService.getCurrentPosition();
-
-    final bool success;
-    if (position != null) {
-      success = await ref.read(deliveryServiceProvider).updateStatus(
-        widget.orderId,
-        'delivered',
-        lat: position.latitude,
-        lng: position.longitude,
-      );
-    } else {
-      success = await ref.read(deliveryServiceProvider).markAsDelivered(widget.orderId);
-    }
+    // _order['id'] = delivery_orders.id (attendu par POST /delivery/:id/verify)
+    final deliveryOrderId = _order?['id'] ?? widget.orderId;
+    final success = await ref.read(deliveryServiceProvider).verifyDeliveryCode(
+      deliveryOrderId,
+      code,
+    );
 
     setState(() => _isDelivering = false);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Commande livrée !' : 'Erreur lors de la mise à jour'),
+          content: Text(success ? '✅ Livraison confirmée !' : '❌ Code invalide, réessayez.'),
           backgroundColor: success ? Colors.green : Colors.red,
         ),
       );
@@ -177,10 +252,11 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
   }
 
   Future<void> _scanQR() async {
-    final realOrderId = _order?['order_id'] ?? widget.orderId;
+    // _order['id'] = delivery_orders.id (attendu par POST /delivery/:id/verify)
+    final deliveryOrderId = _order?['id'] ?? widget.orderId;
     final verified = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => QrScannerPage(orderId: realOrderId),
+        builder: (_) => QrScannerPage(orderId: deliveryOrderId),
       ),
     );
 
@@ -191,7 +267,7 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
           backgroundColor: Colors.green,
         ),
       );
-      _markAsDelivered();
+      context.go('/dashboard');
     }
   }
 
@@ -494,14 +570,14 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
               ),
               const SizedBox(height: 12),
               ElevatedButton.icon(
-                onPressed: _isDelivering ? null : _markAsDelivered,
+                onPressed: _isDelivering ? null : _verifyDeliveryCode,
                 icon: _isDelivering
                     ? const SizedBox(
                         width: 20, height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Icon(Icons.done_all),
-                label: const Text('MARQUER COMME LIVRÉE'),
+                    : const Icon(Icons.dialpad),
+                label: const Text('ENTRER CODE CLIENT'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green.shade700,
                   foregroundColor: Colors.white,

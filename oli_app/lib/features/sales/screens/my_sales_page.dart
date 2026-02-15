@@ -30,7 +30,7 @@ class _MySalesPageState extends ConsumerState<MySalesPage> {
     return Scaffold(
       backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: const Text('Mes Ventes'),
+        title: const Text('Mes Ventes 🔑 v2'),
         backgroundColor: oliBlue,
         foregroundColor: Colors.white,
         elevation: 0,

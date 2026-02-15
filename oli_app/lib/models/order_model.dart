@@ -8,6 +8,8 @@ class Order {
   final double deliveryFee;
   final String? paymentMethod;
   final String paymentStatus;
+  final String? deliveryCode;
+  final String? deliveryMethodId;
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<OrderItem> items;
@@ -21,6 +23,8 @@ class Order {
     this.deliveryFee = 0,
     this.paymentMethod,
     required this.paymentStatus,
+    this.deliveryCode,
+    this.deliveryMethodId,
     required this.createdAt,
     required this.updatedAt,
     required this.items,
@@ -37,6 +41,8 @@ class Order {
       deliveryFee: double.tryParse(json['delivery_fee']?.toString() ?? '0') ?? 0,
       paymentMethod: json['payment_method'],
       paymentStatus: json['payment_status'] ?? 'pending',
+      deliveryCode: json['delivery_code'],
+      deliveryMethodId: json['delivery_method_id'],
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       items: itemsJson.map((e) => OrderItem.fromJson(e)).toList(),
