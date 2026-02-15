@@ -4,7 +4,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../../config/db');
+const pool = require('../../config/db');
 
 // ============================================================
 // GET /admin/database/stats - Statistiques globales
@@ -257,11 +257,11 @@ router.post('/query', async (req, res) => {
         // Sécurité : Vérifier que c'est une requête SELECT
         const trimmed = sql.trim().toUpperCase();
         const dangerousKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'GRANT', 'REVOKE'];
-        
+
         for (const keyword of dangerousKeywords) {
             if (trimmed.startsWith(keyword)) {
-                return res.status(403).json({ 
-                    error: `Requêtes ${keyword} non autorisées. Seules les requêtes SELECT sont permises.` 
+                return res.status(403).json({
+                    error: `Requêtes ${keyword} non autorisées. Seules les requêtes SELECT sont permises.`
                 });
             }
         }
