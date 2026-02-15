@@ -120,7 +120,7 @@ router.patch('/:id/status', async (req, res) => {
         const { id } = req.params;
         const { status } = req.body;
 
-        const validStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'];
+        const validStatuses = ['pending', 'paid', 'processing', 'ready', 'confirmed', 'shipped', 'delivered', 'cancelled'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ error: 'Statut invalide' });
         }
