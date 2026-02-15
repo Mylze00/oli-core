@@ -34,6 +34,13 @@ export default function DatabaseManager() {
     const [queryLoading, setQueryLoading] = useState(false);
     const [queryError, setQueryError] = useState(null);
     const [notification, setNotification] = useState(null);
+    // Search & Filter
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchColumn, setSearchColumn] = useState('');
+    const [tableColumns, setTableColumns] = useState([]);
+    const [searchTimeout, setSearchTimeout] = useState(null);
+    const [sortColumn, setSortColumn] = useState('id');
+    const [sortOrder, setSortOrder] = useState('desc');
 
     useEffect(() => {
         fetchStats();
@@ -75,20 +82,57 @@ export default function DatabaseManager() {
         }
     };
 
-    const fetchTableData = async (tableName, page = 1) => {
+    const fetchTableData = async (tableName, page = 1, search = searchTerm, column = searchColumn, sort = sortColumn, order = sortOrder) => {
         try {
-            const res = await api.get(`/admin/database/tables/${tableName}/data?page=${page}&limit=25`);
+            const params = new URLSearchParams({ page, limit: 25, sort, order });
+            if (search.trim()) params.append('search', search.trim());
+            if (column) params.append('searchColumn', column);
+            const res = await api.get(`/admin/database/tables/${tableName}/data?${params}`);
             setTableData(res.data);
             setCurrentPage(page);
+            if (res.data.columns) setTableColumns(res.data.columns);
         } catch (err) {
             console.error('Table data error:', err);
         }
     };
 
+    const handleSearch = (value) => {
+        setSearchTerm(value);
+        if (searchTimeout) clearTimeout(searchTimeout);
+        const timeout = setTimeout(() => {
+            fetchTableData(selectedTable, 1, value, searchColumn);
+        }, 400);
+        setSearchTimeout(timeout);
+    };
+
+    const handleSearchColumnChange = (col) => {
+        setSearchColumn(col);
+        if (searchTerm.trim()) {
+            fetchTableData(selectedTable, 1, searchTerm, col);
+        }
+    };
+
+    const handleSort = (col) => {
+        const newOrder = (sortColumn === col && sortOrder === 'desc') ? 'asc' : 'desc';
+        setSortColumn(col);
+        setSortOrder(newOrder);
+        fetchTableData(selectedTable, 1, searchTerm, searchColumn, col, newOrder);
+    };
+
+    const clearSearch = () => {
+        setSearchTerm('');
+        setSearchColumn('');
+        fetchTableData(selectedTable, 1, '', '');
+    };
+
     const selectTable = (tableName) => {
         setSelectedTable(tableName);
+        setSearchTerm('');
+        setSearchColumn('');
+        setSortColumn('id');
+        setSortOrder('desc');
         fetchTableDetail(tableName);
-        fetchTableData(tableName, 1);
+        fetchTableData(tableName, 1, '', '', 'id', 'desc');
     };
 
     const executeQuery = async () => {
@@ -250,7 +294,7 @@ export default function DatabaseManager() {
                 {/* Header */}
                 <div className="flex items-center gap-4">
                     <button
-                        onClick={() => { setSelectedTable(null); setTableDetail(null); setTableData(null); }}
+                        onClick={() => { setSelectedTable(null); setTableDetail(null); setTableData(null); setSearchTerm(''); setSearchColumn(''); setTableColumns([]); setSortColumn('id'); setSortOrder('desc'); }}
                         className="flex items-center gap-1 text-gray-500 hover:text-gray-700"
                     >
                         <ChevronLeftIcon className="h-5 w-5" /> Retour
@@ -304,20 +348,62 @@ export default function DatabaseManager() {
                 {/* Data */}
                 {tableData && (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                            <h4 className="font-semibold text-gray-700">
-                                Données ({tableData.pagination.total} lignes)
-                            </h4>
-                            <button onClick={() => fetchTableData(selectedTable, currentPage)} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
-                                <ArrowPathIcon className="h-4 w-4" /> Rafraîchir
-                            </button>
+                        <div className="p-5 border-b border-gray-100 bg-gray-50">
+                            <div className="flex items-center justify-between mb-4">
+                                <h4 className="font-semibold text-gray-700">
+                                    Données ({tableData.pagination.total} ligne{tableData.pagination.total > 1 ? 's' : ''})
+                                    {searchTerm && <span className="text-sm font-normal text-blue-600 ml-2">— filtrées</span>}
+                                </h4>
+                                <button onClick={() => fetchTableData(selectedTable, currentPage)} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                                    <ArrowPathIcon className="h-4 w-4" /> Rafraîchir
+                                </button>
+                            </div>
+                            {/* Search Bar */}
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <div className="relative flex-1">
+                                    <MagnifyingGlassIcon className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(e) => handleSearch(e.target.value)}
+                                        placeholder={searchColumn ? `Rechercher dans ${searchColumn}...` : 'Rechercher dans toutes les colonnes...'}
+                                        className="w-full pl-9 pr-9 py-2.5 text-sm border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                    />
+                                    {searchTerm && (
+                                        <button onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                            <XMarkIcon className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                </div>
+                                <select
+                                    value={searchColumn}
+                                    onChange={(e) => handleSearchColumnChange(e.target.value)}
+                                    className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 outline-none min-w-[180px]"
+                                >
+                                    <option value="">Toutes les colonnes</option>
+                                    {tableColumns.map((col) => (
+                                        <option key={col} value={col}>{col}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        {tableData.data.length > 0 && Object.keys(tableData.data[0]).map((key) => (
-                                            <th key={key} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{key}</th>
+                                        {(tableColumns.length > 0 ? tableColumns : (tableData.data.length > 0 ? Object.keys(tableData.data[0]) : [])).map((key) => (
+                                            <th
+                                                key={key}
+                                                onClick={() => handleSort(key)}
+                                                className="px-3 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap cursor-pointer hover:text-blue-600 hover:bg-blue-50/50 transition-colors select-none"
+                                            >
+                                                <span className="flex items-center gap-1">
+                                                    {key}
+                                                    {sortColumn === key && (
+                                                        <span className="text-blue-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                                    )}
+                                                </span>
+                                            </th>
                                         ))}
                                         <th className="px-3 py-2 text-xs font-semibold text-gray-500">Actions</th>
                                     </tr>
@@ -551,8 +637,8 @@ export default function DatabaseManager() {
                         key={tab.id}
                         onClick={() => { setActiveTab(tab.id); if (tab.id === 'tables') { setSelectedTable(null); setTableDetail(null); setTableData(null); } }}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id
-                                ? 'bg-blue-600 text-white shadow-md'
-                                : 'text-gray-600 hover:bg-gray-100'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'text-gray-600 hover:bg-gray-100'
                             }`}
                     >
                         <tab.icon className="h-4 w-4" />

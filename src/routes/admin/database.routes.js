@@ -174,7 +174,7 @@ router.get('/tables/:name', async (req, res) => {
 });
 
 // ============================================================
-// GET /admin/database/tables/:name/data - Données paginées
+// GET /admin/database/tables/:name/data - Données paginées + recherche
 // ============================================================
 router.get('/tables/:name/data', async (req, res) => {
     try {
@@ -185,6 +185,7 @@ router.get('/tables/:name/data', async (req, res) => {
         const sortBy = req.query.sort || 'id';
         const sortOrder = req.query.order === 'asc' ? 'ASC' : 'DESC';
         const search = req.query.search || '';
+        const searchColumn = req.query.searchColumn || '';
 
         // Vérifier que la table existe
         const exists = await pool.query(`
@@ -196,40 +197,68 @@ router.get('/tables/:name/data', async (req, res) => {
             return res.status(404).json({ error: 'Table not found' });
         }
 
+        // Récupérer toutes les colonnes de la table
+        const allColumns = await pool.query(`
+            SELECT column_name, data_type FROM information_schema.columns 
+            WHERE table_schema = 'public' AND table_name = $1
+            ORDER BY ordinal_position
+        `, [tableName]);
+
+        const columnNames = allColumns.rows.map(c => c.column_name);
+
         // Vérifier que la colonne de tri existe
-        const colCheck = await pool.query(`
-            SELECT column_name FROM information_schema.columns 
-            WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2
-        `, [tableName, sortBy]);
+        const safeSort = columnNames.includes(sortBy) ? sortBy : (columnNames[0] || 'id');
+        const orderClause = `"${safeSort}" ${sortOrder}`;
 
-        const safeSort = colCheck.rows.length > 0 ? sortBy : 'id';
+        // Construire la clause WHERE pour la recherche
+        let whereClause = '';
+        const queryParams = [];
+        let paramIndex = 1;
 
-        // Si fallback 'id' n'existe pas non plus, on prend la première colonne
-        let orderClause;
-        if (safeSort === 'id') {
-            const firstCol = await pool.query(`
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_schema = 'public' AND table_name = $1
-                ORDER BY ordinal_position LIMIT 1
-            `, [tableName]);
-            orderClause = `"${firstCol.rows[0].column_name}" ${sortOrder}`;
-        } else {
-            orderClause = `"${safeSort}" ${sortOrder}`;
+        if (search.trim()) {
+            if (searchColumn && columnNames.includes(searchColumn)) {
+                // Recherche dans une colonne spécifique
+                whereClause = `WHERE "${searchColumn}"::text ILIKE $${paramIndex}`;
+                queryParams.push(`%${search.trim()}%`);
+                paramIndex++;
+            } else {
+                // Recherche dans toutes les colonnes texte
+                const textCols = allColumns.rows
+                    .filter(c => ['character varying', 'text', 'varchar', 'char', 'name', 'uuid'].includes(c.data_type))
+                    .map(c => c.column_name);
+
+                if (textCols.length > 0) {
+                    const conditions = textCols.map(col => {
+                        queryParams.push(`%${search.trim()}%`);
+                        return `"${col}"::text ILIKE $${paramIndex++}`;
+                    });
+                    whereClause = `WHERE (${conditions.join(' OR ')})`;
+                } else {
+                    // Aucune colonne texte — cast toutes les colonnes
+                    const conditions = columnNames.slice(0, 5).map(col => {
+                        queryParams.push(`%${search.trim()}%`);
+                        return `"${col}"::text ILIKE $${paramIndex++}`;
+                    });
+                    whereClause = `WHERE (${conditions.join(' OR ')})`;
+                }
+            }
         }
 
-        // Compter le total
+        // Compter le total (avec filtre)
         const countResult = await pool.query(
-            `SELECT COUNT(*) AS total FROM "${tableName}"`
+            `SELECT COUNT(*) AS total FROM "${tableName}" ${whereClause}`,
+            queryParams
         );
 
-        // Récupérer les données
+        // Récupérer les données (avec filtre)
         const dataResult = await pool.query(
-            `SELECT * FROM "${tableName}" ORDER BY ${orderClause} LIMIT $1 OFFSET $2`,
-            [limit, offset]
+            `SELECT * FROM "${tableName}" ${whereClause} ORDER BY ${orderClause} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+            [...queryParams, limit, offset]
         );
 
         res.json({
             data: dataResult.rows,
+            columns: columnNames,
             pagination: {
                 page,
                 limit,
