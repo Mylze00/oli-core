@@ -93,6 +93,36 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
                 OrderProgressBar(status: order.status),
                 const SizedBox(height: 8),
 
+                // Pickup code visible sans expandre
+                if ((order.status == 'processing' || order.status == 'ready') && order.pickupCode != null)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.orange.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.key, color: Colors.orange.shade700, size: 18),
+                        const SizedBox(width: 8),
+                        Text('Code livreur : ', style: TextStyle(fontSize: 12, color: Colors.orange.shade700)),
+                        Text(
+                          order.pickupCode!,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 3,
+                            color: Colors.orange.shade900,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // Footer: Total + Date
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -248,7 +278,7 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
 
     // Afficher le pickup_code quand la commande est en préparation
     // Le livreur doit saisir ce code pour passer à "en cours de livraison"
-    if (order.status == 'processing' && order.pickupCode != null) {
+    if ((order.status == 'processing' || order.status == 'ready') && order.pickupCode != null) {
       buttons.add(Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
