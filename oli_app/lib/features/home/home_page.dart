@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -19,9 +20,9 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage> {
   int _currentIndex = 0;
 
-  // Tabs principaux (sans le bouton +)
-  late List<Widget> _pages; // Removed 'final' to allow reassignment
-  int _dashboardKey = 0; // Counter to trigger updates
+  // Tabs principaux (sans le bouton Vendre)
+  late List<Widget> _pages;
+  int _dashboardKey = 0;
   
   @override
   void initState() {
@@ -34,7 +35,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       MainDashboardView(
         key: ValueKey(_dashboardKey),
         onSwitchToMarket: () => _switchToMarket(),
-        onBecameVisible: () {}, // Callback when visible
+        onBecameVisible: () {},
       ),
       ConversationsPage(),
       MarketView(),
@@ -43,26 +44,24 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
   
   void _switchToMarket() {
-    setState(() => _currentIndex = 2); // Index 2 = MarketView
+    setState(() => _currentIndex = 2);
   }
 
   void _onTabSelected(int index) {
-    // Bouton +
+    // Bouton Vendre (index 2 dans la barre)
     if (index == 2) {
       _openPublishPage();
       return;
     }
 
-    // Décalage d'index après le bouton +
+    // Décalage d'index après le bouton Vendre
     final adjustedIndex = index > 2 ? index - 1 : index;
 
     setState(() {
-      // Réinitialiser les filtres de recherche si retour à l'accueil (index 0)
       if (adjustedIndex == 0 && _currentIndex != 0) {
         ref.read(searchFiltersProvider.notifier).reset();
-        // Increment key to force dashboard widget rebuild and clear search bar
         _dashboardKey++;
-        _buildPages(); // Rebuild pages list within setState
+        _buildPages();
       }
       
       _currentIndex = adjustedIndex;
@@ -100,9 +99,9 @@ class _HomePageState extends ConsumerState<HomePage> {
             icon: const Icon(Icons.chat_outlined),
             label: 'nav.chats'.tr(),
           ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.add_circle, size: 30),
-            label: '+',
+          BottomNavigationBarItem(
+            icon: const _AnimatedSellIcon(),
+            label: ' ',
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.store_outlined),
@@ -117,3 +116,124 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 }
+
+/// Bouton animé : flip 3D "page de livre" entre "+" et "Vendre"
+/// Change de couleur toutes les 2 secondes
+class _AnimatedSellIcon extends StatefulWidget {
+  const _AnimatedSellIcon();
+
+  @override
+  State<_AnimatedSellIcon> createState() => _AnimatedSellIconState();
+}
+
+class _AnimatedSellIconState extends State<_AnimatedSellIcon>
+    with SingleTickerProviderStateMixin {
+  
+  late AnimationController _flipController;
+  int _colorIndex = 0;
+  bool _showingBack = false;
+
+  static const List<Color> _colors = [
+    Colors.blueAccent,
+    Colors.orangeAccent,
+    Colors.pinkAccent,
+    Colors.greenAccent,
+    Colors.purpleAccent,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    
+    _flipController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _flipController.addListener(() {
+      // À mi-rotation (0.5), on bascule le contenu affiché
+      final isBack = _flipController.value >= 0.5;
+      if (isBack != _showingBack) {
+        setState(() => _showingBack = isBack);
+      }
+    });
+
+    // Lance le cycle : flip toutes les 2 secondes
+    _startFlipCycle();
+  }
+
+  void _startFlipCycle() async {
+    while (mounted) {
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      
+      if (_flipController.isCompleted) {
+        // Retourne à "+"
+        _flipController.reverse();
+      } else if (_flipController.isDismissed) {
+        // Change de couleur avant le flip suivant
+        setState(() {
+          _colorIndex = (_colorIndex + 1) % _colors.length;
+        });
+        // Va vers "Vendre"
+        _flipController.forward();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _flipController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colors[_colorIndex];
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: SizedBox(
+      width: 60,
+      height: 30,
+      child: AnimatedBuilder(
+        animation: _flipController,
+        builder: (context, child) {
+          final angle = _flipController.value * 3.14159;
+          
+          return Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.001)
+              ..rotateY(angle),
+            child: _showingBack
+                ? Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()..rotateY(3.14159),
+                    child: Center(
+                      child: Text(
+                        'Vendre',
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'olive_palm',
+                        ),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Icon(
+                      Icons.add,
+                      color: color,
+                      size: 23,
+                    ),
+                  ),
+          );
+        },
+      ),
+      ),
+    );
+  }
+}
+

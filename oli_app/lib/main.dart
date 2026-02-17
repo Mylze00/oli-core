@@ -69,62 +69,104 @@ class OliApp extends ConsumerWidget {
   }
 
   Widget _getHomeWidget(AuthState state) {
-    if (state.isAuthenticated) {
-      return const HomePage();
-    }
-    
-    // Si on n'est pas authentifié, on montre Login
-    // Note: On pourrait ajouter un Splash si state.isLoading est vrai au début
-    if (state.isCheckingSession) {
+    return SplashWrapper(authState: state);
+  }
+}
+
+/// Splash Screen affiché à chaque démarrage
+class SplashWrapper extends StatefulWidget {
+  final AuthState authState;
+  const SplashWrapper({super.key, required this.authState});
+
+  @override
+  State<SplashWrapper> createState() => _SplashWrapperState();
+}
+
+class _SplashWrapperState extends State<SplashWrapper>
+    with SingleTickerProviderStateMixin {
+  bool _minDelayPassed = false;
+  late AnimationController _fadeCtrl;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeIn);
+    _fadeCtrl.forward();
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _minDelayPassed = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _fadeCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _readyToLeave =>
+      _minDelayPassed && !widget.authState.isCheckingSession;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_readyToLeave) {
       return Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E7DBA), Color(0xFF0D4A73)],
-            ),
-          ),
-          child: const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo / Nom de l'app
-                Text(
-                  'Oli',
-                  style: TextStyle(
-                    fontSize: 56,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    fontFamily: 'Inter',
-                    letterSpacing: 2,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Votre marketplace',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white70,
-                    fontFamily: 'Inter',
-                  ),
-                ),
-                SizedBox(height: 40),
-                SizedBox(
-                  width: 28,
-                  height: 28,
+        backgroundColor: Colors.black,
+        body: FadeTransition(
+          opacity: _fadeAnim,
+          child: Stack(
+            children: [
+              // Spinner centré
+              const Center(
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Colors.white24),
                   ),
                 ),
-              ],
-            ),
+              ),
+              // Logo Oli en bas de page
+              Positioned(
+                bottom: 60,
+                left: 0,
+                right: 0,
+                child: Column(
+                  children: [
+                    Image.asset(
+                      'assets/images/logo.png',
+                      width: 80,
+                      height: 80,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Simple, Rapide, Congolais',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withOpacity(0.5),
+                        fontFamily: 'Inter',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
 
+    // Splash terminé
+    if (widget.authState.isAuthenticated) {
+      return const HomePage();
+    }
     return const LoginPage();
   }
 }

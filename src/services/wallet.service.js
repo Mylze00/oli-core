@@ -160,6 +160,29 @@ class WalletService {
             throw new Error('Date d\'expiration invalide (format MM/YY requis)');
         }
     }
+
+    /**
+     * Créditer le wallet du livreur après livraison confirmée
+     */
+    async creditDeliverer(delivererId, amount, orderId) {
+        const transactionId = `DELIVERY_ORDER_${orderId}`;
+
+        const result = await walletRepository.performDeposit(
+            delivererId,
+            amount,
+            'DELIVERY_CREDIT',
+            transactionId,
+            `Commission livraison commande #${orderId}`
+        );
+
+        console.log(`   🚚💰 Livreur #${delivererId} crédité de ${amount}$ (commande #${orderId}). Nouveau solde: ${result.balanceAfter}$`);
+
+        return {
+            success: true,
+            newBalance: result.balanceAfter,
+            transactionId: result.id
+        };
+    }
 }
 
 module.exports = new WalletService();

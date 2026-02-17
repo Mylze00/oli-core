@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 // import 'package:firebase_messaging/firebase_messaging.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/otp_page.dart';
+import 'features/auth/apply_page.dart';
+import 'features/auth/pending_page.dart';
 import 'features/auth/providers/auth_controller.dart';
 import 'features/home/home_shell.dart';
 import 'features/orders/order_details_page.dart';
@@ -45,20 +47,39 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: authNotifier,
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
+      final loc = state.matchedLocation;
 
       // Autoriser /otp même si pas connecté
-      if (state.matchedLocation == '/otp') return null;
-
-      final isLoggingIn = state.matchedLocation == '/login';
+      if (loc == '/otp') return null;
 
       // En cours de vérification de session
       if (authState.isCheckingSession) return null;
 
-      // Pas connecté et pas sur login → redirige vers login
-      if (!authState.isAuthenticated && !isLoggingIn) return '/login';
+      final isAuthenticated = authState.isAuthenticated;
+      final isDeliverer = authState.userData?['is_deliverer'] == true;
+      final isOnLogin = loc == '/login';
+      final isOnApply = loc == '/apply';
+      final isOnPending = loc == '/pending';
+      final isOnPublicPage = isOnLogin || isOnApply || isOnPending || loc == '/otp';
 
-      // Connecté et sur login → redirige vers dashboard
-      if (authState.isAuthenticated && isLoggingIn) return '/dashboard';
+      // Pas connecté et pas sur une page publique → login
+      if (!isAuthenticated && !isOnLogin && loc != '/otp') return '/login';
+
+      // Connecté mais PAS livreur → rediriger vers candidature
+      if (isAuthenticated && !isDeliverer) {
+        if (isOnLogin) return '/apply';
+        // Permettre /apply et /pending
+        if (isOnApply || isOnPending) return null;
+        // Tout le reste → apply
+        return '/apply';
+      }
+
+      // Connecté ET livreur
+      if (isAuthenticated && isDeliverer) {
+        // Sur login/apply/pending → dashboard
+        if (isOnLogin || isOnApply || isOnPending) return '/dashboard';
+        return null;
+      }
 
       return null;
     },
@@ -73,6 +94,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final phone = state.extra as String? ?? '';
           return OtpPage(phone: phone);
         },
+      ),
+      GoRoute(
+        path: '/apply',
+        builder: (context, state) => const ApplyPage(),
+      ),
+      GoRoute(
+        path: '/pending',
+        builder: (context, state) => const PendingPage(),
       ),
       GoRoute(
         path: '/dashboard',

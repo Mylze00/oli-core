@@ -33,6 +33,7 @@ class MainDashboardView extends ConsumerStatefulWidget {
 
 class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   final TextEditingController _searchCtrl = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final Map<String, String> _categories = {
     "Tout": "",
     "Industrie": "industry",
@@ -47,11 +48,47 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   bool _showCategories = false;
 
   Timer? _hideCategoriesTimer;
-  final List<String> _stopWords = ['Paire', 'Lot', 'Set', 'Kit', 'Nouveau', 'Promo', 'Super', 'Pack', 'Mini', 'La', 'Le', 'Les'];
+  
+  // Lazy loading pour Top Classement
+  static const int _rankingBatchSize = 8; // Nombre de produits chargés par batch
+  int _rankingLoadedCount = _rankingBatchSize; // Initialement 8 produits visibles
+  bool _isLoadingMore = false;
+
+  // Cache pour la distribution des produits (calculé une seule fois)
+  String _cachedSelectionKeyword = "";
+  List<Product> _cachedSelectionProducts = [];
+  List<Product> _cachedSuperOffers = [];
+  List<Product> _cachedDiscoveryList = [];
+  List<Product> _cachedRankingList = [];
+  bool _distributionComputed = false;
+
+  static const List<String> stopWords = ['Paire', 'Lot', 'Set', 'Kit', 'Nouveau', 'Promo', 'Super', 'Pack', 'Mini', 'La', 'Le', 'Les'];
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+  
+  void _onScroll() {
+    if (_isLoadingMore) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    // Charger plus quand l'utilisateur est à 300px du bas
+    if (currentScroll >= maxScroll - 300) {
+      _loadMoreRankingProducts();
+    }
+  }
+  
+  void _loadMoreRankingProducts() {
+    _isLoadingMore = true;
+    setState(() {
+      _rankingLoadedCount += _rankingBatchSize;
+    });
+    // Petit délai pour éviter les appels multiples rapides
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _isLoadingMore = false;
+    });
   }
   
   @override
@@ -66,6 +103,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   @override
   void dispose() {
     _hideCategoriesTimer?.cancel();
+    _scrollController.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -124,6 +162,53 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     });
   }
 
+  /// Calcule la distribution des produits UNE SEULE FOIS
+  void _computeProductDistribution(List<Product> allProducts) {
+    _cachedSelectionKeyword = "";
+    _cachedSelectionProducts = [];
+
+    final Map<String, List<Product>> groupedProducts = {};
+    
+    for (var product in allProducts) {
+      final words = product.name.split(' ');
+      String focusKW = words.isNotEmpty ? words.first : "";
+      
+      if (words.length > 1 && (focusKW.length <= 2 || stopWords.contains(focusKW))) {
+        focusKW = words[1];
+      }
+      
+      focusKW = focusKW.replaceAll(RegExp(r'[^\w\s]+'), '');
+
+      if (focusKW.length > 2) {
+         focusKW = focusKW[0].toUpperCase() + focusKW.substring(1).toLowerCase();
+         if (!groupedProducts.containsKey(focusKW)) {
+           groupedProducts[focusKW] = [];
+         }
+         groupedProducts[focusKW]!.add(product);
+      }
+    }
+
+    final validKeys = groupedProducts.keys.where((k) => groupedProducts[k]!.length >= 5).toList();
+
+    if (validKeys.isNotEmpty) {
+      validKeys.shuffle();
+      _cachedSelectionKeyword = validKeys.first;
+      _cachedSelectionProducts = groupedProducts[_cachedSelectionKeyword]!.take(15).toList();
+    }
+
+    final remainingProducts = allProducts.where((p) => !_cachedSelectionProducts.contains(p)).toList();
+    _cachedSuperOffers = remainingProducts.take(5).toList();
+    _cachedDiscoveryList = remainingProducts.length > 5 
+        ? remainingProducts.skip(5).take(5).toList() 
+        : <Product>[];
+    _cachedRankingList = remainingProducts.length > 10 
+        ? remainingProducts.skip(10).toList() 
+        : <Product>[];
+    _cachedRankingList.sort((a, b) => a.name.compareTo(b.name));
+
+    _distributionComputed = true;
+  }
+
   void _navigateToProduct(Product product) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product)));
   }
@@ -149,67 +234,18 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     final verifiedShopsAsync = ref.watch(verifiedShopsProvider); 
     final verifiedShops = verifiedShopsAsync.valueOrNull ?? [];
     
-    // 2. Logic for lists
-    // A. Dynamic Grouping Algorithm - Scan all products to find valid groups (>= 5 items)
-    String selectedKeyword = "";
-    List<Product> selectionProducts = [];
-
-    // 1. Group products by their "Focus Keyword"
-    final Map<String, List<Product>> groupedProducts = {};
-    
-    for (var product in allProducts) {
-      final words = product.name.split(' ');
-      String focusKW = words.isNotEmpty ? words.first : "";
-      
-      if (words.length > 1 && (focusKW.length <= 2 || _stopWords.contains(focusKW))) {
-        focusKW = words[1];
-      }
-      
-      // Clean up punctuation (e.g. "Robe," -> "Robe")
-      focusKW = focusKW.replaceAll(RegExp(r'[^\w\s]+'), '');
-
-      if (focusKW.length > 2) {
-         // Title case for consistency
-         focusKW = focusKW[0].toUpperCase() + focusKW.substring(1).toLowerCase();
-         
-         if (!groupedProducts.containsKey(focusKW)) {
-           groupedProducts[focusKW] = [];
-         }
-         groupedProducts[focusKW]!.add(product);
-      }
+    // 2. Calcul de la distribution UNE SEULE FOIS (stable entre les rebuilds)
+    if (!_distributionComputed && allProducts.isNotEmpty) {
+      _computeProductDistribution(allProducts);
     }
 
-    // 2. Filter groups with enough items (>= 5)
-    final validKeys = groupedProducts.keys.where((k) => groupedProducts[k]!.length >= 5).toList();
-
-    // 3. Pick a random group
-    if (validKeys.isNotEmpty) {
-      validKeys.shuffle();
-      selectedKeyword = validKeys.first;
-      selectionProducts = groupedProducts[selectedKeyword]!.take(15).toList();
-    }
-
-    // B. Deduplicate: Remove selected items from the pool for other sections
-    final remainingProducts = allProducts.where((p) => !selectionProducts.contains(p)).toList();
-
-    // C. Distribute remaining products
-    final superOffersList = remainingProducts.take(5).toList();
+    final fullRankingList = _cachedRankingList.isNotEmpty 
+        ? _cachedRankingList 
+        : (_cachedDiscoveryList.isNotEmpty ? _cachedDiscoveryList : _cachedSuperOffers);
     
-    final discoveryList = remainingProducts.length > 5 
-        ? remainingProducts.skip(5).take(5).toList() 
-        : <Product>[];
-    
-    final rankingList = remainingProducts.length > 10 ? remainingProducts.skip(10).toList() : <Product>[];
-    
-    // Sort ranking list by name to cluster similar items for coherence
-    rankingList.sort((a, b) => a.name.compareTo(b.name));
-
-    final effectiveRankingList = rankingList.isNotEmpty 
-        ? rankingList 
-        : (discoveryList.isNotEmpty ? discoveryList : superOffersList);
-    
-    // Fallback if no specific keyword matched 3 items
-    final effectiveSelectionIds = selectionProducts.map((e) => e.id).toSet();
+    // Lazy loading : limiter les produits affichés dans le ranking
+    final effectiveRankingList = fullRankingList.take(_rankingLoadedCount).toList();
+    final hasMoreRanking = fullRankingList.length > _rankingLoadedCount;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -217,10 +253,14 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
         onRefresh: () async {
           // Recharger les produits
           await ref.read(featuredProductsProvider.notifier).fetchFeaturedProducts();
-          // On peut aussi recharger les autres si besoin :
-          // ref.read(verifiedShopsProductsProvider.notifier).fetchVerifiedShopsProducts();
+          // Réinitialiser le lazy loading ET la distribution
+          setState(() {
+            _rankingLoadedCount = _rankingBatchSize;
+            _distributionComputed = false;
+          });
         },
         child: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           // 1. APP BAR
           HomeAppBar(
@@ -260,7 +300,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
 
           // 4. SUPER OFFERS
           SliverToBoxAdapter(
-            child: SuperOffersSection(products: superOffersList),
+            child: SuperOffersSection(products: _cachedSuperOffers),
           ),
 
           // 5. ADS
@@ -277,14 +317,14 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           ),
 
           // 6. RANDOM CATEGORY SECTION (STRICT KEYWORD)
-          if (selectionProducts.isNotEmpty)
+          if (_cachedSelectionProducts.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 8.0),
                 child: _buildHorizontalSection(
-                  title: "Sélection : $selectedKeyword",
+                  title: "Sélection : $_cachedSelectionKeyword",
                   subtitle: "Inspiration pour vous",
-                  products: selectionProducts,
+                  products: _cachedSelectionProducts,
                   gradient: null, // Transparent background
                   badgeText: "NEW",
                   badgeColor: Colors.tealAccent.shade700,
@@ -300,10 +340,10 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
              ),
           ),
           SliverToBoxAdapter(
-            child: discoveryList.isEmpty 
+            child: _cachedDiscoveryList.isEmpty 
               ? const SizedBox.shrink()
               : DiscoveryCarousel(
-                  products: discoveryList, 
+                  products: _cachedDiscoveryList, 
                   onTap: _navigateToProduct
                 ),
           ),
@@ -332,6 +372,23 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           
           ..._buildPatternedRankingGrid(effectiveRankingList, textColor),
           
+          // Indicateur de chargement si plus de produits disponibles
+          if (hasMoreRanking)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: SizedBox(
+                    width: 24, height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: textColor.withOpacity(0.4),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          
           const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
         ],
       ),
@@ -339,10 +396,42 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     );
   }
 
+  /// Messages promotionnels rotatifs avec couleurs et tailles uniques
+  static const List<Map<String, dynamic>> _promoMessages = [
+    {
+      'title': 'Guérite Oli 🏪',
+      'text': 'Achetez et récupérez vos commandes dans le guérite Oli de votre supermarché',
+      'gradient1': Color(0xFF4A0E8F),
+      'gradient2': Color(0xFF2D0A5E),
+      'paddingV': 20.0,
+      'titleSize': 17.0,
+      'textSize': 13.0,
+    },
+    {
+      'title': 'Meilleurs Prix 💰',
+      'text': 'Achetez au meilleur prix avec Oli, livraison rapide garantie',
+      'gradient1': Color(0xFF0D7377),
+      'gradient2': Color(0xFF14463A),
+      'paddingV': 12.0,
+      'titleSize': 14.0,
+      'textSize': 11.0,
+    },
+    {
+      'title': 'Vendez sur Oli 🚀',
+      'text': 'Profitez des avantages en vendant sur Oli, commencez gratuitement',
+      'gradient1': Color(0xFFD84315),
+      'gradient2': Color(0xFF8F2B00),
+      'paddingV': 32.0,
+      'titleSize': 22.0,
+      'textSize': 15.0,
+    },
+  ];
+
   /// Construit la liste de Slivers pour le Top Ranking avec le motif 3-3-2
   List<Widget> _buildPatternedRankingGrid(List<Product> allProducts, Color textColor) {
     List<Widget> slivers = [];
     int index = 0;
+    int promoIndex = 0;
     
     // Boucle tant qu'il reste des produits
     while (index < allProducts.length) {
@@ -372,10 +461,8 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
              final words = firstProduct.name.split(' ');
              String focusWord = words.isNotEmpty ? words.first : "";
 
-             // Stop words logic reusing the class field or local list (using class field now ideally but context is tricky if static, let's redefine valid list for grid)
-             // Ideally we refactor this extraction logic to a method.
-             const stopWordsLocal = ['Paire', 'Lot', 'Set', 'Kit', 'Nouveau', 'Promo', 'Super', 'Pack', 'Mini', 'La', 'Le', 'Les'];
-             if (words.length > 1 && (focusWord.length <= 2 || stopWordsLocal.contains(focusWord))) {
+             // Utiliser la liste de stop words définie dans la classe
+             if (words.length > 1 && (focusWord.length <= 2 || stopWords.contains(focusWord))) {
                 focusWord = words[1];
              }
 
@@ -421,6 +508,76 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
           index += chunk2Cols.length;
         }
       }
+
+      // 3. Bannière promotionnelle après chaque cycle de 8 produits
+      final promo = _promoMessages[promoIndex % _promoMessages.length];
+      final Color grad1 = promo['gradient1'] as Color;
+      final Color grad2 = promo['gradient2'] as Color;
+      final double padV = promo['paddingV'] as double;
+      final double tSize = promo['titleSize'] as double;
+      final double dSize = promo['textSize'] as double;
+      promoIndex++;
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: padV),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [grad1, grad2],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: grad1.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  promo['title'] as String,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: tSize,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  promo['text'] as String,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.85),
+                    fontSize: dSize,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.white.withOpacity(0.6)),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Découvrir →',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
     return slivers;
   }

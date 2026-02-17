@@ -789,6 +789,7 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
   // ─── ITEMS CARD ────────────────────────────────────────────
 
   Widget _buildItemsCard() {
+    final items = _order!['items'] as List;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -806,18 +807,60 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
               ],
             ),
             const SizedBox(height: 12),
-            ...(_order!['items'] as List).map<Widget>((item) {
+            ...items.map<Widget>((item) {
+              final imageUrl = item['image_url'];
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // Thumbnail produit
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: imageUrl != null && imageUrl.toString().isNotEmpty
+                          ? Image.network(
+                              imageUrl,
+                              width: 50,
+                              height: 50,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 50,
+                                height: 50,
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.inventory_2, color: Colors.grey, size: 24),
+                              ),
+                            )
+                          : Container(
+                              width: 50,
+                              height: 50,
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.inventory_2, color: Colors.grey, size: 24),
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Nom + quantité
                     Expanded(
-                      child: Text(
-                        '${item['quantity']}x ${item['product_name'] ?? 'Produit'}',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['product_name'] ?? 'Produit',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Qté: ${item['quantity'] ?? 1}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                        ],
                       ),
                     ),
-                    Text('\$${item['price'] ?? 0}'),
+                    // Prix
+                    Text(
+                      '\$${item['price'] ?? 0}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
                   ],
                 ),
               );

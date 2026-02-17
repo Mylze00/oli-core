@@ -79,3 +79,8 @@ flutter:
     - assets/images/services/
     - assets/images/operators/
     - assets/translations/
+
+  fonts:
+    - family: olive_palm
+      fonts:
+        - asset: assets/fonts/olive_palm.otf

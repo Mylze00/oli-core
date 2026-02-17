@@ -1,5 +1,6 @@
 const deliveryRepo = require('../repositories/delivery.repository');
 const pool = require('../config/db');
+const walletService = require('./wallet.service');
 
 class DeliveryService {
 
@@ -115,6 +116,17 @@ class DeliveryService {
             "UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1",
             [delivery.real_order_id]
         );
+
+        // 💰 Créditer automatiquement le livreur
+        const fee = parseFloat(delivery.delivery_fee) || 0;
+        if (fee > 0) {
+            try {
+                await walletService.creditDeliverer(user.id, fee, delivery.real_order_id);
+                console.log(`🚚✅ Livreur #${user.id} crédité de ${fee}$ pour commande #${delivery.real_order_id}`);
+            } catch (err) {
+                console.error(`⚠️ Erreur crédit livreur #${user.id}:`, err.message);
+            }
+        }
 
         return { ...delivery, status: 'delivered' };
     }

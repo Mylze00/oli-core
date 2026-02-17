@@ -64,15 +64,14 @@ class AuthController extends StateNotifier<AuthState> {
       if (response.statusCode == 200) {
         final user = response.data['user'];
 
-        // Vérifier que l'utilisateur est bien un livreur
-        if (user == null || user['is_deliverer'] != true) {
+        if (user == null) {
           await _clearCredentials();
-          state = state.copyWith(
-            isCheckingSession: false,
-            error: 'Accès réservé aux livreurs',
-          );
+          state = state.copyWith(isCheckingSession: false);
           return;
         }
+
+        // Stocker is_deliverer dans userData (ne plus bloquer les non-livreurs)
+        final isDeliverer = user['is_deliverer'] == true;
 
         await storage.write(key: 'user_phone', value: user['phone'] ?? '');
         state = state.copyWith(
@@ -80,9 +79,9 @@ class AuthController extends StateNotifier<AuthState> {
           isCheckingSession: false,
           userData: {
             'id': user['id'],
-            'phone': user['phone'] ?? 'Livreur',
-            'name': user['name'] ?? 'Livreur',
-            'is_deliverer': true,
+            'phone': user['phone'] ?? 'Utilisateur',
+            'name': user['name'] ?? 'Utilisateur',
+            'is_deliverer': isDeliverer,
           },
         );
       } else {
@@ -157,15 +156,13 @@ class AuthController extends StateNotifier<AuthState> {
         final data = response.data;
         final token = data['token'] ?? data['accessToken'];
         
-        // ✨ VÉRIFICATION: L'utilisateur doit être un livreur
         final user = data['user'];
-        if (user == null || user['is_deliverer'] != true) {
-          state = state.copyWith(
-            isLoading: false,
-            error: 'Accès réservé aux livreurs. Veuillez contacter l\'administrateur.',
-          );
+        if (user == null) {
+          state = state.copyWith(isLoading: false, error: 'Données utilisateur manquantes');
           return false;
         }
+
+        final isDeliverer = user['is_deliverer'] == true;
 
         if (token != null) {
           await storage.write(key: 'auth_token', value: token);
@@ -179,8 +176,8 @@ class AuthController extends StateNotifier<AuthState> {
           userData: {
             'id': user['id'],
             'phone': phone,
-            'is_deliverer': true,
-            'name': user['name'] ?? 'Livreur',
+            'is_deliverer': isDeliverer,
+            'name': user['name'] ?? 'Utilisateur',
           },
         );
         return true;

@@ -31,4 +31,13 @@ class ApiConfig {
 
   // Device tokens (FCM)
   static const String deviceTokens = '$baseUrl/device-tokens';
+
+  // Wallet Livreur
+  static const String walletBalance = '$deliveryBase/wallet/balance';
+  static const String walletTransactions = '$deliveryBase/wallet/transactions';
+  static const String walletWithdraw = '$deliveryBase/wallet/withdraw';
+
+  // Candidature Livreur
+  static const String deliveryApply = '$deliveryBase/apply';
+  static const String deliveryApplyStatus = '$deliveryBase/apply/status';
 }

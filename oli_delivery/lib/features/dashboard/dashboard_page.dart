@@ -267,6 +267,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+
+              // Product preview
+              if (order['items'] != null && (order['items'] as List).isNotEmpty)
+                _buildItemsPreview(order['items'] as List),
               const SizedBox(height: 12),
 
               // Footer
@@ -295,6 +300,62 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildItemsPreview(List items) {
+    final firstItem = items.first;
+    final imageUrl = firstItem['image_url'];
+    final name = firstItem['product_name'] ?? 'Produit';
+    final otherCount = items.length - 1;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          // Thumbnails (max 3)
+          ...items.take(3).map<Widget>((item) {
+            final url = item['image_url'];
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: url != null && url.toString().isNotEmpty
+                    ? Image.network(
+                        url,
+                        width: 36,
+                        height: 36,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 36, height: 36,
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.inventory_2, size: 18, color: Colors.grey),
+                        ),
+                      )
+                    : Container(
+                        width: 36, height: 36,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.inventory_2, size: 18, color: Colors.grey),
+                      ),
+              ),
+            );
+          }),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              otherCount > 0 ? '$name + $otherCount autre${otherCount > 1 ? 's' : ''}' : name,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

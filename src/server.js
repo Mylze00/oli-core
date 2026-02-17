@@ -25,6 +25,7 @@ const chatRoutes = require("./routes/chat.routes");
 const shopsRoutes = require("./routes/shops.routes");
 const walletRoutes = require("./routes/wallet.routes");
 const deliveryRoutes = require("./routes/delivery.routes");
+const delivererApplicationRoutes = require("./routes/deliverer-application.routes");
 const userRoutes = require("./routes/user.routes");
 const adminRoutes = require("./routes/admin.routes"); // ✨ Routes admin
 const sellerRoutes = require("./routes/seller.routes"); // ✨ Routes vendeur
@@ -172,6 +173,7 @@ app.use("/api/shops", optionalAuth, shopsRoutes);
 app.use("/orders", requireAuth, ordersRoutes);
 app.use("/wallet", requireAuth, walletRoutes);
 app.use("/delivery", requireAuth, deliveryRoutes);
+app.use("/delivery/apply", requireAuth, delivererApplicationRoutes);
 app.use("/chat", requireAuth, chatRoutes);
 
 // 🆕 Route publique pour le profil vendeur (pas besoin d'auth)

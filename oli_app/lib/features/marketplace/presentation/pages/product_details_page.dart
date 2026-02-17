@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../config/api_config.dart';
+import '../../providers/market_provider.dart';
 import 'market_view.dart';
 import 'seller_profile_page.dart';
 
@@ -23,8 +24,9 @@ import '../widgets/product_details/product_price_banner.dart';
 import '../widgets/product_details/product_delivery_selector.dart';
 import '../widgets/product_details/product_action_buttons.dart';
 import '../widgets/product_details/product_protection_widget.dart';
-import '../widgets/product_details/product_description_sheet.dart';
+
 import '../widgets/product_details/product_provenance_table.dart';
+import '../../../shop/screens/edit_product_page.dart';
 
 
 class ProductDetailsPage extends ConsumerStatefulWidget {
@@ -217,6 +219,33 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          // Bouton Modifier (visible uniquement pour le propriétaire)
+          Consumer(
+            builder: (context, ref, _) {
+              final userState = ref.watch(userProvider);
+              return userState.maybeWhen(
+                data: (user) {
+                  if (user.id.toString() == p.sellerId) {
+                    return IconButton(
+                      icon: const Icon(Icons.edit, size: 20, color: Colors.blueAccent),
+                      tooltip: 'Modifier',
+                      onPressed: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => EditProductPage(product: p)),
+                        );
+                        if (result == true && mounted) {
+                          ref.read(marketProductsProvider.notifier).fetchProducts();
+                        }
+                      },
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+                orElse: () => const SizedBox.shrink(),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.bug_report, size: 18),
             onPressed: _showDebugInfo,
@@ -324,10 +353,23 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                 
                 const SizedBox(height: 12),
                 
-                GestureDetector(
-                  onTap: () => ProductDescriptionSheet.show(context, p.description), 
-                  child: const Text("Afficher la description complète", style: TextStyle(color: Colors.white, decoration: TextDecoration.underline))
+                // Description du produit affichée directement
+                const Text(
+                  "Description",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
+                const SizedBox(height: 8),
+                if (p.description.isNotEmpty)
+                  _ExpandableDescription(description: p.description)
+                else
+                  const Text(
+                    "Aucune description disponible.",
+                    style: TextStyle(color: Colors.white38, fontSize: 14, fontStyle: FontStyle.italic),
+                  ),
                 const SizedBox(height: 8),
                 Text("Quantité Disponible : ${p.quantity}", style: const TextStyle(color: Colors.white70)),
                 const SizedBox(height: 40),
@@ -340,4 +382,43 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   }
 
 
+}
+
+class _ExpandableDescription extends StatefulWidget {
+  final String description;
+  const _ExpandableDescription({required this.description});
+
+  @override
+  State<_ExpandableDescription> createState() => _ExpandableDescriptionState();
+}
+
+class _ExpandableDescriptionState extends State<_ExpandableDescription> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.description,
+          maxLines: _expanded ? null : 4,
+          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+          style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Text(
+            _expanded ? "Voir moins" : "Voir plus",
+            style: const TextStyle(
+              color: Colors.blueAccent,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

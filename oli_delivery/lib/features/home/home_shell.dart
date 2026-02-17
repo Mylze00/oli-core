@@ -7,6 +7,7 @@ import '../auth/providers/auth_controller.dart';
 import '../dashboard/dashboard_page.dart';
 import '../profile/profile_page.dart';
 import '../tasks/my_tasks_page.dart';
+import '../wallet/deliverer_wallet_page.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
@@ -18,11 +19,12 @@ class HomeShell extends ConsumerStatefulWidget {
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _currentIndex = 0;
 
-  static const _titles = ['Livraisons Disponibles', 'Mes Tâches', 'Mon Profil'];
+  static const _titles = ['Livraisons Disponibles', 'Mes Tâches', 'Wallet', 'Mon Profil'];
 
   final _pages = const [
     DashboardPage(),
     MyTasksPage(),
+    DelivererWalletPage(),
     ProfilePage(),
   ];
 
@@ -82,6 +84,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             icon: Icon(Icons.assignment_outlined),
             selectedIcon: Icon(Icons.assignment),
             label: 'Mes Tâches',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet),
+            label: 'Wallet',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),

@@ -106,4 +106,75 @@ class ProductController extends StateNotifier<AsyncValue<void>> {
       return false;
     }
   }
+
+  /// Met à jour un produit existant (PATCH /products/:id)
+  Future<bool> updateProduct({
+    required String productId,
+    required String name,
+    required String price,
+    required String description,
+    required String condition,
+    required int quantity,
+    required String color,
+    String? category,
+    String? location,
+    List<ShippingOption>? shippingOptions,
+  }) async {
+    state = const AsyncValue.loading();
+
+    try {
+      final token = await SecureStorageService().getToken();
+      if (token == null || token.isEmpty) {
+        state = AsyncValue.error('Session expirée.', StackTrace.current);
+        return false;
+      }
+
+      final Map<String, dynamic> body = {
+        'name': name,
+        'price': price,
+        'description': description,
+        'condition': condition,
+        'quantity': quantity,
+        'color': color,
+        'category': category ?? 'Autres',
+        'location': location,
+      };
+
+      if (shippingOptions != null) {
+        body['shipping_options'] = jsonEncode(shippingOptions.map((e) => {
+          'methodId': e.methodId,
+          'label': e.label,
+          'time': e.time,
+          'cost': e.cost,
+        }).toList());
+      }
+
+      final response = await _dio.patch(
+        '${ApiConfig.baseUrl}/products/$productId',
+        data: body,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          validateStatus: (status) => true,
+        ),
+      );
+
+      debugPrint("📥 [EDIT] Réponse PATCH (${response.statusCode}): ${response.data}");
+
+      if (response.statusCode == 200) {
+        state = const AsyncValue.data(null);
+        return true;
+      } else {
+        state = AsyncValue.error('Erreur: ${response.statusCode}', StackTrace.current);
+        return false;
+      }
+    } catch (e) {
+      debugPrint("❌ [EDIT] Erreur: $e");
+      state = AsyncValue.error('Erreur réseau: $e', StackTrace.current);
+      return false;
+    }
+  }
 }

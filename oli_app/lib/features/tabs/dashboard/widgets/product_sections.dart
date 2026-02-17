@@ -188,10 +188,7 @@ class TopRankingGrid extends StatelessWidget {
           (context, index) {
              if (products.isEmpty) return Container(color: Colors.grey[900]);
             final product = products[index];
-            return GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product))),
-              child: MarketProductCard(product: product),
-            );
+            return MarketProductCard(product: product);
           },
           childCount: products.isEmpty ? 6 : products.length,
         ),

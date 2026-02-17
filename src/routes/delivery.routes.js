@@ -81,4 +81,54 @@ router.post('/:id/verify', requireAuth, requireDeliverer, async (req, res) => {
     }
 });
 
+
+// ─── WALLET LIVREUR ──────────────────────────────────────────
+
+const walletService = require('../services/wallet.service');
+
+/**
+ * GET /delivery/wallet/balance
+ * Solde du wallet du livreur
+ */
+router.get('/wallet/balance', requireAuth, requireDeliverer, async (req, res) => {
+    try {
+        const balance = await walletService.getBalance(req.user.id);
+        res.json({ balance, currency: 'USD' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /delivery/wallet/transactions
+ * Historique des transactions du livreur
+ */
+router.get('/wallet/transactions', requireAuth, requireDeliverer, async (req, res) => {
+    try {
+        const history = await walletService.getHistory(req.user.id);
+        res.json(history);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /delivery/wallet/withdraw
+ * Retrait vers Mobile Money
+ */
+router.post('/wallet/withdraw', requireAuth, requireDeliverer, async (req, res) => {
+    const { amount, provider, phoneNumber } = req.body;
+
+    if (!amount || amount <= 0 || !provider || !phoneNumber) {
+        return res.status(400).json({ error: "Données invalides (amount, provider, phoneNumber requis)" });
+    }
+
+    try {
+        const result = await walletService.withdraw(req.user.id, parseFloat(amount), provider, phoneNumber);
+        res.json(result);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
 module.exports = router;

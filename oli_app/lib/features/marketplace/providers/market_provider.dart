@@ -236,13 +236,42 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
       
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        final newProducts = data.map((item) => Product.fromJson(item)).toList();
+        final allProducts = data.map((item) => Product.fromJson(item)).toList();
         
-        if (shuffle) {
-          newProducts.shuffle();
+        if (shuffle && allProducts.isNotEmpty) {
+          // Round-robin : diversifier les produits de différentes boutiques
+          final Map<String, List<Product>> byShop = {};
+          for (final p in allProducts) {
+            final key = p.sellerId.isNotEmpty ? p.sellerId : p.seller;
+            byShop.putIfAbsent(key, () => []).add(p);
+          }
+          
+          // Mélanger les boutiques et les produits au sein de chaque boutique
+          final shopKeys = byShop.keys.toList()..shuffle();
+          for (final key in shopKeys) {
+            byShop[key]!.shuffle();
+          }
+          
+          // Sélection round-robin : 1 produit par boutique en alternance
+          final List<Product> diversified = [];
+          bool hasMore = true;
+          int round = 0;
+          while (hasMore) {
+            hasMore = false;
+            for (final key in shopKeys) {
+              final shopProducts = byShop[key]!;
+              if (round < shopProducts.length) {
+                diversified.add(shopProducts[round]);
+                hasMore = true;
+              }
+            }
+            round++;
+          }
+          
+          state = diversified;
+        } else {
+          state = allProducts;
         }
-
-        state = newProducts;
         _error = null;
       } else {
         _error = "Erreur serveur: ${response.statusCode}";

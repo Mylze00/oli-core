@@ -64,7 +64,7 @@ class MarketProductCard extends ConsumerWidget {
                       : Image.network(
                           product.images[0],
                           width: double.infinity,
-                          fit: BoxFit.fill, // Etirer l'image comme demandÃ©
+                          fit: BoxFit.cover, // Garder le ratio d'aspect
                           errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 30, color: Colors.grey),
                         ),
                     

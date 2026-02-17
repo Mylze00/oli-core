@@ -33,7 +33,21 @@ async function findAvailable() {
     const res = await pool.query(`
         SELECT d.*, o.total_amount, o.status as order_status,
                o.pickup_code, o.delivery_code,
-               u.name as customer_name, u.phone as customer_phone
+               u.name as customer_name, u.phone as customer_phone,
+               COALESCE((
+                   SELECT json_agg(json_build_object(
+                       'product_name', oi.product_name,
+                       'quantity', oi.quantity,
+                       'price', oi.product_price,
+                       'image_url', (
+                           SELECT pi.image_url FROM product_images pi
+                           WHERE pi.product_id = CAST(oi.product_id AS INTEGER)
+                           ORDER BY pi.display_order ASC NULLS LAST, pi.id ASC
+                           LIMIT 1
+                       )
+                   ))
+                   FROM order_items oi WHERE oi.order_id = o.id
+               ), '[]'::json) as items
         FROM delivery_orders d
         JOIN orders o ON d.order_id = o.id
         JOIN users u ON o.user_id = u.id
@@ -99,7 +113,21 @@ async function findByDeliverer(delivererId) {
     const res = await pool.query(`
         SELECT d.*, o.total_amount, o.status as order_status,
                o.pickup_code, o.delivery_code,
-               u.name as customer_name, u.phone as customer_phone 
+               u.name as customer_name, u.phone as customer_phone,
+               COALESCE((
+                   SELECT json_agg(json_build_object(
+                       'product_name', oi.product_name,
+                       'quantity', oi.quantity,
+                       'price', oi.product_price,
+                       'image_url', (
+                           SELECT pi.image_url FROM product_images pi
+                           WHERE pi.product_id = CAST(oi.product_id AS INTEGER)
+                           ORDER BY pi.display_order ASC NULLS LAST, pi.id ASC
+                           LIMIT 1
+                       )
+                   ))
+                   FROM order_items oi WHERE oi.order_id = o.id
+               ), '[]'::json) as items
         FROM delivery_orders d
         JOIN orders o ON d.order_id = o.id
         JOIN users u ON o.user_id = u.id
