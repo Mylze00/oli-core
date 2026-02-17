@@ -39,14 +39,7 @@ async function findAvailable() {
                        'product_name', oi.product_name,
                        'quantity', oi.quantity,
                        'price', oi.product_price,
-                       'image_url', (
-                           SELECT pi.image_url FROM product_images pi
-                           WHERE oi.product_id IS NOT NULL
-                             AND oi.product_id ~ '^[0-9]+$'
-                             AND pi.product_id = CAST(oi.product_id AS INTEGER)
-                           ORDER BY pi.display_order ASC NULLS LAST, pi.id ASC
-                           LIMIT 1
-                       )
+                       'image_url', oi.product_image_url
                    ))
                    FROM order_items oi WHERE oi.order_id = o.id
                ), '[]'::json) as items
@@ -121,14 +114,7 @@ async function findByDeliverer(delivererId) {
                        'product_name', oi.product_name,
                        'quantity', oi.quantity,
                        'price', oi.product_price,
-                       'image_url', (
-                           SELECT pi.image_url FROM product_images pi
-                           WHERE oi.product_id IS NOT NULL
-                             AND oi.product_id ~ '^[0-9]+$'
-                             AND pi.product_id = CAST(oi.product_id AS INTEGER)
-                           ORDER BY pi.display_order ASC NULLS LAST, pi.id ASC
-                           LIMIT 1
-                       )
+                       'image_url', oi.product_image_url
                    ))
                    FROM order_items oi WHERE oi.order_id = o.id
                ), '[]'::json) as items
