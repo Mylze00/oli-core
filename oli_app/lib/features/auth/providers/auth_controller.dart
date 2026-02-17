@@ -116,8 +116,9 @@ class AuthController extends StateNotifier<AuthState> {
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
-        debugPrint("🔴 Session expirée ou invalide. Déconnexion automatique.");
-        logout();
+        debugPrint("⚠️ Session backend expirée — profil non rafraîchi (session locale conservée).");
+        // Ne PAS appeler logout() : l'utilisateur reste connecté localement
+        // Il se déconnectera manuellement via le bouton Déconnexion
       }
     } catch (e) {
       debugPrint("Erreur fetchUserProfile : $e");

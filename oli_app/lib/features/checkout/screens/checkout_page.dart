@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../orders/providers/orders_provider.dart';
 import '../../user/providers/address_provider.dart';
 import '../../user/models/address_model.dart';
 import '../../user/screens/address_management_page.dart';
-import '../../../config/api_config.dart';
-import '../../../core/router/network/dio_provider.dart';
 import 'stripe_payment_page.dart';
 import 'order_success_page.dart';
 import '../../../providers/exchange_rate_provider.dart';
@@ -30,39 +27,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   double _deliveryFee = 5.00;
   String _selectedDeliveryMethod = 'oli_standard';
 
-  /// Méthodes de livraison — chargées dynamiquement depuis le backend
-  List<Map<String, dynamic>> _deliveryMethods = [];
-  bool _methodsLoading = true;
-
-  /// Fallback si l'API échoue
-  static const List<Map<String, dynamic>> _fallbackMethods = [
-    {'id': 'oli_express', 'label': 'Oli Express', 'icon': 'flash_on', 'time': '1-2h', 'cost': 8.00, 'color': 'amber'},
-    {'id': 'oli_standard', 'label': 'Oli Standard', 'icon': 'local_shipping', 'time': '2-5 jours', 'cost': 5.00, 'color': 'blue'},
-    {'id': 'partner', 'label': 'Livreur Partenaire', 'icon': 'delivery_dining', 'time': 'Variable', 'cost': 3.00, 'color': 'purple'},
-    {'id': 'hand_delivery', 'label': 'Remise en Main Propre', 'icon': 'handshake', 'time': 'À convenir', 'cost': 0.0, 'color': 'teal'},
-    {'id': 'pick_go', 'label': 'Pick & Go', 'icon': 'store', 'time': 'Retrait', 'cost': 0.0, 'color': 'green'},
-    {'id': 'free', 'label': 'Livraison Gratuite', 'icon': 'card_giftcard', 'time': '3-7 jours', 'cost': 0.0, 'color': 'pink'},
+  /// Méthodes de livraison simplifiées (choix fait dans le panier)
+  static const List<Map<String, dynamic>> _deliveryMethods = [
+    {'id': 'pick_go', 'label': 'Pick & Go', 'icon': Icons.store_rounded, 'time': 'Retrait en boutique', 'cost': 0.0, 'color': Colors.green},
+    {'id': 'paid_delivery', 'label': 'Livraison Payante', 'icon': Icons.delivery_dining_rounded, 'time': '2-5 jours', 'cost': 5.0, 'color': Colors.blue},
   ];
-
-  /// Mapping d'icônes pour les méthodes de livraison
-  static const Map<String, IconData> _methodIcons = {
-    'oli_express': Icons.flash_on,
-    'oli_standard': Icons.local_shipping,
-    'partner': Icons.delivery_dining,
-    'hand_delivery': Icons.handshake,
-    'pick_go': Icons.store,
-    'free': Icons.card_giftcard,
-  };
-
-  /// Mapping de couleurs
-  static const Map<String, Color> _methodColors = {
-    'oli_express': Colors.amber,
-    'oli_standard': Colors.blue,
-    'partner': Colors.purple,
-    'hand_delivery': Colors.teal,
-    'pick_go': Colors.green,
-    'free': Colors.pink,
-  };
 
   /// Retourne les items à checkout (achat direct ou panier)
   List<CartItem> get _checkoutItems {
@@ -86,67 +55,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
     // Charger les adresses de l'utilisateur
     Future.microtask(() => ref.read(addressProvider.notifier).loadAddresses());
-    // R1: Charger les méthodes de livraison dynamiques
-    _loadDeliveryMethods();
   }
 
-  /// R1: Charge les méthodes de livraison depuis le backend
-  Future<void> _loadDeliveryMethods() async {
-    try {
-      final dio = ref.read(dioProvider);
-      final items = _checkoutItems;
-      
-      if (items.isNotEmpty) {
-        // Charger les méthodes pour le premier produit
-        final productId = items.first.productId;
-        final response = await dio.get(
-          '${ApiConfig.baseUrl}/api/delivery-methods/product/$productId',
-        );
-        
-        if (response.statusCode == 200) {
-          final List<dynamic> methods = response.data is List 
-              ? response.data 
-              : (response.data['methods'] ?? []);
-          
-          if (methods.isNotEmpty) {
-            setState(() {
-              _deliveryMethods = methods.map((m) => {
-                'id': m['id']?.toString() ?? '',
-                'label': m['label']?.toString() ?? '',
-                'icon': _methodIcons[m['id']] ?? Icons.local_shipping,
-                'time': m['estimated_time']?.toString() ?? '',
-                'cost': double.tryParse(m['cost']?.toString() ?? '0') ?? 0.0,
-                'color': _methodColors[m['id']] ?? Colors.grey,
-              }).toList();
-              // Sélectionner le premier si le sélectionné n'est pas disponible
-              final availableIds = _deliveryMethods.map((m) => m['id']).toList();
-              if (!availableIds.contains(_selectedDeliveryMethod) && _deliveryMethods.isNotEmpty) {
-                _selectedDeliveryMethod = _deliveryMethods.first['id'] as String;
-                _deliveryFee = (_deliveryMethods.first['cost'] as double?) ?? 0;
-              }
-              _methodsLoading = false;
-            });
-            return;
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('⚠️ Erreur chargement méthodes livraison: $e');
-    }
-    
-    // Fallback: utiliser les méthodes complètes
-    setState(() {
-      _deliveryMethods = _fallbackMethods.map((m) => {
-        'id': m['id'],
-        'label': m['label'],
-        'icon': _methodIcons[m['id']] ?? Icons.local_shipping,
-        'time': m['time'],
-        'cost': m['cost'],
-        'color': _methodColors[m['id']] ?? Colors.grey,
-      }).toList();
-      _methodsLoading = false;
-    });
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -226,13 +137,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
             // --- MODE DE LIVRAISON ---
             _buildSectionTitle('Mode de livraison'),
-            if (_methodsLoading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(child: CircularProgressIndicator(color: Colors.blueAccent)),
-              )
-            else
-              ..._deliveryMethods.map((method) => _buildDeliveryMethodOption(method)),
+            ..._deliveryMethods.map((method) => _buildDeliveryMethodOption(method)),
 
             const SizedBox(height: 24),
 

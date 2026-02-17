@@ -521,7 +521,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
         SliverToBoxAdapter(
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: padV),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [grad1, grad2],
@@ -555,22 +555,6 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
                     color: Colors.white.withOpacity(0.85),
                     fontSize: dSize,
                     height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white.withOpacity(0.6)),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Découvrir →',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
                   ),
                 ),
               ],

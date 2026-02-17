@@ -65,6 +65,9 @@ class OliApp extends ConsumerWidget {
         ),
       ),
       home: _getHomeWidget(authState),
+      routes: {
+        '/login': (context) => const LoginPage(),
+      },
     );
   }
 
