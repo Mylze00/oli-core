@@ -41,7 +41,9 @@ async function findAvailable() {
                        'price', oi.product_price,
                        'image_url', (
                            SELECT pi.image_url FROM product_images pi
-                           WHERE pi.product_id = CAST(oi.product_id AS INTEGER)
+                           WHERE oi.product_id IS NOT NULL
+                             AND oi.product_id ~ '^[0-9]+$'
+                             AND pi.product_id = CAST(oi.product_id AS INTEGER)
                            ORDER BY pi.display_order ASC NULLS LAST, pi.id ASC
                            LIMIT 1
                        )
@@ -121,7 +123,9 @@ async function findByDeliverer(delivererId) {
                        'price', oi.product_price,
                        'image_url', (
                            SELECT pi.image_url FROM product_images pi
-                           WHERE pi.product_id = CAST(oi.product_id AS INTEGER)
+                           WHERE oi.product_id IS NOT NULL
+                             AND oi.product_id ~ '^[0-9]+$'
+                             AND pi.product_id = CAST(oi.product_id AS INTEGER)
                            ORDER BY pi.display_order ASC NULLS LAST, pi.id ASC
                            LIMIT 1
                        )
