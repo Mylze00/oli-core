@@ -162,6 +162,58 @@ class WalletService {
     }
 
     /**
+     * Transfert P2P entre utilisateurs (envoi cash via chat)
+     */
+    async transferToUser(senderId, receiverId, amount, currency = 'USD') {
+        // Convertir FC en USD si nécessaire (taux fixe simplifié)
+        let amountUSD = amount;
+        if (currency === 'FC') {
+            amountUSD = amount / 2800;
+        }
+
+        if (amountUSD <= 0) throw new Error("Montant invalide");
+        if (senderId === receiverId) throw new Error("Impossible de s'envoyer de l'argent à soi-même");
+
+        // Vérifier solde expéditeur
+        const balance = await walletRepository.getBalance(senderId);
+        if (balance < amountUSD) {
+            throw new Error("Solde insuffisant");
+        }
+
+        const reference = `TRANSFER_${Date.now()}`;
+
+        // 1. Débiter l'expéditeur
+        const debit = await walletRepository.performWithdrawal(
+            senderId,
+            amountUSD,
+            'P2P_TRANSFER',
+            reference,
+            `Envoi à utilisateur #${receiverId}`
+        );
+
+        // 2. Créditer le destinataire
+        const credit = await walletRepository.performDeposit(
+            receiverId,
+            amountUSD,
+            'P2P_TRANSFER',
+            reference,
+            `Reçu de utilisateur #${senderId}`
+        );
+
+        console.log(`💸 Transfert: #${senderId} → #${receiverId} — ${amountUSD.toFixed(2)}$ (${amount} ${currency})`);
+
+        return {
+            success: true,
+            amountUSD,
+            amountOriginal: amount,
+            currency,
+            senderNewBalance: debit.balanceAfter,
+            receiverNewBalance: credit.balanceAfter,
+            reference
+        };
+    }
+
+    /**
      * Créditer le wallet du livreur après livraison confirmée
      */
     async creditDeliverer(delivererId, amount, orderId) {

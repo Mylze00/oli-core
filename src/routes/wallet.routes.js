@@ -35,4 +35,30 @@ router.post('/withdraw', walletController.withdraw);
  */
 router.post('/deposit-card', walletController.depositCard);
 
+/**
+ * POST /wallet/transfer
+ * Transfert P2P (envoi cash via chat)
+ */
+const walletService = require('../services/wallet.service');
+
+router.post('/transfer', async (req, res) => {
+    const { receiverId, amount, currency } = req.body;
+
+    if (!receiverId || !amount || amount <= 0) {
+        return res.status(400).json({ error: "Données invalides (receiverId, amount requis)" });
+    }
+
+    try {
+        const result = await walletService.transferToUser(
+            req.user.id,
+            parseInt(receiverId),
+            parseFloat(amount),
+            currency || 'USD'
+        );
+        res.json(result);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
 module.exports = router;

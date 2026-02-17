@@ -36,6 +36,7 @@ class ApiConfig {
   static const String walletDeposit = '$baseUrl/wallet/deposit';
   static const String walletWithdraw = '$baseUrl/wallet/withdraw';
   static const String walletDepositCard = '$baseUrl/wallet/deposit-card';
+  static const String walletTransfer = '$baseUrl/wallet/transfer';
   
   // --- Chat ---
   static const String chat = '$baseUrl/chat';

@@ -8,6 +8,8 @@ import 'widgets/chat_message_bubble.dart';
 import 'widgets/product_context_header.dart';
 import 'widgets/chat_input_area.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
+import '../../config/api_config.dart';
+import '../../core/router/network/dio_provider.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   final String myId;
@@ -334,9 +336,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   }),
                   _buildToolItem(Icons.attach_money, "Cash", Colors.green, () {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Paiement via Chat bientôt disponible !")),
-                    );
+                    _showSendCashSheet(context);
                   }),
                 ],
               )
@@ -420,6 +420,242 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       productName: widget.productName,
       productImage: widget.productImage,
       productPrice: widget.productPrice,
+    );
+  }
+
+  void _showSendCashSheet(BuildContext context) {
+    final amountController = TextEditingController();
+    String selectedCurrency = 'USD';
+    bool isSending = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              padding: EdgeInsets.only(
+                left: 24, right: 24, top: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Handle
+                  Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.send, color: Colors.green.shade700, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Envoyer du cash',
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'vers ${widget.otherName}',
+                              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Currency toggle
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'USD', label: Text('USD \$')),
+                      ButtonSegment(value: 'FC', label: Text('FC (CDF)')),
+                    ],
+                    selected: {selectedCurrency},
+                    onSelectionChanged: (val) {
+                      setSheetState(() => selectedCurrency = val.first);
+                    },
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return Colors.green.shade100;
+                        }
+                        return Colors.grey.shade100;
+                      }),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Amount input
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    autofocus: true,
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      hintText: selectedCurrency == 'USD' ? '0.00' : '0',
+                      hintStyle: TextStyle(fontSize: 28, color: Colors.grey.shade300),
+                      prefixText: selectedCurrency == 'USD' ? '\$ ' : '',
+                      suffixText: selectedCurrency == 'FC' ? ' FC' : '',
+                      prefixStyle: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green),
+                      suffixStyle: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green),
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Colors.green, width: 2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (selectedCurrency == 'FC')
+                    Text(
+                      'Sera converti en USD automatiquement',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // Send button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: isSending ? null : () async {
+                        final amountText = amountController.text.trim();
+                        final amount = double.tryParse(amountText);
+                        if (amount == null || amount <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Veuillez entrer un montant valide')),
+                          );
+                          return;
+                        }
+
+                        setSheetState(() => isSending = true);
+
+                        try {
+                          final dio = ref.read(dioProvider);
+                          final response = await dio.post(
+                            ApiConfig.walletTransfer,
+                            data: {
+                              'receiverId': widget.otherId,
+                              'amount': amount,
+                              'currency': selectedCurrency,
+                            },
+                          );
+
+                          if (response.statusCode == 200) {
+                            Navigator.pop(ctx);
+
+                            // Send a special chat message for the transfer
+                            final displayAmount = selectedCurrency == 'USD'
+                                ? '\$${amount.toStringAsFixed(2)}'
+                                : '${amount.toStringAsFixed(0)} FC';
+
+                            final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
+                            controller.sendMessage(
+                              content: '💸 Envoi de $displayAmount',
+                              productId: widget.productId,
+                              productName: widget.productName,
+                              productImage: widget.productImage,
+                              productPrice: widget.productPrice,
+                            );
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Text('$displayAmount envoyé à ${widget.otherName} ✓'),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          setSheetState(() => isSending = false);
+                          String errorMsg = 'Erreur lors du transfert';
+                          if (e.toString().contains('Solde insuffisant')) {
+                            errorMsg = 'Solde insuffisant !';
+                          }
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      },
+                      icon: isSending
+                          ? const SizedBox(
+                              width: 20, height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.send),
+                      label: Text(isSending ? 'Envoi en cours...' : 'Envoyer'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Security note
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shield, size: 14, color: Colors.grey.shade400),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Transfert sécurisé via Oli Wallet',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
