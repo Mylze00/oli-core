@@ -15,6 +15,8 @@ class SubscriptionService {
 
         this._tableReady = (async () => {
             try {
+                // Drop old table (was created with UUID columns, need INTEGER)
+                await pool.query(`DROP TABLE IF EXISTS certification_requests`);
                 await pool.query(`
                     CREATE TABLE IF NOT EXISTS certification_requests (
                         id SERIAL PRIMARY KEY,
