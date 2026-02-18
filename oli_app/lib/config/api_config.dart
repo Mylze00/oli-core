@@ -65,4 +65,8 @@ class ApiConfig {
   static const String userUpdateName = '$baseUrl/user/update-name';
   static const String userAvatar = '$baseUrl/auth/avatar';
   static const String userAddresses = '$baseUrl/auth/addresses';
+  // --- Support ---
+  static const String supportTickets = '$baseUrl/support/tickets';
+  static String supportTicketDetail(int id) => '$baseUrl/support/tickets/$id';
+  static String supportTicketReply(int id) => '$baseUrl/support/tickets/$id/reply';
 }

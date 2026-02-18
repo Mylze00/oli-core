@@ -17,23 +17,26 @@ class ProfileHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Optionnel: Écouter les changements globaux du profil pour rafraîchir l'UI
-    // final latestUser = ref.watch(profileControllerProvider).value ?? user;
-
-    return Column(
+    return Stack(
       children: [
-        Row(
+        // Settings icon top-right
+        Positioned(
+          top: 0,
+          right: 0,
+          child: IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
+            icon: const Icon(Icons.settings, color: Colors.white70, size: 22),
+          ),
+        ),
+        // Main content centered
+        Column(
           children: [
             _buildAvatarSection(context, ref),
-            const SizedBox(width: 16),
+            const SizedBox(height: 14),
             _buildUserInfoSection(context, ref),
-            IconButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsPage()),
-              ),
-              icon: const Icon(Icons.settings, color: Colors.white),
-            ),
           ],
         ),
       ],
@@ -122,75 +125,75 @@ class ProfileHeader extends ConsumerWidget {
   }
 
   Widget _buildUserInfoSection(BuildContext context, WidgetRef ref) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  user["name"] ?? "Utilisateur Oli",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                user["name"] ?? "Utilisateur Oli",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
-              IconButton(
-                icon: const Icon(Icons.edit, color: Colors.white, size: 18),
-                onPressed: () => showDialog(
-                  context: context,
-                  builder: (_) => EditNameDialog(
-                    currentName: user["name"] ?? "Utilisateur Oli",
-                  ),
-                ),
-                padding: const EdgeInsets.all(4),
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
-          Text(
-            user["phone"] ?? "Non renseigné",
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
             ),
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.white70, size: 16),
+              onPressed: () => showDialog(
+                context: context,
+                builder: (_) => EditNameDialog(
+                  currentName: user["name"] ?? "Utilisateur Oli",
+                ),
+              ),
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          user["phone"] ?? "Non renseigné",
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.7),
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
           ),
-          const SizedBox(height: 8),
-          _buildBadgesRow(),
-          const SizedBox(height: 8),
-          _buildAddressDisplay(),
-          if (user['is_verified'] != true && user['account_type'] == 'ordinaire') ...[
-             const SizedBox(height: 12),
-             GestureDetector(
-               onTap: () => Navigator.push(
-                 context, 
-                 MaterialPageRoute(builder: (_) => const VerificationLandingPage()) 
+        ),
+        const SizedBox(height: 8),
+        _buildBadgesRow(),
+        const SizedBox(height: 6),
+        _buildAddressDisplay(),
+        if (user['is_verified'] != true && user['account_type'] == 'ordinaire') ...[
+           const SizedBox(height: 12),
+           GestureDetector(
+             onTap: () => Navigator.push(
+               context, 
+               MaterialPageRoute(builder: (_) => const VerificationLandingPage()) 
+             ),
+             child: Container(
+               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+               decoration: BoxDecoration(
+                 color: Colors.blueAccent.withOpacity(0.15),
+                 borderRadius: BorderRadius.circular(20),
+                 border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
                ),
-               child: Container(
-                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                 decoration: BoxDecoration(
-                   color: Colors.blueAccent.withOpacity(0.2),
-                   borderRadius: BorderRadius.circular(20),
-                   border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
-                 ),
-                 child: Row(
-                   mainAxisSize: MainAxisSize.min,
-                   children: const [
-                     Icon(Icons.verified, size: 14, color: Colors.blueAccent),
-                     SizedBox(width: 6),
-                     Text("Obtenir la certification", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
-                   ],
-                 ),
+               child: Row(
+                 mainAxisSize: MainAxisSize.min,
+                 children: const [
+                   Icon(Icons.verified, size: 14, color: Colors.blueAccent),
+                   SizedBox(width: 6),
+                   Text("Obtenir la certification", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                 ],
                ),
              ),
-          ]
-        ],
-      ),
+           ),
+        ]
+      ],
     );
   }
 

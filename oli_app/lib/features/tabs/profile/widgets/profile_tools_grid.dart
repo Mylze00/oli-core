@@ -6,6 +6,7 @@ import '../../../shop/screens/publish_article_page.dart';
 import '../../../favorites/screens/favorites_page.dart';
 import '../../../settings/screens/help_page.dart';
 import '../../../settings/screens/about_page.dart';
+import '../../../settings/screens/contact_support_page.dart';
 import '../../../checkout/screens/payment_methods_page.dart';
 import '../../../user/screens/addresses_page.dart';
 
@@ -38,6 +39,7 @@ class ProfileToolsGrid extends ConsumerWidget {
               _buildGridItem(context, Icons.add_circle_outline, "Vendre", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PublishArticlePage()))),
               _buildGridItem(context, Icons.credit_card, "Cartes", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsPage()))),
               _buildGridItem(context, Icons.location_on_outlined, "Adresses", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesPage()))), 
+              _buildGridItem(context, Icons.headset_mic, "Service Oli", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactSupportPage()))),
               _buildGridItem(context, Icons.help_outline, "Aide", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPage()))),
               _buildGridItem(context, Icons.info_outline, "À propos", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutPage()))),
               _buildGridItem(context, Icons.logout, "Déconnexion", Colors.redAccent, () async {

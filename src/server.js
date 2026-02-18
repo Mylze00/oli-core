@@ -211,6 +211,7 @@ app.use("/ads", require("./routes/ads.routes"));
 app.use('/search', require('./routes/search.routes')); // Recherche visuelle
 app.use("/setup", require("./routes/setup.routes")); // Utility route for migration
 app.use("/services", require("./routes/services.routes")); // ✨ Services dynamiques (Public)
+app.use("/support", requireAuth, require("./routes/support.routes")); // 🎫 Support tickets utilisateur
 app.use("/api/debug", require("./routes/debug.routes")); // 🐞 Debug DB Schema (Temporary)
 
 // Health check
