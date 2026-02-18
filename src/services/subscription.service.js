@@ -15,8 +15,6 @@ class SubscriptionService {
 
         this._tableReady = (async () => {
             try {
-                // Drop old table (was created with UUID columns, need INTEGER)
-                await pool.query(`DROP TABLE IF EXISTS certification_requests`);
                 await pool.query(`
                     CREATE TABLE IF NOT EXISTS certification_requests (
                         id SERIAL PRIMARY KEY,
@@ -167,26 +165,25 @@ class SubscriptionService {
                 UPDATE certification_requests 
                 SET status = 'approved', reviewed_by = $1, reviewed_at = NOW()
                 WHERE id = $2
-            `, [adminId, requestId]);
+            `, [Number(adminId), Number(requestId)]);
 
             // Upgrade l'utilisateur
             const endDate = new Date();
             endDate.setDate(endDate.getDate() + 30);
+
+            // Use separate variables to avoid PostgreSQL type inference issues
+            const accountType = plan === 'enterprise' ? 'entreprise' : 'certifie';
 
             await client.query(`
                 UPDATE users 
                 SET subscription_plan = $1, 
                     subscription_status = 'active', 
                     subscription_end_date = $2,
-                    account_type = CASE 
-                        WHEN $1 = 'enterprise' THEN 'entreprise'
-                        WHEN $1 = 'certified' THEN 'certifie'
-                        ELSE account_type 
-                    END,
+                    account_type = $3,
                     is_verified = TRUE,
                     updated_at = NOW()
-                WHERE id = $3
-            `, [plan, endDate, user_id]);
+                WHERE id = $4
+            `, [plan, endDate, accountType, user_id]);
 
             await client.query('COMMIT');
 
@@ -211,7 +208,7 @@ class SubscriptionService {
             SET status = 'rejected', reviewed_by = $1, reviewed_at = NOW(), rejection_reason = $2
             WHERE id = $3 AND status = 'pending'
             RETURNING *
-        `, [adminId, reason || 'Document non conforme', requestId]);
+        `, [Number(adminId), reason || 'Document non conforme', Number(requestId)]);
 
         if (result.rows.length === 0) {
             throw new Error("Demande introuvable ou déjà traitée");
