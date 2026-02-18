@@ -20,7 +20,7 @@ class MobileMoneyService {
         await simulateNetworkDelay();
 
         // Validation basique
-        if (!['orange', 'mpesa', 'airtel'].includes(provider)) {
+        if (!['orange', 'mtn', 'mpesa', 'airtel'].includes(provider)) {
             throw new Error("Fournisseur non supporté");
         }
 

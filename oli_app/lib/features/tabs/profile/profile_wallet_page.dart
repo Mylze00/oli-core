@@ -65,9 +65,10 @@ class ProfileAndWalletPage extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 50, left: 20, right: 20, bottom: 30),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [oliBlue, oliBlue.withOpacity(0.8)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                    colors: [oliBlue, const Color(0xFF0D3B5E), const Color(0xFF0A1A2A)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.0, 0.6, 1.0],
                   ),
                   borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(24),

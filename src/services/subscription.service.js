@@ -18,6 +18,8 @@ class SubscriptionService {
                     plan VARCHAR(20) NOT NULL,
                     document_type VARCHAR(30) NOT NULL DEFAULT 'carte_identite',
                     id_card_url TEXT NOT NULL,
+                    payment_method VARCHAR(30),
+                    payment_reference VARCHAR(100),
                     status VARCHAR(20) DEFAULT 'pending',
                     rejection_reason TEXT,
                     reviewed_by UUID,
@@ -25,6 +27,13 @@ class SubscriptionService {
                     reviewed_at TIMESTAMP
                 )
             `);
+
+            // Migration: ajouter les colonnes de paiement si elles n'existent pas encore
+            await pool.query(`
+                ALTER TABLE certification_requests 
+                ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30),
+                ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(100)
+            `).catch(() => { }); // Silently ignore if already exists
         } catch (err) {
             console.error('⚠️ certification_requests table init:', err.message);
         }
@@ -34,7 +43,7 @@ class SubscriptionService {
      * Créer une demande de certification (status = pending)
      * L'utilisateur paie + upload sa carte → demande envoyée à l'admin
      */
-    async createCertificationRequest(userId, plan, documentType, idCardUrl) {
+    async createCertificationRequest(userId, plan, documentType, idCardUrl, paymentMethod = null, paymentReference = null) {
         const VALID_PLANS = ['certified', 'enterprise'];
         if (!VALID_PLANS.includes(plan)) {
             throw new Error("Plan invalide. Choix: certified, enterprise");
@@ -59,12 +68,12 @@ class SubscriptionService {
 
         // Créer la demande
         const result = await pool.query(`
-            INSERT INTO certification_requests (user_id, plan, document_type, id_card_url, status)
-            VALUES ($1, $2, $3, $4, 'pending')
+            INSERT INTO certification_requests (user_id, plan, document_type, id_card_url, payment_method, payment_reference, status)
+            VALUES ($1, $2, $3, $4, $5, $6, 'pending')
             RETURNING *
-        `, [userId, plan, documentType, idCardUrl]);
+        `, [userId, plan, documentType, idCardUrl, paymentMethod, paymentReference]);
 
-        console.log(`📋 Demande certification #${result.rows[0].id}: user=${userId}, plan=${plan}, doc=${documentType}`);
+        console.log(`📋 Demande certification #${result.rows[0].id}: user=${userId}, plan=${plan}, doc=${documentType}, payment=${paymentMethod}`);
 
         return result.rows[0];
     }

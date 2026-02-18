@@ -178,16 +178,16 @@ class ProfileHeader extends ConsumerWidget {
              child: Container(
                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                decoration: BoxDecoration(
-                 color: Colors.blueAccent.withOpacity(0.15),
+                 color: Colors.white,
                  borderRadius: BorderRadius.circular(20),
-                 border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
+                 border: Border.all(color: Colors.blue, width: 1.5),
                ),
                child: Row(
                  mainAxisSize: MainAxisSize.min,
                  children: const [
-                   Icon(Icons.verified, size: 14, color: Colors.blueAccent),
+                   Icon(Icons.verified, size: 14, color: Colors.blue),
                    SizedBox(width: 6),
-                   Text("Obtenir la certification", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                   Text("Obtenir la certification", style: TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.bold)),
                  ],
                ),
              ),
@@ -218,15 +218,18 @@ class ProfileHeader extends ConsumerWidget {
         final defaultAddr = ref.watch(defaultAddressProvider);
         if (defaultAddr != null) {
           return Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.location_on, color: Colors.white70, size: 12),
               const SizedBox(width: 4),
-              Expanded(
+              Flexible(
                 child: Text(
                   defaultAddr.fullAddress,
                   style: const TextStyle(color: Colors.white70, fontSize: 11),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
               ),
             ],
@@ -235,6 +238,7 @@ class ProfileHeader extends ConsumerWidget {
         return const Text(
           "Pas d'adresse enregistrée",
           style: TextStyle(color: Colors.white38, fontSize: 11, fontStyle: FontStyle.italic),
+          textAlign: TextAlign.center,
         );
       },
     );

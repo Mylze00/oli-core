@@ -20,6 +20,7 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
     required String paymentMethod,
     required String documentType,
     required File idCardImage,
+    Map<String, String>? paymentDetails,
   }) async {
     state = const AsyncValue.loading();
     try {
@@ -30,7 +31,7 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
       dio.options.headers['Authorization'] = 'Bearer $token';
 
       // Préparer le multipart form
-      final formData = FormData.fromMap({
+      final formMap = <String, dynamic>{
         'plan': plan,
         'payment_method': paymentMethod,
         'document_type': documentType,
@@ -38,7 +39,14 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
           idCardImage.path,
           filename: 'id_card_${DateTime.now().millisecondsSinceEpoch}.jpg',
         ),
-      });
+      };
+
+      // Ajouter les détails de paiement (phone, card info, etc.)
+      if (paymentDetails != null) {
+        formMap.addAll(paymentDetails);
+      }
+
+      final formData = FormData.fromMap(formMap);
 
       final response = await dio.post(
         '${ApiConfig.baseUrl}/api/subscription/request',
