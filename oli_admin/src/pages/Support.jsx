@@ -30,8 +30,10 @@ export default function Support() {
     const [stats, setStats] = useState({});
     const [loading, setLoading] = useState(true);
     const [selectedTicket, setSelectedTicket] = useState(null);
+    const [ticketDetail, setTicketDetail] = useState(null);
     const [messages, setMessages] = useState([]);
     const [msgLoading, setMsgLoading] = useState(false);
+    const [msgError, setMsgError] = useState(null);
     const [reply, setReply] = useState('');
     const scrollRef = useRef(null);
 
@@ -40,11 +42,13 @@ export default function Support() {
         fetchStats();
     }, []);
 
+    // Use selectedTicket?.id to avoid infinite re-triggers
+    const selectedTicketId = selectedTicket?.id;
     useEffect(() => {
-        if (selectedTicket) {
-            fetchMessages(selectedTicket.id);
+        if (selectedTicketId) {
+            fetchMessages(selectedTicketId);
         }
-    }, [selectedTicket]);
+    }, [selectedTicketId]);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -74,13 +78,16 @@ export default function Support() {
 
     const fetchMessages = async (ticketId) => {
         setMsgLoading(true);
+        setMsgError(null);
         try {
             const { data } = await api.get(`/admin/support/${ticketId}`);
-            setMessages(data.messages);
-            // Mettre à jour les infos du ticket aussi au cas où
-            setSelectedTicket(prev => ({ ...prev, ...data.ticket }));
+            setMessages(data.messages || []);
+            // Store detail separately to avoid re-triggering useEffect
+            setTicketDetail(data.ticket);
         } catch (error) {
-            console.error(error);
+            console.error('Erreur chargement messages:', error);
+            setMsgError('Impossible de charger la conversation');
+            setMessages([]);
         } finally {
             setMsgLoading(false);
         }
@@ -105,6 +112,8 @@ export default function Support() {
 
     const startTicket = (ticket) => {
         setSelectedTicket(ticket);
+        setTicketDetail(null);
+        setMessages([]);
     };
 
     const updateStatus = async (status) => {
@@ -185,7 +194,7 @@ export default function Support() {
                                 <h3 className="font-bold text-lg">#{selectedTicket.id} - {selectedTicket.subject}</h3>
                             </div>
                             <p className="text-sm text-gray-500 ml-6 md:ml-0">
-                                {selectedTicket.user_name} ({selectedTicket.user_phone})
+                                {ticketDetail?.user_name || selectedTicket.user_name} ({ticketDetail?.user_phone || selectedTicket.user_phone})
                             </p>
                         </div>
                         <div className="flex gap-2">
@@ -210,16 +219,21 @@ export default function Support() {
                     <div className="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-4" ref={scrollRef}>
                         {msgLoading ? (
                             <div className="text-center text-gray-400 mt-10">Chargement de la conversation...</div>
+                        ) : msgError ? (
+                            <div className="text-center text-red-400 mt-10">
+                                <ExclamationTriangleIcon className="h-8 w-8 mx-auto mb-2" />
+                                <p>{msgError}</p>
+                                <button onClick={() => fetchMessages(selectedTicket.id)} className="mt-2 text-blue-500 underline text-sm">Réessayer</button>
+                            </div>
                         ) : (
                             <>
                                 {messages.length === 0 && (
                                     <div className="text-center text-gray-400 italic my-4">Début de la conversation</div>
                                 )}
                                 {messages.map(msg => {
-                                    const isMe = msg.sender_id === selectedTicket.admin_id || msg.is_internal_note;
-                                    // Note: simplifcation, idéalement on compare avec user.id du context auth
-                                    // Mais ici on suppose que si c'est 'admin_id' ou internal, c'est "nous" (staff)
-                                    // Mieux : checker si sender_id exist dans table users field is_admin
+                                    // Compare against ticket user_id: if sender is NOT the user, it's admin/staff
+                                    const ticketUserId = ticketDetail?.user_id || selectedTicket.user_id;
+                                    const isMe = msg.sender_id !== ticketUserId;
 
                                     const roleStyle = isMe ? 'ml-auto bg-blue-600 text-white' : 'mr-auto bg-white border text-gray-800';
 

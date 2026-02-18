@@ -85,8 +85,7 @@ router.get('/:id', async (req, res) => {
                 st.*,
                 u.name as user_name,
                 u.phone as user_phone,
-                u.avatar_url as user_avatar,
-                (SELECT COUNT(*) FROM orders o WHERE o.user_id = st.user_id) as user_orders_count
+                u.avatar_url as user_avatar
             FROM support_tickets st
             JOIN users u ON st.user_id = u.id
             WHERE st.id = $1
