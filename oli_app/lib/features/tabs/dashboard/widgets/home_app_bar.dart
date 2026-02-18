@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/providers/auth_controller.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
+import '../../../../widgets/verification_badge.dart';
 import 'dynamic_search_bar.dart';
 import '../../../../widgets/currency_selector_widget.dart';
 import '../../../notifications/providers/notification_provider.dart';
@@ -45,6 +46,14 @@ class HomeAppBar extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          // Badge de certification
+          if (authState.userData != null && VerificationBadge.fromUser(authState.userData!) != null) ...[
+            const SizedBox(width: 4),
+            VerificationBadge(
+              type: VerificationBadge.fromUser(authState.userData!)!,
+              size: 16,
+            ),
+          ],
         ],
       ),
       flexibleSpace: Stack(
