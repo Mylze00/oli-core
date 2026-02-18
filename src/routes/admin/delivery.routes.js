@@ -116,4 +116,163 @@ router.patch('/drivers/:id/verify', async (req, res) => {
     }
 });
 
+/**
+ * GET /admin/delivery/applications
+ * Liste toutes les candidatures de livreurs
+ */
+router.get('/applications', async (req, res) => {
+    try {
+        const { status, search, limit = 100, offset = 0 } = req.query;
+
+        let query = `
+            SELECT 
+                da.id, da.user_id, da.pledge_amount, da.phone as app_phone,
+                da.motivation, da.status, da.admin_note,
+                da.created_at, da.reviewed_at,
+                u.name, u.phone, u.email, u.avatar_url
+            FROM deliverer_applications da
+            JOIN users u ON u.id = da.user_id
+        `;
+        const params = [];
+        let paramIndex = 1;
+        const conditions = [];
+
+        if (status && status !== 'all') {
+            conditions.push(`da.status = $${paramIndex++}`);
+            params.push(status);
+        }
+
+        if (search) {
+            conditions.push(`(u.name ILIKE $${paramIndex} OR u.phone ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
+            params.push(`%${search}%`);
+            paramIndex++;
+        }
+
+        if (conditions.length > 0) {
+            query += ` WHERE ${conditions.join(' AND ')}`;
+        }
+
+        query += ` ORDER BY da.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
+        params.push(parseInt(limit), parseInt(offset));
+
+        const result = await pool.query(query, params);
+
+        // Format avatars
+        const applications = result.rows.map(a => ({
+            ...a,
+            avatar_url: a.avatar_url
+                ? (a.avatar_url.startsWith('http') ? a.avatar_url : `${BASE_URL}/uploads/${a.avatar_url}`)
+                : null
+        }));
+
+        // Stats des candidatures
+        let appStats = { total: 0, pending: 0, approved: 0, rejected: 0 };
+        try {
+            const statsResult = await pool.query(`
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE status = 'pending') as pending,
+                    COUNT(*) FILTER (WHERE status = 'approved') as approved,
+                    COUNT(*) FILTER (WHERE status = 'rejected') as rejected
+                FROM deliverer_applications
+            `);
+            appStats = statsResult.rows[0];
+        } catch (e) { console.warn('app stats error:', e.message); }
+
+        res.json({
+            applications,
+            stats: {
+                total: parseInt(appStats.total),
+                pending: parseInt(appStats.pending),
+                approved: parseInt(appStats.approved),
+                rejected: parseInt(appStats.rejected),
+            }
+        });
+    } catch (err) {
+        console.error('Erreur GET /admin/delivery/applications:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * PATCH /admin/delivery/applications/:id/approve
+ * Approuver une candidature → active is_deliverer sur l'utilisateur
+ */
+router.patch('/applications/:id/approve', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Récupérer la candidature
+        const app = await pool.query(
+            'SELECT user_id, status FROM deliverer_applications WHERE id = $1',
+            [id]
+        );
+        if (app.rows.length === 0) {
+            return res.status(404).json({ error: 'Candidature introuvable' });
+        }
+        if (app.rows[0].status === 'approved') {
+            return res.status(400).json({ error: 'Candidature déjà approuvée' });
+        }
+
+        const userId = app.rows[0].user_id;
+
+        // Mettre à jour la candidature
+        await pool.query(
+            `UPDATE deliverer_applications 
+             SET status = 'approved', admin_note = $1, reviewed_at = NOW() 
+             WHERE id = $2`,
+            [req.body.admin_note || 'Approuvé par admin', id]
+        );
+
+        // Activer le rôle livreur sur l'utilisateur
+        await pool.query(
+            'UPDATE users SET is_deliverer = TRUE, updated_at = NOW() WHERE id = $1',
+            [userId]
+        );
+
+        res.json({
+            success: true,
+            message: 'Candidature approuvée — livreur activé',
+            user_id: userId
+        });
+    } catch (err) {
+        console.error('Erreur approve application:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * PATCH /admin/delivery/applications/:id/reject
+ * Rejeter une candidature
+ */
+router.patch('/applications/:id/reject', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { admin_note } = req.body;
+
+        const app = await pool.query(
+            'SELECT user_id, status FROM deliverer_applications WHERE id = $1',
+            [id]
+        );
+        if (app.rows.length === 0) {
+            return res.status(404).json({ error: 'Candidature introuvable' });
+        }
+
+        await pool.query(
+            `UPDATE deliverer_applications 
+             SET status = 'rejected', admin_note = $1, reviewed_at = NOW() 
+             WHERE id = $2`,
+            [admin_note || 'Rejeté par admin', id]
+        );
+
+        res.json({
+            success: true,
+            message: 'Candidature rejetée'
+        });
+    } catch (err) {
+        console.error('Erreur reject application:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
 module.exports = router;

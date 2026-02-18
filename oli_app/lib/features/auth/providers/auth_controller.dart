@@ -56,13 +56,18 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> checkSession() async {
     try {
+      debugPrint("🔄 checkSession: Lecture du storage local...");
       final localData = await _storage.getUserData();
       final token = localData['token'];
       final phone = localData['phone'];
       final name = localData['name'];
       final avatarUrl = localData['avatar_url'];
       
+      debugPrint("🔑 checkSession: token=${token != null ? '${token.substring(0, 10)}...(${token.length} chars)' : 'NULL'}");
+      debugPrint("📱 checkSession: phone=$phone, name=$name");
+      
       if (token != null && token.isNotEmpty) {
+        debugPrint("✅ checkSession: Token trouvé, session restaurée !");
         state = state.copyWith(
           isAuthenticated: true,
           isCheckingSession: false, 
@@ -74,10 +79,11 @@ class AuthController extends StateNotifier<AuthState> {
         );
         fetchUserProfile(); 
       } else {
+        debugPrint("❌ checkSession: Pas de token — utilisateur non connecté");
         state = state.copyWith(isCheckingSession: false);
       }
     } catch (e) {
-      debugPrint("Erreur session : $e");
+      debugPrint("❌ Erreur session : $e");
       state = state.copyWith(isCheckingSession: false);
     }
   }
@@ -193,7 +199,11 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await FcmService().removeToken();
     await _storage.deleteAll();
-    state = const AuthState(isAuthenticated: false, userData: null);
+    state = const AuthState(
+      isAuthenticated: false, 
+      isCheckingSession: false, 
+      userData: null,
+    );
   }
 
   /// 🔹 MISE À JOUR LOCALE (Optimistic UI)

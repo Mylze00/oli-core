@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/product_model.dart';
@@ -252,7 +253,7 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '${_filteredProducts.length} produit${_filteredProducts.length > 1 ? 's' : ''} trouvé${_filteredProducts.length > 1 ? 's' : ''}',
+                '${_filteredProducts.length} produit${_filteredProducts.length > 1 ? 's' : ''} trouvé${_filteredProducts.length > 1 ? 's' : ''} chez ${_getGroupedProducts().length} vendeur${_getGroupedProducts().length > 1 ? 's' : ''}',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -262,23 +263,150 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
             ),
           ),
 
-          // Liste des résultats (disposition horizontale)
+          // Liste des résultats groupés par vendeur
           Expanded(
             child: _filteredProducts.isEmpty
                 ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: _filteredProducts.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: SearchResultCard(product: _filteredProducts[index]),
-                      );
-                    },
-                  ),
+                : _buildGroupedResults(),
           ),
         ],
       ),
+    );
+  }
+
+  /// Regroupe les produits par vendeur (sellerId)
+  LinkedHashMap<String, List<Product>> _getGroupedProducts() {
+    final grouped = LinkedHashMap<String, List<Product>>();
+    for (final product in _filteredProducts) {
+      final key = product.sellerId.isNotEmpty ? product.sellerId : product.seller;
+      grouped.putIfAbsent(key, () => []).add(product);
+    }
+    return grouped;
+  }
+
+  /// Construit la liste groupée par vendeur
+  Widget _buildGroupedResults() {
+    final grouped = _getGroupedProducts();
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: grouped.length,
+      itemBuilder: (context, index) {
+        final sellerId = grouped.keys.elementAt(index);
+        final products = grouped[sellerId]!;
+        final firstProduct = products.first;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // En-tête vendeur
+            Container(
+              margin: EdgeInsets.only(top: index == 0 ? 0 : 16, bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A2E),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  // Avatar vendeur
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: const Color(0xFF1E7DBA),
+                    backgroundImage: firstProduct.sellerAvatar != null &&
+                            firstProduct.sellerAvatar!.isNotEmpty
+                        ? NetworkImage(firstProduct.sellerAvatar!)
+                        : null,
+                    child: firstProduct.sellerAvatar == null ||
+                            firstProduct.sellerAvatar!.isEmpty
+                        ? Text(
+                            firstProduct.seller.isNotEmpty
+                                ? firstProduct.seller[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  // Nom du vendeur
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                firstProduct.seller,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (firstProduct.sellerIsVerified)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 4),
+                                child: Icon(
+                                  Icons.verified,
+                                  size: 16,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            if (firstProduct.sellerHasCertifiedShop)
+                              Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'Certifié',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        Text(
+                          '${products.length} produit${products.length > 1 ? 's' : ''} trouvé${products.length > 1 ? 's' : ''}',
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Icône chevron
+                  Icon(
+                    Icons.storefront_outlined,
+                    color: Colors.grey[400],
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+            // Produits du vendeur
+            ...products.map((product) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: SearchResultCard(product: product),
+                )),
+          ],
+        );
+      },
     );
   }
 

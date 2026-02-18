@@ -98,6 +98,10 @@ class SecureStorageService {
       await prefs.remove(_phoneKey);
       await prefs.remove(_nameKey);
       await prefs.remove(_avatarKey);
+      debugPrint("🗑️ Session supprimée (SharedPreferences)");
+      // NE PAS appeler _secureStorage.deleteAll() sur web — 
+      // il utilise le même localStorage et efface tout
+      return;
     }
     try {
       await _secureStorage.deleteAll();

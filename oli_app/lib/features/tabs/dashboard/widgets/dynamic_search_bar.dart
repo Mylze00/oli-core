@@ -171,7 +171,10 @@ class _DynamicSearchBarState extends ConsumerState<DynamicSearchBar> {
           allProducts: widget.allProducts,
         ),
       ),
-    );
+    ).then((_) {
+      // Vider le texte après retour pour une nouvelle recherche
+      widget.controller.clear();
+    });
   }
 
   @override
