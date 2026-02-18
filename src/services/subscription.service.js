@@ -18,7 +18,7 @@ class SubscriptionService {
                 await pool.query(`
                     CREATE TABLE IF NOT EXISTS certification_requests (
                         id SERIAL PRIMARY KEY,
-                        user_id UUID NOT NULL REFERENCES users(id),
+                        user_id UUID NOT NULL,
                         plan VARCHAR(20) NOT NULL,
                         document_type VARCHAR(30) NOT NULL DEFAULT 'carte_identite',
                         id_card_url TEXT NOT NULL,
