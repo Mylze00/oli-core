@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../../config/api_config.dart';
@@ -15,11 +15,13 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
   VerificationController(this.ref) : super(const AsyncValue.data(null));
 
   /// Soumettre une demande de certification avec carte d'identité
+  /// Utilise Uint8List pour la compatibilité web (pas de dart:io File)
   Future<Map<String, dynamic>> submitCertificationRequest({
     required String plan,
     required String paymentMethod,
     required String documentType,
-    required File idCardImage,
+    required Uint8List idCardBytes,
+    required String idCardFileName,
     Map<String, String>? paymentDetails,
   }) async {
     state = const AsyncValue.loading();
@@ -30,14 +32,14 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
 
       dio.options.headers['Authorization'] = 'Bearer $token';
 
-      // Préparer le multipart form
+      // Préparer le multipart form avec bytes (compatible web + mobile)
       final formMap = <String, dynamic>{
         'plan': plan,
         'payment_method': paymentMethod,
         'document_type': documentType,
-        'id_card': await MultipartFile.fromFile(
-          idCardImage.path,
-          filename: 'id_card_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        'id_card': MultipartFile.fromBytes(
+          idCardBytes,
+          filename: idCardFileName,
         ),
       };
 

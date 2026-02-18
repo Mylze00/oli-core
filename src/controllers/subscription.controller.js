@@ -151,7 +151,10 @@ exports.createRequest = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error("Certification Request Error:", error);
+        console.error("❌ Certification Request Error:", error.message);
+        console.error("Stack:", error.stack);
+        console.error("Body received:", JSON.stringify(req.body));
+        console.error("File received:", req.file ? JSON.stringify({ fieldname: req.file.fieldname, path: req.file.path, size: req.file.size }) : 'NO FILE');
         res.status(400).json({ message: error.message || "Erreur lors de la demande" });
     }
 };

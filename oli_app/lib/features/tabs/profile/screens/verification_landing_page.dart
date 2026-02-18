@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -282,7 +282,8 @@ class _CertificationFlowSheetState extends ConsumerState<_CertificationFlowSheet
   int _step = 0; // 0 = doc type, 1 = photo, 2 = payment, 3 = submit
   String _docType = 'carte_identite';
   String _paymentMethod = 'mobile_money';
-  File? _idCardImage;
+  Uint8List? _idCardBytes;
+  String _idCardFileName = '';
   bool _submitting = false;
 
   // Payment controllers
@@ -315,15 +316,17 @@ class _CertificationFlowSheetState extends ConsumerState<_CertificationFlowSheet
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: source, imageQuality: 80, maxWidth: 1200);
     if (picked != null) {
+      final bytes = await picked.readAsBytes();
       setState(() {
-        _idCardImage = File(picked.path);
+        _idCardBytes = bytes;
+        _idCardFileName = 'id_card_${DateTime.now().millisecondsSinceEpoch}.jpg';
         _step = 2; // Aller au paiement
       });
     }
   }
 
   Future<void> _submit() async {
-    if (_idCardImage == null) return;
+    if (_idCardBytes == null) return;
 
     // Validation selon la méthode
     if (_paymentMethod == 'mobile_money' && _phoneController.text.trim().isEmpty) {
@@ -367,7 +370,8 @@ class _CertificationFlowSheetState extends ConsumerState<_CertificationFlowSheet
       plan: widget.plan,
       paymentMethod: actualPaymentMethod,
       documentType: _docType,
-      idCardImage: _idCardImage!,
+      idCardBytes: _idCardBytes!,
+      idCardFileName: _idCardFileName,
       paymentDetails: paymentDetails,
     );
 
@@ -490,10 +494,10 @@ class _CertificationFlowSheetState extends ConsumerState<_CertificationFlowSheet
         ),
         const SizedBox(height: 20),
 
-        if (_idCardImage != null) ...[
+        if (_idCardBytes != null) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.file(_idCardImage!, height: 180, fit: BoxFit.cover),
+            child: Image.memory(_idCardBytes!, height: 180, fit: BoxFit.cover),
           ),
           const SizedBox(height: 12),
         ],
