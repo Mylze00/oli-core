@@ -2,6 +2,7 @@
  * Service User - Gestion du profil et activité utilisateur
  */
 const userRepository = require('../repositories/user.repository');
+const productRepository = require('../repositories/product.repository');
 const pool = require('../config/db'); // Needed for direct updates if repo doesn't support it yet
 const { BASE_URL } = require('../config');
 
@@ -51,6 +52,8 @@ async function getVisitedProducts(userId, limit = 20) {
 async function trackProductView(userId, productId) {
     try {
         await userRepository.trackProductView(userId, productId);
+        // Aussi incrémenter le compteur de vues sur le produit
+        await productRepository.incrementViewCount(productId);
     } catch (error) {
         console.error('Erreur trackProductView:', error);
         // Fail silently

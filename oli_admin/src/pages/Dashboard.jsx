@@ -113,7 +113,7 @@ export default function Dashboard() {
                     trend={stats?.orders?.revenue_trend}
                     icon={<CurrencyDollarIcon className="h-6 w-6 text-green-600" />}
                     subtitle={`${Number(stats?.orders?.revenue_period || 0).toLocaleString()} $ cette période`}
-                    link="/commandes"
+                    link="/orders"
                 />
                 <StatsCard
                     title="Utilisateurs"
@@ -129,7 +129,7 @@ export default function Dashboard() {
                     trend={stats?.products?.trend}
                     icon={<CubeIcon className="h-6 w-6 text-violet-600" />}
                     subtitle={`${stats?.products?.total || 0} total`}
-                    link="/produits"
+                    link="/products"
                 />
                 <StatsCard
                     title="Commandes"
@@ -137,21 +137,21 @@ export default function Dashboard() {
                     trend={stats?.orders?.orders_trend}
                     icon={<ShoppingBagIcon className="h-6 w-6 text-indigo-600" />}
                     subtitle={`${stats?.orders?.paid || 0} payées · ${stats?.orders?.pending_shipping || 0} en attente`}
-                    link="/commandes"
+                    link="/orders"
                 />
                 <StatsCard
                     title="Boutiques"
                     value={stats?.shops?.total || 0}
                     icon={<BuildingStorefrontIcon className="h-6 w-6 text-amber-600" />}
                     subtitle={`${stats?.shops?.period || 0} nouvelles cette période`}
-                    link="/magasins"
+                    link="/shops"
                 />
                 <StatsCard
                     title="Conversations"
                     value={Number(stats?.chat?.total_conversations || 0).toLocaleString()}
                     icon={<ChatBubbleLeftRightIcon className="h-6 w-6 text-cyan-600" />}
                     subtitle={`${stats?.chat?.messages_period || 0} messages cette période`}
-                    link="/messagerie"
+                    link="/disputes"
                 />
                 <StatsCard
                     title="Livraisons"
@@ -159,7 +159,7 @@ export default function Dashboard() {
                     icon={<TruckIcon className="h-6 w-6 text-emerald-600" />}
                     subtitle={`${stats?.deliveries?.pending || 0} en cours`}
                     color={stats?.deliveries?.pending > 0 ? 'bg-emerald-50' : 'bg-white'}
-                    link="/livraisons"
+                    link="/delivery"
                 />
                 <StatsCard
                     title="Tickets Support"
