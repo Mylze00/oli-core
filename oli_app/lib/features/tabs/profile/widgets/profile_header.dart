@@ -142,6 +142,14 @@ class ProfileHeader extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            // Badge de certification à côté du nom
+            if (VerificationBadge.fromUser(user) != null) ...[
+              const SizedBox(width: 6),
+              VerificationBadge(
+                type: VerificationBadge.fromUser(user)!,
+                size: 18,
+              ),
+            ],
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.white70, size: 16),
               onPressed: () => showDialog(
