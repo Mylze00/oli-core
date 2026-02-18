@@ -185,7 +185,7 @@ export default function Support() {
                                 <h3 className="font-bold text-lg">#{selectedTicket.id} - {selectedTicket.subject}</h3>
                             </div>
                             <p className="text-sm text-gray-500 ml-6 md:ml-0">
-                                {selectedTicket.user_name} ({selectedTicket.user_email})
+                                {selectedTicket.user_name} ({selectedTicket.user_phone})
                             </p>
                         </div>
                         <div className="flex gap-2">

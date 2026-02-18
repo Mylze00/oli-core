@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
             SELECT 
                 st.*,
                 u.name as user_name,
-                u.email as user_email,
+                u.phone as user_phone,
                 u.avatar_url as user_avatar,
                 adm.name as admin_name
             FROM support_tickets st
@@ -85,7 +85,6 @@ router.get('/:id', async (req, res) => {
                 st.*,
                 u.name as user_name,
                 u.phone as user_phone,
-                u.email as user_email,
                 u.avatar_url as user_avatar,
                 (SELECT COUNT(*) FROM orders o WHERE o.user_id = st.user_id) as user_orders_count
             FROM support_tickets st
