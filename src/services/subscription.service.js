@@ -3,40 +3,43 @@ const pool = require('../config/db');
 class SubscriptionService {
 
     constructor() {
-        this._ensureTable();
+        this._tableReady = null;
     }
 
     /**
      * Auto-create certification_requests table if not exists
+     * Lazy init — will be awaited before every DB operation
      */
     async _ensureTable() {
-        try {
-            await pool.query(`
-                CREATE TABLE IF NOT EXISTS certification_requests (
-                    id SERIAL PRIMARY KEY,
-                    user_id UUID NOT NULL REFERENCES users(id),
-                    plan VARCHAR(20) NOT NULL,
-                    document_type VARCHAR(30) NOT NULL DEFAULT 'carte_identite',
-                    id_card_url TEXT NOT NULL,
-                    payment_method VARCHAR(30),
-                    payment_reference VARCHAR(100),
-                    status VARCHAR(20) DEFAULT 'pending',
-                    rejection_reason TEXT,
-                    reviewed_by UUID,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    reviewed_at TIMESTAMP
-                )
-            `);
+        if (this._tableReady) return this._tableReady;
 
-            // Migration: ajouter les colonnes de paiement si elles n'existent pas encore
-            await pool.query(`
-                ALTER TABLE certification_requests 
-                ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30),
-                ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(100)
-            `).catch(() => { }); // Silently ignore if already exists
-        } catch (err) {
-            console.error('⚠️ certification_requests table init:', err.message);
-        }
+        this._tableReady = (async () => {
+            try {
+                await pool.query(`
+                    CREATE TABLE IF NOT EXISTS certification_requests (
+                        id SERIAL PRIMARY KEY,
+                        user_id UUID NOT NULL REFERENCES users(id),
+                        plan VARCHAR(20) NOT NULL,
+                        document_type VARCHAR(30) NOT NULL DEFAULT 'carte_identite',
+                        id_card_url TEXT NOT NULL,
+                        payment_method VARCHAR(30),
+                        payment_reference VARCHAR(100),
+                        status VARCHAR(20) DEFAULT 'pending',
+                        rejection_reason TEXT,
+                        reviewed_by UUID,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        reviewed_at TIMESTAMP
+                    )
+                `);
+                console.log('✅ certification_requests table ready');
+            } catch (err) {
+                console.error('⚠️ certification_requests table init:', err.message);
+                this._tableReady = null; // Retry on next call
+                throw err;
+            }
+        })();
+
+        return this._tableReady;
     }
 
     /**
@@ -44,6 +47,7 @@ class SubscriptionService {
      * L'utilisateur paie + upload sa carte → demande envoyée à l'admin
      */
     async createCertificationRequest(userId, plan, documentType, idCardUrl, paymentMethod = null, paymentReference = null) {
+        await this._ensureTable();
         const VALID_PLANS = ['certified', 'enterprise'];
         if (!VALID_PLANS.includes(plan)) {
             throw new Error("Plan invalide. Choix: certified, enterprise");
@@ -82,6 +86,7 @@ class SubscriptionService {
      * Vérifier l'état de la demande de l'utilisateur
      */
     async getRequestStatus(userId) {
+        await this._ensureTable();
         const result = await pool.query(`
             SELECT id, plan, document_type, status, rejection_reason, created_at, reviewed_at
             FROM certification_requests
@@ -96,6 +101,7 @@ class SubscriptionService {
      * [ADMIN] Lister les demandes en attente
      */
     async getPendingRequests() {
+        await this._ensureTable();
         const result = await pool.query(`
             SELECT cr.*, 
                    u.name as user_name, u.phone as user_phone, u.avatar_url,
@@ -112,6 +118,7 @@ class SubscriptionService {
      * [ADMIN] Lister toutes les demandes (avec filtre optionnel)
      */
     async getAllRequests(status = null) {
+        await this._ensureTable();
         let query = `
             SELECT cr.*, 
                    u.name as user_name, u.phone as user_phone, u.avatar_url,
@@ -136,6 +143,7 @@ class SubscriptionService {
      * [ADMIN] Approuver une demande → upgrade l'utilisateur
      */
     async approveRequest(requestId, adminId) {
+        await this._ensureTable();
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
@@ -195,6 +203,7 @@ class SubscriptionService {
      * [ADMIN] Rejeter une demande
      */
     async rejectRequest(requestId, adminId, reason) {
+        await this._ensureTable();
         const result = await pool.query(`
             UPDATE certification_requests 
             SET status = 'rejected', reviewed_by = $1, reviewed_at = NOW(), rejection_reason = $2
