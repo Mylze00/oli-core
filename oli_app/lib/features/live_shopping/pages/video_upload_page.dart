@@ -39,7 +39,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
     setState(() => _loadingProducts = true);
     try {
       final dio = ref.read(dioProvider);
-      final response = await dio.get('/products/my');
+      final response = await dio.get('/api/seller/products');
       if (response.data is List) {
         _myProducts = (response.data as List).cast<Map<String, dynamic>>();
       } else if (response.data['products'] is List) {

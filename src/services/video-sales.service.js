@@ -66,7 +66,7 @@ class VideoSalesService {
                 u.id AS seller_id, u.name AS seller_name, u.avatar_url AS seller_avatar,
                 u.has_certified_shop AS seller_certified,
                 p.name AS product_name, p.price AS product_price, 
-                p.images AS product_images, p.currency AS product_currency,
+                p.images AS product_images,
                 ${currentUserId ? `
                     EXISTS(
                         SELECT 1 FROM video_likes vl 
