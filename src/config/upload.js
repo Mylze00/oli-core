@@ -93,7 +93,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const limits = {
-    fileSize: 10 * 1024 * 1024, // 10MB max (vidéos courtes / audio)
+    fileSize: 50 * 1024 * 1024, // 50MB max (vidéos courtes de vente)
 };
 
 const upload = mult({
@@ -111,6 +111,8 @@ module.exports = {
     productUpload: upload,
     avatarUpload: upload,
     chatUpload: upload,
+    videoUpload: upload,
     genericUpload: upload,
     isCloudStorage: isCloudConfigured
 };
+

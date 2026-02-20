@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/providers/auth_controller.dart';
@@ -17,12 +18,15 @@ class HomeAppBar extends ConsumerWidget {
   final List<Product> allProducts;
   final List<Product> verifiedShopsProducts;
 
+  final bool isScrolled;
+
   const HomeAppBar({
     super.key,
     required this.searchCtrl,
     required this.onSearch,
     required this.allProducts,
     required this.verifiedShopsProducts,
+    this.isScrolled = false,
   });
 
   @override
@@ -30,7 +34,12 @@ class HomeAppBar extends ConsumerWidget {
     final authState = ref.watch(authControllerProvider);
 
     return SliverAppBar(
-      backgroundColor: Colors.transparent,
+      pinned: true,
+      floating: false,
+      backgroundColor: Colors.black,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -57,7 +66,9 @@ class HomeAppBar extends ConsumerWidget {
         ],
       ),
       flexibleSpace: Stack(
+        fit: StackFit.expand,
         children: [
+          // Gradient de base
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -67,6 +78,20 @@ class HomeAppBar extends ConsumerWidget {
               ),
             ),
           ),
+          // Effet glass iOS au scroll
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 250),
+            opacity: isScrolled ? 1.0 : 0.0,
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  color: Colors.black.withOpacity(0.45),
+                ),
+              ),
+            ),
+          ),
+          // Logo toujours visible
           SafeArea(
             child: Align(
               alignment: Alignment.topCenter,

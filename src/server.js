@@ -213,6 +213,7 @@ app.use("/setup", require("./routes/setup.routes")); // Utility route for migrat
 app.use("/services", require("./routes/services.routes")); // ✨ Services dynamiques (Public)
 app.use("/support", requireAuth, require("./routes/support.routes")); // 🎫 Support tickets utilisateur
 app.use("/api/debug", require("./routes/debug.routes")); // 🐞 Debug DB Schema (Temporary)
+app.use("/api/videos", requireAuth, require('./routes/video-sales.routes')); // 🎬 Live Shopping vidéos
 
 // Health check
 app.get("/health", (req, res) => {
@@ -232,7 +233,7 @@ app.use((err, req, res, next) => {
     console.error("- Method:", req.method);
 
     if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ error: "Fichier trop volumineux (max 10MB)" });
+        return res.status(400).json({ error: "Fichier trop volumineux (max 50MB)" });
     }
 
     res.status(err.status || 500).json({

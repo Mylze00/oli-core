@@ -3,6 +3,7 @@ import '../../../marketplace/presentation/pages/all_categories_page.dart';
 import '../../../services/request_product_page.dart';
 import '../../../services/services_page.dart';
 import '../../../services/miniapps_page.dart';
+import '../../../oticket/pages/oticket_page.dart';
 import '../../../services/live_shopping_page.dart';
 
 import 'service_glass_panel.dart'; // Import
@@ -27,15 +28,15 @@ class QuickActionsRow extends StatelessWidget {
           }),
           _buildImageActionCard(context, "Demande", "assets/images/megaphone_icon.png", () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestProductPage()));
-          }, size: 31.2),
+          }, size: 24.0),
           _buildQuickActionCard(context, "Service", Icons.public, Colors.blue, () {
             showDialog(
               context: context, 
               builder: (_) => const ServiceGlassPanel(),
             );
           }),
-          _buildQuickActionCard(context, "Mini-app", Icons.apps, Colors.purple, () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const MiniAppsPage()));
+          _buildQuickActionCard(context, "O-ticket", Icons.confirmation_number, Colors.purple, () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const OTicketPage()));
           }),
           _buildQuickActionCard(context, "Live", Icons.live_tv, Colors.red, () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveShoppingPage()));

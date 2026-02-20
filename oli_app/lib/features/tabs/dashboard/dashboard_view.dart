@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../../models/product_model.dart';
@@ -46,6 +47,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   };
   String _selectedCategory = "Tout";
   bool _showCategories = false;
+  bool _isScrolled = false;
 
   Timer? _hideCategoriesTimer;
   
@@ -72,10 +74,17 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   
   void _onScroll() {
     if (_isLoadingMore) return;
+    final offset = _scrollController.position.pixels;
     final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentScroll = _scrollController.position.pixels;
+
+    // Glass effect dès 10px de scroll
+    final nowScrolled = offset > 10;
+    if (nowScrolled != _isScrolled) {
+      setState(() => _isScrolled = nowScrolled);
+    }
+
     // Charger plus quand l'utilisateur est à 300px du bas
-    if (currentScroll >= maxScroll - 300) {
+    if (offset >= maxScroll - 300) {
       _loadMoreRankingProducts();
     }
   }
@@ -264,15 +273,21 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
         slivers: [
           // 1. APP BAR
           HomeAppBar(
-            searchCtrl: _searchCtrl, 
+            searchCtrl: _searchCtrl,
             onSearch: _onSearch,
-            allProducts: allProductsForSearch, // Utilise TOUS les produits pour la recherche
+            allProducts: allProductsForSearch,
             verifiedShopsProducts: verifiedShopsProducts,
+            isScrolled: _isScrolled,
           ),
 
-          // 2. QUICK ACTIONS
-          SliverToBoxAdapter(
-            child: QuickActionsRow(onCategoryTap: _toggleCategories),
+          // 2. QUICK ACTIONS (épinglé au scroll)
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _QuickActionsDelegate(
+              child: QuickActionsRow(onCategoryTap: _toggleCategories),
+              backgroundColor: backgroundColor ?? Colors.black,
+              isScrolled: _isScrolled,
+            ),
           ),
           
           // 2b. CATEGORIES (SLIDE DOWN ANIMATION)
@@ -705,4 +720,54 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
      }
     );
   }
+}
+
+/// Delegate pour épingler la QuickActionsRow lors du scroll
+class _QuickActionsDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final Color backgroundColor;
+  final bool isScrolled;
+  const _QuickActionsDelegate({
+    required this.child,
+    required this.backgroundColor,
+    this.isScrolled = false,
+  });
+
+  @override
+  double get minExtent => 90.0;
+  @override
+  double get maxExtent => 90.0;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. Fond : glass ou solide selon le scroll
+        if (isScrolled)
+          ClipRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: Container(
+                color: backgroundColor.withOpacity(0.60),
+              ),
+            ),
+          )
+        else
+          ColoredBox(color: backgroundColor),
+        // 2. Icônes toujours visibles par-dessus
+        AnimatedOpacity(
+          duration: const Duration(milliseconds: 250),
+          opacity: 1.0,
+          child: child,
+        ),
+      ],
+    );
+  }
+
+  @override
+  bool shouldRebuild(_QuickActionsDelegate oldDelegate) =>
+      oldDelegate.child != child ||
+      oldDelegate.backgroundColor != backgroundColor ||
+      oldDelegate.isScrolled != isScrolled;
 }
