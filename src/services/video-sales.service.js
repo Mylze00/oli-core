@@ -64,7 +64,7 @@ class VideoSalesService {
                 v.duration_seconds, v.views_count, v.likes_count,
                 v.product_id, v.created_at,
                 u.id AS seller_id, u.name AS seller_name, u.avatar_url AS seller_avatar,
-                u.is_certified AS seller_certified,
+                u.has_certified_shop AS seller_certified,
                 p.name AS product_name, p.price AS product_price, 
                 p.images AS product_images, p.currency AS product_currency,
                 ${currentUserId ? `
@@ -92,10 +92,10 @@ class VideoSalesService {
     async createVideo(userId, videoUrl, thumbnailUrl, productId, title, description) {
         // Vérification limite : 3 vidéos/mois pour non-certifiés
         const userCheck = await pool.query(
-            'SELECT is_certified FROM users WHERE id = $1',
+            'SELECT has_certified_shop FROM users WHERE id = $1',
             [userId]
         );
-        const isCertified = userCheck.rows[0]?.is_certified;
+        const isCertified = userCheck.rows[0]?.has_certified_shop;
 
         if (!isCertified) {
             const countResult = await pool.query(
