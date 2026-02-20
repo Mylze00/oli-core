@@ -2,9 +2,9 @@
 
 -- Table principale des vidéos de vente
 CREATE TABLE IF NOT EXISTS video_sales (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id),
-  product_id UUID REFERENCES products(id),
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  product_id INTEGER REFERENCES products(id),
   video_url TEXT NOT NULL,
   thumbnail_url TEXT,
   title VARCHAR(150),
@@ -19,18 +19,18 @@ CREATE TABLE IF NOT EXISTS video_sales (
 
 -- Table des likes (1 like par user par vidéo)
 CREATE TABLE IF NOT EXISTS video_likes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  video_id UUID NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id),
+  id SERIAL PRIMARY KEY,
+  video_id INTEGER NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(video_id, user_id)
 );
 
 -- Table pour traquer les vues uniques (anti-spam)
 CREATE TABLE IF NOT EXISTS video_views (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  video_id UUID NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id),
+  id SERIAL PRIMARY KEY,
+  video_id INTEGER NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(video_id, user_id)
 );

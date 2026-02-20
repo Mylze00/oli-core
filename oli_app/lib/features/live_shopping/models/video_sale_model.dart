@@ -54,7 +54,7 @@ class VideoSale {
     }
 
     return VideoSale(
-      id: json['id'] ?? '',
+      id: json['id']?.toString() ?? '',
       videoUrl: json['video_url'] ?? '',
       thumbnailUrl: json['thumbnail_url'],
       title: json['title'],

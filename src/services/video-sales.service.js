@@ -13,9 +13,9 @@ class VideoSalesService {
         try {
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS video_sales (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    user_id UUID NOT NULL REFERENCES users(id),
-                    product_id UUID REFERENCES products(id),
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    product_id INTEGER REFERENCES products(id),
                     video_url TEXT NOT NULL,
                     thumbnail_url TEXT,
                     title VARCHAR(150),
@@ -30,18 +30,18 @@ class VideoSalesService {
             `);
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS video_likes (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    video_id UUID NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
-                    user_id UUID NOT NULL REFERENCES users(id),
+                    id SERIAL PRIMARY KEY,
+                    video_id INTEGER NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     UNIQUE(video_id, user_id)
                 )
             `);
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS video_views (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    video_id UUID NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
-                    user_id UUID NOT NULL REFERENCES users(id),
+                    id SERIAL PRIMARY KEY,
+                    video_id INTEGER NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     UNIQUE(video_id, user_id)
                 )
@@ -125,7 +125,6 @@ class VideoSalesService {
      */
     async incrementView(videoId, userId) {
         try {
-            // INSERT IGNORE : si l'user a déjà vu, on ne compte pas
             const result = await pool.query(
                 `INSERT INTO video_views (video_id, user_id)
                  VALUES ($1, $2)
@@ -134,7 +133,6 @@ class VideoSalesService {
                 [videoId, userId]
             );
 
-            // Si c'est une nouvelle vue, incrémenter le compteur
             if (result.rows.length > 0) {
                 await pool.query(
                     'UPDATE video_sales SET views_count = views_count + 1 WHERE id = $1',
@@ -153,14 +151,12 @@ class VideoSalesService {
      * Toggle like (like ou unlike)
      */
     async toggleLike(videoId, userId) {
-        // Vérifier si déjà liké
         const existing = await pool.query(
             'SELECT id FROM video_likes WHERE video_id = $1 AND user_id = $2',
             [videoId, userId]
         );
 
         if (existing.rows.length > 0) {
-            // Unlike
             await pool.query(
                 'DELETE FROM video_likes WHERE video_id = $1 AND user_id = $2',
                 [videoId, userId]
@@ -171,7 +167,6 @@ class VideoSalesService {
             );
             return { liked: false };
         } else {
-            // Like
             await pool.query(
                 'INSERT INTO video_likes (video_id, user_id) VALUES ($1, $2)',
                 [videoId, userId]
