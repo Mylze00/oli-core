@@ -76,7 +76,8 @@ router.post('/', requireAuth, genericUpload.single('video'), async (req, res) =>
             });
         }
         console.error('❌ Erreur upload vidéo:', err.message);
-        res.status(500).json({ error: 'Erreur lors de l\'upload' });
+        console.error('   Stack:', err.stack);
+        res.status(500).json({ error: 'Erreur lors de l\'upload', message: err.message });
     }
 });
 

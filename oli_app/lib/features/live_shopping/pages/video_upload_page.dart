@@ -87,7 +87,10 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         '/api/videos',
         data: formData,
         options: Options(
-          headers: {'Content-Type': 'multipart/form-data'},
+          // Ne PAS spécifier Content-Type: Dio l'ajoute automatiquement
+          // avec le boundary correct pour multipart/form-data
+          sendTimeout: const Duration(seconds: 120),
+          receiveTimeout: const Duration(seconds: 120),
         ),
         onSendProgress: (sent, total) {
           if (total > 0 && mounted) {
