@@ -76,6 +76,11 @@ export const sellerAPI = {
         return response.data;
     },
 
+    getProductById: async (productId) => {
+        const response = await api.get(`/products/${productId}`);
+        return response.data;
+    },
+
     bulkUpdatePrice: async (shopId, divisor) => {
         const response = await api.post('/products/bulk-update-price', { shopId, divisor });
         return response.data;

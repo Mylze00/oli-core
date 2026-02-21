@@ -175,6 +175,12 @@ function App() {
                     </ProtectedRoute>
                 } />
 
+                <Route path="/products/:productId/edit" element={
+                    <ProtectedRoute>
+                        <SellerLayout><ProductEditor /></SellerLayout>
+                    </ProtectedRoute>
+                } />
+
                 <Route path="/products/:productId/variants" element={
                     <ProtectedRoute>
                         <SellerLayout><VariantsEditor /></SellerLayout>

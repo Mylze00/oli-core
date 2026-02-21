@@ -42,6 +42,7 @@ exports.getAll = async (req, res) => {
             location: req.query.location,
             search: req.query.search,
             shopId: req.query.shopId,
+            seller_id: req.query.seller_id,
             filterType: req.query.filterType // new, popular, promotions
         };
         // Limite raisonnable : 100 produits par page (réduit de 200 pour optimiser data)

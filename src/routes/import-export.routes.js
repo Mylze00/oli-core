@@ -12,6 +12,31 @@ const { Readable } = require('stream');
 const { requireAuth } = require('../middlewares/auth.middleware');
 const db = require('../config/db');
 const exchangeRateService = require('../services/exchange-rate.service');
+const cloudinary = require('cloudinary').v2;
+
+/**
+ * Re-upload une image externe vers Cloudinary
+ * Nécessaire car les images scrapées (ex: losako.shop) n'ont pas de headers CORS,
+ * ce qui empêche Flutter Web de les afficher.
+ */
+async function reuploadToCloudinary(imageUrl) {
+    try {
+        if (!imageUrl || !imageUrl.startsWith('http')) return imageUrl;
+
+        // Si c'est déjà une URL Cloudinary, ne pas re-uploader
+        if (imageUrl.includes('cloudinary.com')) return imageUrl;
+
+        const result = await cloudinary.uploader.upload(imageUrl, {
+            folder: 'oli_app/imported',
+            resource_type: 'image',
+        });
+        console.log(`☁️  Image re-uploadée: ${imageUrl.substring(0, 50)}... → ${result.secure_url.substring(0, 50)}...`);
+        return result.secure_url;
+    } catch (err) {
+        console.warn(`⚠️  Échec re-upload image: ${imageUrl.substring(0, 80)}... - ${err.message}`);
+        return imageUrl; // Garder l'URL originale en fallback
+    }
+}
 
 // Configuration multer pour fichiers CSV en mémoire
 const upload = multer({
@@ -173,7 +198,14 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                 const brand = row.brand || row.marque || '';
                 const unit = row.unit || row.unite || 'Pièce';
                 const weight = row.weight || row.poids || '';
-                const images = row.images ? row.images.split(';').map(i => i.trim()) : [];
+                const rawImages = row.images ? row.images.split(';').map(i => i.trim()).filter(i => i) : [];
+
+                // ☁️ Re-uploader les images externes vers Cloudinary (fix CORS Flutter Web)
+                const images = [];
+                for (const imgUrl of rawImages) {
+                    const cloudinaryUrl = await reuploadToCloudinary(imgUrl);
+                    images.push(cloudinaryUrl);
+                }
 
                 // 💱 Conversion automatique en FC (Francs Congolais)
                 // Si le prix semble être en USD (< 100), le convertir en CDF

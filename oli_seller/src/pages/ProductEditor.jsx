@@ -1,10 +1,18 @@
-import { useState } from 'react';
-import { Plus, Trash, ArrowLeft, Truck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Plus, Trash, ArrowLeft, Truck, Save, Loader2, X } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
+import { sellerAPI, productAPI } from '../services/api';
 
 export default function ProductEditor() {
     const navigate = useNavigate();
+    const { productId } = useParams(); // Si présent → mode édition
+    const isEditMode = !!productId;
+
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [loadError, setLoadError] = useState(null);
+
     const [b2bPricing, setB2bPricing] = useState([
         { min: 1, max: 50, price: '' }
     ]);
@@ -31,14 +39,12 @@ export default function ProductEditor() {
     const updateShippingOption = (index, field, value) => {
         const newOptions = [...shippingOptions];
 
-        // Si c'est gratuit, remise en main propre ou partenaire, le coût est géré automatiquement
         if (field === 'methodId') {
             if (value === 'free' || value === 'hand_delivery') {
                 newOptions[index].cost = 0;
             } else if (value === 'partner') {
                 newOptions[index].cost = '';
             }
-            // Pré-remplir le délai
             const method = availableMethods.find(m => m.id === value);
             if (method) newOptions[index].time = method.time;
         }
@@ -50,6 +56,7 @@ export default function ProductEditor() {
     const removeShippingOption = (index) => {
         setShippingOptions(shippingOptions.filter((_, i) => i !== index));
     };
+
     const [product, setProduct] = useState({
         name: '',
         category: '',
@@ -57,16 +64,19 @@ export default function ProductEditor() {
         moq: 1,
         brand: '',
         unit: 'Pièce',
-        weight: ''
+        weight: '',
+        description: '',
+        quantity: ''
     });
-    const [images, setImages] = useState([]); // State pour les images
+    const [images, setImages] = useState([]); // Nouvelles images (File objects)
+    const [existingImages, setExistingImages] = useState([]); // Images existantes (URLs)
+    const [removedImages, setRemovedImages] = useState([]); // Images à supprimer
 
     const units = [
         "Pièce", "Kg", "Litre", "Carton (6)", "Carton (12)", "Carton (24)",
         "Douzaine", "Paquet", "Sac (25kg)", "Sac (50kg)", "Palette"
     ];
 
-    // Catégories standardisées (correspondant au système)
     const categories = [
         { label: "Alimentation", value: "food" },
         { label: "Beauté", value: "beauty" },
@@ -77,6 +87,79 @@ export default function ProductEditor() {
         { label: "Électronique", value: "electronics" },
         { label: "Véhicules", value: "vehicles" }
     ];
+
+    // --- Charger le produit en mode édition ---
+    useEffect(() => {
+        if (isEditMode) {
+            loadProduct();
+        }
+    }, [productId]);
+
+    const loadProduct = async () => {
+        try {
+            setLoading(true);
+            setLoadError(null);
+            const data = await sellerAPI.getProductById(productId);
+
+            // Mapper les données du backend vers l'état local
+            const p = data.product || data;
+            setProduct({
+                name: p.name || '',
+                category: p.category || '',
+                basePrice: p.price ? String(p.price) : '',
+                moq: p.moq || 1,
+                brand: p.brand || '',
+                unit: p.unit || 'Pièce',
+                weight: p.weight || '',
+                description: p.description || '',
+                quantity: p.quantity ? String(p.quantity) : ''
+            });
+
+            // Images existantes
+            if (p.images && p.images.length > 0) {
+                const CLOUD_NAME = 'dbfpnxjmm';
+                const imageUrls = p.images.map(img => {
+                    if (img.startsWith('http')) return img;
+                    const cleanPath = img.startsWith('/') ? img.slice(1) : img;
+                    if (cleanPath.startsWith('uploads/')) {
+                        const API_URL = import.meta.env.VITE_API_URL || 'https://oli-core.onrender.com';
+                        return `${API_URL}/${cleanPath}`;
+                    }
+                    return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${cleanPath}`;
+                });
+                setExistingImages(imageUrls);
+            }
+
+            // B2B pricing
+            if (p.b2b_pricing && Array.isArray(p.b2b_pricing) && p.b2b_pricing.length > 0) {
+                setB2bPricing(p.b2b_pricing);
+            }
+
+            // Shipping options
+            if (p.shipping_options && Array.isArray(p.shipping_options) && p.shipping_options.length > 0) {
+                setShippingOptions(p.shipping_options.map(opt => ({
+                    methodId: opt.methodId || opt.method_id || 'oli_standard',
+                    cost: opt.cost || '',
+                    time: opt.time || ''
+                })));
+            }
+
+            // Discount
+            if (p.discount_price) {
+                setProduct(prev => ({
+                    ...prev,
+                    discount_price: String(p.discount_price),
+                    discount_start_date: p.discount_start_date || '',
+                    discount_end_date: p.discount_end_date || ''
+                }));
+            }
+        } catch (err) {
+            console.error("Erreur chargement produit:", err);
+            setLoadError("Impossible de charger le produit. Vérifiez votre connexion.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const addTier = () => {
         const lastMax = b2bPricing[b2bPricing.length - 1]?.max || 0;
@@ -103,47 +186,97 @@ export default function ProductEditor() {
         setImages(images.filter((_, i) => i !== index));
     };
 
+    const removeExistingImage = (index) => {
+        const url = existingImages[index];
+        setRemovedImages([...removedImages, url]);
+        setExistingImages(existingImages.filter((_, i) => i !== index));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setSaving(true);
 
         try {
             const formData = new FormData();
 
-            // Append basic fields
+            // Champs de base
             Object.keys(product).forEach(key => {
-                formData.append(key, product[key]);
+                if (product[key] !== '' && product[key] !== undefined) {
+                    formData.append(key, product[key]);
+                }
             });
 
-            // Append images
+            // Nouvelles images
             images.forEach(image => {
                 formData.append('images', image);
             });
 
-            // Append B2B pricing as JSON string
+            // B2B pricing
             formData.append('b2b_pricing', JSON.stringify(b2bPricing));
 
-            // Append Shipping options as JSON string
+            // Shipping options
             formData.append('shipping_options', JSON.stringify(shippingOptions));
 
-            console.log("Saving Product via FormData...");
-            await api.post('/products/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            if (isEditMode) {
+                // Images existantes à conserver
+                const keptImages = existingImages.filter(url => !removedImages.includes(url));
+                formData.append('existing_images', JSON.stringify(keptImages));
+                formData.append('removed_images', JSON.stringify(removedImages));
 
-            alert("Produit publié avec succès !");
+                // Mapper basePrice → price pour le backend
+                formData.set('price', product.basePrice);
+
+                await productAPI.update(productId, formData);
+                alert("Produit mis à jour avec succès !");
+            } else {
+                await api.post('/products/upload', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                alert("Produit publié avec succès !");
+            }
+
             navigate('/products');
         } catch (err) {
-            console.error("Erreur upload:", err);
-            alert("Erreur lors de la publication");
+            console.error("Erreur:", err);
+            alert(isEditMode ? "Erreur lors de la mise à jour" : "Erreur lors de la publication");
+        } finally {
+            setSaving(false);
         }
     };
+
+    // --- Loading / Error states ---
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-96">
+                <div className="text-center">
+                    <Loader2 size={40} className="animate-spin text-blue-600 mx-auto mb-4" />
+                    <p className="text-gray-500">Chargement du produit...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="p-8 max-w-5xl mx-auto">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+                    <p className="text-red-600 mb-4">{loadError}</p>
+                    <button onClick={loadProduct} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                        Réessayer
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-8 max-w-5xl mx-auto">
             <button onClick={() => navigate('/products')} className="text-gray-500 flex items-center gap-2 mb-4 hover:text-gray-900">
                 <ArrowLeft size={16} /> Retour
             </button>
-            <h1 className="text-2xl font-bold text-gray-900 mb-6">Ajouter un nouveau produit</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-6">
+                {isEditMode ? '✏️ Modifier le produit' : '➕ Ajouter un nouveau produit'}
+            </h1>
 
             <form onSubmit={handleSubmit} className="space-y-8">
                 {/* Basic Info */}
@@ -160,6 +293,24 @@ export default function ProductEditor() {
                                 required
                             />
                         </div>
+
+                        {/* DESCRIPTION — NOUVEAU */}
+                        <div className="col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Description du produit
+                            </label>
+                            <textarea
+                                className="w-full border p-3 rounded focus:ring-2 focus:ring-blue-500 outline-none resize-y"
+                                rows={5}
+                                placeholder="Décrivez votre produit en détail : caractéristiques, matériaux, dimensions, conseils d'utilisation..."
+                                value={product.description}
+                                onChange={e => setProduct({ ...product, description: e.target.value })}
+                            />
+                            <p className="text-xs text-gray-400 mt-1 text-right">
+                                {product.description.length} caractère{product.description.length > 1 ? 's' : ''}
+                            </p>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie *</label>
                             <select
@@ -211,6 +362,19 @@ export default function ProductEditor() {
                                 placeholder="ex: 500g, 1.5L"
                                 value={product.weight}
                                 onChange={e => setProduct({ ...product, weight: e.target.value })}
+                            />
+                        </div>
+
+                        {/* QUANTITÉ — NOUVEAU */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Quantité en stock</label>
+                            <input
+                                type="number"
+                                min="0"
+                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                                placeholder="ex: 100"
+                                value={product.quantity}
+                                onChange={e => setProduct({ ...product, quantity: e.target.value })}
                             />
                         </div>
                     </div>
@@ -302,6 +466,36 @@ export default function ProductEditor() {
                 {/* Image Upload Section */}
                 <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
                     <h2 className="text-lg font-bold mb-4">Photos du produit</h2>
+
+                    {/* Images existantes (mode édition) */}
+                    {existingImages.length > 0 && (
+                        <div className="mb-4">
+                            <p className="text-sm text-gray-500 mb-2">Photos actuelles :</p>
+                            <div className="grid grid-cols-4 gap-4">
+                                {existingImages.map((url, idx) => (
+                                    <div key={`existing-${idx}`} className="relative group aspect-square rounded overflow-hidden border-2 border-green-200">
+                                        <img
+                                            src={url}
+                                            alt={`Photo ${idx + 1}`}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => e.target.src = 'https://via.placeholder.com/100?text=Erreur'}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeExistingImage(idx)}
+                                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                        <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-xs text-center py-0.5">
+                                            En ligne
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative">
                         <input
                             type="file"
@@ -312,30 +506,40 @@ export default function ProductEditor() {
                         />
                         <div className="flex flex-col items-center justify-center text-gray-500">
                             <Plus size={32} className="mb-2 text-blue-500" />
-                            <p className="font-medium">Cliquez ou glissez vos images ici</p>
+                            <p className="font-medium">
+                                {isEditMode ? 'Ajouter de nouvelles photos' : 'Cliquez ou glissez vos images ici'}
+                            </p>
                             <p className="text-sm text-gray-400">Jusqu'à 8 photos (JPG, PNG)</p>
                         </div>
                     </div>
 
-                    {/* Image Previews */}
+                    {/* New Image Previews */}
                     {images.length > 0 && (
-                        <div className="grid grid-cols-4 gap-4 mt-6">
-                            {images.map((img, idx) => (
-                                <div key={idx} className="relative group aspect-square rounded overflow-hidden border">
-                                    <img
-                                        src={URL.createObjectURL(img)}
-                                        alt="Preview"
-                                        className="w-full h-full object-cover"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => removeImage(idx)}
-                                        className="absolute top-1 right-1 bg-white rounded-full p-1 shadow hover:text-red-600"
-                                    >
-                                        <Trash size={14} />
-                                    </button>
-                                </div>
-                            ))}
+                        <div className="mt-4">
+                            {isEditMode && <p className="text-sm text-gray-500 mb-2">Nouvelles photos à ajouter :</p>}
+                            <div className="grid grid-cols-4 gap-4">
+                                {images.map((img, idx) => (
+                                    <div key={idx} className="relative group aspect-square rounded overflow-hidden border border-blue-200">
+                                        <img
+                                            src={URL.createObjectURL(img)}
+                                            alt="Preview"
+                                            className="w-full h-full object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeImage(idx)}
+                                            className="absolute top-1 right-1 bg-white rounded-full p-1 shadow hover:text-red-600"
+                                        >
+                                            <Trash size={14} />
+                                        </button>
+                                        {isEditMode && (
+                                            <div className="absolute bottom-0 left-0 right-0 bg-blue-600 text-white text-xs text-center py-0.5">
+                                                Nouvelle
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -346,7 +550,6 @@ export default function ProductEditor() {
                         <h2 className="text-lg font-bold text-orange-600 flex items-center gap-2">
                             <span className="text-xl">🏷️</span> Promotion & Offre Spéciale
                         </h2>
-                        {/* Toggle switch could go here if we want to enable/disable the whole section visual */}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -453,9 +656,29 @@ export default function ProductEditor() {
 
                 {/* Action Buttons */}
                 <div className="flex justify-end gap-3">
-                    <button type="button" className="px-6 py-2 border rounded text-gray-600 hover:bg-gray-50">Annuler</button>
-                    <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow-md">
-                        Publier le produit
+                    <button
+                        type="button"
+                        onClick={() => navigate('/products')}
+                        className="px-6 py-2 border rounded text-gray-600 hover:bg-gray-50"
+                    >
+                        Annuler
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={saving}
+                        className="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow-md flex items-center gap-2 disabled:opacity-50"
+                    >
+                        {saving ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" />
+                                {isEditMode ? 'Sauvegarde...' : 'Publication...'}
+                            </>
+                        ) : (
+                            <>
+                                <Save size={16} />
+                                {isEditMode ? 'Enregistrer les modifications' : 'Publier le produit'}
+                            </>
+                        )}
                     </button>
                 </div>
             </form>
