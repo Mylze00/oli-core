@@ -21,14 +21,21 @@ class ProductImageCarousel extends StatefulWidget {
 
 class _ProductImageCarouselState extends State<ProductImageCarousel> {
   int _currentImageIndex = 0;
+  int _previousImageIndex = 0;
 
   void _onSwipe(DragEndDetails details) {
     if (details.primaryVelocity == null) return;
     final images = widget.product.images;
     if (details.primaryVelocity! < -100 && _currentImageIndex < images.length - 1) {
-      setState(() => _currentImageIndex++);
+      setState(() {
+        _previousImageIndex = _currentImageIndex;
+        _currentImageIndex++;
+      });
     } else if (details.primaryVelocity! > 100 && _currentImageIndex > 0) {
-      setState(() => _currentImageIndex--);
+      setState(() {
+        _previousImageIndex = _currentImageIndex;
+        _currentImageIndex--;
+      });
     }
   }
 
@@ -52,33 +59,39 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
                   )
                 : GestureDetector(
                     onHorizontalDragEnd: _onSwipe,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: Image.network(
-                        p.images[_currentImageIndex],
-                        key: ValueKey(p.images[_currentImageIndex]),
-                        width: double.infinity,
-                        fit: BoxFit.fitWidth,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const SizedBox(
-                              height: 300,
-                              child: Center(
-                                child: Icon(Icons.broken_image,
-                                    color: Colors.grey, size: 60)),
-                            ),
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const SizedBox(
-                            height: 300,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.blueAccent,
-                                strokeWidth: 2,
+                    child: Stack(
+                      children: [
+                        // Image précédente visible en dessous pendant le chargement
+                        if (_previousImageIndex != _currentImageIndex)
+                          Image.network(
+                            p.images[_previousImageIndex],
+                            width: double.infinity,
+                            fit: BoxFit.fitWidth,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          ),
+                        // Image courante — se charge par-dessus
+                        Image.network(
+                          p.images[_currentImageIndex],
+                          key: ValueKey(p.images[_currentImageIndex]),
+                          width: double.infinity,
+                          fit: BoxFit.fitWidth,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const SizedBox(
+                                height: 300,
+                                child: Center(
+                                  child: Icon(Icons.broken_image,
+                                      color: Colors.grey, size: 60)),
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                            if (wasSynchronouslyLoaded || frame != null) {
+                              // Image chargée → on peut retirer l'ancienne
+                              return child;
+                            }
+                            // Pas encore chargée → transparent (l'ancienne reste visible en dessous)
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ],
                     ),
                   ),
           ),
