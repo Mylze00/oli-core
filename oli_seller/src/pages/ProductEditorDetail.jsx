@@ -309,7 +309,16 @@ export default function ProductEditorDetail() {
                         <h2 className="font-bold text-gray-900 flex items-center gap-2">
                             <Camera size={18} className="text-blue-500" /> Photos du produit
                         </h2>
-                        <span className="text-xs text-gray-400">{images.length}/8</span>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs text-gray-400">{images.length}/8</span>
+                            <button
+                                type="button"
+                                onClick={handleMultipleImages}
+                                className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-100 flex items-center gap-1.5 font-medium transition-colors"
+                            >
+                                <Plus size={12} /> Charger toutes les photos
+                            </button>
+                        </div>
                     </div>
 
                     <div className="flex flex-wrap gap-3">
