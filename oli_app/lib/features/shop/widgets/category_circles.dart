@@ -15,24 +15,28 @@ class CategoryCircles extends StatelessWidget {
 
   List<Map<String, dynamic>> get _defaultCategories => [
     {
-      'label': 'Reconditionné', 
+      'label': 'Électronique', 
+      'key': 'electronics',
       'image': 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=500&q=80', 
-      'color': const Color(0xFF3665F3) // Bleu eBay
+      'color': const Color(0xFF3665F3)
     },
     {
-      'label': 'Seconde main', 
+      'label': 'Mode', 
+      'key': 'fashion',
       'image': 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&q=80', 
-      'color': const Color(0xFFE53238) // Rouge eBay
+      'color': const Color(0xFFE53238)
     },
     {
-      'label': 'Auto et moto', 
+      'label': 'Véhicules', 
+      'key': 'vehicles',
       'image': 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=500&q=80', 
-      'color': const Color(0xFFF5AF02) // Jaune eBay
+      'color': const Color(0xFFF5AF02)
     },
     {
       'label': 'Maison', 
+      'key': 'home',
       'image': 'https://images.unsplash.com/photo-1484154218962-a1c002085aac?w=500&q=80', 
-      'color': const Color(0xFF86B817) // Vert eBay
+      'color': const Color(0xFF86B817)
     },
   ];
 

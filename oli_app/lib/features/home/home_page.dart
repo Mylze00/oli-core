@@ -23,6 +23,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   // Tabs principaux (sans le bouton Vendre)
   late List<Widget> _pages;
   int _dashboardKey = 0;
+  final _dashboardStateKey = GlobalKey<MainDashboardViewState>();
   
   @override
   void initState() {
@@ -33,7 +34,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _buildPages() {
     _pages = [
       MainDashboardView(
-        key: ValueKey(_dashboardKey),
+        key: _dashboardStateKey,
         onSwitchToMarket: () => _switchToMarket(),
         onBecameVisible: () {},
       ),
@@ -57,11 +58,15 @@ class _HomePageState extends ConsumerState<HomePage> {
     // Décalage d'index après le bouton Vendre
     final adjustedIndex = index > 2 ? index - 1 : index;
 
+    // Si déjà sur l'accueil → scroll to top
+    if (adjustedIndex == 0 && _currentIndex == 0) {
+      _dashboardStateKey.currentState?.scrollToTop();
+      return;
+    }
+
     setState(() {
       if (adjustedIndex == 0 && _currentIndex != 0) {
         ref.read(searchFiltersProvider.notifier).reset();
-        _dashboardKey++;
-        _buildPages();
       }
       
       _currentIndex = adjustedIndex;

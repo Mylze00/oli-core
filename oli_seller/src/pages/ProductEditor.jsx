@@ -78,14 +78,24 @@ export default function ProductEditor() {
     ];
 
     const categories = [
-        { label: "Alimentation", value: "food" },
-        { label: "Beauté", value: "beauty" },
-        { label: "Maison", value: "home" },
-        { label: "Enfants", value: "kids" },
         { label: "Industrie", value: "industry" },
+        { label: "Maison", value: "home" },
+        { label: "Véhicules", value: "vehicles" },
         { label: "Mode", value: "fashion" },
         { label: "Électronique", value: "electronics" },
-        { label: "Véhicules", value: "vehicles" }
+        { label: "Sports", value: "sports" },
+        { label: "Beauté", value: "beauty" },
+        { label: "Jouets", value: "toys" },
+        { label: "Santé", value: "health" },
+        { label: "Construction", value: "construction" },
+        { label: "Outils", value: "tools" },
+        { label: "Bureau", value: "office" },
+        { label: "Jardin", value: "garden" },
+        { label: "Animaux", value: "pets" },
+        { label: "Bébé", value: "baby" },
+        { label: "Alimentation", value: "food" },
+        { label: "Sécurité", value: "security" },
+        { label: "Autres", value: "other" }
     ];
 
     // --- Charger le produit en mode édition ---
@@ -194,6 +204,13 @@ export default function ProductEditor() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Validation : au moins 1 image
+        if (images.length === 0 && existingImages.length === 0) {
+            alert('Veuillez ajouter au moins une photo du produit.');
+            return;
+        }
+
         setSaving(true);
 
         try {
@@ -205,6 +222,11 @@ export default function ProductEditor() {
                     formData.append(key, product[key]);
                 }
             });
+
+            // Toujours envoyer 'price' explicitement pour le backend
+            if (product.basePrice) {
+                formData.set('price', product.basePrice);
+            }
 
             // Nouvelles images
             images.forEach(image => {

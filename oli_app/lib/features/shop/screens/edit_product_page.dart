@@ -38,10 +38,25 @@ class _EditProductPageState extends ConsumerState<EditProductPage> {
     {'id': 'free', 'label': 'Livraison Gratuite', 'time': '3-7 jours'},
   ];
 
-  final List<String> _categories = [
-    'Industrie', 'Maison', 'Véhicules', 'Mode', 'Électronique', 'Sports',
-    'Beauté', 'Jouets', 'Santé', 'Construction', 'Outils', 'Bureau',
-    'Jardin', 'Animaux', 'Bébé', 'Alimentation', 'Sécurité', 'Autres',
+  final List<Map<String, String>> _categories = [
+    {'key': 'industry',     'label': 'Industrie'},
+    {'key': 'home',         'label': 'Maison'},
+    {'key': 'vehicles',     'label': 'Véhicules'},
+    {'key': 'fashion',      'label': 'Mode'},
+    {'key': 'electronics',  'label': 'Électronique'},
+    {'key': 'sports',       'label': 'Sports'},
+    {'key': 'beauty',       'label': 'Beauté'},
+    {'key': 'toys',         'label': 'Jouets'},
+    {'key': 'health',       'label': 'Santé'},
+    {'key': 'construction', 'label': 'Construction'},
+    {'key': 'tools',        'label': 'Outils'},
+    {'key': 'office',       'label': 'Bureau'},
+    {'key': 'garden',       'label': 'Jardin'},
+    {'key': 'pets',         'label': 'Animaux'},
+    {'key': 'baby',         'label': 'Bébé'},
+    {'key': 'food',         'label': 'Alimentation'},
+    {'key': 'security',     'label': 'Sécurité'},
+    {'key': 'other',        'label': 'Autres'},
   ];
 
   final List<String> _conditions = ['Neuf', 'Occasion', 'Fonctionnel', 'Pour pièce ou à réparer'];
@@ -59,7 +74,20 @@ class _EditProductPageState extends ConsumerState<EditProductPage> {
     _location = TextEditingController(text: p.location ?? '');
 
     _condition = _conditions.contains(p.condition) ? p.condition : 'Neuf';
-    _category = _categories.contains(p.category) ? (p.category ?? 'Autres') : 'Autres';
+    // Resolve category: support both EN keys and old FR labels
+    final labelToKey = <String, String>{};
+    for (final c in _categories) {
+      labelToKey[c['label']!] = c['key']!;
+    }
+    final validKeys = _categories.map((c) => c['key']).toSet();
+    final rawCat = p.category ?? 'other';
+    if (validKeys.contains(rawCat)) {
+      _category = rawCat;
+    } else if (labelToKey.containsKey(rawCat)) {
+      _category = labelToKey[rawCat]!;
+    } else {
+      _category = 'other';
+    }
 
     // Copier les shipping options existantes
     _shippingOptions = p.shippingOptions.isNotEmpty
@@ -272,7 +300,7 @@ class _EditProductPageState extends ConsumerState<EditProductPage> {
 
   Widget _buildCategoryDropdown() {
     return DropdownButtonFormField<String>(
-      value: _category,
+      value: _categories.any((c) => c['key'] == _category) ? _category : 'other',
       dropdownColor: Colors.grey[900],
       style: const TextStyle(color: Colors.white, fontSize: 16),
       decoration: InputDecoration(
@@ -285,8 +313,8 @@ class _EditProductPageState extends ConsumerState<EditProductPage> {
       ),
       items: _categories.map((cat) {
         return DropdownMenuItem<String>(
-          value: cat,
-          child: Text(cat, style: const TextStyle(color: Colors.white)),
+          value: cat['key'],
+          child: Text(cat['label']!, style: const TextStyle(color: Colors.white)),
         );
       }).toList(),
       onChanged: (v) => setState(() => _category = v!),

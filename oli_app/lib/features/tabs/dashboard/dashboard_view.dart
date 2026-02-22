@@ -29,10 +29,11 @@ class MainDashboardView extends ConsumerStatefulWidget {
   const MainDashboardView({super.key, this.onSwitchToMarket, this.onBecameVisible});
 
   @override
-  ConsumerState<MainDashboardView> createState() => _MainDashboardViewState();
+  ConsumerState<MainDashboardView> createState() => MainDashboardViewState();
 }
 
-class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
+class MainDashboardViewState extends ConsumerState<MainDashboardView>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final Map<String, String> _categories = {
@@ -42,14 +43,30 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
     "Véhicules": "vehicles",
     "Mode": "fashion",
     "Électronique": "electronics",
+    "Sports": "sports",
     "Beauté": "beauty",
-    "Enfants": "kids",
+    "Jouets": "toys",
+    "Santé": "health",
+    "Construction": "construction",
+    "Outils": "tools",
+    "Bureau": "office",
+    "Jardin": "garden",
+    "Animaux": "pets",
+    "Bébé": "baby",
+    "Alimentation": "food",
+    "Sécurité": "security",
+    "Autres": "other",
   };
   String _selectedCategory = "Tout";
   bool _showCategories = false;
   bool _isScrolled = false;
 
   Timer? _hideCategoriesTimer;
+
+  // Animation pour le panneau de catégories
+  late AnimationController _categoryAnimController;
+  late Animation<Offset> _categorySlideAnimation;
+  late Animation<double> _categoryFadeAnimation;
   
   // Lazy loading pour Top Classement
   static const int _rankingBatchSize = 8; // Nombre de produits chargés par batch
@@ -70,6 +87,40 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+
+    // Animation pour le panneau catégories coulissant
+    _categoryAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _categorySlideAnimation = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _categoryAnimController,
+      curve: Curves.easeOutCubic,
+    ));
+    _categoryFadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _categoryAnimController,
+      curve: Curves.easeOut,
+    ));
+    _categoryAnimController.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed && mounted) {
+        setState(() => _showCategories = false);
+      }
+    });
+  }
+
+  /// Scroll to top — called when home tab is tapped while already on home
+  void scrollToTop() {
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
+    );
   }
   
   void _onScroll() {
@@ -112,6 +163,7 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   @override
   void dispose() {
     _hideCategoriesTimer?.cancel();
+    _categoryAnimController.dispose();
     _scrollController.dispose();
     _searchCtrl.dispose();
     super.dispose();
@@ -151,22 +203,23 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
   }
 
   void _toggleCategories() {
-    setState(() {
-      _showCategories = !_showCategories;
-    });
-
     if (_showCategories) {
-      _startCategoryTimer();
-    } else {
+      // Fermer avec animation
       _hideCategoriesTimer?.cancel();
+      _categoryAnimController.reverse();
+    } else {
+      // Ouvrir avec animation
+      setState(() => _showCategories = true);
+      _categoryAnimController.forward();
+      _startCategoryTimer();
     }
   }
 
   void _startCategoryTimer() {
-    _hideCategoriesTimer?.cancel(); // Toujours annuler avant de recréer
+    _hideCategoriesTimer?.cancel();
     _hideCategoriesTimer = Timer(const Duration(seconds: 6), () {
       if (mounted && _showCategories) {
-        setState(() => _showCategories = false);
+        _categoryAnimController.reverse();
       }
     });
   }
@@ -258,155 +311,183 @@ class _MainDashboardViewState extends ConsumerState<MainDashboardView> {
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: RefreshIndicator(
-        onRefresh: () async {
-          // Recharger les produits
-          await ref.read(featuredProductsProvider.notifier).fetchFeaturedProducts();
-          // Réinitialiser le lazy loading ET la distribution
-          setState(() {
-            _rankingLoadedCount = _rankingBatchSize;
-            _distributionComputed = false;
-          });
-        },
-        child: CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          // 1. APP BAR
-          HomeAppBar(
-            searchCtrl: _searchCtrl,
-            onSearch: _onSearch,
-            allProducts: allProductsForSearch,
-            verifiedShopsProducts: verifiedShopsProducts,
-            isScrolled: _isScrolled,
-          ),
+      body: Stack(
+        children: [
+          // ── MAIN SCROLLABLE CONTENT ──
+          RefreshIndicator(
+            onRefresh: () async {
+              await ref.read(featuredProductsProvider.notifier).fetchFeaturedProducts();
+              setState(() {
+                _rankingLoadedCount = _rankingBatchSize;
+                _distributionComputed = false;
+              });
+            },
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                // 1. APP BAR
+                HomeAppBar(
+                  searchCtrl: _searchCtrl,
+                  onSearch: _onSearch,
+                  allProducts: allProductsForSearch,
+                  verifiedShopsProducts: verifiedShopsProducts,
+                  isScrolled: _isScrolled,
+                ),
 
-          // 2. QUICK ACTIONS (épinglé au scroll)
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _QuickActionsDelegate(
-              child: QuickActionsRow(onCategoryTap: _toggleCategories),
-              backgroundColor: backgroundColor ?? Colors.black,
-              isScrolled: _isScrolled,
-            ),
-          ),
-          
-          // 2b. CATEGORIES (SLIDE DOWN ANIMATION)
-          SliverToBoxAdapter(
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              child: _showCategories
-                  ? Padding(
-                      padding: const EdgeInsets.only(bottom: 12.0),
-                      child: CategoryGlassSection(
-                        selectedCategory: _selectedCategory,
-                        onCategorySelected: _onCategorySelected,
-                        categories: _categories,
+                // 2. QUICK ACTIONS (épinglé au scroll)
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _QuickActionsDelegate(
+                    child: QuickActionsRow(onCategoryTap: _toggleCategories),
+                    backgroundColor: backgroundColor ?? Colors.black,
+                    isScrolled: _isScrolled,
+                  ),
+                ),
+
+                // 3. VERIFIED SHOPS CAROUSEL
+                SliverToBoxAdapter(
+                  child: VerifiedShopsCarousel(shops: verifiedShops),
+                ),
+
+                // 4. SUPER OFFERS
+                SliverToBoxAdapter(
+                  child: SuperOffersSection(products: _cachedSuperOffers),
+                ),
+
+                // 5. ADS
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    height: 221,
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 221,
+                      child: AdsCarousel(ads: ref.watch(adsProvider)),
+                    ),
+                  ),
+                ),
+
+                // 6. RANDOM CATEGORY SECTION (STRICT KEYWORD)
+                if (_cachedSelectionProducts.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: _buildHorizontalSection(
+                        title: "Sélection : $_cachedSelectionKeyword",
+                        subtitle: "Inspiration pour vous",
+                        products: _cachedSelectionProducts,
+                        gradient: null,
+                        badgeText: "NEW",
+                        badgeColor: Colors.tealAccent.shade700,
                       ),
-                    )
-                  : const SizedBox(width: double.infinity, height: 0),
+                    ),
+                  ),
+
+                // 7. DISCOVERY
+                SliverPadding(
+                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                   sliver: SliverToBoxAdapter(
+                     child: Text("Découverte", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                   ),
+                ),
+                SliverToBoxAdapter(
+                  child: _cachedDiscoveryList.isEmpty 
+                    ? const SizedBox.shrink()
+                    : DiscoveryCarousel(
+                        products: _cachedDiscoveryList, 
+                        onTap: _navigateToProduct
+                      ),
+                ),
+
+                // 8. VERIFIED SHOP PRODUCTS
+                SliverToBoxAdapter(
+                  child: VerifiedShopProductsSection(products: verifiedShopsProducts),
+                ),
+
+                // 9. TOP RANKING (Patron répétitif : 6 produits (3 cols) -> 2 produits (2 cols))
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  sliver: SliverToBoxAdapter(
+                     child: Text("Top Classement", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 18)),
+                  ),
+                ),
+                
+                ..._buildPatternedRankingGrid(effectiveRankingList, textColor),
+                
+                // Indicateur de chargement si plus de produits disponibles
+                if (hasMoreRanking)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: SizedBox(
+                          width: 24, height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: textColor.withOpacity(0.4),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                
+                const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+              ],
             ),
           ),
 
-          // 3. VERIFIED SHOPS CAROUSEL
-          SliverToBoxAdapter(
-            child: VerifiedShopsCarousel(shops: verifiedShops),
-          ),
-
-          // 4. SUPER OFFERS
-          SliverToBoxAdapter(
-            child: SuperOffersSection(products: _cachedSuperOffers),
-          ),
-
-          // 5. ADS
-          SliverToBoxAdapter(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              height: 221, // +15%
-              child: SizedBox(
-                width: double.infinity,
-                height: 221, // +15%
-                child: AdsCarousel(ads: ref.watch(adsProvider)),
-              ),
-            ),
-          ),
-
-          // 6. RANDOM CATEGORY SECTION (STRICT KEYWORD)
-          if (_cachedSelectionProducts.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: _buildHorizontalSection(
-                  title: "Sélection : $_cachedSelectionKeyword",
-                  subtitle: "Inspiration pour vous",
-                  products: _cachedSelectionProducts,
-                  gradient: null, // Transparent background
-                  badgeText: "NEW",
-                  badgeColor: Colors.tealAccent.shade700,
+          // ── FLOATING CATEGORIES OVERLAY ──
+          // Apparaît avec animation coulissante par-dessus le contenu
+          if (_showCategories) ...[
+            // Fond semi-transparent animé pour fermer en tapant dehors
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _toggleCategories,
+                child: FadeTransition(
+                  opacity: _categoryFadeAnimation,
+                  child: Container(color: Colors.black.withOpacity(0.3)),
                 ),
               ),
             ),
-
-          // 7. DISCOVERY
-          SliverPadding(
-             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-             sliver: SliverToBoxAdapter(
-               child: Text("Découverte", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-             ),
-          ),
-          SliverToBoxAdapter(
-            child: _cachedDiscoveryList.isEmpty 
-              ? const SizedBox.shrink()
-              : DiscoveryCarousel(
-                  products: _cachedDiscoveryList, 
-                  onTap: _navigateToProduct
-                ),
-          ),
-
-          // 7. BEST SELLERS
-          // 7. BEST SELLERS (Masqué temporairement)
-          // SliverToBoxAdapter(
-          //   child: TopSellersSection(products: topSellers),
-          // ),
-
-          // 8. VERIFIED SHOP PRODUCTS
-          SliverToBoxAdapter(
-            child: VerifiedShopProductsSection(products: verifiedShopsProducts),
-          ),
-
-          // 9. TOP RANKING
-
-          
-          // 9. TOP RANKING (Patron répétitif : 6 produits (3 cols) -> 2 produits (2 cols))
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            sliver: SliverToBoxAdapter(
-               child: Text("Top Classement", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 18)),
-            ),
-          ),
-          
-          ..._buildPatternedRankingGrid(effectiveRankingList, textColor),
-          
-          // Indicateur de chargement si plus de produits disponibles
-          if (hasMoreRanking)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: SizedBox(
-                    width: 24, height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: textColor.withOpacity(0.4),
+            // Panneau de catégories coulissant sous la QuickActionsRow
+            Positioned(
+              // statusBar + appBar title + search bar bottom(60) + quickActions(90)
+              top: MediaQuery.of(context).padding.top + kToolbarHeight + 60 + 90,
+              left: 0,
+              right: 0,
+              child: SlideTransition(
+                position: _categorySlideAnimation,
+                child: FadeTransition(
+                  opacity: _categoryFadeAnimation,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.60),
+                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                          border: Border(
+                            bottom: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+                          ),
+                        ),
+                        padding: const EdgeInsets.only(top: 8, bottom: 12),
+                        child: CategoryGlassSection(
+                          selectedCategory: _selectedCategory,
+                          onCategorySelected: (label) {
+                            _onCategorySelected(label);
+                            _categoryAnimController.reverse();
+                          },
+                          categories: _categories,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          
-          const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+          ],
         ],
-      ),
       ),
     );
   }

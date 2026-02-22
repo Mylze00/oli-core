@@ -213,6 +213,12 @@ app.use("/setup", require("./routes/setup.routes")); // Utility route for migrat
 app.use("/services", require("./routes/services.routes")); // ✨ Services dynamiques (Public)
 app.use("/support", requireAuth, require("./routes/support.routes")); // 🎫 Support tickets utilisateur
 app.use("/api/debug", require("./routes/debug.routes")); // 🐞 Debug DB Schema (Temporary)
+
+// 🏷️ Catégories produits (source unique de vérité)
+app.get("/api/categories", (req, res) => {
+    const { CATEGORIES } = require('./config/categories');
+    res.json(CATEGORIES);
+});
 app.use("/api/videos", requireAuth, require('./routes/video-sales.routes')); // 🎬 Live Shopping vidéos
 
 // Health check

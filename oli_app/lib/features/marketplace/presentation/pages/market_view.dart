@@ -38,8 +38,19 @@ class _MarketViewState extends ConsumerState<MarketView> {
     "Véhicules": "vehicles",
     "Mode": "fashion",
     "Électronique": "electronics",
+    "Sports": "sports",
     "Beauté": "beauty",
-    "Enfants": "kids",
+    "Jouets": "toys",
+    "Santé": "health",
+    "Construction": "construction",
+    "Outils": "tools",
+    "Bureau": "office",
+    "Jardin": "garden",
+    "Animaux": "pets",
+    "Bébé": "baby",
+    "Alimentation": "food",
+    "Sécurité": "security",
+    "Autres": "other",
   };
 
   @override

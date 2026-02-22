@@ -43,7 +43,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
   ];
 
   String _condition = 'Neuf';
-  String _category = 'Électronique';
+  String _category = 'electronics';
   final TextEditingController _locationController = TextEditingController();
   bool _gettingLocation = false;
 
@@ -61,24 +61,24 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
   ];
 
   final List<Map<String, dynamic>> _categoriesData = [
-    {"label": "Industrie", "icon": Icons.factory, "image": "assets/images/categories/industry.png"},
-    {"label": "Maison", "icon": Icons.chair, "image": "assets/images/categories/home.png"},
-    {"label": "Véhicules", "icon": Icons.directions_car, "image": "assets/images/categories/vehicles.png"},
-    {"label": "Mode", "icon": Icons.checkroom, "image": "assets/images/categories/fashion.png"},
-    {"label": "Électronique", "icon": Icons.phone_android, "image": "assets/images/categories/electronics.png"},
-    {"label": "Sports", "icon": Icons.sports_soccer, "image": "assets/images/categories/sports.png"},
-    {"label": "Beauté", "icon": Icons.face, "image": "assets/images/categories/beauty.png"}, 
-    {"label": "Jouets", "icon": Icons.toys, "image": "assets/images/categories/toys.png"},
-    {"label": "Santé", "icon": Icons.medical_services, "image": "assets/images/categories/health.png"},
-    {"label": "Construction", "icon": Icons.construction, "image": "assets/images/categories/construction.png"},
-    {"label": "Outils", "icon": Icons.build, "image": "assets/images/categories/tools.png"},
-    {"label": "Bureau", "icon": Icons.desk, "image": "assets/images/categories/office.png"},
-    {"label": "Jardin", "icon": Icons.grass, "image": "assets/images/categories/garden.png"},
-    {"label": "Animaux", "icon": Icons.pets, "image": "assets/images/categories/pets.png"},
-    {"label": "Bébé", "icon": Icons.child_friendly, "image": "assets/images/categories/baby.png"}, 
-    {"label": "Alimentation", "icon": Icons.restaurant, "image": null},
-    {"label": "Sécurité", "icon": Icons.security, "image": null},
-    {"label": "Autres", "icon": Icons.category, "image": null},
+    {"key": "industry",     "label": "Industrie",     "icon": Icons.factory,          "image": "assets/images/categories/industry.png"},
+    {"key": "home",         "label": "Maison",        "icon": Icons.chair,            "image": "assets/images/categories/home.png"},
+    {"key": "vehicles",     "label": "Véhicules",     "icon": Icons.directions_car,   "image": "assets/images/categories/vehicles.png"},
+    {"key": "fashion",      "label": "Mode",          "icon": Icons.checkroom,        "image": "assets/images/categories/fashion.png"},
+    {"key": "electronics",  "label": "Électronique",  "icon": Icons.phone_android,    "image": "assets/images/categories/electronics.png"},
+    {"key": "sports",       "label": "Sports",        "icon": Icons.sports_soccer,    "image": "assets/images/categories/sports.png"},
+    {"key": "beauty",       "label": "Beauté",        "icon": Icons.face,             "image": "assets/images/categories/beauty.png"}, 
+    {"key": "toys",         "label": "Jouets",        "icon": Icons.toys,             "image": "assets/images/categories/toys.png"},
+    {"key": "health",       "label": "Santé",         "icon": Icons.medical_services, "image": "assets/images/categories/health.png"},
+    {"key": "construction", "label": "Construction",  "icon": Icons.construction,     "image": "assets/images/categories/construction.png"},
+    {"key": "tools",        "label": "Outils",        "icon": Icons.build,            "image": "assets/images/categories/tools.png"},
+    {"key": "office",       "label": "Bureau",        "icon": Icons.desk,             "image": "assets/images/categories/office.png"},
+    {"key": "garden",       "label": "Jardin",        "icon": Icons.grass,            "image": "assets/images/categories/garden.png"},
+    {"key": "pets",         "label": "Animaux",       "icon": Icons.pets,             "image": "assets/images/categories/pets.png"},
+    {"key": "baby",         "label": "Bébé",          "icon": Icons.child_friendly,   "image": "assets/images/categories/baby.png"}, 
+    {"key": "food",         "label": "Alimentation",  "icon": Icons.restaurant,       "image": null},
+    {"key": "security",     "label": "Sécurité",      "icon": Icons.security,         "image": null},
+    {"key": "other",        "label": "Autres",        "icon": Icons.category,         "image": null},
   ];
 
   // ────────────────── LISTENERS pour la barre de progression ──────────────────
@@ -311,7 +311,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
 
             // ─── DÉTAILS ───
             const SizedBox(height: 20),
-            _buildTextField(_description, "Description détaillée", Icons.description, maxLines: 3),
+            _buildDescriptionEditor(),
             _buildTextField(_quantity, "Quantité en stock", Icons.inventory, isNumber: true),
             _buildTextField(_color, "Couleur(s)", Icons.palette),
 
@@ -553,6 +553,160 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     );
   }
 
+  // ─── ÉDITEUR DE DESCRIPTION AMÉLIORÉ ───
+  Widget _buildDescriptionEditor() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Titre de section
+          Row(
+            children: [
+              const Icon(Icons.description, color: Colors.blueAccent, size: 18),
+              const SizedBox(width: 8),
+              const Text(
+                "Description du produit",
+                style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Barre d'outils de formatage
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
+              ),
+              border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                _formatButton(Icons.format_bold, "Gras", () => _insertTag("**")),
+                _formatButton(Icons.format_italic, "Italique", () => _insertTag("_")),
+                Container(width: 1, height: 20, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 6)),
+                _formatButton(Icons.format_list_bulleted, "Liste", () => _insertPrefix("• ")),
+                _formatButton(Icons.horizontal_rule, "Séparateur", () => _insertLine("───────────────")),
+                const Spacer(),
+                Text(
+                  "${_description.text.length}",
+                  style: TextStyle(
+                    color: _description.text.length > 500 ? Colors.greenAccent : Colors.white38,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Zone de texte principale
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white10,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(12),
+                bottomRight: Radius.circular(12),
+              ),
+              border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+            ),
+            child: TextFormField(
+              controller: _description,
+              maxLines: null,
+              minLines: 5,
+              keyboardType: TextInputType.multiline,
+              style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+              decoration: InputDecoration(
+                hintText: "Décrivez votre produit en détail :\n• Caractéristiques principales\n• Matériaux / composition\n• Dimensions ou taille\n• Conseils d'utilisation",
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.25), fontSize: 13),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.all(14),
+              ),
+            ),
+          ),
+
+          // Indicateur de qualité
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                _description.text.length >= 100 ? Icons.check_circle : Icons.info_outline,
+                size: 13,
+                color: _description.text.length >= 100 ? Colors.greenAccent : Colors.white38,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  _description.text.length >= 100
+                      ? "Bonne description ! Plus elle est détaillée, plus vos chances de vente augmentent."
+                      : "Ajoutez au moins 100 caractères pour une description efficace.",
+                  style: TextStyle(
+                    color: _description.text.length >= 100 ? Colors.greenAccent.withOpacity(0.7) : Colors.white38,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _formatButton(IconData icon, String tooltip, VoidCallback onTap) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, color: Colors.white54, size: 18),
+        ),
+      ),
+    );
+  }
+
+  void _insertTag(String tag) {
+    final text = _description.text;
+    final selection = _description.selection;
+    if (selection.isValid && selection.start != selection.end) {
+      final selected = text.substring(selection.start, selection.end);
+      final newText = text.replaceRange(selection.start, selection.end, "$tag$selected$tag");
+      _description.text = newText;
+      _description.selection = TextSelection.collapsed(offset: selection.start + tag.length + selected.length + tag.length);
+    } else {
+      final cursor = selection.isValid ? selection.start : text.length;
+      final newText = text.substring(0, cursor) + "$tag$tag" + text.substring(cursor);
+      _description.text = newText;
+      _description.selection = TextSelection.collapsed(offset: cursor + tag.length);
+    }
+  }
+
+  void _insertPrefix(String prefix) {
+    final text = _description.text;
+    final cursor = _description.selection.isValid ? _description.selection.start : text.length;
+    final needsNewline = cursor > 0 && text[cursor - 1] != '\n';
+    final insert = (needsNewline ? "\n" : "") + prefix;
+    final newText = text.substring(0, cursor) + insert + text.substring(cursor);
+    _description.text = newText;
+    _description.selection = TextSelection.collapsed(offset: cursor + insert.length);
+  }
+
+  void _insertLine(String line) {
+    final text = _description.text;
+    final cursor = _description.selection.isValid ? _description.selection.start : text.length;
+    final needsNewlineBefore = cursor > 0 && text[cursor - 1] != '\n';
+    final insert = (needsNewlineBefore ? "\n" : "") + line + "\n";
+    final newText = text.substring(0, cursor) + insert + text.substring(cursor);
+    _description.text = newText;
+    _description.selection = TextSelection.collapsed(offset: cursor + insert.length);
+  }
+
   // ─── CONDITION DROPDOWN + AIDE ───
   Widget _buildConditionDropdown() {
     return Row(
@@ -754,27 +908,27 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
 
   // ─── CATÉGORIE ───
   Widget _buildCategorySelector() {
-    return DropdownButtonFormField<String>(
-      value: _categoriesData.any((c) => c['label'] == _category) ? _category : null,
-      dropdownColor: Colors.grey[900],
-      style: const TextStyle(color: Colors.white, fontSize: 16),
-      decoration: InputDecoration(
-        labelText: "Catégorie",
-        labelStyle: const TextStyle(color: Colors.white54),
-        filled: true,
-        fillColor: Colors.white10,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
-      ),
-      items: _categoriesData.map((cat) {
-        return DropdownMenuItem<String>(
-          value: cat['label'],
-          child: Text(cat['label'], style: const TextStyle(color: Colors.white)),
-        );
-      }).toList(),
-      onChanged: (v) => setState(() => _category = v!),
-    );
-  }
+  return DropdownButtonFormField<String>(
+    value: _categoriesData.any((c) => c['key'] == _category) ? _category : null,
+    dropdownColor: Colors.grey[900],
+    style: const TextStyle(color: Colors.white, fontSize: 16),
+    decoration: InputDecoration(
+      labelText: "Catégorie",
+      labelStyle: const TextStyle(color: Colors.white54),
+      filled: true,
+      fillColor: Colors.white10,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+    ),
+    items: _categoriesData.map((cat) {
+      return DropdownMenuItem<String>(
+        value: cat['key'],
+        child: Text(cat['label']!, style: const TextStyle(color: Colors.white)),
+      );
+    }).toList(),
+    onChanged: (v) => setState(() => _category = v!),
+  );
+}
 
   // ─── CONDITIONS DE VENTE ───
   Widget _buildSaleConditions() {
