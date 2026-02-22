@@ -22,39 +22,65 @@ class ProductImageCarousel extends StatefulWidget {
 class _ProductImageCarouselState extends State<ProductImageCarousel> {
   int _currentImageIndex = 0;
 
+  void _onSwipe(DragEndDetails details) {
+    if (details.primaryVelocity == null) return;
+    final images = widget.product.images;
+    if (details.primaryVelocity! < -100 && _currentImageIndex < images.length - 1) {
+      setState(() => _currentImageIndex++);
+    } else if (details.primaryVelocity! > 100 && _currentImageIndex > 0) {
+      setState(() => _currentImageIndex--);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = widget.product;
+
     return Stack(children: [
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: 250,
-              maxHeight: 500,
-            ),
-            child: Container(
+          child: Container(
             color: const Color(0xFF1A1A1A),
             width: double.infinity,
-        child: p.images.isEmpty
-            ? const SizedBox(
-                height: 300,
-                child: Center(
-                  child: Icon(Icons.image, size: 60, color: Colors.grey)),
-              )
-            : PageView.builder(
-                onPageChanged: (i) => setState(() => _currentImageIndex = i),
-                itemCount: p.images.length,
-                itemBuilder: (c, i) => Image.network(
-                  p.images[i],
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Center(
-                      child: Icon(Icons.broken_image, color: Colors.grey)),
-                ),
-              ),
-          ),
+            child: p.images.isEmpty
+                ? const SizedBox(
+                    height: 300,
+                    child: Center(
+                      child: Icon(Icons.image, size: 60, color: Colors.grey)),
+                  )
+                : GestureDetector(
+                    onHorizontalDragEnd: _onSwipe,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: Image.network(
+                        p.images[_currentImageIndex],
+                        key: ValueKey(p.images[_currentImageIndex]),
+                        width: double.infinity,
+                        fit: BoxFit.fitWidth,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const SizedBox(
+                              height: 300,
+                              child: Center(
+                                child: Icon(Icons.broken_image,
+                                    color: Colors.grey, size: 60)),
+                            ),
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const SizedBox(
+                            height: 300,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.blueAccent,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
           ),
         ),
       ),
@@ -117,7 +143,7 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
       ),
       if (p.images.length > 1)
         Positioned(
-          bottom: 20,
+          bottom: 10,
           left: 0,
           right: 0,
           child: Row(
