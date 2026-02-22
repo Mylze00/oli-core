@@ -30,23 +30,31 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: Container(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: 250,
+              maxHeight: 500,
+            ),
+            child: Container(
             color: const Color(0xFF1A1A1A),
-            height: 405, // Increased by 15% from 352 for better presentation
             width: double.infinity,
         child: p.images.isEmpty
-            ? const Center(
-                child: Icon(Icons.image, size: 60, color: Colors.grey))
+            ? const SizedBox(
+                height: 300,
+                child: Center(
+                  child: Icon(Icons.image, size: 60, color: Colors.grey)),
+              )
             : PageView.builder(
                 onPageChanged: (i) => setState(() => _currentImageIndex = i),
                 itemCount: p.images.length,
                 itemBuilder: (c, i) => Image.network(
                   p.images[i],
-                  fit: BoxFit.fill,
+                  fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) => const Center(
                       child: Icon(Icons.broken_image, color: Colors.grey)),
                 ),
               ),
+          ),
           ),
         ),
       ),
