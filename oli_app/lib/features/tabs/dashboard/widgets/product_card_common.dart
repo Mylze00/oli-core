@@ -27,7 +27,7 @@ class DashboardProductCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       width: width,
-      margin: const EdgeInsets.only(right: 10),
+      margin: const EdgeInsets.only(right: 7),
       decoration: BoxDecoration(
         color: const Color(0xFF2C2C2C),
         borderRadius: BorderRadius.circular(12),
@@ -86,7 +86,7 @@ class DashboardProductCard extends ConsumerWidget {
                     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    return Text(formattedPrice, style: TextStyle(color: priceColor, fontWeight: FontWeight.bold, fontSize: 14));
+                    return Text(formattedPrice, style: TextStyle(color: priceColor, fontWeight: FontWeight.bold, fontSize: 15));
                   },
                 ),
                 
