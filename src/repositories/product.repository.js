@@ -63,6 +63,7 @@ class ProductRepository {
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE p.status = 'active'
+              AND (u.is_admin IS NULL OR u.is_admin = FALSE)
               AND (
                   s.is_verified = TRUE 
                   OR u.account_type = 'entreprise'

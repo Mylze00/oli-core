@@ -5,6 +5,7 @@ import '../../../../widgets/verification_badge.dart';
 import '../../../user/providers/favorites_provider.dart';
 import '../pages/product_details_page.dart';
 import '../../../../providers/exchange_rate_provider.dart';
+import '../../../../utils/cloudinary_helper.dart'; // Added this import
 
 class MarketProductCard extends ConsumerWidget {
   final Product product;
@@ -62,7 +63,7 @@ class MarketProductCard extends ConsumerWidget {
                     product.images.isEmpty
                       ? const Center(child: Icon(Icons.image, size: 40, color: Colors.grey))
                       : Image.network(
-                          product.images[0],
+                          CloudinaryHelper.thumbnail(product.images[0]),
                           width: double.infinity,
                           fit: BoxFit.cover,
                           // Fade-in animation when image loads

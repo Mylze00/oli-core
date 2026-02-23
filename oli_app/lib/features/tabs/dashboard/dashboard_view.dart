@@ -20,6 +20,8 @@ import 'widgets/super_offers_section.dart';
 import 'widgets/discovery_carousel.dart';
 import 'widgets/product_sections.dart';
 import '../../../../app/theme/theme_provider.dart';
+import '../../../../utils/cloudinary_helper.dart';
+import '../../../../widgets/oli_refresh_indicator.dart';
 
 
 class MainDashboardView extends ConsumerStatefulWidget {
@@ -259,12 +261,12 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     }
 
     final remainingProducts = allProducts.where((p) => !_cachedSelectionProducts.contains(p)).toList();
-    _cachedSuperOffers = remainingProducts.take(5).toList();
-    _cachedDiscoveryList = remainingProducts.length > 5 
-        ? remainingProducts.skip(5).take(5).toList() 
+    _cachedSuperOffers = remainingProducts.take(10).toList();
+    _cachedDiscoveryList = remainingProducts.length > 10 
+        ? remainingProducts.skip(10).take(5).toList() 
         : <Product>[];
-    _cachedRankingList = remainingProducts.length > 10 
-        ? remainingProducts.skip(10).toList() 
+    _cachedRankingList = remainingProducts.length > 15 
+        ? remainingProducts.skip(15).toList() 
         : <Product>[];
     _cachedRankingList.sort((a, b) => a.name.compareTo(b.name));
 
@@ -314,7 +316,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       body: Stack(
         children: [
           // ── MAIN SCROLLABLE CONTENT ──
-          RefreshIndicator(
+          OliRefreshIndicator(
             onRefresh: () async {
               await ref.read(featuredProductsProvider.notifier).fetchFeaturedProducts();
               setState(() {
@@ -379,6 +381,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                         gradient: null,
                         badgeText: "NEW",
                         badgeColor: Colors.tealAccent.shade700,
+                        searchKeyword: _cachedSelectionKeyword,
                       ),
                     ),
                   ),
@@ -670,6 +673,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     List<Color>? gradient,
     required String badgeText,
     required Color badgeColor,
+    String? searchKeyword,
   }) {
     // Local theme logic (since this method is inside the class)
     // Ideally pass it as param or check theme here too, but let's check provider again or assume dark for cards if not passed?
@@ -720,7 +724,23 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                     Text(subtitle, style: TextStyle(color: sectionSubtitleColor, fontSize: 11)),
                   ],
                 ),
-                Icon(Icons.arrow_forward_ios, color: sectionTitleColor, size: 14),
+                GestureDetector(
+                  onTap: () {
+                    final keyword = searchKeyword ?? title.replaceFirst('Sélection : ', '');
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => MarketView(initialSearchQuery: keyword)),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: sectionTitleColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.arrow_forward_ios, color: sectionTitleColor, size: 14),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -750,7 +770,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                                   borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                                   child: product.images.isNotEmpty 
                                     ? Image.network(
-                                        product.images.first, 
+                                        CloudinaryHelper.small(product.images.first), 
                                         fit: BoxFit.cover, 
                                         width: double.infinity,
                                         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {

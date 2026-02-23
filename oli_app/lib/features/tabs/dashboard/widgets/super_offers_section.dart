@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../marketplace/presentation/pages/product_details_page.dart';
 import '../../../../models/product_model.dart';
 import 'product_card_common.dart';
+import '../pages/super_offers_page.dart';
 
 class SuperOffersSection extends StatefulWidget {
   final List<Product> products;
@@ -63,9 +64,9 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
               decoration: BoxDecoration(
                 color: Colors.black,
                 image: DecorationImage(
-                  image: const AssetImage("assets/images/fire_bg.png"),
+                  image: const AssetImage("assets/images/super_offers_bg.jpg"),
                   fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.9), BlendMode.darken),
+                  colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.5), BlendMode.darken),
                 ),
               ),
               child: Column(
@@ -90,8 +91,9 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
                       ),
                       GestureDetector(
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Page Super Offres bientôt disponible !'), duration: Duration(seconds: 2)),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SuperOffresPage()),
                           );
                         },
                         child: Container(
@@ -100,14 +102,7 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
                             color: Colors.white.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text("Voir tout", style: TextStyle(color: Colors.grey[300], fontSize: 11, fontWeight: FontWeight.w500)),
-                              const SizedBox(width: 4),
-                              Icon(Icons.arrow_forward_ios, color: Colors.grey[300], size: 12),
-                            ],
-                          ),
+                          child: Icon(Icons.arrow_forward_ios, color: Colors.grey[300], size: 14),
                         ),
                       ),
                     ],
@@ -172,7 +167,7 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
                       blendMode: BlendMode.srcATop,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withOpacity(0.0),
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),

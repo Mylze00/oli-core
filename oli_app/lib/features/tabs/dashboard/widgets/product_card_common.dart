@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
 import '../../../../providers/exchange_rate_provider.dart';
+import '../../../../utils/cloudinary_helper.dart';
 
 class DashboardProductCard extends ConsumerWidget {
   final Product product;
@@ -35,14 +36,15 @@ class DashboardProductCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
+          SizedBox(
+            height: 100,
             child: Stack(
               children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   child: product.images.isNotEmpty 
                     ? Image.network(
-                        product.images.first, 
+                        CloudinaryHelper.small(product.images.first), 
                         fit: BoxFit.cover, 
                         width: double.infinity,
                         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {

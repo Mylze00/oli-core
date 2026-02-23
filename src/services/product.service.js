@@ -68,7 +68,7 @@ class ProductService {
         });
     }
 
-    async getTopSellers(limit = 10) {
+    async getTopSellers(limit = 50) {
         const products = await productRepository.findTopSellers(limit);
         return products.map(p => this._formatProduct(p));
     }
