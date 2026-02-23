@@ -65,7 +65,7 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
                 image: DecorationImage(
                   image: const AssetImage("assets/images/fire_bg.png"),
                   fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.8), BlendMode.darken),
+                  colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.9), BlendMode.darken),
                 ),
               ),
               child: Column(
@@ -137,46 +137,48 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
                 ],
               ),
             ),
-            // Glass shimmer overlay
+            // Glass shimmer overlay — IgnorePointer so taps pass through
             Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _shimmerAnimation,
-                builder: (context, child) {
-                  return ShaderMask(
-                    shaderCallback: (bounds) {
-                      return LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: const [
-                          Colors.transparent,
-                          Colors.transparent,
-                          Colors.white24,
-                          Colors.white38,
-                          Colors.white24,
-                          Colors.transparent,
-                          Colors.transparent,
-                        ],
-                        stops: [
-                          0.0,
-                          (_shimmerAnimation.value - 0.3).clamp(0.0, 1.0),
-                          (_shimmerAnimation.value - 0.1).clamp(0.0, 1.0),
-                          _shimmerAnimation.value.clamp(0.0, 1.0),
-                          (_shimmerAnimation.value + 0.1).clamp(0.0, 1.0),
-                          (_shimmerAnimation.value + 0.3).clamp(0.0, 1.0),
-                          1.0,
-                        ],
-                        transform: const GradientRotation(0.5),
-                      ).createShader(bounds);
-                    },
-                    blendMode: BlendMode.srcATop,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _shimmerAnimation,
+                  builder: (context, child) {
+                    return ShaderMask(
+                      shaderCallback: (bounds) {
+                        return LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: const [
+                            Colors.transparent,
+                            Colors.transparent,
+                            Colors.white24,
+                            Colors.white38,
+                            Colors.white24,
+                            Colors.transparent,
+                            Colors.transparent,
+                          ],
+                          stops: [
+                            0.0,
+                            (_shimmerAnimation.value - 0.3).clamp(0.0, 1.0),
+                            (_shimmerAnimation.value - 0.1).clamp(0.0, 1.0),
+                            _shimmerAnimation.value.clamp(0.0, 1.0),
+                            (_shimmerAnimation.value + 0.1).clamp(0.0, 1.0),
+                            (_shimmerAnimation.value + 0.3).clamp(0.0, 1.0),
+                            1.0,
+                          ],
+                          transform: const GradientRotation(0.5),
+                        ).createShader(bounds);
+                      },
+                      blendMode: BlendMode.srcATop,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ],

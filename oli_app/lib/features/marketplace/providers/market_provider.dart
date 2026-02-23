@@ -138,7 +138,7 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
     _error = null;
 
     try {
-      final featuredUrl = '${ApiConfig.productsFeatured}?limit=100';
+      final featuredUrl = '${ApiConfig.productsFeatured}?limit=500';
       final uri = Uri.parse(featuredUrl);
       final response = await http.get(uri);
       

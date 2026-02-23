@@ -57,7 +57,7 @@ class ProductService {
         };
     }
 
-    async getFeaturedProducts(limit = 20) {
+    async getFeaturedProducts(limit = 500) {
         const ADMIN_PHONE = '+243827088682';
         const products = await productRepository.findFeatured(ADMIN_PHONE, limit);
 

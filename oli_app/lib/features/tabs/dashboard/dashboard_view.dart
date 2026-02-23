@@ -749,7 +749,33 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                                 ClipRRect(
                                   borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                                   child: product.images.isNotEmpty 
-                                    ? Image.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
+                                    ? Image.network(
+                                        product.images.first, 
+                                        fit: BoxFit.cover, 
+                                        width: double.infinity,
+                                        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                                          if (wasSynchronouslyLoaded) return child;
+                                          return AnimatedOpacity(
+                                            opacity: frame == null ? 0.0 : 1.0,
+                                            duration: const Duration(milliseconds: 400),
+                                            curve: Curves.easeOut,
+                                            child: child,
+                                          );
+                                        },
+                                        loadingBuilder: (context, child, loadingProgress) {
+                                          if (loadingProgress == null) return child;
+                                          return Container(
+                                            color: const Color(0xFF1A1A1A),
+                                            child: const Center(
+                                              child: SizedBox(
+                                                width: 14, height: 14,
+                                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        errorBuilder: (ctx, err, stack) => const Center(child: Icon(Icons.broken_image, size: 20, color: Colors.grey)),
+                                      )
                                     : const Center(child: Icon(Icons.image, color: Colors.grey)),
                                 ),
                                 Positioned(

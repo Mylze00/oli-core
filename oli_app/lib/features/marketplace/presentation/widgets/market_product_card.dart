@@ -64,7 +64,36 @@ class MarketProductCard extends ConsumerWidget {
                       : Image.network(
                           product.images[0],
                           width: double.infinity,
-                          fit: BoxFit.cover, // Garder le ratio d'aspect
+                          fit: BoxFit.cover,
+                          // Fade-in animation when image loads
+                          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                            if (wasSynchronouslyLoaded) return child;
+                            return AnimatedOpacity(
+                              opacity: frame == null ? 0.0 : 1.0,
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeOut,
+                              child: child,
+                            );
+                          },
+                          // Placeholder while loading
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: const Color(0xFF1A1A1A),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 20, height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.grey[700],
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                           errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 30, color: Colors.grey),
                         ),
                     

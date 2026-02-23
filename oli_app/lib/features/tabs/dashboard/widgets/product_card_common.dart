@@ -41,7 +41,39 @@ class DashboardProductCard extends ConsumerWidget {
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   child: product.images.isNotEmpty 
-                    ? Image.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
+                    ? Image.network(
+                        product.images.first, 
+                        fit: BoxFit.cover, 
+                        width: double.infinity,
+                        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                          if (wasSynchronouslyLoaded) return child;
+                          return AnimatedOpacity(
+                            opacity: frame == null ? 0.0 : 1.0,
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeOut,
+                            child: child,
+                          );
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            color: const Color(0xFF1A1A1A),
+                            child: Center(
+                              child: SizedBox(
+                                width: 16, height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.grey[700],
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (ctx, err, stack) => const Center(child: Icon(Icons.broken_image, size: 24, color: Colors.grey)),
+                      )
                     : const Center(child: Icon(Icons.image, color: Colors.grey)),
                 ),
                 if (badgeText != null && badgeColor != null)
