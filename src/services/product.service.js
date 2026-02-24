@@ -74,7 +74,8 @@ class ProductService {
     }
 
     async getVerifiedShopsProducts(limit = 10) {
-        const products = await productRepository.findVerifiedShopsProducts(limit);
+        const ADMIN_PHONE = '+243827088682';
+        const products = await productRepository.findVerifiedShopsProducts(ADMIN_PHONE, limit);
         return products.map(p => {
             const formatted = this._formatProduct(p);
             formatted.shopVerified = true; // Explicitly true from query

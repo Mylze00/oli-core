@@ -46,7 +46,7 @@ class ProductRepository {
         return result.rows;
     }
 
-    async findVerifiedShopsProducts(limit) {
+    async findVerifiedShopsProducts(adminPhone, limit) {
         const query = `
             SELECT p.*, 
                    u.name as seller_name, 
@@ -63,18 +63,20 @@ class ProductRepository {
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE p.status = 'active'
+              AND u.phone != $2
               AND (u.is_admin IS NULL OR u.is_admin = FALSE)
               AND (
                   s.is_verified = TRUE 
                   OR u.account_type = 'entreprise'
                   OR u.has_certified_shop = TRUE
               )
-            ORDER BY p.created_at DESC
+            ORDER BY RANDOM()
             LIMIT $1
         `;
-        const result = await pool.query(query, [limit]);
+        const result = await pool.query(query, [limit, adminPhone]);
         return result.rows;
     }
+
 
     async findGoodDeals(limit) {
         const query = `
