@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import { Trash2, Plus, Edit2, Upload } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'https://oli-core.onrender.com';
+import api from '../services/api';
 
 function ServicesManager() {
     const [services, setServices] = useState([]);
@@ -10,7 +8,7 @@ function ServicesManager() {
     const [formData, setFormData] = useState({
         name: '',
         logo_url: '',
-        color_hex: '#000000',
+        color_hex: '#2563EB',
         status: 'coming_soon',
         display_order: 0
     });
@@ -23,10 +21,7 @@ function ServicesManager() {
 
     const fetchServices = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await axios.get(`${API_URL}/admin/services`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await api.get('/admin/services');
             setServices(res.data);
         } catch (err) {
             console.error("Erreur chargement services", err);
@@ -38,10 +33,7 @@ function ServicesManager() {
     const handleDelete = async (id) => {
         if (!window.confirm('Supprimer ce service ?')) return;
         try {
-            const token = localStorage.getItem('token');
-            await axios.delete(`${API_URL}/admin/services/${id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.delete(`/admin/services/${id}`);
             setServices(services.filter(s => s.id !== id));
         } catch (err) {
             alert('Erreur lors de la suppression');
@@ -63,120 +55,115 @@ function ServicesManager() {
     const handleCancelEdit = () => {
         setIsEditing(false);
         setEditId(null);
-        setFormData({
-            name: '',
-            logo_url: '',
-            color_hex: '#000000',
-            status: 'coming_soon',
-            display_order: 0
-        });
+        setFormData({ name: '', logo_url: '', color_hex: '#2563EB', status: 'coming_soon', display_order: 0 });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const token = localStorage.getItem('token');
             let res;
             if (isEditing) {
-                res = await axios.put(`${API_URL}/admin/services/${editId}`, formData, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                res = await api.put(`/admin/services/${editId}`, formData);
                 setServices(services.map(s => s.id === editId ? res.data : s));
             } else {
-                res = await axios.post(`${API_URL}/admin/services`, formData, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                res = await api.post('/admin/services', formData);
                 setServices([res.data, ...services]);
             }
             handleCancelEdit();
         } catch (err) {
             alert('Erreur sauvegarde service');
-            console.error(err);
         }
     };
 
     const handleUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         const uploadData = new FormData();
         uploadData.append('image', file);
-
         try {
             setLoading(true);
-            const token = localStorage.getItem('token');
-            // Assuming we reuse the ads/upload or create a generic upload. 
-            // I created admin/services/upload!
-            const res = await axios.post(`${API_URL}/admin/services/upload`, uploadData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    Authorization: `Bearer ${token}`
-                }
+            const res = await api.post('/admin/services/upload', uploadData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
             setFormData(prev => ({ ...prev, logo_url: res.data.url }));
         } catch (err) {
             alert("Erreur upload image");
-            console.error(err);
         } finally {
             setLoading(false);
         }
     };
 
-    if (loading && services.length === 0) return <div className="p-8 text-white">Chargement...</div>;
+    const statusInfo = (status) => {
+        const map = {
+            active: { label: 'ACTIF', bg: 'bg-green-100 text-green-700' },
+            coming_soon: { label: 'BIENTÔT', bg: 'bg-amber-100 text-amber-700' },
+            maintenance: { label: 'OFF', bg: 'bg-red-100 text-red-700' },
+        };
+        return map[status] || map.coming_soon;
+    };
+
+    if (loading && services.length === 0) return (
+        <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+    );
 
     return (
-        <div className="p-6">
-            <h1 className="text-2xl font-bold text-white mb-6">Gestion Services & Paiements</h1>
+        <div className="space-y-6 p-4 md:p-6 bg-gray-50 min-h-screen">
+            <div>
+                <h1 className="text-2xl font-bold text-gray-900">Services & Paiements</h1>
+                <p className="text-sm text-gray-400 mt-1">Gérez les services disponibles dans l'application</p>
+            </div>
 
             {/* Formulaire */}
-            <div className="bg-gray-800 p-4 rounded-lg mb-8 border border-gray-700">
-                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    {isEditing ? <Edit2 size={20} /> : <Plus size={20} />}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                    {isEditing ? <Edit2 size={18} className="text-blue-500" /> : <Plus size={18} className="text-blue-500" />}
                     {isEditing ? 'Modifier le service' : 'Ajouter un service'}
                 </h2>
                 <form onSubmit={handleSubmit} className="flex gap-4 flex-wrap items-end">
                     <div className="flex-1 min-w-[200px]">
-                        <label className="block text-gray-400 text-sm mb-1">Nom du service</label>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Nom du service</label>
                         <input
                             type="text"
                             required
-                            className="w-full bg-gray-900 text-white rounded p-2 border border-gray-700 outline-none focus:border-blue-500"
+                            className="w-full bg-gray-50 text-gray-900 rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                             value={formData.name}
                             onChange={e => setFormData({ ...formData, name: e.target.value })}
                         />
                     </div>
 
-                    <div className="flex-1 min-w-[200px]">
-                        <label className="block text-gray-400 text-sm mb-1">Logo URL</label>
+                    <div className="flex-1 min-w-[220px]">
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Logo URL</label>
                         <div className="flex gap-2">
                             <input
                                 type="text"
                                 required
                                 value={formData.logo_url}
                                 onChange={e => setFormData({ ...formData, logo_url: e.target.value })}
-                                className="flex-1 bg-gray-900 text-white rounded p-2 border border-gray-700 outline-none focus:border-blue-500"
+                                className="flex-1 bg-gray-50 text-gray-900 rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                             />
-                            <label className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded cursor-pointer transition-colors flex items-center justify-center">
-                                <Upload size={20} />
+                            <label className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2.5 rounded-xl cursor-pointer transition flex items-center">
+                                <Upload size={16} />
                                 <input type="file" className="hidden" accept="image/*" onChange={handleUpload} />
                             </label>
                         </div>
                     </div>
 
                     <div className="w-[120px]">
-                        <label className="block text-gray-400 text-sm mb-1">Couleur (Hex)</label>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Couleur</label>
                         <input
                             type="color"
-                            className="w-full h-[42px] bg-gray-900 rounded cursor-pointer"
+                            className="w-full h-[42px] rounded-xl cursor-pointer border border-gray-200"
                             value={formData.color_hex}
                             onChange={e => setFormData({ ...formData, color_hex: e.target.value })}
                         />
                     </div>
 
                     <div className="w-[150px]">
-                        <label className="block text-gray-400 text-sm mb-1">Statut</label>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Statut</label>
                         <select
-                            className="w-full bg-gray-900 text-white rounded p-2 border border-gray-700 outline-none focus:border-blue-500"
+                            className="w-full bg-gray-50 text-gray-900 rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                             value={formData.status}
                             onChange={e => setFormData({ ...formData, status: e.target.value })}
                         >
@@ -186,11 +173,11 @@ function ServicesManager() {
                         </select>
                     </div>
 
-                    <div className="w-[100px]">
-                        <label className="block text-gray-400 text-sm mb-1">Ordre</label>
+                    <div className="w-[90px]">
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Ordre</label>
                         <input
                             type="number"
-                            className="w-full bg-gray-900 text-white rounded p-2 border border-gray-700 outline-none focus:border-blue-500"
+                            className="w-full bg-gray-50 text-gray-900 rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                             value={formData.display_order}
                             onChange={e => setFormData({ ...formData, display_order: parseInt(e.target.value) })}
                         />
@@ -198,15 +185,13 @@ function ServicesManager() {
 
                     <div className="flex gap-2">
                         {isEditing && (
-                            <button
-                                type="button"
-                                onClick={handleCancelEdit}
-                                className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded font-medium transition-colors"
-                            >
+                            <button type="button" onClick={handleCancelEdit}
+                                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm transition hover:bg-gray-200">
                                 Annuler
                             </button>
                         )}
-                        <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded font-medium transition-colors">
+                        <button type="submit"
+                            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition shadow-sm">
                             {isEditing ? 'Mettre à jour' : 'Ajouter'}
                         </button>
                     </div>
@@ -214,42 +199,43 @@ function ServicesManager() {
             </div>
 
             {/* Liste */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {services.map(service => (
-                    <div key={service.id} className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 relative group">
-                        <div className="h-32 bg-gray-900 flex items-center justify-center relative p-4" style={{ backgroundColor: service.color_hex + '20' }}>
-                            <img src={service.logo_url} alt={service.name} className="h-16 object-contain" />
-                            <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-bold ${service.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                                service.status === 'coming_soon' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
-                                }`}>
-                                {service.status === 'active' ? 'ACTIF' : service.status === 'coming_soon' ? 'BIENTÔT' : 'OFF'}
+            {services.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center">
+                    <p className="text-gray-400 text-sm">Aucun service configuré.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {services.map(service => {
+                        const s = statusInfo(service.status);
+                        return (
+                            <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                <div className="h-32 flex items-center justify-center relative p-4" style={{ backgroundColor: service.color_hex + '15' }}>
+                                    <img src={service.logo_url} alt={service.name} className="h-16 object-contain" />
+                                    <div className={`absolute top-2 right-2 px-2.5 py-1 rounded-full text-xs font-bold ${s.bg}`}>
+                                        {s.label}
+                                    </div>
+                                    <div className="absolute top-2 left-2 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-sm text-xs font-bold text-gray-600">
+                                        {service.display_order}
+                                    </div>
+                                </div>
+                                <div className="p-4">
+                                    <h3 className="text-gray-900 font-bold text-base">{service.name}</h3>
+                                    <div className="flex justify-end gap-2 mt-3">
+                                        <button onClick={() => handleEdit(service)}
+                                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition" title="Modifier">
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button onClick={() => handleDelete(service.id)}
+                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition" title="Supprimer">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="absolute top-2 left-2 px-2 py-1 bg-gray-700 rounded text-xs text-white">
-                                #{service.display_order}
-                            </div>
-                        </div>
-                        <div className="p-4">
-                            <h3 className="text-white font-bold text-lg">{service.name}</h3>
-                            <div className="flex justify-end gap-2 mt-4 opacity-100 transition-opacity">
-                                <button
-                                    onClick={() => handleEdit(service)}
-                                    className="p-2 text-blue-400 hover:bg-blue-500/10 rounded"
-                                    title="Modifier"
-                                >
-                                    <Edit2 size={18} />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(service.id)}
-                                    className="p-2 text-red-400 hover:bg-red-500/10 rounded"
-                                    title="Supprimer"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }
