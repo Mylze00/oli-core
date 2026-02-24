@@ -147,24 +147,59 @@ class VerifiedShopProductsSection extends StatelessWidget {
           const SizedBox(height: 12),
           SizedBox(
             height: 160,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: products.isEmpty ? 3 : products.length,
-              itemBuilder: (context, index) {
-                if (products.isEmpty) return _buildPlaceholderCard();
-                 final product = products[index];
-                return GestureDetector(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product))),
-                  child: DashboardProductCard(
-                    product: product,
-                    priceColor: Colors.blueAccent,
-                    badgeText: "Vérifié",
-                    badgeColor: Colors.green,
-                    badgeOnRight: true,
-                    subtitleWidget: product.shopName != null
-                      ? Text(product.shopName!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[500], fontSize: 10))
-                      : null,
-                  ),
+            child: Builder(
+              builder: (context) {
+                // Diversifier: max 1 produit par boutique (dédup par shopId en priorité, sinon shopName)
+                final diversified = <Product>[];
+                final seenShops = <String>{};
+                for (final p in products) {
+                  // Filtrer les noms génériques
+                  final rawShopName = p.shopName ?? '';
+                  final isGenericName = rawShopName.toUpperCase().contains('BOUTIQUE ENTREPRISE') ||
+                      rawShopName.toUpperCase() == 'BOUTIQUE';
+
+                  // Clé de déduplication : shopId en priorité, sinon shopName, sinon seller
+                  final shopKey = p.shopId ?? (isGenericName ? null : p.shopName) ?? p.seller;
+                  if (!seenShops.contains(shopKey)) {
+                    seenShops.add(shopKey);
+                    diversified.add(p);
+                  }
+                }
+                final displayProducts = diversified.isEmpty ? products : diversified;
+
+                return ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: displayProducts.isEmpty ? 3 : displayProducts.length,
+                  itemBuilder: (context, index) {
+                    if (displayProducts.isEmpty) return _buildPlaceholderCard();
+                    final product = displayProducts[index];
+                    return GestureDetector(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product))),
+                      child: DashboardProductCard(
+                        product: product,
+                        priceColor: Colors.blueAccent,
+                        badgeText: "Vérifié",
+                        badgeColor: Colors.green,
+                        badgeOnRight: true,
+                        cardColor: Colors.white,
+                        imageBackgroundColor: Colors.white,
+                        subtitleWidget: () {
+                          final rawShopName = product.shopName ?? '';
+                          final isGenericName = rawShopName.toUpperCase().contains('BOUTIQUE ENTREPRISE') ||
+                              rawShopName.toUpperCase() == 'BOUTIQUE';
+                          final displayName = (!isGenericName && rawShopName.isNotEmpty)
+                              ? rawShopName
+                              : product.seller;
+                          return Text(
+                            displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: Colors.grey[600], fontSize: 10),
+                          );
+                        }(),
+                      ),
+                    );
+                  },
                 );
               },
             ),

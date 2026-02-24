@@ -230,7 +230,7 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
     _error = null;
 
     try {
-      final verifiedUrl = ApiConfig.productsVerifiedShops;
+      final verifiedUrl = '${ApiConfig.productsVerifiedShops}?limit=30';
       final uri = Uri.parse(verifiedUrl);
       final response = await http.get(uri);
       
