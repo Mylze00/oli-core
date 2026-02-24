@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import SellerDashboard from './pages/SellerDashboard';
 import ProductEditor from './pages/ProductEditor';
 import ProductModeSelector from './pages/ProductModeSelector';
@@ -78,62 +78,62 @@ const SellerLayout = ({ children }) => {
                     </div>
 
                     <nav className="space-y-1">
-                        <a
-                            href="/dashboard"
+                        <Link
+                            to="/dashboard"
                             className={`block p-3 rounded transition-colors ${isActive('/dashboard') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
                                 }`}
                         >
                             📊 Tableau de bord
-                        </a>
-                        <a
-                            href="/products"
+                        </Link>
+                        <Link
+                            to="/products"
                             className={`block p-3 rounded transition-colors ${isActive('/products') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
                                 }`}
                         >
                             📦 Produits
-                        </a>
-                        <a
-                            href="/import-export"
+                        </Link>
+                        <Link
+                            to="/import-export"
                             className={`block p-3 rounded transition-colors ${isActive('/import-export') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
                                 }`}
                         >
                             📥 Import / Export
-                        </a>
-                        <a
-                            href="/orders"
+                        </Link>
+                        <Link
+                            to="/orders"
                             className={`block p-3 rounded transition-colors ${isActive('/orders') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
                                 }`}
                         >
                             🛒 Commandes
-                        </a>
-                        <a
-                            href="/reports"
+                        </Link>
+                        <Link
+                            to="/reports"
                             className={`block p-3 rounded transition-colors ${isActive('/reports') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
                                 }`}
                         >
                             📈 Rapports
-                        </a>
-                        <a
-                            href="/messages"
+                        </Link>
+                        <Link
+                            to="/messages"
                             className={`block p-3 rounded transition-colors ${isActive('/messages') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
                                 }`}
                         >
                             💬 Messages B2B
-                        </a>
-                        <a
-                            href="/promotions"
+                        </Link>
+                        <Link
+                            to="/promotions"
                             className={`block p-3 rounded transition-colors ${isActive('/promotions') ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
                                 }`}
                         >
                             🎁 Promotions
-                        </a>
-                        <a
-                            href="/subscription"
+                        </Link>
+                        <Link
+                            to="/subscription"
                             className={`block p-3 rounded transition-colors text-amber-400 ${isActive('/subscription') ? 'bg-amber-600 text-white' : 'hover:bg-slate-800'
                                 }`}
                         >
                             ⭐ Certification
-                        </a>
+                        </Link>
                     </nav>
                 </div>
                 <div className="mt-auto p-4 border-t border-slate-800">

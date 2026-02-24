@@ -182,8 +182,8 @@ app.get("/user/public-profile/:id", require('./controllers/user.controller').get
 // Autres routes user (protégées)
 app.use("/user", requireAuth, userRoutes);
 app.use("/addresses", requireAuth, require('./routes/address.routes'));
-app.use("/notifications", require('./routes/notifications.routes')); // Notifications
-app.use("/device-tokens", require('./routes/device-tokens.routes')); // 📱 Tokens FCM
+app.use("/notifications", requireAuth, require('./routes/notifications.routes')); // 🔔 Notifications
+app.use("/device-tokens", requireAuth, require('./routes/device-tokens.routes')); // 📱 Tokens FCM
 
 // 🆕 Routes pour l'architecture utilisateur unifiée
 app.use("/api/identity", require('./routes/identity.routes'));
@@ -205,9 +205,8 @@ app.use("/api/reports", require('./routes/reports.routes')); // 📊 Rapports av
 app.use("/api/coupons", require('./routes/coupons.routes')); // 🎫 Coupons promo
 app.use("/api/loyalty", require('./routes/loyalty.routes')); // ⭐ Programme fidélité
 app.use("/api/payment", paymentRoutes); // 💳 Paiement Stripe (Simulé)
-app.use("/admin/ads", adminRoutes); // Mounting admin ads handled inside admin.routes?? No, I created src/routes/admin/ads.routes.js
-// Let's mount explicit paths
-app.use("/ads", require("./routes/ads.routes"));
+// /admin/ads is already handled inside adminRoutes (mounted on /admin above)
+app.use("/ads", require("./routes/ads.routes")); // 📢 Publicités publiques
 app.use('/search', require('./routes/search.routes')); // Recherche visuelle
 app.use("/setup", require("./routes/setup.routes")); // Utility route for migration
 app.use("/services", require("./routes/services.routes")); // ✨ Services dynamiques (Public)
