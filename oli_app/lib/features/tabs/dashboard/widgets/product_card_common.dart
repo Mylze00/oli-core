@@ -12,6 +12,9 @@ class DashboardProductCard extends ConsumerWidget {
   final bool badgeOnRight;
   final Widget? subtitleWidget;
   final double width;
+  final double priceFontSize;
+  final Color cardColor;
+  final Color imageBackgroundColor;
 
   const DashboardProductCard({
     super.key,
@@ -21,7 +24,10 @@ class DashboardProductCard extends ConsumerWidget {
     this.badgeColor,
     this.badgeOnRight = false,
     this.subtitleWidget,
-    this.width = 104, // Reduced by 20%
+    this.width = 104,
+    this.priceFontSize = 15,
+    this.cardColor = const Color(0xFF2C2C2C),
+    this.imageBackgroundColor = const Color(0xFF1A1A1A),
   });
 
   @override
@@ -30,7 +36,7 @@ class DashboardProductCard extends ConsumerWidget {
       width: width,
       margin: const EdgeInsets.only(right: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFF2C2C2C),
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -59,7 +65,7 @@ class DashboardProductCard extends ConsumerWidget {
                         loadingBuilder: (context, child, loadingProgress) {
                           if (loadingProgress == null) return child;
                           return Container(
-                            color: const Color(0xFF1A1A1A),
+                            color: imageBackgroundColor,
                             child: Center(
                               child: SizedBox(
                                 width: 16, height: 16,
@@ -120,7 +126,7 @@ class DashboardProductCard extends ConsumerWidget {
                     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    return Text(formattedPrice, style: TextStyle(color: priceColor, fontWeight: FontWeight.bold, fontSize: 15));
+                    return Text(formattedPrice, style: TextStyle(color: priceColor, fontWeight: FontWeight.bold, fontSize: priceFontSize));
                   },
                 ),
                 

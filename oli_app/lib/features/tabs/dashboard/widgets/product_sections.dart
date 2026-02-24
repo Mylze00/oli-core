@@ -178,6 +178,7 @@ class VerifiedShopProductsSection extends StatelessWidget {
                       child: DashboardProductCard(
                         product: product,
                         priceColor: Colors.blueAccent,
+                        priceFontSize: 12,
                         badgeText: "Vérifié",
                         badgeColor: Colors.green,
                         badgeOnRight: true,
