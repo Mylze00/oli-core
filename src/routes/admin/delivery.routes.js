@@ -7,6 +7,30 @@ const router = express.Router();
 const pool = require('../../config/db');
 const { BASE_URL } = require('../../config');
 
+// ─── Auto-migration au démarrage ──────────────────────────────────
+(async () => {
+    try {
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deliverer BOOLEAN DEFAULT FALSE`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_suspended BOOLEAN DEFAULT FALSE`);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS deliverer_applications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) UNIQUE,
+                pledge_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+                phone VARCHAR(20),
+                motivation TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                admin_note TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                reviewed_at TIMESTAMP
+            )
+        `);
+        console.log('✅ [admin/delivery] Tables livreurs prêtes');
+    } catch (err) {
+        console.error('❌ [admin/delivery] Migration:', err.message);
+    }
+})();
+
 /**
  * GET /admin/delivery/drivers
  * Liste tous les livreurs (users avec is_deliverer = true)
@@ -77,6 +101,47 @@ router.get('/drivers', async (req, res) => {
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });
+
+/**
+ * POST /admin/delivery/drivers
+ * Promouvoir manuellement un utilisateur en livreur (par phone ou user_id)
+ */
+router.post('/drivers', async (req, res) => {
+    try {
+        const { phone, user_id } = req.body;
+        if (!phone && !user_id) {
+            return res.status(400).json({ error: 'phone ou user_id requis' });
+        }
+
+        let userQuery;
+        if (user_id) {
+            userQuery = await pool.query('SELECT id, name, phone, is_deliverer FROM users WHERE id = $1', [user_id]);
+        } else {
+            userQuery = await pool.query('SELECT id, name, phone, is_deliverer FROM users WHERE phone = $1', [phone]);
+        }
+
+        if (userQuery.rows.length === 0) {
+            return res.status(404).json({ error: 'Utilisateur introuvable' });
+        }
+
+        const user = userQuery.rows[0];
+        if (user.is_deliverer) {
+            return res.status(400).json({ error: 'Cet utilisateur est déjà livreur' });
+        }
+
+        await pool.query('UPDATE users SET is_deliverer = TRUE, updated_at = NOW() WHERE id = $1', [user.id]);
+
+        res.json({
+            success: true,
+            message: `${user.name || user.phone} est maintenant livreur`,
+            user_id: user.id
+        });
+    } catch (err) {
+        console.error('Erreur POST /admin/delivery/drivers:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
 
 /**
  * PATCH /admin/delivery/drivers/:id/toggle

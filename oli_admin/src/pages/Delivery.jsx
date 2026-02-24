@@ -12,6 +12,8 @@ import {
     ShieldCheckIcon,
     ClipboardDocumentListIcon,
     ClockIcon,
+    PlusCircleIcon,
+    XMarkIcon,
 } from '@heroicons/react/24/solid';
 
 /* ─── Reusable Components ─────────────────────────────────────── */
@@ -66,7 +68,13 @@ export default function Delivery() {
     const [appLoading, setAppLoading] = useState(true);
     const [appFilter, setAppFilter] = useState('all');
     const [appSearch, setAppSearch] = useState('');
-    const [actionLoading, setActionLoading] = useState(null); // id of application being actioned
+    const [actionLoading, setActionLoading] = useState(null);
+
+    // Add driver modal state
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [addPhone, setAddPhone] = useState('');
+    const [addLoading, setAddLoading] = useState(false);
+    const [addError, setAddError] = useState('');
 
     useEffect(() => {
         fetchDrivers();
@@ -96,6 +104,25 @@ export default function Delivery() {
             console.error("Erreur candidatures:", error);
         } finally {
             setAppLoading(false);
+        }
+    };
+
+    /* ─── Add Driver Manually ─── */
+
+    const addDriver = async () => {
+        if (!addPhone.trim()) return;
+        setAddLoading(true);
+        setAddError('');
+        try {
+            const { data } = await api.post('/admin/delivery/drivers', { phone: addPhone.trim() });
+            alert(data.message);
+            setShowAddModal(false);
+            setAddPhone('');
+            await fetchDrivers();
+        } catch (err) {
+            setAddError(err.response?.data?.error || 'Erreur lors de la promotion');
+        } finally {
+            setAddLoading(false);
         }
     };
 
@@ -224,12 +251,23 @@ export default function Delivery() {
                     <h1 className="text-2xl font-bold text-gray-900">Livreurs</h1>
                     <p className="text-sm text-gray-400 mt-1">Gestion et suivi des livreurs partenaires</p>
                 </div>
-                <div className="relative">
-                    <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type="text" placeholder="Rechercher nom, téléphone..."
-                        className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={tab === 'drivers' ? driverSearch : appSearch}
-                        onChange={(e) => tab === 'drivers' ? setDriverSearch(e.target.value) : setAppSearch(e.target.value)} />
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input type="text" placeholder="Rechercher nom, téléphone..."
+                            className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={tab === 'drivers' ? driverSearch : appSearch}
+                            onChange={(e) => tab === 'drivers' ? setDriverSearch(e.target.value) : setAppSearch(e.target.value)} />
+                    </div>
+                    {tab === 'drivers' && (
+                        <button
+                            onClick={() => { setShowAddModal(true); setAddError(''); }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition shadow-sm"
+                        >
+                            <PlusCircleIcon className="h-5 w-5" />
+                            Ajouter un livreur
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -507,6 +545,68 @@ export default function Delivery() {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* ════════════════════════════════════════ MODAL: AJOUTER LIVREUR ════════════════════════════════════════ */}
+            {showAddModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                        <div className="flex items-center justify-between mb-5">
+                            <h2 className="text-lg font-bold text-gray-900">Ajouter un livreur manuellement</h2>
+                            <button onClick={() => setShowAddModal(false)} className="p-1 rounded-lg hover:bg-gray-100 transition">
+                                <XMarkIcon className="h-5 w-5 text-gray-500" />
+                            </button>
+                        </div>
+
+                        <p className="text-sm text-gray-500 mb-4">
+                            Entrez le numéro de téléphone de l'utilisateur à promouvoir en livreur. Il doit avoir un compte Oli existant.
+                        </p>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1">
+                                    Numéro de téléphone
+                                </label>
+                                <input
+                                    type="tel"
+                                    placeholder="+243 8X XXX XXXX"
+                                    value={addPhone}
+                                    onChange={(e) => setAddPhone(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && addDriver()}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    autoFocus
+                                />
+                            </div>
+
+                            {addError && (
+                                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
+                                    {addError}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={() => setShowAddModal(false)}
+                                className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={addDriver}
+                                disabled={addLoading || !addPhone.trim()}
+                                className="flex-1 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {addLoading ? (
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                    <TruckIcon className="h-4 w-4" />
+                                )}
+                                Promouvoir en livreur
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
