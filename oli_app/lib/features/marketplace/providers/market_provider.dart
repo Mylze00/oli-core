@@ -188,7 +188,7 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
     _error = null;
 
     try {
-      final topSellersUrl = ApiConfig.productsTopSellers;
+      final topSellersUrl = '${ApiConfig.productsTopSellers}?limit=30';
       final uri = Uri.parse(topSellersUrl);
       final response = await http.get(uri);
       

@@ -6,6 +6,7 @@ import '../../../marketplace/providers/market_provider.dart';
 import '../../../marketplace/presentation/pages/product_details_page.dart';
 import '../../../marketplace/presentation/widgets/market_product_card.dart';
 import '../../../../app/theme/theme_provider.dart';
+import '../../../../utils/cloudinary_helper.dart';
 
 /// Super Offres Page — Produits les plus visités
 class SuperOffresPage extends ConsumerStatefulWidget {
@@ -436,7 +437,7 @@ class _SuperOfferProductCard extends ConsumerWidget {
                                     size: 36, color: Colors.grey)),
                           )
                         : Image.network(
-                            product.images[0],
+                            CloudinaryHelper.small(product.images[0]),
                             fit: BoxFit.cover,
                             frameBuilder: (context, child, frame,
                                 wasSynchronouslyLoaded) {

@@ -353,7 +353,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
 
                 // 4. SUPER OFFERS
                 SliverToBoxAdapter(
-                  child: SuperOffersSection(products: _cachedSuperOffers),
+                  child: SuperOffersSection(products: topSellers.take(10).toList()),
                 ),
 
                 // 5. ADS
