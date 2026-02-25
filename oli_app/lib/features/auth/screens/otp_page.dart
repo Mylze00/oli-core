@@ -24,10 +24,8 @@ class _OtpPageState extends ConsumerState<OtpPage>
   void initState() {
     super.initState();
 
-    // Auto-fill le code OTP reçu du serveur
-    if (widget.otpCode != null) {
-      _otpController.text = widget.otpCode!;
-    }
+    // Note: le code OTP sera envoyé par SMS à l'avenir
+    // L'utilisateur doit le saisir manuellement
 
     _fadeController = AnimationController(
       vsync: this,
