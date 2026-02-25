@@ -170,13 +170,47 @@ class ProductService {
             discount_end_date: data.discount_end_date || null
         };
 
-        const createdProduct = await productRepository.create(productData); // Assuming create method takes object
+        const createdProduct = await productRepository.create(productData);
+        const productId = createdProduct.id;
 
-        // Update User Sales Count (Side effect)
-        // TODO: Move this to UserRepository.updateSalesCount
+        // ── Insert product variants (colors & sizes) ──
+        try {
+            const colorsArr = data.colors ? JSON.parse(data.colors) : [];
+            const sizesArr = data.sizes ? JSON.parse(data.sizes) : [];
+
+            for (const color of colorsArr) {
+                if (color && color.trim()) {
+                    await pool.query(
+                        `INSERT INTO product_variants (product_id, variant_type, variant_value, stock_quantity, is_active)
+                         VALUES ($1, 'color', $2, $3, true)
+                         ON CONFLICT (product_id, variant_type, variant_value) DO NOTHING`,
+                        [productId, color.trim(), parseInt(data.quantity || 1) || 1]
+                    );
+                }
+            }
+
+            for (const size of sizesArr) {
+                if (size && size.trim()) {
+                    await pool.query(
+                        `INSERT INTO product_variants (product_id, variant_type, variant_value, stock_quantity, is_active)
+                         VALUES ($1, 'size', $2, $3, true)
+                         ON CONFLICT (product_id, variant_type, variant_value) DO NOTHING`,
+                        [productId, size.trim(), parseInt(data.quantity || 1) || 1]
+                    );
+                }
+            }
+
+            if (colorsArr.length > 0 || sizesArr.length > 0) {
+                console.log(`🎨 Variantes créées pour produit ${productId}: ${colorsArr.length} couleur(s), ${sizesArr.length} taille(s)`);
+            }
+        } catch (variantErr) {
+            console.warn(`⚠️ Erreur insertion variantes pour produit ${productId}:`, variantErr.message);
+        }
+
+        // Update User Sales Count
         await pool.query("UPDATE users SET total_sales = COALESCE(total_sales, 0) + 1 WHERE id = $1", [userId]);
 
-        return createdProduct.id;
+        return productId;
     }
 
     async getUserProducts(userId) {
