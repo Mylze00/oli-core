@@ -233,7 +233,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("Détails - ${p.name.substring(0, p.name.length > 10 ? 10 : p.name.length)}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+        title: const Text("Détail", style: TextStyle(color: Colors.white, fontSize: 16)),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [

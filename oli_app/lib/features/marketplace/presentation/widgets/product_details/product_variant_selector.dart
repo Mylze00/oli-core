@@ -132,12 +132,12 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
       children: [
         for (final entry in _grouped.entries) ...[
           Padding(
-            padding: const EdgeInsets.only(bottom: 8, top: 4),
+            padding: const EdgeInsets.only(bottom: 6, top: 2),
             child: Text(
               entry.value.first.typeLabel,
               style: const TextStyle(
                 color: Colors.white70,
-                fontSize: 13,
+                fontSize: 11,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.5,
               ),
@@ -147,7 +147,7 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
             _buildColorChips(entry.value)
           else
             _buildTextChips(entry.value, entry.key, exchangeNotifier),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
         ],
       ],
     );
@@ -155,8 +155,8 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
 
   Widget _buildColorChips(List<ProductVariant> variants) {
     return Wrap(
-      spacing: 10,
-      runSpacing: 10,
+      spacing: 6,
+      runSpacing: 6,
       children: variants.map((v) {
         final isSelected = _selections['color']?.id == v.id;
         final color = _getColorForValue(v.variantValue);
@@ -166,23 +166,23 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
           onTap: v.inStock ? () => _selectVariant('color', v) : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            width: 40,
-            height: 40,
+            width: 24,
+            height: 24,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
               border: Border.all(
-                color: isSelected ? Colors.blueAccent : (isLight ? Colors.white24 : Colors.transparent),
-                width: isSelected ? 3 : 1.5,
+                color: isSelected ? Colors.blueAccent : Colors.white38,
+                width: isSelected ? 2.5 : 1.5,
               ),
               boxShadow: isSelected
-                  ? [BoxShadow(color: Colors.blueAccent.withOpacity(0.4), blurRadius: 8)]
+                  ? [BoxShadow(color: Colors.blueAccent.withOpacity(0.4), blurRadius: 6)]
                   : null,
             ),
             child: !v.inStock
                 ? CustomPaint(painter: _CrossPainter())
                 : (isSelected
-                    ? Icon(Icons.check, size: 18, color: isLight ? Colors.black : Colors.white)
+                    ? Icon(Icons.check, size: 12, color: isLight ? Colors.black : Colors.white)
                     : null),
           ),
         );
@@ -192,8 +192,8 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
 
   Widget _buildTextChips(List<ProductVariant> variants, String type, ExchangeRateNotifier exchangeNotifier) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 5,
+      runSpacing: 5,
       children: variants.map((v) {
         final isSelected = _selections[type]?.id == v.id;
         final outOfStock = !v.inStock;
@@ -209,12 +209,12 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
           onTap: outOfStock ? null : () => _selectVariant(type, v),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
               color: isSelected
                   ? Colors.blueAccent.withOpacity(0.15)
                   : (outOfStock ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.08)),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(6),
               border: Border.all(
                 color: isSelected
                     ? Colors.blueAccent
@@ -228,7 +228,7 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
                 color: outOfStock
                     ? Colors.white30
                     : (isSelected ? Colors.blueAccent : Colors.white),
-                fontSize: 13,
+                fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 decoration: outOfStock ? TextDecoration.lineThrough : null,
               ),
