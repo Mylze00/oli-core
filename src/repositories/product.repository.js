@@ -184,8 +184,7 @@ class ProductRepository {
         // Exclure les produits des utilisateurs masqués (sauf si on filtre par seller_id - dashboard vendeur)
         if (!filters.seller_id) {
             query += ` AND (u.is_hidden IS NULL OR u.is_hidden = FALSE)`;
-            // Exclure les produits des administrateurs OLI du marché public
-            query += ` AND (u.is_admin IS NULL OR u.is_admin = FALSE)`;
+            // Les produits admin sont désormais visibles dans le marketplace
         }
 
         // Tri selon le type de filtre
