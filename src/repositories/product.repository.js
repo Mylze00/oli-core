@@ -184,7 +184,10 @@ class ProductRepository {
         // Exclure les produits des utilisateurs masqués (sauf si on filtre par seller_id - dashboard vendeur)
         if (!filters.seller_id) {
             query += ` AND (u.is_hidden IS NULL OR u.is_hidden = FALSE)`;
-            // Les produits admin sont désormais visibles dans le marketplace
+            // Exclure les produits admin du marché, mais les garder visibles en recherche
+            if (!filters.search) {
+                query += ` AND (u.is_admin IS NULL OR u.is_admin = FALSE)`;
+            }
         }
 
         // Tri selon le type de filtre
