@@ -168,7 +168,6 @@ class _DynamicSearchBarState extends ConsumerState<DynamicSearchBar> {
       MaterialPageRoute(
         builder: (_) => SearchResultsPage(
           initialQuery: query,
-          allProducts: widget.allProducts,
         ),
       ),
     ).then((_) {

@@ -1,6 +1,9 @@
 import 'dart:collection';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import '../../../config/api_config.dart';
 import '../../../models/product_model.dart';
 import '../widgets/search_result_card.dart';
 import '../providers/search_filters_provider.dart';
@@ -11,12 +14,10 @@ import '../widgets/product_request_widget.dart';
 /// Page dédiée pour afficher les résultats de recherche
 class SearchResultsPage extends ConsumerStatefulWidget {
   final String initialQuery;
-  final List<Product> allProducts;
 
   const SearchResultsPage({
     super.key,
     required this.initialQuery,
-    required this.allProducts,
   });
 
   @override
@@ -26,6 +27,8 @@ class SearchResultsPage extends ConsumerStatefulWidget {
 class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
   late TextEditingController _searchController;
   List<Product> _filteredProducts = [];
+  List<Product> _allSearchResults = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -45,29 +48,68 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
     super.dispose();
   }
 
-  /// Effectue la recherche et applique les filtres avec tri par pertinence
-  void _performSearch(String query) {
+  /// Effectue la recherche via l'API backend puis applique les filtres avec tri par pertinence
+  Future<void> _performSearch(String query) async {
     if (query.trim().isEmpty) {
       setState(() {
         _filteredProducts = [];
+        _allSearchResults = [];
+        _isLoading = false;
       });
       return;
     }
 
+    setState(() => _isLoading = true);
+
+    try {
+      // Appel API direct — indépendant de la page market
+      final uri = Uri.parse('${ApiConfig.baseUrl}/products').replace(
+        queryParameters: {
+          'search': query.trim(),
+          'limit': '100',
+        },
+      );
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        List<dynamic> data;
+        if (decoded is List) {
+          data = decoded;
+        } else if (decoded is Map<String, dynamic> && decoded['products'] != null) {
+          data = decoded['products'] as List<dynamic>;
+        } else {
+          data = [];
+        }
+
+        final products = <Product>[];
+        for (final json in data) {
+          try {
+            products.add(Product.fromJson(json));
+          } catch (e) {
+            debugPrint('⚠️ Skipping malformed product: $e');
+          }
+        }
+
+        _allSearchResults = products;
+      } else {
+        debugPrint('❌ Search API error: ${response.statusCode}');
+        _allSearchResults = [];
+      }
+    } catch (e) {
+      debugPrint('❌ Search error: $e');
+      _allSearchResults = [];
+    }
+
+    // Tri par pertinence côté client
     final filters = ref.read(searchFiltersProvider);
     final lowerQuery = query.toLowerCase().trim();
     final queryWords = lowerQuery.split(RegExp(r'\s+'));
 
-    // 1. Filtrer par recherche textuelle — chaque mot-clé doit matcher
-    var results = widget.allProducts.where((product) {
-      final name = product.name.toLowerCase();
-      final desc = product.description?.toLowerCase() ?? '';
-      // Chaque mot de la requête doit être trouvé dans le nom OU la description
-      return queryWords.every((word) =>
-          name.contains(word) || desc.contains(word));
-    }).toList();
+    var results = List<Product>.from(_allSearchResults);
 
-    // 2. Tri par pertinence (starts-with en premier, puis par nombre de matches)
+    // Tri par pertinence (starts-with en premier, puis par nombre de matches)
     results.sort((a, b) {
       final aName = a.name.toLowerCase();
       final bName = b.name.toLowerCase();
@@ -94,12 +136,15 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
       return b.viewCount.compareTo(a.viewCount);
     });
 
-    // 3. Appliquer les autres filtres
+    // Appliquer les autres filtres
     results = _applyFilters(results, filters);
 
-    setState(() {
-      _filteredProducts = results;
-    });
+    if (mounted) {
+      setState(() {
+        _filteredProducts = results;
+        _isLoading = false;
+      });
+    }
   }
 
   /// Applique les filtres actifs
@@ -182,9 +227,9 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
 
   /// Calcule le prix maximum parmi les résultats
   double _getMaxPrice() {
-    if (widget.allProducts.isEmpty) return 1000;
+    if (_allSearchResults.isEmpty) return 1000;
     double maxP = 0;
-    for (final p in widget.allProducts) {
+    for (final p in _allSearchResults) {
       final price = double.tryParse(p.price) ?? 0;
       if (price > maxP) maxP = price;
     }
@@ -366,9 +411,11 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
 
           // Liste des résultats groupés par vendeur
           Expanded(
-            child: _filteredProducts.isEmpty
-                ? _buildEmptyState()
-                : _buildGroupedResults(),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E7DBA)))
+                : _filteredProducts.isEmpty
+                    ? _buildEmptyState()
+                    : _buildGroupedResults(),
           ),
         ],
       ),
