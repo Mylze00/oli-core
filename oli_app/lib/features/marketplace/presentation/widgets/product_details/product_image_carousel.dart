@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../../models/product_model.dart';
 import '../../../../../../features/cart/providers/cart_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../../../../../providers/exchange_rate_provider.dart';
 
 class ProductImageCarousel extends StatefulWidget {
@@ -20,159 +19,334 @@ class ProductImageCarousel extends StatefulWidget {
 }
 
 class _ProductImageCarouselState extends State<ProductImageCarousel> {
+  final PageController _pageController = PageController();
   int _currentImageIndex = 0;
-  int _previousImageIndex = 0;
 
-  void _onSwipe(DragEndDetails details) {
-    if (details.primaryVelocity == null) return;
-    final images = widget.product.images;
-    if (details.primaryVelocity! < -100 && _currentImageIndex < images.length - 1) {
-      setState(() {
-        _previousImageIndex = _currentImageIndex;
-        _currentImageIndex++;
-      });
-    } else if (details.primaryVelocity! > 100 && _currentImageIndex > 0) {
-      setState(() {
-        _previousImageIndex = _currentImageIndex;
-        _currentImageIndex--;
-      });
-    }
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final p = widget.product;
+    final images = p.images;
 
-    return Stack(children: [
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            color: const Color(0xFF1A1A1A),
-            width: double.infinity,
-            child: p.images.isEmpty
-                ? const SizedBox(
-                    height: 300,
-                    child: Center(
-                      child: Icon(Icons.image, size: 60, color: Colors.grey)),
-                  )
-                : GestureDetector(
-                    onHorizontalDragEnd: _onSwipe,
-                    child: Stack(
-                      children: [
-                        // Image précédente visible en dessous pendant le chargement
-                        if (_previousImageIndex != _currentImageIndex)
-                          Image.network(
-                            p.images[_previousImageIndex],
-                            width: double.infinity,
-                            fit: BoxFit.fitWidth,
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                          ),
-                        // Image courante — se charge par-dessus
-                        Image.network(
-                          p.images[_currentImageIndex],
-                          key: ValueKey(p.images[_currentImageIndex]),
-                          width: double.infinity,
-                          fit: BoxFit.fitWidth,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const SizedBox(
-                                height: 300,
-                                child: Center(
-                                  child: Icon(Icons.broken_image,
-                                      color: Colors.grey, size: 60)),
-                              ),
-                          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                            if (wasSynchronouslyLoaded || frame != null) {
-                              // Image chargée → on peut retirer l'ancienne
-                              return child;
-                            }
-                            // Pas encore chargée → transparent (l'ancienne reste visible en dessous)
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
+    return Stack(
+      children: [
+        // ── Carrousel principal ──────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              height: 340,
+              child: Container(
+                color: const Color(0xFF1A1A1A),
+                width: double.infinity,
+                child: images.isEmpty
+                    ? const Center(
+                        child: Icon(Icons.image, size: 60, color: Colors.grey),
+                      )
+                    : PageView.builder(
+                        controller: _pageController,
+                        itemCount: images.length,
+                        onPageChanged: (index) {
+                          setState(() => _currentImageIndex = index);
+                        },
+                        itemBuilder: (context, index) {
+                          return GestureDetector(
+                            onTap: () => _openFullscreen(context, images, index),
+                            child: _CarouselImageTile(
+                              url: images[index],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
           ),
         ),
-      ),
-      Positioned(
-        top: 10,
-        right: 16,
-        child: Row(children: [
-          CircleAvatar(
-              backgroundColor: Colors.white.withOpacity(0.9),
-              child: IconButton(
-                icon:
-                    const Icon(Icons.ios_share, color: Colors.black, size: 18),
-                onPressed: widget.onShare,
-              )),
-          const SizedBox(width: 10),
-          Consumer(
-            builder: (context, ref, _) {
-              return CircleAvatar(
-                backgroundColor: Colors.white.withOpacity(0.9),
-                child: IconButton(
-                  icon: const Icon(Icons.shopping_cart_outlined,
-                      color: Colors.black, size: 18),
-                  onPressed: () {
-                    final p = widget.product;
-                    ref.read(cartProvider.notifier).addItem(
-                          CartItem(
-                            productId: p.id.toString(),
-                            productName: p.name,
-                            price: double.tryParse(p.price) ?? 0.0,
-                            quantity: 1,
-                            imageUrl:
-                                p.images.isNotEmpty ? p.images.first : null,
-                            sellerName: p.seller,
-                            sellerId: p.sellerId,
-                          ),
-                        );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Row(
-                          children: [
-                            const Icon(Icons.check_circle, color: Colors.white),
-                            const SizedBox(width: 8),
-                            const Text('Produit ajouté au panier'),
-                          ],
-                        ),
-                        backgroundColor: Colors.green,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        margin: const EdgeInsets.all(16),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                ),
-              );
-            }
-          ),
-        ]),
-      ),
-      if (p.images.length > 1)
+
+        // ── Boutons Partage + Panier ──────────────────────────────────────
         Positioned(
-          bottom: 10,
-          left: 0,
-          right: 0,
+          top: 10,
+          right: 24,
           child: Row(
+            children: [
+              _ActionCircle(
+                icon: Icons.ios_share,
+                onTap: widget.onShare,
+              ),
+              const SizedBox(width: 10),
+              Consumer(
+                builder: (context, ref, _) {
+                  return _ActionCircle(
+                    icon: Icons.shopping_cart_outlined,
+                    onTap: () {
+                      ref.read(cartProvider.notifier).addItem(
+                            CartItem(
+                              productId: p.id.toString(),
+                              productName: p.name,
+                              price: double.tryParse(p.price) ?? 0.0,
+                              quantity: 1,
+                              imageUrl: images.isNotEmpty ? images.first : null,
+                              sellerName: p.seller,
+                              sellerId: p.sellerId,
+                            ),
+                          );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Row(
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text('Produit ajouté au panier'),
+                            ],
+                          ),
+                          backgroundColor: Colors.green,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          margin: const EdgeInsets.all(16),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // ── Indicateur de pages (points) ─────────────────────────────────
+        if (images.length > 1)
+          Positioned(
+            bottom: 12,
+            left: 0,
+            right: 0,
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
-                  p.images.length,
-                  (i) => Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: i == _currentImageIndex
-                              ? Colors.blueAccent
-                              : Colors.grey.withOpacity(0.5))))),
+                images.length,
+                (i) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: i == _currentImageIndex ? 18 : 8,
+                  height: 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    color: i == _currentImageIndex
+                        ? Colors.blueAccent
+                        : Colors.white.withOpacity(0.4),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // ── Compteur "1 / N" ─────────────────────────────────────────────
+        if (images.length > 1)
+          Positioned(
+            top: 12,
+            left: 24,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${_currentImageIndex + 1} / ${images.length}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Ouvre un viewer plein écran au tap sur une image
+  void _openFullscreen(BuildContext context, List<String> images, int initialIndex) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, __, ___) => _FullscreenImageViewer(
+          images: images,
+          initialIndex: initialIndex,
         ),
-    ]);
+      ),
+    );
+  }
+}
+
+// ── Tuile image avec placeholder shimmer opaque ────────────────────────────
+class _CarouselImageTile extends StatefulWidget {
+  final String url;
+  const _CarouselImageTile({required this.url});
+
+  @override
+  State<_CarouselImageTile> createState() => _CarouselImageTileState();
+}
+
+class _CarouselImageTileState extends State<_CarouselImageTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _shimmerCtrl;
+  late final Animation<double> _shimmer;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _shimmer = Tween<double>(begin: 0.3, end: 0.7).animate(
+      CurvedAnimation(parent: _shimmerCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _shimmerCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      widget.url,
+      key: ValueKey(widget.url),
+      width: double.infinity,
+      fit: BoxFit.fitWidth,
+      /// Placeholder opaque pendant le chargement → aucune image précédente visible
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) {
+          // Image prête → on l'affiche avec un fade-in
+          return AnimatedOpacity(
+            opacity: 1.0,
+            duration: const Duration(milliseconds: 200),
+            child: child,
+          );
+        }
+        // Pendant le téléchargement → shimmer opaque gris-foncé
+        return AnimatedBuilder(
+          animation: _shimmer,
+          builder: (_, __) => Container(
+            height: 300,
+            color: Color.lerp(
+              const Color(0xFF1A1A1A),
+              const Color(0xFF2E2E2E),
+              _shimmer.value,
+            ),
+          ),
+        );
+      },
+      errorBuilder: (_, __, ___) => const SizedBox(
+        height: 300,
+        child: Center(
+          child: Icon(Icons.broken_image, color: Colors.grey, size: 60),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Widget bouton circulaire ────────────────────────────────────────────────
+class _ActionCircle extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ActionCircle({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      backgroundColor: Colors.white.withOpacity(0.9),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.black, size: 18),
+        onPressed: onTap,
+      ),
+    );
+  }
+}
+
+// ── Viewer plein écran (swipe + zoom) ──────────────────────────────────────
+class _FullscreenImageViewer extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const _FullscreenImageViewer({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_FullscreenImageViewer> createState() => _FullscreenImageViewerState();
+}
+
+class _FullscreenImageViewerState extends State<_FullscreenImageViewer> {
+  late final PageController _ctrl;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _ctrl = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          '${_currentIndex + 1} / ${widget.images.length}',
+          style: const TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        centerTitle: true,
+      ),
+      body: PageView.builder(
+        controller: _ctrl,
+        itemCount: widget.images.length,
+        onPageChanged: (i) => setState(() => _currentIndex = i),
+        itemBuilder: (context, index) {
+          return InteractiveViewer(
+            minScale: 0.8,
+            maxScale: 4.0,
+            child: Center(
+              child: Image.network(
+                widget.images[index],
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.broken_image,
+                  color: Colors.grey,
+                  size: 80,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

@@ -13,7 +13,7 @@ const { BASE_URL } = require('../../config');
  */
 router.get('/', async (req, res) => {
     try {
-        const { status, is_featured, search, limit = 100, offset = 0 } = req.query;
+        const { status, is_featured, search, limit = 9999, offset = 0 } = req.query;
 
         // ── Stats globales ──
         let globalStats = { total: 0, active: 0, banned: 0, featured: 0, good_deals: 0 };

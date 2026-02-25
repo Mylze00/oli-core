@@ -190,19 +190,36 @@ export default function Products() {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 50;
 
-    useEffect(() => { fetchProducts(); }, [filter]);
+    useEffect(() => { setPage(1); fetchProducts(); }, [filter]);
 
     const fetchProducts = async () => {
         try {
-            let url = '/admin/products?limit=200';
+            setLoading(true);
+            // Pas de limit : on charge tout (le backend peut paginer, on demande 9999)
+            let url = '/admin/products?limit=9999';
             if (filter === 'active') url += '&status=active';
             if (filter === 'banned') url += '&status=banned';
             if (filter === 'hidden') url += '&status=hidden';
             if (filter === 'featured') url += '&is_featured=true';
             const { data } = await api.get(url);
-            if (Array.isArray(data)) { setProducts(data); }
-            else { setProducts(data.products || []); if (data.stats) setStats(data.stats); }
+            const list = Array.isArray(data) ? data : (data.products || []);
+            setProducts(list);
+            // Si l'API fournit des stats, on les utilise, sinon on les calcule
+            if (!Array.isArray(data) && data.stats) {
+                setStats(data.stats);
+            } else {
+                setStats({
+                    total: list.length,
+                    active: list.filter(p => p.status === 'active').length,
+                    banned: list.filter(p => p.status === 'banned').length,
+                    hidden: list.filter(p => p.status === 'hidden').length,
+                    featured: list.filter(p => p.is_featured).length,
+                    good_deals: list.filter(p => p.is_good_deal).length,
+                });
+            }
         } catch (error) { console.error("Erreur products:", error); }
         finally { setLoading(false); }
     };
@@ -258,14 +275,20 @@ export default function Products() {
         return 'https://via.placeholder.com/80?text=No+img';
     };
 
-    const filteredProducts = useMemo(() =>
-        products.filter(p => !search ||
+    const filteredProducts = useMemo(() => {
+        const result = products.filter(p => !search ||
             p.name?.toLowerCase().includes(search.toLowerCase()) ||
             p.seller_name?.toLowerCase().includes(search.toLowerCase()) ||
             p.seller_phone?.includes(search) ||
             p.category?.toLowerCase().includes(search.toLowerCase())
-        ), [products, search]
-    );
+        );
+        return result;
+    }, [products, search]);
+
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+    const safePage = Math.min(page, totalPages);
+    const paginatedProducts = filteredProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
     if (loading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
 
@@ -337,7 +360,7 @@ export default function Products() {
 
                     {/* Product Rows */}
                     <div className="divide-y divide-gray-50">
-                        {filteredProducts.map((product) => (
+                        {paginatedProducts.map((product) => (
                             <div key={product.id}
                                 className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-blue-50/50 transition cursor-pointer"
                                 onClick={() => setSelectedProduct(product)}
@@ -440,9 +463,28 @@ export default function Products() {
                         ))}
                     </div>
 
-                    {/* Footer */}
-                    <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 text-xs text-gray-400 text-right">
-                        {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''} affiché{filteredProducts.length > 1 ? 's' : ''}
+                    {/* Footer avec pagination */}
+                    <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                        <span className="text-xs text-gray-400">
+                            {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''} — page {safePage}/{totalPages}
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={safePage <= 1}
+                                className="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition font-medium"
+                            >
+                                ← Précédent
+                            </button>
+                            <span className="text-xs text-gray-500 font-semibold">{safePage}</span>
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={safePage >= totalPages}
+                                className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition font-medium"
+                            >
+                                Suivant →
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

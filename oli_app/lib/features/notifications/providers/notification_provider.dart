@@ -44,53 +44,94 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
 
   Dio get _dio => _ref.read(dioProvider);
 
-  /// Récupérer toutes les notifications
-  Future<void> fetchNotifications() async {
+  /// Indique si une erreur est de type réseau/timeout (retryable)
+  bool _isRetryable(dynamic error) {
+    if (error is DioException) {
+      return error.type == DioExceptionType.connectionTimeout ||
+             error.type == DioExceptionType.receiveTimeout ||
+             error.type == DioExceptionType.sendTimeout ||
+             error.type == DioExceptionType.connectionError;
+    }
+    return false;
+  }
+
+  /// Récupérer toutes les notifications (avec retry automatique)
+  Future<void> fetchNotifications({int maxRetries = 3}) async {
     debugPrint('🔔 [NotificationProvider] Récupération des notifications');
 
     state = state.copyWith(isLoading: true, error: null);
 
-    try {
-      final response = await _dio.get(ApiConfig.notifications);
+    int attempt = 0;
+    while (attempt < maxRetries) {
+      try {
+        final response = await _dio.get(ApiConfig.notifications);
 
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final List notificationsList = response.data['notifications'] ?? [];
-        final int unreadCount = response.data['unreadCount'] ?? 0;
+        if (response.statusCode == 200 && response.data['success'] == true) {
+          final List notificationsList = response.data['notifications'] ?? [];
+          final int unreadCount = response.data['unreadCount'] ?? 0;
 
-        final notifications = notificationsList
-            .map((json) => NotificationModel.fromJson(json))
-            .toList();
+          final notifications = notificationsList
+              .map((json) => NotificationModel.fromJson(json))
+              .toList();
 
-        debugPrint('   ✅ ${notifications.length} notifications récupérées');
+          debugPrint('   ✅ ${notifications.length} notifications récupérées');
 
-        state = state.copyWith(
-          notifications: notifications,
-          unreadCount: unreadCount,
-          isLoading: false,
-        );
-      } else {
-        throw Exception('Erreur lors de la récupération');
+          state = state.copyWith(
+            notifications: notifications,
+            unreadCount: unreadCount,
+            isLoading: false,
+            error: null,
+          );
+          return; // Succès → on sort
+        } else {
+          throw Exception('Erreur lors de la récupération');
+        }
+      } catch (e) {
+        attempt++;
+        final retryable = _isRetryable(e);
+
+        if (retryable && attempt < maxRetries) {
+          final delay = Duration(seconds: (2 << (attempt - 1))); // 2s, 4s, 8s
+          debugPrint('⚠️ [NotificationProvider] Tentative $attempt/$maxRetries échouée. '
+              'Retry dans ${delay.inSeconds}s...');
+          await Future.delayed(delay);
+        } else {
+          // Erreur non retryable ou max tentatives atteint
+          debugPrint('❌ [NotificationProvider] Erreur finale (tentative $attempt/$maxRetries): $e');
+          state = state.copyWith(
+            isLoading: false,
+            error: e.toString(),
+          );
+          return;
+        }
       }
-    } catch (e) {
-      debugPrint('❌ [NotificationProvider] Erreur: $e');
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
     }
   }
 
-  /// Récupérer uniquement le compteur de non-lues
-  Future<void> fetchUnreadCount() async {
-    try {
-      final response = await _dio.get('${ApiConfig.notifications}/unread-count');
 
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final count = response.data['count'] ?? 0;
-        state = state.copyWith(unreadCount: count);
+  /// Récupérer uniquement le compteur de non-lues (avec retry silencieux)
+  Future<void> fetchUnreadCount({int maxRetries = 2}) async {
+    int attempt = 0;
+    while (attempt < maxRetries) {
+      try {
+        final response = await _dio.get('${ApiConfig.notifications}/unread-count');
+        if (response.statusCode == 200 && response.data['success'] == true) {
+          final count = response.data['count'] ?? 0;
+          state = state.copyWith(unreadCount: count);
+          return; // Succès
+        }
+        return;
+      } catch (e) {
+        attempt++;
+        if (_isRetryable(e) && attempt < maxRetries) {
+          final delay = Duration(seconds: (2 << (attempt - 1))); // 2s, 4s
+          debugPrint('⚠️ [NotificationProvider] fetchUnreadCount retry $attempt dans ${delay.inSeconds}s');
+          await Future.delayed(delay);
+        } else {
+          debugPrint('❌ Erreur fetchUnreadCount (finale): $e');
+          return;
+        }
       }
-    } catch (e) {
-      debugPrint('❌ Erreur fetchUnreadCount: $e');
     }
   }
 

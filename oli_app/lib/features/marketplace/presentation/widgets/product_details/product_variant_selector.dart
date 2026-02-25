@@ -127,10 +127,75 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
 
     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
+    // Séparer couleur et taille, puis les autres types
+    final colorEntry = _grouped.entries.where((e) => e.key == 'color').firstOrNull;
+    final sizeEntry  = _grouped.entries.where((e) => e.key == 'size').firstOrNull;
+    final otherEntries = _grouped.entries
+        .where((e) => e.key != 'color' && e.key != 'size')
+        .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final entry in _grouped.entries) ...[
+        // ── Couleur | Taille sur la même ligne ──────────────────────────
+        if (colorEntry != null || sizeEntry != null)
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (colorEntry != null)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          colorEntry.value.first.typeLabel,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        _buildColorChips(colorEntry.value),
+                      ],
+                    ),
+                  ),
+                if (colorEntry != null && sizeEntry != null)
+                  const VerticalDivider(
+                    width: 24,
+                    thickness: 1,
+                    color: Colors.white12,
+                  ),
+                if (sizeEntry != null)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          sizeEntry.value.first.typeLabel,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        _buildTextChips(sizeEntry.value, 'size', exchangeNotifier),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+        if ((colorEntry != null || sizeEntry != null) && otherEntries.isNotEmpty)
+          const SizedBox(height: 8),
+
+        // ── Autres types de variantes (empilés) ─────────────────────────
+        for (final entry in otherEntries) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 6, top: 2),
             child: Text(
@@ -143,10 +208,7 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
               ),
             ),
           ),
-          if (entry.key == 'color')
-            _buildColorChips(entry.value)
-          else
-            _buildTextChips(entry.value, entry.key, exchangeNotifier),
+          _buildTextChips(entry.value, entry.key, exchangeNotifier),
           const SizedBox(height: 4),
         ],
       ],

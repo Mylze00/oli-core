@@ -1,4 +1,5 @@
 
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
@@ -6,6 +7,7 @@ import '../../../../providers/exchange_rate_provider.dart';
 import '../../providers/market_provider.dart';
 import '../pages/product_details_page.dart';
 import '../widgets/market_product_card.dart';
+import '../widgets/market_spotlight_carousel.dart';
 import '../../../../app/theme/theme_provider.dart';
 import '../../../tabs/dashboard/widgets/verified_shops_carousel.dart';
 import '../../../tabs/dashboard/widgets/product_sections.dart';
@@ -84,7 +86,7 @@ class _MarketViewState extends ConsumerState<MarketView> {
       ).toList();
     }
 
-    // Filtre par catégorie (utilise maintenant le vrai champ category)
+    // Filtre par catégorie
     if (_selectedCategory != "Tout") {
       final categoryKey = _categories[_selectedCategory] ?? "";
       if (categoryKey.isNotEmpty) {
@@ -94,7 +96,37 @@ class _MarketViewState extends ConsumerState<MarketView> {
       }
     }
 
-    return filtered;
+    // Mélange aléatoire + diversification vendeurs
+    return _diversify(filtered);
+  }
+
+  /// Mélange les produits et garantit un maximum de diversité vendeur
+  /// en tête de liste (au moins 1 produit par vendeur parmi les premiers)
+  List<Product> _diversify(List<Product> products) {
+    if (products.length <= 1) return products;
+
+    final rng = Random();
+    final shuffled = List<Product>.from(products)..shuffle(rng);
+
+    // Construire une tête diversifiée (un produit par vendeur en premier)
+    final head = <Product>[];
+    final tail = <Product>[];
+    final seenSellers = <String>{};
+
+    for (final p in shuffled) {
+      final sid = p.sellerId.trim();
+      if (sid.isNotEmpty && !seenSellers.contains(sid)) {
+        seenSellers.add(sid);
+        head.add(p);
+      } else {
+        tail.add(p);
+      }
+    }
+
+    // Mélanger aussi la queue
+    tail.shuffle(rng);
+
+    return [...head, ...tail];
   }
 
   void _navigateToProduct(Product product) {
@@ -152,9 +184,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
         data: (allProducts) {
           final filtered = _filterProducts(allProducts);
 
-          // Sections
+          // Sections — filtered est déjà mélangé et diversifié
           final recentProducts = filtered.take(8).toList();
-          final gridProducts = filtered.length > 8 ? filtered.skip(8).toList() : <Product>[];
+          final allGridProducts = filtered.length > 8 ? filtered.skip(8).toList() : <Product>[];
+          // Grille scindée : 6 avant le spotlight, le reste après
+          final gridBefore = allGridProducts.take(6).toList();
+          final gridAfter = allGridProducts.length > 6 ? allGridProducts.skip(6).toList() : <Product>[];
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -250,7 +285,7 @@ class _MarketViewState extends ConsumerState<MarketView> {
                 ],
 
                 // ── 5. SÉPARATEUR ──
-                if (gridProducts.isNotEmpty)
+                if (allGridProducts.isNotEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -266,8 +301,8 @@ class _MarketViewState extends ConsumerState<MarketView> {
                     ),
                   ),
 
-                // ── 6. GRILLE PRODUITS ──
-                if (gridProducts.isNotEmpty)
+                // ── 6a. GRILLE PRODUITS (6 premiers) ──
+                if (gridBefore.isNotEmpty)
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     sliver: SliverGrid(
@@ -279,13 +314,43 @@ class _MarketViewState extends ConsumerState<MarketView> {
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          final product = gridProducts[index];
+                          final product = gridBefore[index];
                           return GestureDetector(
                             onTap: () => _navigateToProduct(product),
                             child: MarketProductCard(product: product),
                           );
                         },
-                        childCount: gridProducts.length,
+                        childCount: gridBefore.length,
+                      ),
+                    ),
+                  ),
+
+                // ── 7. SPOTLIGHT CAROUSEL ──
+                if (filtered.length >= 4)
+                  SliverToBoxAdapter(
+                    child: MarketSpotlightCarousel(products: filtered),
+                  ),
+
+                // ── 6b. GRILLE PRODUITS (suite) ──
+                if (gridAfter.isNotEmpty)
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    sliver: SliverGrid(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 0.65,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final product = gridAfter[index];
+                          return GestureDetector(
+                            onTap: () => _navigateToProduct(product),
+                            child: MarketProductCard(product: product),
+                          );
+                        },
+                        childCount: gridAfter.length,
                       ),
                     ),
                   ),
