@@ -6,7 +6,8 @@ import 'package:oli_app/features/home/home_page.dart';
 
 class OtpPage extends ConsumerStatefulWidget {
   final String phone;
-  const OtpPage({super.key, required this.phone});
+  final String? otpCode; // Code OTP reçu du serveur (mode dev)
+  const OtpPage({super.key, required this.phone, this.otpCode});
 
   @override
   ConsumerState<OtpPage> createState() => _OtpPageState();
@@ -22,6 +23,12 @@ class _OtpPageState extends ConsumerState<OtpPage>
   @override
   void initState() {
     super.initState();
+
+    // Auto-fill le code OTP reçu du serveur
+    if (widget.otpCode != null) {
+      _otpController.text = widget.otpCode!;
+    }
+
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),

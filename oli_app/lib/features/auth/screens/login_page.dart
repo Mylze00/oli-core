@@ -241,15 +241,15 @@ class _LoginPageState extends ConsumerState<LoginPage>
                   onPressed: (_isValid && !authState.isLoading)
                       ? () async {
                           final phone = _phoneController.text;
-                          final success = await ref
+                          final otpCode = await ref
                               .read(authControllerProvider.notifier)
                               .sendOtp(phone);
 
-                          if (success && mounted) {
+                          if (otpCode != null && mounted) {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => OtpPage(phone: phone),
+                                builder: (_) => OtpPage(phone: phone, otpCode: otpCode),
                               ),
                             );
                           }

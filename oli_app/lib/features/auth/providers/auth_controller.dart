@@ -132,7 +132,7 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   /// sendOtp et verifyOtp utilisent http car appelés AVANT login (pas de token)
-  Future<bool> sendOtp(String phone) async {
+  Future<String?> sendOtp(String phone) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final response = await http.post(
@@ -141,10 +141,16 @@ class AuthController extends StateNotifier<AuthState> {
         body: jsonEncode({'phone': phone}),
       );
       state = state.copyWith(isLoading: false);
-      return response.statusCode == 200 || response.statusCode == 201;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        final otpCode = data['otp']?.toString();
+        debugPrint('📩 OTP reçu du serveur: $otpCode');
+        return otpCode;
+      }
+      return null;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'Serveur injoignable');
-      return false;
+      return null;
     }
   }
 
