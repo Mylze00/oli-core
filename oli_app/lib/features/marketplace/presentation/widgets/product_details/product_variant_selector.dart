@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../../../config/api_config.dart';
-import '../../../models/product_variant_model.dart';
-import '../../../providers/exchange_rate_provider.dart';
+import '../../../../../config/api_config.dart';
+import '../../../../../models/product_variant_model.dart';
+import '../../../../../providers/exchange_rate_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Widget pour afficher et sélectionner les variantes d'un produit
