@@ -25,6 +25,16 @@ class SearchFiltersNotifier extends StateNotifier<SearchFilters> {
     state = state.copyWith(inStockOnly: value);
   }
 
+  /// Définir le filtre vendeur
+  void setSellerName(String? name) {
+    state = state.copyWith(sellerName: name);
+  }
+
+  /// Définir le filtre localisation
+  void setLocation(String? location) {
+    state = state.copyWith(location: location);
+  }
+
   /// Effacer la catégorie
   void clearCategory() {
     state = state.copyWith(clearCategory: true);
@@ -43,6 +53,16 @@ class SearchFiltersNotifier extends StateNotifier<SearchFilters> {
   /// Effacer le filtre stock
   void clearStock() {
     state = state.copyWith(clearStock: true);
+  }
+
+  /// Effacer le filtre vendeur
+  void clearSellerName() {
+    state = state.copyWith(clearSeller: true);
+  }
+
+  /// Effacer le filtre localisation
+  void clearLocation() {
+    state = state.copyWith(clearLocation: true);
   }
 
   /// Réinitialiser tous les filtres

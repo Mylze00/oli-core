@@ -301,4 +301,25 @@ router.get('/types/suggestions', requireAuth, requireSeller, (req, res) => {
     });
 });
 
+/**
+ * GET /variants/public/:productId
+ * Liste des variantes actives d'un produit (endpoint public pour les acheteurs)
+ */
+router.get('/public/:productId', async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT id, product_id, variant_type, variant_value, 
+                   price_adjustment, stock_quantity
+            FROM product_variants
+            WHERE product_id = $1 AND is_active = true
+            ORDER BY variant_type, variant_value
+        `, [req.params.productId]);
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error GET /variants/public/:productId:', error);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
 module.exports = router;

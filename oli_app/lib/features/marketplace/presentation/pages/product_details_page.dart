@@ -26,6 +26,8 @@ import '../widgets/product_details/product_action_buttons.dart';
 import '../widgets/product_details/product_protection_widget.dart';
 
 import '../widgets/product_details/product_provenance_table.dart';
+import '../widgets/product_details/product_variant_selector.dart';
+import '../../../../models/product_variant_model.dart';
 import '../../../shop/screens/edit_product_page.dart';
 
 
@@ -37,7 +39,8 @@ class ProductDetailsPage extends ConsumerStatefulWidget {
 }
 
 class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
-  ShippingOption? _selectedShipping; 
+  ShippingOption? _selectedShipping;
+  ProductVariant? _selectedVariant;
 
   void _shareProduct() {
       debugPrint("📤 [DEBUG] Bouton Partage cliqué");
@@ -124,10 +127,20 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   
   void _addToCart() {
     final p = widget.product;
+    final basePrice = double.tryParse(p.price) ?? 0.0;
+    final priceAdj = _selectedVariant?.priceAdjustment ?? 0.0;
+    final effectivePrice = (p.discountPrice != null && p.discountPrice! > 0)
+        ? p.discountPrice! + priceAdj
+        : basePrice + priceAdj;
+    
+    final variantLabel = _selectedVariant != null
+        ? '${_selectedVariant!.typeLabel}: ${_selectedVariant!.variantValue}'
+        : null;
+    
     final cartItem = CartItem(
       productId: p.id,
-      productName: p.name,
-      price: double.tryParse(p.price) ?? 0.0,
+      productName: variantLabel != null ? '${p.name} ($variantLabel)' : p.name,
+      price: effectivePrice,
       imageUrl: p.images.isNotEmpty ? p.images.first : null,
       sellerName: p.seller,
       sellerId: p.sellerId,
@@ -158,13 +171,18 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   void _buyNow() {
     final p = widget.product;
     final basePrice = double.tryParse(p.price) ?? 0.0;
+    final priceAdj = _selectedVariant?.priceAdjustment ?? 0.0;
     final effectivePrice = (p.discountPrice != null && p.discountPrice! > 0)
-        ? p.discountPrice!
-        : basePrice;
+        ? p.discountPrice! + priceAdj
+        : basePrice + priceAdj;
+    
+    final variantLabel = _selectedVariant != null
+        ? '${_selectedVariant!.typeLabel}: ${_selectedVariant!.variantValue}'
+        : null;
     
     final directItem = CartItem(
       productId: p.id,
-      productName: p.name,
+      productName: variantLabel != null ? '${p.name} ($variantLabel)' : p.name,
       price: effectivePrice,
       quantity: 1,
       imageUrl: p.images.isNotEmpty ? p.images.first : null,
@@ -308,6 +326,18 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
           ),
 
           ProductPriceBanner(product: p),
+
+          // Sélecteur de variantes (taille, couleur, etc.)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: ProductVariantSelector(
+              productId: p.id,
+              basePrice: double.tryParse(p.price) ?? 0.0,
+              onVariantSelected: (variant) {
+                setState(() => _selectedVariant = variant);
+              },
+            ),
+          ),
 
           Padding(
             padding: const EdgeInsets.all(16),

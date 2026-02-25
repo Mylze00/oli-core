@@ -45,7 +45,7 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
     super.dispose();
   }
 
-  /// Effectue la recherche et applique les filtres
+  /// Effectue la recherche et applique les filtres avec tri par pertinence
   void _performSearch(String query) {
     if (query.trim().isEmpty) {
       setState(() {
@@ -55,15 +55,46 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
     }
 
     final filters = ref.read(searchFiltersProvider);
-    final lowerQuery = query.toLowerCase();
+    final lowerQuery = query.toLowerCase().trim();
+    final queryWords = lowerQuery.split(RegExp(r'\s+'));
 
-    // 1. Filtrer par recherche textuelle
+    // 1. Filtrer par recherche textuelle — chaque mot-clé doit matcher
     var results = widget.allProducts.where((product) {
-      return product.name.toLowerCase().contains(lowerQuery) ||
-          (product.description?.toLowerCase().contains(lowerQuery) ?? false);
+      final name = product.name.toLowerCase();
+      final desc = product.description?.toLowerCase() ?? '';
+      // Chaque mot de la requête doit être trouvé dans le nom OU la description
+      return queryWords.every((word) =>
+          name.contains(word) || desc.contains(word));
     }).toList();
 
-    // 2. Appliquer les autres filtres
+    // 2. Tri par pertinence (starts-with en premier, puis par nombre de matches)
+    results.sort((a, b) {
+      final aName = a.name.toLowerCase();
+      final bName = b.name.toLowerCase();
+
+      // Priorité 1 : Le nom commence par la requête complète
+      final aStartsFull = aName.startsWith(lowerQuery);
+      final bStartsFull = bName.startsWith(lowerQuery);
+      if (aStartsFull && !bStartsFull) return -1;
+      if (bStartsFull && !aStartsFull) return 1;
+
+      // Priorité 2 : Le nom commence par le premier mot recherché
+      final aStartsFirst = aName.startsWith(queryWords.first);
+      final bStartsFirst = bName.startsWith(queryWords.first);
+      if (aStartsFirst && !bStartsFirst) return -1;
+      if (bStartsFirst && !aStartsFirst) return 1;
+
+      // Priorité 3 : Le mot-clé est dans le nom (pas juste la description)
+      final aInName = queryWords.every((w) => aName.contains(w));
+      final bInName = queryWords.every((w) => bName.contains(w));
+      if (aInName && !bInName) return -1;
+      if (bInName && !aInName) return 1;
+
+      // Priorité 4 : Nombre de vues (popularité)
+      return b.viewCount.compareTo(a.viewCount);
+    });
+
+    // 3. Appliquer les autres filtres
     results = _applyFilters(results, filters);
 
     setState(() {
@@ -75,7 +106,7 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
   List<Product> _applyFilters(List<Product> products, filters) {
     var filtered = products;
 
-    // Filtre catégorie (utilise maintenant le vrai champ category)
+    // Filtre catégorie
     if (filters.category != null) {
       filtered = filtered.where((p) {
         return p.category?.toLowerCase() == filters.category!.toLowerCase();
@@ -106,6 +137,19 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
       filtered = filtered.where((p) => p.quantity > 0).toList();
     }
 
+    // Filtre vendeur
+    if (filters.sellerName != null) {
+      filtered = filtered.where((p) =>
+          p.seller.toLowerCase() == filters.sellerName!.toLowerCase()).toList();
+    }
+
+    // Filtre localisation
+    if (filters.location != null) {
+      final loc = filters.location!.toLowerCase();
+      filtered = filtered.where((p) =>
+          p.location != null && p.location!.toLowerCase().contains(loc)).toList();
+    }
+
     return filtered;
   }
 
@@ -116,6 +160,36 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
         .map((p) => p.category!)
         .toSet()
         .toList()..sort();
+  }
+
+  /// Extrait les vendeurs uniques depuis les résultats
+  List<String> _getAvailableSellers() {
+    return _filteredProducts
+        .where((p) => p.seller.isNotEmpty)
+        .map((p) => p.seller)
+        .toSet()
+        .toList()..sort();
+  }
+
+  /// Extrait les localisations uniques depuis les résultats
+  List<String> _getAvailableLocations() {
+    return _filteredProducts
+        .where((p) => p.location != null && p.location!.isNotEmpty)
+        .map((p) => p.location!)
+        .toSet()
+        .toList()..sort();
+  }
+
+  /// Calcule le prix maximum parmi les résultats
+  double _getMaxPrice() {
+    if (widget.allProducts.isEmpty) return 1000;
+    double maxP = 0;
+    for (final p in widget.allProducts) {
+      final price = double.tryParse(p.price) ?? 0;
+      if (price > maxP) maxP = price;
+    }
+    // Arrondir au centième supérieur
+    return (maxP / 100).ceilToDouble() * 100;
   }
 
   @override
@@ -157,6 +231,9 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
                     ),
                     builder: (context) => SearchFiltersSheet(
                       availableCategories: _getAvailableCategories(),
+                      availableSellers: _getAvailableSellers(),
+                      availableLocations: _getAvailableLocations(),
+                      maxProductPrice: _getMaxPrice(),
                     ),
                   ).then((_) {
                     // Réappliquer la recherche après modification des filtres
@@ -208,6 +285,7 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
                   if (filters.category != null)
                     Chip(
                       label: Text(filters.category!),
+                      avatar: const Icon(Icons.category, size: 16),
                       deleteIcon: const Icon(Icons.close, size: 16),
                       onDeleted: () {
                         ref.read(searchFiltersProvider.notifier).clearCategory();
@@ -217,17 +295,39 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
                   if (filters.minPrice != null || filters.maxPrice != null)
                     Chip(
                       label: Text(
-                        '${filters.minPrice?.toInt() ?? 0} - ${filters.maxPrice?.toInt() ?? "∞"} CDF',
+                        '\$${filters.minPrice?.toInt() ?? 0} - \$${filters.maxPrice?.toInt() ?? "∞"}',
                       ),
+                      avatar: const Icon(Icons.attach_money, size: 16),
                       deleteIcon: const Icon(Icons.close, size: 16),
                       onDeleted: () {
                         ref.read(searchFiltersProvider.notifier).clearPrice();
                         _performSearch(_searchController.text);
                       },
                     ),
+                  if (filters.sellerName != null)
+                    Chip(
+                      label: Text(filters.sellerName!),
+                      avatar: const Icon(Icons.store, size: 16),
+                      deleteIcon: const Icon(Icons.close, size: 16),
+                      onDeleted: () {
+                        ref.read(searchFiltersProvider.notifier).clearSellerName();
+                        _performSearch(_searchController.text);
+                      },
+                    ),
+                  if (filters.location != null)
+                    Chip(
+                      label: Text(filters.location!),
+                      avatar: const Icon(Icons.location_on, size: 16),
+                      deleteIcon: const Icon(Icons.close, size: 16),
+                      onDeleted: () {
+                        ref.read(searchFiltersProvider.notifier).clearLocation();
+                        _performSearch(_searchController.text);
+                      },
+                    ),
                   if (filters.verifiedShopsOnly == true)
                     Chip(
                       label: const Text('Boutiques vérifiées'),
+                      avatar: const Icon(Icons.verified, size: 16, color: Colors.blue),
                       deleteIcon: const Icon(Icons.close, size: 16),
                       onDeleted: () {
                         ref.read(searchFiltersProvider.notifier).clearShopType();
@@ -237,6 +337,7 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
                   if (filters.inStockOnly == true)
                     Chip(
                       label: const Text('En stock'),
+                      avatar: const Icon(Icons.inventory, size: 16),
                       deleteIcon: const Icon(Icons.close, size: 16),
                       onDeleted: () {
                         ref.read(searchFiltersProvider.notifier).clearStock();
@@ -380,12 +481,29 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
                               ),
                           ],
                         ),
-                        Text(
-                          '${products.length} produit${products.length > 1 ? 's' : ''} trouvé${products.length > 1 ? 's' : ''}',
-                          style: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              '${products.length} produit${products.length > 1 ? 's' : ''} trouvé${products.length > 1 ? 's' : ''}',
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (firstProduct.location != null && firstProduct.location!.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Icon(Icons.location_on, size: 12, color: Colors.grey[500]),
+                              const SizedBox(width: 2),
+                              Flexible(
+                                child: Text(
+                                  firstProduct.location!,
+                                  style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),

@@ -21,9 +21,9 @@ class AllCategoriesPage extends StatelessWidget {
     {"label": "Jardin", "icon": Icons.grass, "image": "assets/images/categories/garden.png"},
     {"label": "Animaux", "icon": Icons.pets, "image": "assets/images/categories/pets.png"},
     {"label": "Bébé", "icon": Icons.child_friendly, "image": "assets/images/categories/baby.png"}, 
-    {"label": "Alimentation", "icon": Icons.restaurant, "image": null}, // Pas d'image générée
-    {"label": "Sécurité", "icon": Icons.security, "image": null}, // Pas d'image générée
-    {"label": "Autres", "icon": Icons.category, "image": null},
+    {"label": "Alimentation", "icon": Icons.restaurant, "image": "assets/images/categories/food.png"},
+    {"label": "Sécurité", "icon": Icons.security, "image": "assets/images/categories/security.png"},
+    {"label": "Autres", "icon": Icons.category, "image": "assets/images/categories/other.png"},
   ];
 
   @override

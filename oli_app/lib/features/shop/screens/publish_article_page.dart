@@ -76,9 +76,9 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     {"key": "garden",       "label": "Jardin",        "icon": Icons.grass,            "image": "assets/images/categories/garden.png"},
     {"key": "pets",         "label": "Animaux",       "icon": Icons.pets,             "image": "assets/images/categories/pets.png"},
     {"key": "baby",         "label": "Bébé",          "icon": Icons.child_friendly,   "image": "assets/images/categories/baby.png"}, 
-    {"key": "food",         "label": "Alimentation",  "icon": Icons.restaurant,       "image": null},
-    {"key": "security",     "label": "Sécurité",      "icon": Icons.security,         "image": null},
-    {"key": "other",        "label": "Autres",        "icon": Icons.category,         "image": null},
+    {"key": "food",         "label": "Alimentation",  "icon": Icons.restaurant,       "image": "assets/images/categories/food.png"},
+    {"key": "security",     "label": "Sécurité",      "icon": Icons.security,         "image": "assets/images/categories/security.png"},
+    {"key": "other",        "label": "Autres",        "icon": Icons.category,         "image": "assets/images/categories/other.png"},
   ];
 
   // ────────────────── LISTENERS pour la barre de progression ──────────────────

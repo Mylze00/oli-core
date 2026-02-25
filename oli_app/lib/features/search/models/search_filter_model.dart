@@ -8,6 +8,8 @@ class SearchFilters {
   final double? maxPrice;
   final bool? verifiedShopsOnly;
   final bool? inStockOnly;
+  final String? sellerName;
+  final String? location;
 
   const SearchFilters({
     this.category,
@@ -15,6 +17,8 @@ class SearchFilters {
     this.maxPrice,
     this.verifiedShopsOnly,
     this.inStockOnly,
+    this.sellerName,
+    this.location,
   });
 
   /// Vérifie si des filtres sont actifs
@@ -23,7 +27,9 @@ class SearchFilters {
       minPrice != null ||
       maxPrice != null ||
       verifiedShopsOnly == true ||
-      inStockOnly == true;
+      inStockOnly == true ||
+      sellerName != null ||
+      location != null;
 
   /// Compte le nombre de filtres actifs
   int get activeFiltersCount {
@@ -32,6 +38,8 @@ class SearchFilters {
     if (minPrice != null || maxPrice != null) count++;
     if (verifiedShopsOnly == true) count++;
     if (inStockOnly == true) count++;
+    if (sellerName != null) count++;
+    if (location != null) count++;
     return count;
   }
 
@@ -42,10 +50,14 @@ class SearchFilters {
     double? maxPrice,
     bool? verifiedShopsOnly,
     bool? inStockOnly,
+    String? sellerName,
+    String? location,
     bool clearCategory = false,
     bool clearPrice = false,
     bool clearShopType = false,
     bool clearStock = false,
+    bool clearSeller = false,
+    bool clearLocation = false,
   }) {
     return SearchFilters(
       category: clearCategory ? null : (category ?? this.category),
@@ -53,6 +65,8 @@ class SearchFilters {
       maxPrice: clearPrice ? null : (maxPrice ?? this.maxPrice),
       verifiedShopsOnly: clearShopType ? null : (verifiedShopsOnly ?? this.verifiedShopsOnly),
       inStockOnly: clearStock ? null : (inStockOnly ?? this.inStockOnly),
+      sellerName: clearSeller ? null : (sellerName ?? this.sellerName),
+      location: clearLocation ? null : (location ?? this.location),
     );
   }
 
@@ -70,7 +84,9 @@ class SearchFilters {
           minPrice == other.minPrice &&
           maxPrice == other.maxPrice &&
           verifiedShopsOnly == other.verifiedShopsOnly &&
-          inStockOnly == other.inStockOnly;
+          inStockOnly == other.inStockOnly &&
+          sellerName == other.sellerName &&
+          location == other.location;
 
   @override
   int get hashCode =>
@@ -78,5 +94,7 @@ class SearchFilters {
       minPrice.hashCode ^
       maxPrice.hashCode ^
       verifiedShopsOnly.hashCode ^
-      inStockOnly.hashCode;
+      inStockOnly.hashCode ^
+      sellerName.hashCode ^
+      location.hashCode;
 }
