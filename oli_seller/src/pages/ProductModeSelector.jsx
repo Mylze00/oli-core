@@ -16,6 +16,16 @@ export default function ProductModeSelector() {
             route: '/products/new/detail'
         },
         {
+            id: 'batch',
+            icon: <Package size={36} className="text-amber-500" />,
+            title: 'Mode Lot',
+            subtitle: 'Jusqu\'à 20 produits d\'un coup',
+            description: 'Ajoutez plusieurs produits en une seule session. Idéal pour publier rapidement un stock de produits avec photos, prix et catégorie.',
+            tags: ['1-20 produits', 'Publication groupée', 'Gain de temps'],
+            color: 'amber',
+            route: '/products/new/batch'
+        },
+        {
             id: 'wholesale',
             icon: <Package size={36} className="text-emerald-400" />,
             title: 'Mode Grossiste',
@@ -45,7 +55,7 @@ export default function ProductModeSelector() {
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {modes.map((mode) => (
                     <button
                         key={mode.id}

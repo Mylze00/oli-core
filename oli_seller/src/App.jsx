@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import SellerDashboard from './pages/SellerDashboard';
 import ProductEditor from './pages/ProductEditor';
+import ProductBatchEditor from './pages/ProductBatchEditor';
 import ProductModeSelector from './pages/ProductModeSelector';
 import ProductEditorDetail from './pages/ProductEditorDetail';
 import ProductList from './pages/ProductList';
@@ -180,6 +181,12 @@ function App() {
                 <Route path="/products/new/detail" element={
                     <ProtectedRoute>
                         <SellerLayout><ProductEditorDetail /></SellerLayout>
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/products/new/batch" element={
+                    <ProtectedRoute>
+                        <SellerLayout><ProductBatchEditor /></SellerLayout>
                     </ProtectedRoute>
                 } />
 
