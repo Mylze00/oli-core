@@ -193,7 +193,7 @@ export default function ProductList() {
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {products.map((product) => (
-                                <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                                <tr key={product.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => navigate(`/products/${product.id}/edit`)}>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
                                             {getImageUrl(product.images) ? (
@@ -222,25 +222,25 @@ export default function ProductList() {
                                     </td>
                                     <td className="px-6 py-4">
                                         <span
-                                            className={`px-3 py-1 rounded-full text-xs font-semibold ${product.is_active
+                                            className={`px-3 py-1 rounded-full text-xs font-semibold ${product.status === 'active'
                                                 ? 'bg-green-100 text-green-800'
                                                 : 'bg-gray-100 text-gray-800'
                                                 }`}
                                         >
-                                            {product.is_active ? 'Actif' : 'Inactif'}
+                                            {product.status === 'active' ? 'Actif' : 'Inactif'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex items-center justify-end gap-2">
+                                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                                             <button
                                                 onClick={() => handleToggleStatus(product)}
-                                                className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${product.is_active
+                                                className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${product.status === 'active'
                                                     ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
                                                     : 'text-orange-600 bg-orange-50 hover:bg-orange-100'}`}
-                                                title={product.is_active ? "Cliquez pour masquer" : "Cliquez pour afficher"}
+                                                title={product.status === 'active' ? "Cliquez pour masquer" : "Cliquez pour afficher"}
                                             >
-                                                {product.is_active ? <Eye size={16} /> : <EyeOff size={16} />}
-                                                <span className="text-sm hidden md:inline">{product.is_active ? 'Masquer' : 'Afficher'}</span>
+                                                {product.status === 'active' ? <Eye size={16} /> : <EyeOff size={16} />}
+                                                <span className="text-sm hidden md:inline">{product.status === 'active' ? 'Masquer' : 'Afficher'}</span>
                                             </button>
 
                                             <button

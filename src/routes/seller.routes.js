@@ -110,15 +110,16 @@ router.patch('/products/:id/toggle', requireAuth, requireSeller, async (req, res
             return res.status(403).json({ error: 'Non autorisé' });
         }
 
-        // Toggle le statut
+        // Toggle le statut (active <-> inactive)
+        const newStatus = product.status === 'active' ? 'inactive' : 'active';
         const updatedProduct = await productRepo.update(id, {
-            is_active: !product.is_active
+            status: newStatus
         });
 
         res.json({
             success: true,
             product: updatedProduct,
-            message: updatedProduct.is_active ? 'Produit activé' : 'Produit désactivé'
+            message: newStatus === 'active' ? 'Produit activé' : 'Produit désactivé'
         });
     } catch (error) {
         console.error('Error PATCH /seller/products/:id/toggle:', error);
