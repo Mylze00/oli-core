@@ -10,6 +10,7 @@ import '../../marketplace/presentation/pages/product_details_page.dart'; // For 
 import '../dashboard/providers/shops_provider.dart';
 import '../../marketplace/providers/market_provider.dart';
 import '../../marketplace/presentation/pages/market_view.dart';
+import '../../marketplace/presentation/pages/category_products_page.dart';
 import '../../search/providers/search_filters_provider.dart'; // <- Added
 import 'widgets/ads_carousel.dart';
 import 'widgets/home_app_bar.dart';
@@ -186,22 +187,41 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   void _onCategorySelected(String label) {
     _hideCategoriesTimer?.cancel();
     
-    // Set the category filter in the provider
+    // Map label → key
     final categoryKey = _categories[label] ?? '';
-    ref.read(searchFiltersProvider.notifier).setCategory(categoryKey);
     
-    // Switch to the Market tab instead of pushing a new page
-    if (widget.onSwitchToMarket != null) {
-      widget.onSwitchToMarket!();
-    } else {
-      // Fallback: push if callback not provided (shouldn't happen)
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => MarketView(initialCategoryLabel: label),
+    // Map label → icon
+    const categoryIcons = <String, IconData>{
+      'Industrie': Icons.factory,
+      'Maison': Icons.chair,
+      'Véhicules': Icons.directions_car,
+      'Mode': Icons.checkroom,
+      'Électronique': Icons.phone_android,
+      'Sports': Icons.sports_soccer,
+      'Beauté': Icons.face,
+      'Jouets': Icons.toys,
+      'Santé': Icons.medical_services,
+      'Construction': Icons.construction,
+      'Outils': Icons.build,
+      'Bureau': Icons.desk,
+      'Jardin': Icons.grass,
+      'Animaux': Icons.pets,
+      'Bébé': Icons.child_friendly,
+      'Alimentation': Icons.restaurant,
+      'Sécurité': Icons.security,
+      'Autres': Icons.category,
+    };
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CategoryProductsPage(
+          categoryKey: categoryKey,
+          categoryLabel: label,
+          categoryIcon: categoryIcons[label],
         ),
-      );
-    }
+      ),
+    );
   }
 
   void _toggleCategories() {

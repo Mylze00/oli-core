@@ -1,29 +1,29 @@
 import 'package:flutter/material.dart';
-import 'market_view.dart';
+import 'category_products_page.dart';
 
 class AllCategoriesPage extends StatelessWidget {
   const AllCategoriesPage({super.key});
 
   // Liste alignée avec MarketView - Design Premium 3D Icons
   final List<Map<String, dynamic>> categories = const [
-    {"label": "Industrie", "icon": Icons.factory, "image": "assets/images/categories/industry.png"},
-    {"label": "Maison", "icon": Icons.chair, "image": "assets/images/categories/home.png"},
-    {"label": "Véhicules", "icon": Icons.directions_car, "image": "assets/images/categories/vehicles.png"},
-    {"label": "Mode", "icon": Icons.checkroom, "image": "assets/images/categories/fashion.png"},
-    {"label": "Électronique", "icon": Icons.phone_android, "image": "assets/images/categories/electronics.png"},
-    {"label": "Sports", "icon": Icons.sports_soccer, "image": "assets/images/categories/sports.png"},
-    {"label": "Beauté", "icon": Icons.face, "image": "assets/images/categories/beauty.png"}, 
-    {"label": "Jouets", "icon": Icons.toys, "image": "assets/images/categories/toys.png"},
-    {"label": "Santé", "icon": Icons.medical_services, "image": "assets/images/categories/health.png"},
-    {"label": "Construction", "icon": Icons.construction, "image": "assets/images/categories/construction.png"},
-    {"label": "Outils", "icon": Icons.build, "image": "assets/images/categories/tools.png"},
-    {"label": "Bureau", "icon": Icons.desk, "image": "assets/images/categories/office.png"},
-    {"label": "Jardin", "icon": Icons.grass, "image": "assets/images/categories/garden.png"},
-    {"label": "Animaux", "icon": Icons.pets, "image": "assets/images/categories/pets.png"},
-    {"label": "Bébé", "icon": Icons.child_friendly, "image": "assets/images/categories/baby.png"}, 
-    {"label": "Alimentation", "icon": Icons.restaurant, "image": "assets/images/categories/food.png"},
-    {"label": "Sécurité", "icon": Icons.security, "image": "assets/images/categories/security.png"},
-    {"label": "Autres", "icon": Icons.category, "image": "assets/images/categories/other.png"},
+    {"label": "Industrie", "key": "industry", "icon": Icons.factory, "image": "assets/images/categories/industry.png"},
+    {"label": "Maison", "key": "home", "icon": Icons.chair, "image": "assets/images/categories/home.png"},
+    {"label": "Véhicules", "key": "vehicles", "icon": Icons.directions_car, "image": "assets/images/categories/vehicles.png"},
+    {"label": "Mode", "key": "fashion", "icon": Icons.checkroom, "image": "assets/images/categories/fashion.png"},
+    {"label": "Électronique", "key": "electronics", "icon": Icons.phone_android, "image": "assets/images/categories/electronics.png"},
+    {"label": "Sports", "key": "sports", "icon": Icons.sports_soccer, "image": "assets/images/categories/sports.png"},
+    {"label": "Beauté", "key": "beauty", "icon": Icons.face, "image": "assets/images/categories/beauty.png"}, 
+    {"label": "Jouets", "key": "toys", "icon": Icons.toys, "image": "assets/images/categories/toys.png"},
+    {"label": "Santé", "key": "health", "icon": Icons.medical_services, "image": "assets/images/categories/health.png"},
+    {"label": "Construction", "key": "construction", "icon": Icons.construction, "image": "assets/images/categories/construction.png"},
+    {"label": "Outils", "key": "tools", "icon": Icons.build, "image": "assets/images/categories/tools.png"},
+    {"label": "Bureau", "key": "office", "icon": Icons.desk, "image": "assets/images/categories/office.png"},
+    {"label": "Jardin", "key": "garden", "icon": Icons.grass, "image": "assets/images/categories/garden.png"},
+    {"label": "Animaux", "key": "pets", "icon": Icons.pets, "image": "assets/images/categories/pets.png"},
+    {"label": "Bébé", "key": "baby", "icon": Icons.child_friendly, "image": "assets/images/categories/baby.png"}, 
+    {"label": "Alimentation", "key": "food", "icon": Icons.restaurant, "image": "assets/images/categories/food.png"},
+    {"label": "Sécurité", "key": "security", "icon": Icons.security, "image": "assets/images/categories/security.png"},
+    {"label": "Autres", "key": "other", "icon": Icons.category, "image": "assets/images/categories/other.png"},
   ];
 
   @override
@@ -58,7 +58,11 @@ class AllCategoriesPage extends StatelessWidget {
               Navigator.push(
                 context, 
                 MaterialPageRoute(
-                  builder: (_) => MarketView(initialCategoryLabel: cat['label'])
+                  builder: (_) => CategoryProductsPage(
+                    categoryKey: cat['key'],
+                    categoryLabel: cat['label'],
+                    categoryIcon: cat['icon'],
+                  ),
                 )
               );
             },
