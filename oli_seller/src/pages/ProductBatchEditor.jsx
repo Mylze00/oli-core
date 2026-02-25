@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, X, HelpCircle, Camera, Tag, Package, ChevronDown, CheckCircle, AlertCircle, Layers } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, X, HelpCircle, Camera, Tag, Package, ChevronDown, CheckCircle, AlertCircle, Layers, Palette, Ruler } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
@@ -39,6 +39,23 @@ const AVAILABLE_METHODS = [
     { id: 'free', label: 'Livraison Gratuite', time: '3-7 jours' },
 ];
 
+const PRESET_COLORS = [
+    { name: 'Noir', hex: '#1a1a1a' },
+    { name: 'Blanc', hex: '#f5f5f5' },
+    { name: 'Rouge', hex: '#ef4444' },
+    { name: 'Bleu', hex: '#3b82f6' },
+    { name: 'Vert', hex: '#22c55e' },
+    { name: 'Jaune', hex: '#eab308' },
+    { name: 'Rose', hex: '#ec4899' },
+    { name: 'Orange', hex: '#f97316' },
+    { name: 'Violet', hex: '#a855f7' },
+    { name: 'Gris', hex: '#9ca3af' },
+    { name: 'Marron', hex: '#92400e' },
+    { name: 'Beige', hex: '#d4a574' },
+];
+
+const PRESET_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45'];
+
 // Génère un produit vierge
 const createEmptyProduct = () => ({
     name: '',
@@ -47,7 +64,8 @@ const createEmptyProduct = () => ({
     category: 'electronics',
     condition: 'Neuf',
     quantity: '1',
-    color: '',
+    colors: [],          // string[]
+    sizes: [],           // string[]
     location: '',
     images: [],          // File[]
     imagePreviews: [],   // string[] (object URLs)
@@ -118,12 +136,40 @@ export default function ProductBatchEditor() {
         const dup = {
             ...source,
             name: source.name ? `${source.name} (copie)` : '',
+            colors: [...source.colors],
+            sizes: [...source.sizes],
             images: [],
             imagePreviews: [],
             certifyAuthenticity: false,
         };
         setProducts(prev => [...prev.slice(0, index + 1), dup, ...prev.slice(index + 1)]);
         setActiveTab(index + 1);
+    };
+
+    // ── Color/Size helpers ──
+
+    const addColor = (productIndex, colorName) => {
+        const p = products[productIndex];
+        const trimmed = colorName.trim();
+        if (!trimmed || p.colors.includes(trimmed)) return;
+        updateProduct(productIndex, 'colors', [...p.colors, trimmed]);
+    };
+
+    const removeColor = (productIndex, colorIndex) => {
+        const p = products[productIndex];
+        updateProduct(productIndex, 'colors', p.colors.filter((_, i) => i !== colorIndex));
+    };
+
+    const addSize = (productIndex, sizeName) => {
+        const p = products[productIndex];
+        const trimmed = sizeName.trim();
+        if (!trimmed || p.sizes.includes(trimmed)) return;
+        updateProduct(productIndex, 'sizes', [...p.sizes, trimmed]);
+    };
+
+    const removeSize = (productIndex, sizeIndex) => {
+        const p = products[productIndex];
+        updateProduct(productIndex, 'sizes', p.sizes.filter((_, i) => i !== sizeIndex));
     };
 
     // ── Image handling ──
@@ -222,7 +268,9 @@ export default function ProductBatchEditor() {
                 formData.append('description', p.description.trim());
                 formData.append('condition', p.condition);
                 formData.append('quantity', p.quantity || '1');
-                formData.append('color', p.color.trim());
+                formData.append('color', p.colors.join(', '));
+                formData.append('colors', JSON.stringify(p.colors));
+                formData.append('sizes', JSON.stringify(p.sizes));
                 formData.append('category', p.category || 'other');
                 formData.append('location', p.location.trim() || 'Non spécifiée');
                 formData.append('is_negotiable', 'false');
@@ -362,8 +410,8 @@ export default function ProductBatchEditor() {
                                     key={i}
                                     onClick={() => setActiveTab(i)}
                                     className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${isActive
-                                            ? 'border-amber-500 text-amber-700 bg-amber-50/50'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                                        ? 'border-amber-500 text-amber-700 bg-amber-50/50'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                                         }`}
                                 >
                                     {/* Status dot */}
@@ -522,28 +570,159 @@ export default function ProductBatchEditor() {
                         </button>
                     </div>
 
-                    {/* État + Couleur (2 cols) */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">État *</label>
-                            <select
-                                className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none bg-white"
-                                value={current.condition}
-                                onChange={e => updateProduct(activeTab, 'condition', e.target.value)}
-                            >
-                                {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
+                    {/* État */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">État *</label>
+                        <select
+                            className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                            value={current.condition}
+                            onChange={e => updateProduct(activeTab, 'condition', e.target.value)}
+                        >
+                            {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                </div>
+
+                {/* ── Couleurs & Tailles ── */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-5">
+                    {/* Couleurs */}
+                    <div>
+                        <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                            <Palette size={16} className="text-amber-500" /> Couleurs disponibles
+                        </label>
+
+                        {/* Selected colors */}
+                        {current.colors.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                {current.colors.map((c, i) => {
+                                    const preset = PRESET_COLORS.find(pc => pc.name === c);
+                                    return (
+                                        <span
+                                            key={i}
+                                            className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full group"
+                                        >
+                                            {preset && (
+                                                <span
+                                                    className="w-3.5 h-3.5 rounded-full border border-gray-300 flex-shrink-0"
+                                                    style={{ backgroundColor: preset.hex }}
+                                                />
+                                            )}
+                                            {c}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeColor(activeTab, i)}
+                                                className="text-gray-400 hover:text-red-500 transition-colors"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Preset color swatches */}
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            {PRESET_COLORS.map(pc => {
+                                const isSelected = current.colors.includes(pc.name);
+                                return (
+                                    <button
+                                        key={pc.name}
+                                        type="button"
+                                        onClick={() => isSelected ? removeColor(activeTab, current.colors.indexOf(pc.name)) : addColor(activeTab, pc.name)}
+                                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all ${isSelected
+                                                ? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm'
+                                                : 'border-gray-200 hover:border-gray-300 text-gray-600 hover:bg-gray-50'
+                                            }`}
+                                        title={pc.name}
+                                    >
+                                        <span
+                                            className={`w-3.5 h-3.5 rounded-full border flex-shrink-0 ${isSelected ? 'border-amber-400' : 'border-gray-300'}`}
+                                            style={{ backgroundColor: pc.hex }}
+                                        />
+                                        {pc.name}
+                                    </button>
+                                );
+                            })}
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Couleur</label>
-                            <input
-                                type="text"
-                                className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
-                                placeholder="ex: Noir"
-                                value={current.color}
-                                onChange={e => updateProduct(activeTab, 'color', e.target.value)}
-                            />
+
+                        {/* Custom color input */}
+                        <input
+                            type="text"
+                            className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                            placeholder="Autre couleur + Entrée"
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addColor(activeTab, e.target.value);
+                                    e.target.value = '';
+                                }
+                            }}
+                        />
+                    </div>
+
+                    <hr className="border-gray-100" />
+
+                    {/* Tailles */}
+                    <div>
+                        <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                            <Ruler size={16} className="text-amber-500" /> Tailles disponibles
+                        </label>
+
+                        {/* Selected sizes */}
+                        {current.sizes.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                {current.sizes.map((s, i) => (
+                                    <span
+                                        key={i}
+                                        className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full"
+                                    >
+                                        {s}
+                                        <button
+                                            type="button"
+                                            onClick={() => removeSize(activeTab, i)}
+                                            className="text-gray-400 hover:text-red-500 transition-colors"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Preset size chips */}
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            {PRESET_SIZES.map(size => {
+                                const isSelected = current.sizes.includes(size);
+                                return (
+                                    <button
+                                        key={size}
+                                        type="button"
+                                        onClick={() => isSelected ? removeSize(activeTab, current.sizes.indexOf(size)) : addSize(activeTab, size)}
+                                        className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${isSelected
+                                                ? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm'
+                                                : 'border-gray-200 hover:border-gray-300 text-gray-600 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        {size}
+                                    </button>
+                                );
+                            })}
                         </div>
+
+                        {/* Custom size input */}
+                        <input
+                            type="text"
+                            className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                            placeholder="Autre taille + Entrée (ex: 46, Unique, 128GB...)"
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addSize(activeTab, e.target.value);
+                                    e.target.value = '';
+                                }
+                            }}
+                        />
                     </div>
 
                     {/* Localisation */}
@@ -679,8 +858,8 @@ export default function ProductBatchEditor() {
                                             setShowCategoryOverlay(false);
                                         }}
                                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${current.category === cat.key
-                                                ? 'border-amber-500 bg-amber-50 shadow-md'
-                                                : 'border-gray-100 hover:border-amber-200 hover:bg-gray-50'
+                                            ? 'border-amber-500 bg-amber-50 shadow-md'
+                                            : 'border-gray-100 hover:border-amber-200 hover:bg-gray-50'
                                             }`}
                                     >
                                         <span className="text-2xl">{cat.emoji}</span>
