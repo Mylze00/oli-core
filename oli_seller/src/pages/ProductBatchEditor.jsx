@@ -69,9 +69,9 @@ const createEmptyProduct = () => ({
     location: '',
     images: [],          // File[]
     imagePreviews: [],   // string[] (object URLs)
-    shippingMethod: 'oli_standard',
+    shippingMethod: '',
     shippingCost: '',
-    shippingTime: '2-5 jours',
+    shippingTime: '',
     certifyAuthenticity: false,
 });
 
@@ -208,14 +208,12 @@ export default function ProductBatchEditor() {
 
     // ── Shipping update ──
     const updateShipping = (productIndex, methodId) => {
-        const method = AVAILABLE_METHODS.find(m => m.id === methodId);
         const isFree = methodId === 'free' || methodId === 'hand_delivery';
         setProducts(prev => {
             const updated = [...prev];
             updated[productIndex] = {
                 ...updated[productIndex],
                 shippingMethod: methodId,
-                shippingTime: method?.time || '',
                 shippingCost: isFree ? '0' : updated[productIndex].shippingCost,
             };
             return updated;
@@ -631,8 +629,8 @@ export default function ProductBatchEditor() {
                                         type="button"
                                         onClick={() => isSelected ? removeColor(activeTab, current.colors.indexOf(pc.name)) : addColor(activeTab, pc.name)}
                                         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-medium transition-all ${isSelected
-                                                ? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm'
-                                                : 'border-gray-200 hover:border-gray-300 text-gray-600 hover:bg-gray-50'
+                                            ? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm'
+                                            : 'border-gray-200 hover:border-gray-300 text-gray-600 hover:bg-gray-50'
                                             }`}
                                         title={pc.name}
                                     >
@@ -700,8 +698,8 @@ export default function ProductBatchEditor() {
                                         type="button"
                                         onClick={() => isSelected ? removeSize(activeTab, current.sizes.indexOf(size)) : addSize(activeTab, size)}
                                         className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${isSelected
-                                                ? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm'
-                                                : 'border-gray-200 hover:border-gray-300 text-gray-600 hover:bg-gray-50'
+                                            ? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm'
+                                            : 'border-gray-200 hover:border-gray-300 text-gray-600 hover:bg-gray-50'
                                             }`}
                                     >
                                         {size}
@@ -744,18 +742,30 @@ export default function ProductBatchEditor() {
                         <Package size={18} className="text-amber-500" /> Livraison
                     </h2>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-xs text-gray-500 mb-1">Mode de livraison</label>
+                            <label className="block text-xs text-gray-500 mb-1">Mode de livraison *</label>
                             <select
                                 className="w-full border border-gray-200 p-2.5 rounded-lg text-sm bg-white"
                                 value={current.shippingMethod}
                                 onChange={e => updateShipping(activeTab, e.target.value)}
                             >
+                                <option value="">Choisir...</option>
                                 {AVAILABLE_METHODS.map(m => (
-                                    <option key={m.id} value={m.id}>{m.label} ({m.time})</option>
+                                    <option key={m.id} value={m.id}>{m.label}</option>
                                 ))}
                             </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Délai (jours) *</label>
+                            <input
+                                type="number"
+                                min="1"
+                                className="w-full border border-gray-200 p-2.5 rounded-lg text-sm"
+                                placeholder="ex: 3"
+                                value={current.shippingTime}
+                                onChange={e => updateProduct(activeTab, 'shippingTime', e.target.value)}
+                            />
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Coût ($)</label>
