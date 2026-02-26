@@ -12,18 +12,28 @@ export default function ProductList() {
     const [activatingAll, setActivatingAll] = useState(false);
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [deleting, setDeleting] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+    const [totalCount, setTotalCount] = useState(0);
+
+    const PAGE_SIZE = 200;
 
     useEffect(() => {
-        loadProducts();
+        loadProducts(1);
     }, []);
 
-    const loadProducts = async () => {
+    const loadProducts = async (page = currentPage) => {
         try {
             setLoading(true);
-            const filters = {};
+            const offset = (page - 1) * PAGE_SIZE;
+            const filters = { limit: PAGE_SIZE, offset };
             if (searchTerm) filters.search = searchTerm;
+
             const data = await sellerAPI.getProducts(filters);
             setProducts(data);
+            setCurrentPage(page);
+            setSelectedIds(new Set());
+            setHasMore(data.length === PAGE_SIZE);
         } catch (err) {
             console.error('Error loading products:', err);
         } finally {
@@ -99,7 +109,7 @@ export default function ProductList() {
 
     const handleSearch = (e) => {
         e.preventDefault();
-        loadProducts();
+        loadProducts(1); // reset to page 1 on new search
     };
 
     const getImageUrl = (images) => {
@@ -128,10 +138,16 @@ export default function ProductList() {
     const activeCount = products.filter(p => p.status === 'active' && p.is_active).length;
 
     const tabs = [
-        { id: 'all', label: 'Tous', count: products.length },
+        { id: 'all', label: 'Tous', count: products.length + (hasMore ? '+' : '') },
         { id: 'active', label: 'Actifs', count: activeCount, color: 'green' },
         { id: 'draft', label: 'Brouillons', count: draftCount, color: 'amber' },
     ];
+
+    // Reset to page 1 when tab changes
+    const handleTabChange = (tabId) => {
+        setActiveTab(tabId);
+        setSelectedIds(new Set());
+    };
 
     return (
         <div className="p-8">
@@ -232,7 +248,7 @@ export default function ProductList() {
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => handleTabChange(tab.id)}
                         className={`px-4 py-2.5 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors -mb-px ${activeTab === tab.id
                             ? 'border-blue-600 text-blue-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -451,6 +467,35 @@ export default function ProductList() {
                             ))}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {/* Pagination — affiché en dehors du bloc conditionnel table */}
+            {(currentPage > 1 || hasMore) && (
+                <div className="mt-4 flex items-center justify-between px-2">
+                    <p className="text-sm text-gray-500">
+                        Page <strong>{currentPage}</strong> — {filteredProducts.length} produits affichés
+                        {hasMore && <span className="text-blue-600 ml-1">(+200 disponibles)</span>}
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => loadProducts(currentPage - 1)}
+                            disabled={currentPage === 1 || loading}
+                            className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                            ← Précédent
+                        </button>
+                        <span className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg font-bold min-w-[2.5rem] text-center">
+                            {currentPage}
+                        </span>
+                        <button
+                            onClick={() => loadProducts(currentPage + 1)}
+                            disabled={!hasMore || loading}
+                            className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                            Suivant →
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
