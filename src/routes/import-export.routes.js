@@ -78,9 +78,10 @@ function parseCSV(csvString) {
     // Première ligne = headers (normaliser les noms français)
     const rawHeaders = headerLine.split(separator).map(h => h.trim().replace(/^"|"$/g, ''));
     const headers = rawHeaders.map(h => {
-        const normalized = h.toLowerCase();
-        // Mapper les en-têtes français vers les noms attendus
+        const normalized = h.toLowerCase().trim();
+        // Mapper les en-têtes français, anglais ET Alibaba vers les noms attendus
         const mapping = {
+            // Format Oli standard (FR)
             'nom': 'name',
             'prix': 'price',
             'stock': 'quantity',
@@ -92,7 +93,18 @@ function parseCSV(csvString) {
             'unité': 'unit',
             'unite': 'unit',
             'poids': 'weight',
-            'actif': 'is_active'
+            'actif': 'is_active',
+            // Format Alibaba scrape
+            'mainimage': 'images',
+            'title': 'name',
+            'companyname': 'brand',
+            'moq': 'quantity',
+            'producturl': 'source_url',
+            'promotionprice': 'promotion_price',
+            'reviewscore': 'review_score',
+            'reviewcount': 'review_count',
+            'deliveryestimate': 'delivery_estimate',
+            'goldsupplieryears': 'supplier_years',
         };
         return mapping[normalized] || normalized;
     });
@@ -189,11 +201,32 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
             const row = rows[i];
 
             try {
-                // Mapper les colonnes (support français et anglais)
-                const name = row.name || row.nom || '';
+                // Mapper les colonnes (support français, anglais ET Alibaba)
+                let name = row.name || row.nom || '';
                 const description = row.description || '';
-                let price = parseFloat(row.price || row.prix || 0);
-                const quantity = parseInt(row.quantity || row.stock || row.quantite || 0);
+                let price = 0;
+                const rawPrice = row.price || row.prix || '0';
+
+                // Parser les formats de prix Alibaba: "$17.99-19.99", "$6.60", "$3-12"
+                const priceStr = rawPrice.replace(/[^\d.\-]/g, ''); // strip $ and spaces
+                if (priceStr.includes('-')) {
+                    // Fourchette de prix → prendre le prix le plus bas
+                    const parts = priceStr.split('-').map(Number).filter(n => !isNaN(n) && n > 0);
+                    price = parts.length > 0 ? parts[0] : 0;
+                } else {
+                    price = parseFloat(priceStr) || 0;
+                }
+
+                // Nettoyer les tags HTML du titre Alibaba (<b>Robe</b> → Robe)
+                name = name.replace(/<[^>]*>/g, '').trim();
+
+                // Parser le MOQ Alibaba: "Min. order: 100 sets" → 100
+                let quantity = parseInt(row.quantity || row.stock || row.quantite || 0);
+                if (isNaN(quantity) || quantity === 0) {
+                    const moqMatch = (row.quantity || '').match(/(\d[\d,]*)/);
+                    quantity = moqMatch ? parseInt(moqMatch[1].replace(',', '')) : 10;
+                }
+
                 const category = row.category || row.categorie || '';
                 const brand = row.brand || row.marque || '';
                 const unit = row.unit || row.unite || 'Pièce';
