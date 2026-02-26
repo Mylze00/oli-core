@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash, ArrowLeft, Truck, Save, Loader2, X } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Plus, Trash, ArrowLeft, Truck, Save, Loader2, X, PackageSearch } from 'lucide-react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { sellerAPI, productAPI } from '../services/api';
 
 export default function ProductEditor() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { productId } = useParams(); // Si présent → mode édition
     const isEditMode = !!productId;
+    const [importedFrom, setImportedFrom] = useState(null); // Bannière import
 
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -105,6 +107,14 @@ export default function ProductEditor() {
         }
     }, [productId]);
 
+    // --- Pré-remplissage depuis un brouillon importé (?prefill=<productId>) ---
+    useEffect(() => {
+        const prefillId = searchParams.get('prefill');
+        if (prefillId && !isEditMode) {
+            loadProductAsPrefill(prefillId);
+        }
+    }, []);
+
     const loadProduct = async () => {
         try {
             setLoading(true);
@@ -169,6 +179,64 @@ export default function ProductEditor() {
         } finally {
             setLoading(false);
         }
+    };
+
+    /**
+     * Charge un produit existant (brouillon importé) et pré-remplit le formulaire
+     * sans passer en mode édition — le vendeur publiera un nouveau produit enrichi.
+     */
+    const loadProductAsPrefill = async (prefillId) => {
+        try {
+            setLoading(true);
+            const data = await sellerAPI.getProductById(prefillId);
+            const p = data.product || data;
+            handleImportedProduct({
+                name: p.name || '',
+                description: p.description || '',
+                basePrice: p.price ? String(p.price) : '',
+                category: p.category || '',
+                brand: p.brand || '',
+                weight: p.weight || '',
+                quantity: p.quantity ? String(p.quantity) : '',
+                image_url: p.images?.[0] || null,
+                sourceProductId: prefillId,
+            });
+        } catch (err) {
+            console.error('Erreur pré-remplissage:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    /**
+     * Pré-remplit le formulaire depuis des données importées (Alibaba, CSV, etc.)
+     * Force la livraison standard 10-15j pour les produits venant de l'étranger.
+     * N'écrase PAS l'architecture existante — le vendeur peut tout modifier.
+     */
+    const handleImportedProduct = (data) => {
+        setProduct(prev => ({
+            ...prev,
+            name: data.name || prev.name,
+            description: data.description || prev.description,
+            basePrice: data.basePrice || prev.basePrice,
+            category: data.category || prev.category,
+            brand: data.brand || prev.brand,
+            weight: data.weight || prev.weight,
+            quantity: data.quantity || prev.quantity,
+        }));
+
+        // Forcer livraison standard pour produits importés (délai international)
+        setShippingOptions([
+            { methodId: 'oli_standard', cost: '0', time: '10-15 jours' }
+        ]);
+
+        // Si une image URL est fournie, l'ajouter comme image existante
+        if (data.image_url) {
+            setExistingImages([data.image_url]);
+        }
+
+        // Mémoriser la source pour afficher la bannière
+        setImportedFrom(data.sourceProductId || 'csv');
     };
 
     const addTier = () => {
@@ -297,8 +365,29 @@ export default function ProductEditor() {
                 <ArrowLeft size={16} /> Retour
             </button>
             <h1 className="text-2xl font-bold text-gray-900 mb-6">
-                {isEditMode ? '✏️ Modifier le produit' : '➕ Ajouter un nouveau produit'}
+                {isEditMode ? '✏️ Modifier le produit' : importedFrom ? '📦 Compléter et publier le produit' : '➕ Ajouter un nouveau produit'}
             </h1>
+
+            {/* Bannière import pré-remplissage */}
+            {importedFrom && (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3">
+                    <PackageSearch size={22} className="text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-semibold text-amber-800">Produit pré-rempli depuis votre import</p>
+                        <p className="text-sm text-amber-700 mt-0.5">
+                            Les champs ont été remplis automatiquement. Vérifiez et complétez les informations avant de publier.
+                            La livraison est définie sur <strong>Oli Standard (10-15 jours)</strong> — adaptez si nécessaire.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setImportedFrom(null)}
+                        className="ml-auto text-amber-400 hover:text-amber-600 shrink-0"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-8">
                 {/* Basic Info */}
