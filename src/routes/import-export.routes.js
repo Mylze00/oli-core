@@ -144,6 +144,81 @@ function parseCSV(csvString) {
 }
 
 /**
+ * Normalise une ligne brute vers le format standard attendu par l'import.
+ * Supporte automatiquement :
+ *   - Format Oli standard (name, price, images, ...)
+ *   - Format Alibaba scraper (title, mainimage, moq, ...)
+ *   - Format AliExpress scraper (title, pricing/0/dollarPrice, images/0..5, thumb)
+ */
+function normalizeRow(row) {
+    // Détecter le format AliExpress : présence de clés "pricing/0/dollarPrice" ou "images/0"
+    const isAliExpress = Object.keys(row).some(k => k.startsWith('pricing/') || k.startsWith('images/'));
+
+    if (!isAliExpress) {
+        return row; // Formats Oli standard et Alibaba — déjà gérés par le mapping CSV
+    }
+
+    // ── Format AliExpress ──────────────────────────────────────────────────────
+
+    // Titre (déjà en français grâce au scraper AliExpress)
+    const name = (row['title'] || row['name'] || '').replace(/<[^>]*>/g, '').trim();
+
+    // Prix : essayer plusieurs colonnes par ordre de priorité
+    const rawPrice =
+        row['pricing/0/dollarPrice'] ||
+        row['pricing/0/price'] ||
+        row['pricing/0/min'] ||
+        row['pricing/1/dollarPrice'] ||
+        row['pricing/1/price'] ||
+        row['price'] || '0';
+
+    // Retirer symboles monétaires et espaces
+    const priceStr = String(rawPrice).replace(/[^\d.]/g, '');
+    let price = parseFloat(priceStr) || 0;
+
+    // Images : colonnes images/0 ... images/9, plus thumb en fallback
+    const imageKeys = Object.keys(row)
+        .filter(k => /^images\/\d+$/.test(k))
+        .sort((a, b) => {
+            const ai = parseInt(a.split('/')[1]);
+            const bi = parseInt(b.split('/')[1]);
+            return ai - bi;
+        });
+    const imageUrls = imageKeys
+        .map(k => row[k])
+        .filter(url => url && url.startsWith('http'));
+
+    // Fallback sur thumb si aucune image trouvée
+    const thumb = row['thumb'] || row['thumbnail'] || '';
+    if (imageUrls.length === 0 && thumb.startsWith('http')) {
+        imageUrls.push(thumb);
+    }
+
+    const imagesStr = imageUrls.slice(0, 6).join(';'); // max 6 images
+
+    // Autres champs
+    const description = row['description'] || row['desc'] || '';
+    const category = row['category'] || row['categorie'] || '';
+    const brand = row['brand'] || row['marque'] || '';
+    const quantity = row['quantity'] || row['stock'] || row['moq'] || '10';
+    const unit = row['unit'] || row['unite'] || 'Pièce';
+    const weight = row['weight'] || row['poids'] || '';
+
+    return {
+        name,
+        price: String(price),
+        images: imagesStr,
+        description,
+        category,
+        brand,
+        quantity,
+        unit,
+        weight,
+        _source: 'aliexpress',
+    };
+}
+
+/**
  * GET /import-export/template
  * Télécharger le template CSV pour l'import
  */
@@ -216,7 +291,7 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                 await bgClient.query('BEGIN');
 
                 for (let i = 0; i < rows.length; i++) {
-                    const row = rows[i];
+                    const row = normalizeRow(rows[i]); // Auto-détecte Oli / Alibaba / AliExpress
 
                     try {
                         let name = row.name || row.nom || '';
