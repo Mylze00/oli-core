@@ -166,6 +166,7 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
 
     try {
         if (!req.file) {
+            client.release();
             return res.status(400).json({ error: 'Fichier CSV requis' });
         }
 
@@ -173,8 +174,16 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
         const rows = parseCSV(csvString);
 
         if (rows.length === 0) {
+            client.release();
             return res.status(400).json({ error: 'Fichier CSV vide ou mal formaté' });
         }
+
+        // Récupérer le shop du vendeur
+        const shopResult = await client.query(
+            'SELECT id FROM shops WHERE owner_id = $1 LIMIT 1',
+            [req.user.id]
+        );
+        const shopId = shopResult.rows[0]?.id || null;
 
         // Créer un enregistrement d'import
         const importRecord = await client.query(`
@@ -184,134 +193,143 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
         `, [req.user.id, req.file.originalname, rows.length]);
 
         const importId = importRecord.rows[0].id;
+        const sellerId = req.user.id;
 
-        // Récupérer le shop du vendeur
-        const shopResult = await client.query(
-            'SELECT id FROM shops WHERE owner_id = $1 LIMIT 1',
-            [req.user.id]
-        );
-        const shopId = shopResult.rows[0]?.id || null;
-
-        await client.query('BEGIN');
-
-        let imported = 0;
-        const errors = [];
-
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-
-            try {
-                // Mapper les colonnes (support français, anglais ET Alibaba)
-                let name = row.name || row.nom || '';
-                const description = row.description || '';
-                let price = 0;
-                const rawPrice = row.price || row.prix || '0';
-
-                // Parser les formats de prix Alibaba: "$17.99-19.99", "$6.60", "$3-12"
-                const priceStr = rawPrice.replace(/[^\d.\-]/g, ''); // strip $ and spaces
-                if (priceStr.includes('-')) {
-                    // Fourchette de prix → prendre le prix le plus bas
-                    const parts = priceStr.split('-').map(Number).filter(n => !isNaN(n) && n > 0);
-                    price = parts.length > 0 ? parts[0] : 0;
-                } else {
-                    price = parseFloat(priceStr) || 0;
-                }
-
-                // Nettoyer les tags HTML du titre Alibaba (<b>Robe</b> → Robe)
-                name = name.replace(/<[^>]*>/g, '').trim();
-
-                // Parser le MOQ Alibaba: "Min. order: 100 sets" → 100
-                let quantity = parseInt(row.quantity || row.stock || row.quantite || 0);
-                if (isNaN(quantity) || quantity === 0) {
-                    const moqMatch = (row.quantity || '').match(/(\d[\d,]*)/);
-                    quantity = moqMatch ? parseInt(moqMatch[1].replace(',', '')) : 10;
-                }
-
-                const category = row.category || row.categorie || '';
-                const brand = row.brand || row.marque || '';
-                const unit = row.unit || row.unite || 'Pièce';
-                const weight = row.weight || row.poids || '';
-                const rawImages = row.images ? row.images.split(';').map(i => i.trim()).filter(i => i) : [];
-
-                // ☁️ Re-uploader les images externes vers Cloudinary (fix CORS Flutter Web)
-                const images = [];
-                for (const imgUrl of rawImages) {
-                    const cloudinaryUrl = await reuploadToCloudinary(imgUrl);
-                    images.push(cloudinaryUrl);
-                }
-
-                // 💱 Conversion automatique en FC (Francs Congolais)
-                // Si le prix semble être en USD (< 100), le convertir en CDF
-                if (price > 0 && price < 100) {
-                    const convertedPrice = await exchangeRateService.convertAmount(price, 'USD', 'CDF');
-                    console.log(`💱 Prix converti: ${price} USD → ${convertedPrice} CDF`);
-                    price = convertedPrice;
-                } else if (price >= 100) {
-                    // Prix déjà en CDF (probablement)
-                    console.log(`💰 Prix déjà en CDF: ${price}`);
-                }
-
-                // Validation
-                if (!name) {
-                    errors.push({ row: i + 2, field: 'name', error: 'Nom requis' });
-                    continue;
-                }
-                if (isNaN(price) || price <= 0) {
-                    errors.push({ row: i + 2, field: 'price', error: 'Prix invalide' });
-                    continue;
-                }
-
-                // Insérer le produit
-                await client.query(`
-                    INSERT INTO products (
-                        seller_id, shop_id, name, description, price, 
-                        category, quantity, brand, unit, weight, images,
-                        status, is_active, created_at, updated_at
-                    ) VALUES (
-                        $1, $2, $3, $4, $5, 
-                        $6, $7, $8, $9, $10, $11,
-                        'draft', false, NOW(), NOW()
-                    )
-                `, [
-                    req.user.id, shopId, name, description, price,
-                    category, quantity, brand, unit, weight, images
-                ]);
-
-                imported++;
-            } catch (err) {
-                errors.push({
-                    row: i + 2,
-                    error: err.message,
-                    data: row.name || row.nom || 'Inconnu'
-                });
-            }
-        }
-
-        await client.query('COMMIT');
-
-        // Mettre à jour l'enregistrement d'import
-        await client.query(`
-            UPDATE import_history 
-            SET imported_count = $1, error_count = $2, errors = $3, 
-                status = 'completed', completed_at = NOW()
-            WHERE id = $4
-        `, [imported, errors.length, JSON.stringify(errors), importId]);
-
+        // ✅ Répondre IMMÉDIATEMENT — le traitement continue en arrière-plan
         res.json({
             success: true,
             import_id: importId,
             total: rows.length,
-            imported,
-            errors: errors.length,
-            error_details: errors.slice(0, 10) // Limiter à 10 erreurs dans la réponse
+            message: `Import de ${rows.length} produits démarré. Rafraîchissez l'historique pour suivre la progression.`
+        });
+
+        // Libérer le client DB avant le traitement long
+        client.release();
+
+        // 🔄 Traitement en arrière-plan (après la réponse HTTP)
+        setImmediate(async () => {
+            const bgClient = await db.connect();
+            let imported = 0;
+            const errors = [];
+
+            try {
+                await bgClient.query('BEGIN');
+
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+
+                    try {
+                        let name = row.name || row.nom || '';
+                        const description = row.description || '';
+                        let price = 0;
+                        const rawPrice = row.price || row.prix || '0';
+
+                        // Parser les formats de prix Alibaba: "$17.99-19.99", "$6.60", "$3-12"
+                        const priceStr = rawPrice.replace(/[^\d.\-]/g, '');
+                        if (priceStr.includes('-')) {
+                            const parts = priceStr.split('-').map(Number).filter(n => !isNaN(n) && n > 0);
+                            price = parts.length > 0 ? parts[0] : 0;
+                        } else {
+                            price = parseFloat(priceStr) || 0;
+                        }
+
+                        // Nettoyer les tags HTML
+                        name = name.replace(/<[^>]*>/g, '').trim();
+
+                        // Parser le MOQ Alibaba
+                        let quantity = parseInt(row.quantity || row.stock || row.quantite || 0);
+                        if (isNaN(quantity) || quantity === 0) {
+                            const moqMatch = (row.quantity || '').match(/(\d[\d,]*)/);
+                            quantity = moqMatch ? parseInt(moqMatch[1].replace(',', '')) : 10;
+                        }
+
+                        const category = row.category || row.categorie || '';
+                        const brand = row.brand || row.marque || '';
+                        const unit = row.unit || row.unite || 'Pièce';
+                        const weight = row.weight || row.poids || '';
+                        const rawImages = row.images ? row.images.split(';').map(img => img.trim()).filter(img => img) : [];
+
+                        // ☁️ Re-uploader images vers Cloudinary
+                        const images = [];
+                        for (const imgUrl of rawImages) {
+                            const cloudinaryUrl = await reuploadToCloudinary(imgUrl);
+                            images.push(cloudinaryUrl);
+                        }
+
+                        // 💱 Conversion USD → CDF si prix < 100
+                        if (price > 0 && price < 100) {
+                            const convertedPrice = await exchangeRateService.convertAmount(price, 'USD', 'CDF');
+                            console.log(`💱 Prix converti: ${price} USD → ${convertedPrice} CDF`);
+                            price = convertedPrice;
+                        }
+
+                        // Validation
+                        if (!name) {
+                            errors.push({ row: i + 2, field: 'name', error: 'Nom requis' });
+                            continue;
+                        }
+                        if (isNaN(price) || price <= 0) {
+                            errors.push({ row: i + 2, field: 'price', error: 'Prix invalide' });
+                            continue;
+                        }
+
+                        await bgClient.query(`
+                            INSERT INTO products (
+                                seller_id, shop_id, name, description, price,
+                                category, quantity, brand, unit, weight, images,
+                                status, is_active, created_at, updated_at
+                            ) VALUES (
+                                $1, $2, $3, $4, $5,
+                                $6, $7, $8, $9, $10, $11,
+                                'draft', false, NOW(), NOW()
+                            )
+                        `, [sellerId, shopId, name, description, price,
+                            category, quantity, brand, unit, weight, images]);
+
+                        imported++;
+
+                        // Mise à jour partielle toutes les 10 lignes pour suivre la progression
+                        if (imported % 10 === 0) {
+                            await bgClient.query(`
+                                UPDATE import_history
+                                SET imported_count = $1, status = 'processing'
+                                WHERE id = $2
+                            `, [imported, importId]);
+                        }
+
+                    } catch (err) {
+                        errors.push({ row: i + 2, error: err.message, data: row.name || row.nom || 'Inconnu' });
+                    }
+                }
+
+                await bgClient.query('COMMIT');
+
+            } catch (err) {
+                await bgClient.query('ROLLBACK');
+                console.error('Background import error:', err);
+                errors.push({ row: 0, error: 'Erreur critique: ' + err.message });
+            } finally {
+                // Marquer l'import comme terminé
+                await bgClient.query(`
+                    UPDATE import_history
+                    SET imported_count = $1, error_count = $2, errors = $3,
+                        status = $4, completed_at = NOW()
+                    WHERE id = $5
+                `, [imported, errors.length, JSON.stringify(errors),
+                    errors.length === rows.length ? 'failed' : 'completed',
+                    importId]);
+
+                bgClient.release();
+                console.log(`✅ Import ${importId} terminé: ${imported}/${rows.length} produits, ${errors.length} erreurs`);
+            }
         });
 
     } catch (error) {
-        await client.query('ROLLBACK');
+        try { client.release(); } catch (_) { }
         console.error('Error POST /import-export/import:', error);
-        res.status(500).json({ error: 'Erreur lors de l\'import' });
-    } finally {
-        client.release();
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Erreur lors de l\'import' });
+        }
     }
 });
 

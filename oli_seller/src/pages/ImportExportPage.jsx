@@ -29,6 +29,8 @@ export default function ImportExportPage() {
         }
     };
 
+    const [activeImportId, setActiveImportId] = useState(null);
+
     const handleFileSelect = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -38,7 +40,9 @@ export default function ImportExportPage() {
 
         try {
             const result = await sellerAPI.importProducts(file);
-            setImportResult(result);
+            // Backend now responds immediately with import_id
+            setImportResult({ ...result, success: true, pending: true });
+            setActiveImportId(result.import_id);
             await loadHistory();
         } catch (err) {
             console.error('Erreur import:', err);
@@ -53,6 +57,34 @@ export default function ImportExportPage() {
             }
         }
     };
+
+    // Auto-refresh history while an import is processing
+    useEffect(() => {
+        if (!activeImportId) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const data = await sellerAPI.getImportHistory();
+                setHistory(data);
+                const current = data.find(h => h.id === activeImportId);
+                if (current && current.status !== 'processing') {
+                    // Import finished
+                    setActiveImportId(null);
+                    setImportResult({
+                        success: current.status === 'completed',
+                        pending: false,
+                        imported: current.imported_count,
+                        errors: current.error_count,
+                        total: current.total_rows,
+                    });
+                }
+            } catch (err) {
+                console.error('Erreur poll:', err);
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [activeImportId]);
 
     const handleDownloadTemplate = () => {
         const token = localStorage.getItem('token');
@@ -178,34 +210,36 @@ export default function ImportExportPage() {
 
                     {/* Import Result */}
                     {importResult && (
-                        <div className={`mt-4 p-4 rounded-lg ${importResult.success
-                            ? 'bg-green-50 border border-green-200'
-                            : 'bg-red-50 border border-red-200'
+                        <div className={`mt-4 p-4 rounded-lg ${importResult.pending
+                                ? 'bg-blue-50 border border-blue-200'
+                                : importResult.success
+                                    ? 'bg-green-50 border border-green-200'
+                                    : 'bg-red-50 border border-red-200'
                             }`}>
-                            {importResult.success ? (
+                            {importResult.pending ? (
+                                <div className="flex items-center gap-3 text-blue-700">
+                                    <RefreshCw className="animate-spin shrink-0" size={18} />
+                                    <div>
+                                        <p className="font-medium">Import en cours en arrière-plan…</p>
+                                        <p className="text-xs text-blue-600 mt-0.5">
+                                            {importResult.total} produits à traiter. L'historique se met à jour automatiquement.
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : importResult.success ? (
                                 <>
                                     <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
                                         <CheckCircle size={18} />
-                                        Import réussi
+                                        Import terminé
                                     </div>
                                     <div className="text-sm text-green-600 space-y-1">
-                                        <p>✓ {importResult.imported} produits importés</p>
+                                        <p>✓ {importResult.imported} produits créés en brouillon</p>
                                         {importResult.errors > 0 && (
                                             <p className="text-yellow-600">
                                                 ⚠ {importResult.errors} erreurs
                                             </p>
                                         )}
                                     </div>
-                                    {importResult.error_details?.length > 0 && (
-                                        <div className="mt-3 pt-3 border-t border-green-200">
-                                            <p className="text-xs font-medium text-gray-600 mb-1">Erreurs:</p>
-                                            <ul className="text-xs text-red-600 space-y-1">
-                                                {importResult.error_details.slice(0, 5).map((err, i) => (
-                                                    <li key={i}>Ligne {err.row}: {err.error}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
                                 </>
                             ) : (
                                 <div className="flex items-center gap-2 text-red-700">
