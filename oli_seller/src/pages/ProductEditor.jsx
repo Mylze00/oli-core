@@ -319,6 +319,10 @@ export default function ProductEditor() {
                 await productAPI.update(productId, formData);
                 alert("Produit mis à jour avec succès !");
             } else {
+                // En mode création avec prefill : envoyer aussi les images URL pré-remplies
+                if (existingImages.length > 0) {
+                    formData.append('existing_images', JSON.stringify(existingImages));
+                }
                 await api.post('/products/upload', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });

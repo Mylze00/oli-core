@@ -112,7 +112,22 @@ class ProductService {
             throw new Error('Nom et prix requis');
         }
 
-        const images = files ? files.map(f => f.path || f.filename) : [];
+        // Images uploadées (fichiers binaires)
+        const uploadedImages = files ? files.map(f => f.path || f.filename) : [];
+
+        // Images URL pré-remplies (depuis un brouillon importé, format existing_images)
+        let prefillImages = [];
+        if (data.existing_images) {
+            try {
+                prefillImages = JSON.parse(data.existing_images);
+                if (!Array.isArray(prefillImages)) prefillImages = [];
+            } catch (e) {
+                console.warn('Erreur parsing existing_images:', e.message);
+            }
+        }
+
+        // Fusionner : images uploadées + URLs pré-remplies (sans doublons)
+        const images = [...new Set([...uploadedImages, ...prefillImages])];
 
         // 1. Déterminer le shop_id
         let shopId = (data.shop_id && !isNaN(data.shop_id)) ? parseInt(data.shop_id) : null;
