@@ -11,6 +11,7 @@ export default function ImportExportPage() {
     const [importResult, setImportResult] = useState(null);
     const [history, setHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
+    const [activeImportId, setActiveImportId] = useState(null); // Pour le polling async
 
     useEffect(() => {
         loadHistory();
@@ -28,8 +29,6 @@ export default function ImportExportPage() {
             setLoadingHistory(false);
         }
     };
-
-    const [activeImportId, setActiveImportId] = useState(null);
 
     const handleFileSelect = async (e) => {
         const file = e.target.files?.[0];
@@ -211,10 +210,10 @@ export default function ImportExportPage() {
                     {/* Import Result */}
                     {importResult && (
                         <div className={`mt-4 p-4 rounded-lg ${importResult.pending
-                                ? 'bg-blue-50 border border-blue-200'
-                                : importResult.success
-                                    ? 'bg-green-50 border border-green-200'
-                                    : 'bg-red-50 border border-red-200'
+                            ? 'bg-blue-50 border border-blue-200'
+                            : importResult.success
+                                ? 'bg-green-50 border border-green-200'
+                                : 'bg-red-50 border border-red-200'
                             }`}>
                             {importResult.pending ? (
                                 <div className="flex items-center gap-3 text-blue-700">
