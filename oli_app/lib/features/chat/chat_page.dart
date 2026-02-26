@@ -7,9 +7,13 @@ import 'chat_controller.dart';
 import 'widgets/chat_message_bubble.dart';
 import 'widgets/product_context_header.dart';
 import 'widgets/chat_input_area.dart';
+import 'widgets/reply_preview.dart';
+import 'widgets/chat_cart_summary.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
 import '../../config/api_config.dart';
 import '../../core/router/network/dio_provider.dart';
+import '../cart/providers/cart_provider.dart';
+import '../checkout/screens/checkout_page.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   final String myId;
@@ -44,6 +48,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   
   // URL d'avatar (récupéré depuis args ou controller)
   String? _effectiveAvatarUrl;
+
+  // Swipe-to-reply state
+  Map<String, dynamic>? _replyToMessage;
 
   @override
   void initState() {
@@ -184,6 +191,50 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 productName: widget.productName,
                 productPrice: widget.productPrice,
                 productImage: widget.productImage,
+                onAddToCart: widget.productId != null ? () {
+                  final cartItem = CartItem(
+                    productId: widget.productId!,
+                    productName: widget.productName ?? 'Produit',
+                    price: widget.productPrice ?? 0,
+                    imageUrl: widget.productImage,
+                    sellerId: widget.otherId,
+                    sellerName: widget.otherName,
+                  );
+                  ref.read(chatCartProvider(widget.otherId).notifier)
+                      .addProduct(cartItem);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.white, size: 18),
+                          const SizedBox(width: 8),
+                          Text('"${widget.productName}" ajouté au panier'),
+                        ],
+                      ),
+                      backgroundColor: Colors.green.shade700,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                } : null,
+                onBuyNow: widget.productId != null ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CheckoutPage(
+                        directPurchaseItem: CartItem(
+                          productId: widget.productId!,
+                          productName: widget.productName ?? 'Produit',
+                          price: widget.productPrice ?? 0,
+                          imageUrl: widget.productImage,
+                          sellerId: widget.otherId,
+                          sellerName: widget.otherName,
+                        ),
+                      ),
+                    ),
+                  );
+                } : null,
               ),
 
             if (_isUploading)
@@ -232,12 +283,31 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         return ChatMessageBubble(
                           message: msg,
                           isMe: isMe,
+                          currentUserId: widget.myId,
                           otherAvatarUrl: _effectiveAvatarUrl,
+                          onSwipeReply: (message) {
+                            setState(() => _replyToMessage = message);
+                          },
+                          onReact: (messageId, emoji) {
+                            ref.read(chatControllerProvider(widget.otherId).notifier)
+                                .reactToMessage(messageId, emoji);
+                          },
                         );
                       },
                     ),
           ),
           
+            // Cart summary (when items have been added)
+            ChatCartSummary(conversationId: widget.otherId),
+
+            // Reply Preview (shown when swiping a message)
+            if (_replyToMessage != null)
+              ReplyPreview(
+                replyToMessage: _replyToMessage!,
+                currentUserId: widget.myId,
+                onCancel: () => setState(() => _replyToMessage = null),
+              ),
+
             ChatInputArea(
               onSendMessage: _sendMessage,
               onShowTools: () => _showChatTools(context),
@@ -420,7 +490,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       productName: widget.productName,
       productImage: widget.productImage,
       productPrice: widget.productPrice,
+      replyToId: _replyToMessage?['id']?.toString(),
     );
+
+    // Clear reply state
+    if (_replyToMessage != null) {
+      setState(() => _replyToMessage = null);
+    }
   }
 
   void _showSendCashSheet(BuildContext context) {

@@ -262,6 +262,7 @@ class ChatController extends StateNotifier<ChatState> {
     String? productImage,
     double? productPrice,
     Map<String, dynamic>? customMetadata,
+    String? replyToId,
   }) async {
     // Si pas de contenu, pas de média, et pas de metadata custom, on n'envoie rien
     if ((content.trim().isEmpty && mediaUrl == null && customMetadata == null) || myId == null) return;
@@ -323,6 +324,7 @@ class ChatController extends StateNotifier<ChatState> {
           'mediaUrl': mediaUrl,
           'mediaType': mediaType,
           'metadata': metadata,
+          if (replyToId != null) 'replyToId': int.tryParse(replyToId),
         };
       }
 
@@ -349,6 +351,50 @@ class ChatController extends StateNotifier<ChatState> {
         error: "Erreur d'envoi",
         messages: state.messages.where((m) => m['id'] != tempId).toList(), // Retrait si erreur
       );
+    }
+  }
+
+  /// Ajouter ou retirer une réaction sur un message
+  Future<void> reactToMessage(String messageId, String emoji) async {
+    // Mise à jour optimiste locale
+    final updatedMessages = state.messages.map((m) {
+      if (m['id']?.toString() == messageId) {
+        final rawReactions = m['reactions'];
+        Map<String, dynamic> reactions = {};
+        if (rawReactions != null) {
+          try {
+            reactions = rawReactions is String
+                ? Map<String, dynamic>.from(jsonDecode(rawReactions))
+                : Map<String, dynamic>.from(rawReactions);
+          } catch (_) {}
+        }
+
+        // Toggle logic: si déjà présent par cet user, retirer
+        // (simplifié : on incrémente/décrémente le compteur global)
+        final current = (reactions[emoji] as num?)?.toInt() ?? 0;
+        if (current > 0) {
+          reactions[emoji] = current - 1;
+          if (reactions[emoji] == 0) reactions.remove(emoji);
+        } else {
+          reactions[emoji] = current + 1;
+        }
+        return {...m, 'reactions': reactions};
+      }
+      return m;
+    }).toList();
+    state = state.copyWith(messages: updatedMessages);
+
+    // Appel backend
+    try {
+      final token = await _storage.getToken();
+      await _dio.put(
+        '${ApiConfig.baseUrl}/chat/messages/$messageId/react',
+        data: {'emoji': emoji},
+        options: Options(headers: {'Authorization': 'Bearer \$token'}),
+      );
+    } catch (e) {
+      debugPrint('❌ Erreur reactToMessage: \$e');
+      // On ne rollback pas pour ne pas perturber l'UX
     }
   }
 

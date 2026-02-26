@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
 import '../../../../providers/exchange_rate_provider.dart';
+import '../../../../utils/cloudinary_helper.dart';
 import '../../../user/providers/favorites_provider.dart';
 import '../pages/product_details_page.dart';
 
@@ -38,7 +39,7 @@ class SearchProductListItem extends ConsumerWidget {
                 height: 120,
                 child: product.images.isNotEmpty
                     ? Image.network(
-                        product.images.first,
+                        CloudinaryHelper.thumbnail(product.images.first),
                         fit: BoxFit.cover,
                         errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, color: Colors.grey),
                       )

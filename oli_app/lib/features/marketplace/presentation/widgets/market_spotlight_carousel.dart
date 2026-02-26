@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
 import '../../../../providers/exchange_rate_provider.dart';
+import '../../../../utils/cloudinary_helper.dart';
 import '../pages/product_details_page.dart';
 
 /// Couleurs de contour épais, une par carte
@@ -20,29 +21,33 @@ const List<Color> _kBorderColors = [
 ];
 
 /// Sélectionne jusqu'à [max] produits : priorité aux vendeurs uniques,
-/// complète avec d'autres produits ayant une image si besoin.
+/// complète avec d'autres produits du même vendeur si besoin pour atteindre [max].
 List<Product> _pickSpotlight(List<Product> all, {int max = 10}) {
   final shuffled = List<Product>.from(all)..shuffle(Random());
   final result = <Product>[];
-  final usedIds = <String>{};
+  final usedIds = <String>{};   // IDs produits déjà ajoutés
+  final usedSellers = <String>{}; // sellerIds déjà représentés
 
-  // Passe 1 : un produit par sellerId non-vide
+  // Passe 1 : un produit par vendeur unique (sellerId non-vide)
   for (final p in shuffled) {
     if (result.length >= max) break;
     if (p.images.isEmpty) continue;
     final sid = p.sellerId.trim();
-    if (sid.isNotEmpty && !usedIds.contains(sid)) {
-      usedIds.add(sid);
+    if (sid.isNotEmpty && !usedSellers.contains(sid)) {
+      usedSellers.add(sid);
+      usedIds.add(p.id);
       result.add(p);
     }
   }
 
   // Passe 2 : compléter avec n'importe quel produit avec image (pas déjà ajouté)
+  // Accepte plusieurs produits du même vendeur pour atteindre [max]
   if (result.length < max) {
     for (final p in shuffled) {
       if (result.length >= max) break;
       if (p.images.isEmpty) continue;
-      if (!result.contains(p)) {
+      if (!usedIds.contains(p.id)) {
+        usedIds.add(p.id);
         result.add(p);
       }
     }
@@ -101,7 +106,7 @@ class _MarketSpotlightCarouselState
                 ),
               ),
               const SizedBox(width: 6),
-              const Text('✨', style: TextStyle(fontSize: 14)),
+              const Text('', style: TextStyle(fontSize: 14)),
             ],
           ),
         ),
@@ -201,7 +206,7 @@ class _SpotlightCircleItem extends StatelessWidget {
             child: ClipOval(
               child: product.images.isNotEmpty
                   ? Image.network(
-                      product.images.first,
+                      CloudinaryHelper.xsmall(product.images.first),
                       fit: BoxFit.cover,
                       width: circleSize,
                       height: circleSize,

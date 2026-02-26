@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'chat_page.dart';
 import 'socket_service.dart';
+import 'providers/inbox_providers.dart';
 import '../../config/api_config.dart';
 import '../../core/user/user_provider.dart';
 import '../../core/storage/secure_storage_service.dart';
@@ -42,8 +43,14 @@ class ConversationsPage extends ConsumerStatefulWidget {
 
 class _ConversationsPageState extends ConsumerState<ConversationsPage> {
   int _selectedIndex = 0; // 0: Privé, 1: Market
+  InboxFilter _filter = InboxFilter.all;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _multiSelectMode = false;
+  final Set<String> _selectedConvIds = {};
+
+  // Favoris locaux (Set de otherId)
+  final Set<String> _favorites = {};
 
   @override
   void initState() {
@@ -123,20 +130,57 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          "Discussions",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.black),
-            onPressed: () {},
-          ),
-        ],
+        title: _multiSelectMode
+            ? Text(
+                '${_selectedConvIds.length} sélectionné${_selectedConvIds.length > 1 ? 's' : ''}',
+                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+              )
+            : const Text(
+                'Discussions',
+                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+              ),
+        leading: _multiSelectMode
+            ? IconButton(
+                icon: const Icon(Icons.close, color: Colors.black),
+                onPressed: () => setState(() {
+                  _multiSelectMode = false;
+                  _selectedConvIds.clear();
+                }),
+              )
+            : null,
+        actions: _multiSelectMode
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  tooltip: 'Supprimer la sélection',
+                  onPressed: _selectedConvIds.isEmpty ? null : () {
+                    setState(() {
+                      _multiSelectMode = false;
+                      _selectedConvIds.clear();
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Conversations supprimées')),
+                    );
+                  },
+                ),
+              ]
+            : [
+                IconButton(
+                  icon: const Icon(Icons.checklist_rounded, color: Colors.black),
+                  tooltip: 'Multi-sélection',
+                  onPressed: () => setState(() {
+                    _multiSelectMode = true;
+                  }),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.more_vert, color: Colors.black),
+                  onPressed: () {},
+                ),
+              ],
       ),
       body: Column(
         children: [
-          // 1. Barre de Recherche + Tabs (Header)
+          // Search + Tabs + Filters
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.white,
@@ -152,26 +196,42 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                   child: TextField(
                     controller: _searchController,
                     decoration: const InputDecoration(
-                      hintText: "Rechercher un message...",
+                      hintText: 'Rechercher un message...',
                       prefixIcon: Icon(Icons.search, color: Colors.grey),
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                
-                // Custom Tabs
+                const SizedBox(height: 10),
+
+                // Type tabs (Privé / Market)
                 Container(
-                  height: 45,
+                  height: 40,
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
                     borderRadius: BorderRadius.circular(25),
                   ),
-                  child: Row(
+                  child: Row(children: [
+                    _buildTabItem(0, 'Privé'),
+                    _buildTabItem(1, 'Market Chat'),
+                  ]),
+                ),
+                const SizedBox(height: 10),
+
+                // Filter bar
+                SizedBox(
+                  height: 34,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
                     children: [
-                      _buildTabItem(0, "Privé"),
-                      _buildTabItem(1, "Market Chat"),
+                      _FilterChip(label: 'Tous', icon: Icons.inbox_outlined, selected: _filter == InboxFilter.all, onTap: () => setState(() => _filter = InboxFilter.all)),
+                      const SizedBox(width: 8),
+                      _FilterChip(label: 'Non lus', icon: Icons.mark_chat_unread_outlined, selected: _filter == InboxFilter.unread, onTap: () => setState(() => _filter = InboxFilter.unread)),
+                      const SizedBox(width: 8),
+                      _FilterChip(label: 'Favoris', icon: Icons.star_outline_rounded, selected: _filter == InboxFilter.favorites, onTap: () => setState(() => _filter = InboxFilter.favorites)),
+                      const SizedBox(width: 8),
+                      _FilterChip(label: 'Archives', icon: Icons.archive_outlined, selected: _filter == InboxFilter.archives, onTap: () => setState(() => _filter = InboxFilter.archives)),
                     ],
                   ),
                 ),
@@ -195,17 +255,52 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, stack) => Center(child: Text("Erreur: $err")),
                 data: (allConversations) {
-                  // Filtrage par Type ET par Recherche
-                  final filteredConversations = allConversations.where((c) {
+                  final archived = ref.watch(archivedConversationsProvider);
+                  final pinned = ref.watch(pinnedConversationsProvider);
+
+                  // 1. Filtre type (Privé / Market)
+                  final filtered = allConversations.where((c) {
                     final hasProduct = c['product_id'] != null;
                     final matchesType = _selectedIndex == 1 ? hasProduct : !hasProduct;
-                    
                     final otherName = (c['other_name'] ?? '').toString().toLowerCase();
                     final lastMsg = (c['last_message'] ?? '').toString().toLowerCase();
                     final matchesSearch = otherName.contains(_searchQuery) || lastMsg.contains(_searchQuery);
-
                     return matchesType && matchesSearch;
                   }).toList();
+
+                  // 2. Déduplication par other_id
+                  final Map<String, List<Map<String, dynamic>>> grouped = {};
+                  for (final c in filtered) {
+                    final key = c['other_id']?.toString() ?? 'unknown';
+                    grouped.putIfAbsent(key, () => []).add(c);
+                  }
+                  var deduped = grouped.values.map((list) => list.first).toList();
+
+                  // 3. InboxFilter
+                  deduped = deduped.where((c) {
+                    final otherId = c['other_id']?.toString() ?? '';
+                    switch (_filter) {
+                      case InboxFilter.all:
+                        return !archived.contains(otherId);
+                      case InboxFilter.unread:
+                        return (c['unread_count'] ?? 0) > 0 && !archived.contains(otherId);
+                      case InboxFilter.favorites:
+                        return _favorites.contains(otherId);
+                      case InboxFilter.archives:
+                        return archived.contains(otherId);
+                    }
+                  }).toList();
+
+                  // 4. Tri : épinglées en premier
+                  deduped.sort((a, b) {
+                    final aPin = pinned.contains(a['other_id']?.toString() ?? '');
+                    final bPin = pinned.contains(b['other_id']?.toString() ?? '');
+                    if (aPin && !bPin) return -1;
+                    if (!aPin && bPin) return 1;
+                    return 0;
+                  });
+
+                  final filteredConversations = deduped;
 
                   if (filteredConversations.isEmpty) {
                     return Center(
@@ -237,28 +332,106 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                       separatorBuilder: (context, index) => const Divider(height: 1, indent: 80),
                       itemBuilder: (context, index) {
                         final conv = filteredConversations[index];
-                        return ConversationTile(
-                          conversation: conv,
-                          currentUserId: user.id.toString(),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ChatPage(
-                                  myId: user.id.toString(),
-                                  otherId: conv['other_id']?.toString() ?? '',
-                                  otherName: conv['other_name'] ?? 'Utilisateur',
-                                  productId: conv['product_id']?.toString(),
-                                  productName: conv['product_name'],
-                                  productImage: conv['product_image'],
-                                  productPrice: double.tryParse(conv['product_price']?.toString() ?? '0'),
-                                  otherAvatarUrl: conv['other_avatar'],
+                        final convId = conv['conversation_id']?.toString() ?? 'conv_$index';
+
+                        return Dismissible(
+                          key: Key(convId),
+                          // ── Swipe gauche → Archiver / Supprimer ─────────────────────
+                          background: Container(
+                            alignment: Alignment.centerLeft,
+                            padding: const EdgeInsets.only(left: 20),
+                            color: Colors.blue.shade600,
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.mark_chat_read_outlined, color: Colors.white),
+                                SizedBox(width: 8),
+                                Text('Lu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                          // ── Swipe droite → Marquer lu/non-lu ─────────────────────
+                          secondaryBackground: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            color: Colors.red.shade400,
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text('Supprimer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                SizedBox(width: 8),
+                                Icon(Icons.delete_outline, color: Colors.white),
+                              ],
+                            ),
+                          ),
+                          confirmDismiss: (direction) async {
+                            if (direction == DismissDirection.endToStart) {
+                              // Swipe gauche = Supprimer (demander confirmation)
+                              return await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  title: const Text('Supprimer la conversation'),
+                                  content: Text('Supprimer la conversation avec ${conv['other_name'] ?? 'cet utilisateur'} ?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, false),
+                                      child: const Text('Annuler'),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ).then((_) {
-                              ref.invalidate(conversationsProvider);
-                            });
+                              ) ?? false;
+                            } else {
+                              // Swipe droite = Marquer comme lu (pas de dismiss réel)
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.mark_chat_read, color: Colors.white, size: 18),
+                                      const SizedBox(width: 8),
+                                      Text('Conversation avec ${conv['other_name'] ?? ''} marquée comme lue'),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.blue.shade700,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                              return false; // On ne dismissreel pas la tuile
+                            }
                           },
+                          onDismissed: (direction) {
+                            // Confirmé uniquement pour endToStart (supprimer)
+                            ref.invalidate(conversationsProvider);
+                          },
+                          child: ConversationTile(
+                            conversation: conv,
+                            currentUserId: user.id.toString(),
+                            // Badge for duplicate conversations
+                            extraBadge: (() {
+                              final otherId = conv['other_id']?.toString() ?? '';
+                              final count = grouped[otherId]?.length ?? 1;
+                              return count > 1 ? count : null;
+                            })(),
+                            onTap: () {
+                              final otherId = conv['other_id']?.toString() ?? '';
+                              final dupeList = grouped[otherId] ?? [conv];
+
+                              if (dupeList.length > 1) {
+                                // Afficher le sélecteur de conversation
+                                _showConversationSelector(context, dupeList, user.id.toString());
+                              } else {
+                                _openConversation(context, conv, user.id.toString());
+                              }
+                            },
+                          ),
                         );
                       },
                     ),
@@ -276,6 +449,92 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
               child: const Icon(Icons.person_add, color: Colors.white),
             )
           : null,
+    );
+  }
+
+  void _openConversation(BuildContext context, Map<String, dynamic> conv, String myUserId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatPage(
+          myId: myUserId,
+          otherId: conv['other_id']?.toString() ?? '',
+          otherName: conv['other_name'] ?? 'Utilisateur',
+          productId: conv['product_id']?.toString(),
+          productName: conv['product_name'],
+          productImage: conv['product_image'],
+          productPrice: double.tryParse(conv['product_price']?.toString() ?? '0'),
+          otherAvatarUrl: conv['other_avatar'],
+        ),
+      ),
+    ).then((_) => ref.invalidate(conversationsProvider));
+  }
+
+  void _showConversationSelector(
+    BuildContext context,
+    List<Map<String, dynamic>> convList,
+    String myUserId,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.chat_bubble_outline, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Conversations avec ${convList.first['other_name'] ?? 'cet utilisateur'}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ...convList.map((conv) {
+              final product = conv['product_name'];
+              final lastMsg = conv['last_message'] ?? '';
+              return ListTile(
+                leading: Icon(
+                  product != null ? Icons.shopping_bag_outlined : Icons.chat_bubble_outline,
+                  color: product != null ? Colors.orange : Colors.blue,
+                ),
+                title: Text(
+                  product != null ? '📦 $product' : '💬 Conversation privée',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                subtitle: Text(
+                  lastMsg,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openConversation(context, conv, myUserId);
+                },
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
+        );
+      },
     );
   }
 
@@ -318,12 +577,14 @@ class ConversationTile extends StatelessWidget {
   final Map<String, dynamic> conversation;
   final String currentUserId;
   final VoidCallback onTap;
+  final int? extraBadge; // Nombre de conversations en double avec ce user
 
   const ConversationTile({
     Key? key,
     required this.conversation,
     required this.currentUserId,
     required this.onTap,
+    this.extraBadge,
   }) : super(key: key);
 
   String _formatTimestamp(String? timestamp) {
@@ -400,6 +661,28 @@ class ConversationTile extends StatelessWidget {
                           color: Colors.green,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                  // Badge "+ X conversations" en double
+                  if (extraBadge != null && extraBadge! > 1)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: Text(
+                          '+$extraBadge',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -502,6 +785,60 @@ class ConversationTile extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── _FilterChip ─────────────────────────────────────────────────────────────
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? theme.primaryColor : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? theme.primaryColor : Colors.grey.shade300,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? Colors.white : Colors.grey.shade600,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                color: selected ? Colors.white : Colors.grey.shade700,
+              ),
+            ),
+          ],
         ),
       ),
     );

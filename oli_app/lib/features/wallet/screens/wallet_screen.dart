@@ -4,6 +4,10 @@ import '../../auth/providers/auth_controller.dart';
 import '../providers/wallet_provider.dart';
 import '../models/transaction_model.dart';
 import '../widgets/payment_dialogs.dart';
+import '../widgets/cash_bill_widget.dart';
+import '../services/biometric_service.dart';
+import '../services/receipt_service.dart';
+import '../../../providers/exchange_rate_provider.dart';
 
 class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
@@ -13,6 +17,8 @@ class WalletScreen extends ConsumerStatefulWidget {
 }
 
 class _WalletScreenState extends ConsumerState<WalletScreen> {
+  bool _balanceVisible = true;
+
   @override
   void initState() {
     super.initState();
@@ -21,30 +27,27 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
 
   void _showTransactionDialog(bool isDeposit) async {
     if (isDeposit) {
-      // Show payment method selection first
       final paymentMethod = await showDialog<String>(
         context: context,
         builder: (_) => const PaymentMethodSelectionDialog(),
       );
-
       if (paymentMethod != null && mounted) {
-        if (paymentMethod == 'mobile') {
-          showDialog(
-            context: context,
-            builder: (_) => TransactionDialog(isDeposit: true),
-          );
-        } else {
-          showDialog(
-            context: context,
-            builder: (_) => const CardPaymentDialog(),
-          );
-        }
+        showDialog(
+          context: context,
+          builder: (_) => paymentMethod == 'mobile'
+              ? PaymentMethodSelectionDialog()
+              : const CardPaymentDialog(),
+        );
       }
     } else {
-      // For withdrawals, only mobile money
+      // Biometric auth before withdrawal
+      final ok = await biometricService.authenticate(
+        reason: 'Confirmez votre retraite',
+      );
+      if (!ok || !mounted) return;
       showDialog(
         context: context,
-        builder: (_) => TransactionDialog(isDeposit: false),
+        builder: (_) => const CardPaymentDialog(),
       );
     }
   }
@@ -52,244 +55,377 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   @override
   Widget build(BuildContext context) {
     final walletState = ref.watch(walletProvider);
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+    final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title: const Text('Mon Wallet Oli'),
         elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.read(walletProvider.notifier).loadWalletData(),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // BALANCE CARD
+
+              // ── Carte de solde redessinée ───────────────────────────────
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF1E3C72), Color(0xFF2A5298)]),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0D1F4C), Color(0xFF1B3A84), Color(0xFF1565C0)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF1565C0).withOpacity(0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Solde Disponible', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                    Row(
+                      children: [
+                        const Text(
+                          'Solde disponible',
+                          style: TextStyle(color: Colors.white60, fontSize: 14),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => setState(() => _balanceVisible = !_balanceVisible),
+                          child: Icon(
+                            _balanceVisible ? Icons.visibility_off : Icons.visibility,
+                            color: Colors.white54,
+                            size: 20,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
-                    Text(
-                      '${walletState.balance.toStringAsFixed(2)} \$',
-                      style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: _balanceVisible
+                          ? Text(
+                              key: const ValueKey('visible'),
+                              walletState.isLoading
+                                  ? '•••••'
+                                  : exchangeNotifier.formatProductPrice(walletState.balance),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 36,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
+                              ),
+                            )
+                          : const Text(
+                              key: ValueKey('hidden'),
+                              '●●●●●●●',
+                              style: TextStyle(color: Colors.white54, fontSize: 28, letterSpacing: 4),
+                            ),
                     ),
                     const SizedBox(height: 24),
+
+                    // Actions rapides
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _ActionButton(
-                          icon: Icons.add, 
-                          label: 'Dépôt', 
-                          onTap: () => _showTransactionDialog(true)
+                        _QuickAction(
+                          icon: Icons.add_rounded,
+                          label: 'Dépôt',
+                          color: Colors.greenAccent,
+                          onTap: () => _showTransactionDialog(true),
                         ),
-                        _ActionButton(
-                          icon: Icons.arrow_upward, 
-                          label: 'Retrait', 
-                          onTap: () => _showTransactionDialog(false)
+                        _QuickAction(
+                          icon: Icons.arrow_upward_rounded,
+                          label: 'Retrait',
+                          color: Colors.orangeAccent,
+                          onTap: () => _showTransactionDialog(false),
+                        ),
+                        _QuickAction(
+                          icon: Icons.send_rounded,
+                          label: 'Envoyer',
+                          color: Colors.cyanAccent,
+                          onTap: () => _showSendSheet(),
+                        ),
+                        _QuickAction(
+                          icon: Icons.request_page_outlined,
+                          label: 'Demander',
+                          color: Colors.purpleAccent,
+                          onTap: () => _showRequestSheet(),
                         ),
                       ],
-                    )
+                    ),
                   ],
                 ),
               ),
 
               if (walletState.error != null)
                 Padding(
-                   padding: const EdgeInsets.all(8.0),
-                   child: Text(walletState.error!, style: const TextStyle(color: Colors.red)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(walletState.error!, style: const TextStyle(color: Colors.red, fontSize: 12))),
+                      ],
+                    ),
+                  ),
                 ),
 
-              // TRANSACTIONS HEADER
+              const SizedBox(height: 8),
+
+              // ── Historique ─────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Historique', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    Icon(Icons.history, color: Colors.grey[600]),
+                    const Text('Historique des transactions',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    Icon(Icons.history, color: Colors.grey.shade500, size: 20),
                   ],
                 ),
               ),
 
-              // LIST
               if (walletState.isLoading && walletState.transactions.isEmpty)
-                const Center(child: CircularProgressIndicator())
-              else if (walletState.transactions.isEmpty)
-                const Padding(
+                const Center(child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: Text("Aucune transaction récente", style: TextStyle(color: Colors.grey)),
+                  child: CircularProgressIndicator(),
+                ))
+              else if (walletState.transactions.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(48),
+                    child: Column(
+                      children: [
+                        Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Aucune transaction',
+                          style: TextStyle(color: Colors.grey.shade400, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  ),
                 )
               else
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: walletState.transactions.length,
-                  itemBuilder: (context, index) {
-                    final tx = walletState.transactions[index];
-                    final isPositive = tx.type == 'deposit' || tx.type == 'refund';
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: isPositive ? Colors.green[100] : Colors.red[100],
-                        child: Icon(
-                          isPositive ? Icons.call_received : Icons.call_made, 
-                          color: isPositive ? Colors.green : Colors.red
-                        ),
-                      ),
-                      title: Text(tx.description),
-                      subtitle: Text(tx.createdAt.toString().substring(0, 16)),
-                      trailing: Text(
-                        '${isPositive ? '+' : ''}${tx.amount.toStringAsFixed(2)} \$',
-                        style: TextStyle(
-                          color: isPositive ? Colors.green : Colors.red,
-                          fontWeight: FontWeight.bold
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                ...walletState.transactions.map((tx) => _TransactionCard(
+                  tx: tx,
+                  exchangeNotifier: exchangeNotifier,
+                  onReceiptTap: () => receiptService.showReceipt(context, tx),
+                )),
+
+              const SizedBox(height: 32),
             ],
           ),
         ),
       ),
     );
   }
-}
 
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
+  // ── Send Cash avec biométrie ──────────────────────────────────────────────
+  Future<void> _showSendSheet() async {
+    // D'abord biométrie
+    final ok = await biometricService.authenticate(
+      reason: 'Confirmer l\'envoi d\'argent',
+    );
+    if (!ok || !mounted) return;
 
-  const _ActionButton({required this.icon, required this.label, required this.onTap});
+    // Puis sheet
+    showDialog(
+      context: context,
+      builder: (_) => const CardPaymentDialog(),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle
-            ),
-            child: Icon(icon, color: Colors.white, size: 28),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white))
-      ],
+  Future<void> _showRequestSheet() async {
+    // Pour l'instant : message placeholder
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Fonctionnalité disponible depuis le chat produit'),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        backgroundColor: Colors.deepPurple,
+      ),
     );
   }
 }
 
-class TransactionDialog extends ConsumerStatefulWidget {
-  final bool isDeposit;
-  const TransactionDialog({super.key, required this.isDeposit});
+// ── Widgets helpers ──────────────────────────────────────────────────────────
 
-  @override
-  ConsumerState<TransactionDialog> createState() => _TransactionDialogState();
-}
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
 
-class _TransactionDialogState extends ConsumerState<TransactionDialog> {
-  final _amountCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  String _provider = 'orange'; // orange, mpesa, airtel
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Pre-fill phone number from user profile
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = ref.read(authControllerProvider).userData;
-      if (user != null && user['phone'] != null) {
-        _phoneCtrl.text = user['phone'];
-        // Tenter de deviner le provider (Sommaire)
-        final phone = user['phone'] as String;
-        if (phone.startsWith('07') || phone.startsWith('+2438')) { 
-           // Logique simplifiée, à adapter selon pays
-           // Orange souvent 085, 089, 084...
-           // Vodacom 081, 082...
-           // Airtel 099, 097...
-        }
-      }
-    });
-  }
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isDeposit = widget.isDeposit;
-    return AlertDialog(
-      title: Text(isDeposit ? 'Dépôt Mobile Money' : 'Retrait vers Mobile Money'),
-      content: SingleChildScrollView(
-        child: Column(
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransactionCard extends StatelessWidget {
+  final WalletTransaction tx;
+  final dynamic exchangeNotifier;
+  final VoidCallback onReceiptTap;
+
+  const _TransactionCard({
+    required this.tx,
+    required this.exchangeNotifier,
+    required this.onReceiptTap,
+  });
+
+  bool get _isCredit => tx.type == 'deposit' || tx.type == 'refund';
+
+  IconData get _icon {
+    switch (tx.type) {
+      case 'deposit': return Icons.call_received_rounded;
+      case 'refund': return Icons.replay_rounded;
+      case 'transfer': return Icons.swap_horiz_rounded;
+      default: return Icons.call_made_rounded;
+    }
+  }
+
+  Color get _color => _isCredit ? const Color(0xFF00C853) : const Color(0xFFDD2C00);
+
+  @override
+  Widget build(BuildContext context) {
+    final dateStr = '${tx.createdAt.day.toString().padLeft(2, '0')}/'
+        '${tx.createdAt.month.toString().padLeft(2, '0')}/'
+        '${tx.createdAt.year}';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: _color.withOpacity(0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(_icon, color: _color, size: 20),
+        ),
+        title: Text(
+          tx.description,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          dateStr,
+          style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+        ),
+        trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Simulation Sandbox: Terminez le numéro par 99 pour 'Pending', 00 pour 'Fail', autre pour 'Success'."),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: _provider,
-              items: const [
-                DropdownMenuItem(value: 'orange', child: Text('Orange Money')),
-                DropdownMenuItem(value: 'mpesa', child: Text('M-Pesa')),
-                DropdownMenuItem(value: 'airtel', child: Text('Airtel Money')),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${_isCredit ? '+' : '-'}${exchangeNotifier.formatProductPrice(tx.amount)}',
+                  style: TextStyle(
+                    color: _color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: tx.status == 'completed'
+                        ? Colors.green.shade50
+                        : tx.status == 'failed'
+                            ? Colors.red.shade50
+                            : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    tx.status == 'completed' ? 'Complété' : tx.status == 'failed' ? 'Échoué' : 'En attente',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: tx.status == 'completed'
+                          ? Colors.green.shade700
+                          : tx.status == 'failed'
+                              ? Colors.red.shade700
+                              : Colors.orange.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ],
-              onChanged: (v) => setState(() => _provider = v!),
-              decoration: const InputDecoration(labelText: 'Opérateur'),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _amountCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Montant (USD)', suffixText: '\$'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Numéro de téléphone'),
+            const SizedBox(width: 8),
+            // Bouton PDF reçu
+            IconButton(
+              icon: const Icon(Icons.receipt_long_outlined, size: 20),
+              color: Colors.grey.shade400,
+              onPressed: onReceiptTap,
+              tooltip: 'Reçu PDF',
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: const EdgeInsets.all(4),
+              splashRadius: 18,
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-        ElevatedButton(
-          onPressed: _isLoading ? null : () async {
-            final amount = double.tryParse(_amountCtrl.text);
-            final phone = _phoneCtrl.text;
-            
-            if (amount == null || phone.isEmpty) return;
-
-            setState(() => _isLoading = true);
-
-            final notifier = ref.read(walletProvider.notifier);
-            final success = isDeposit 
-                ? await notifier.deposit(amount: amount, provider: _provider, phone: phone)
-                : await notifier.withdraw(amount: amount, provider: _provider, phone: phone);
-
-            setState(() => _isLoading = false);
-
-            if (mounted) {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(success ? 'Opération réussie' : 'Échec opération')),
-              );
-            }
-          },
-          child: _isLoading ? const CircularProgressIndicator() : const Text('Valider'),
-        ),
-      ],
     );
   }
 }

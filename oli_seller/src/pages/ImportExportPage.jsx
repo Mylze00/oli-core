@@ -14,6 +14,7 @@ export default function ImportExportPage() {
 
     useEffect(() => {
         loadHistory();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadHistory = async () => {
@@ -38,16 +39,15 @@ export default function ImportExportPage() {
         try {
             const result = await sellerAPI.importProducts(file);
             setImportResult(result);
-            loadHistory(); // Refresh history
+            await loadHistory();
         } catch (err) {
             console.error('Erreur import:', err);
             setImportResult({
                 success: false,
-                error: err.response?.data?.error || 'Erreur lors de l\'import'
+                error: err.response?.data?.error || err.message || 'Erreur lors de l\'import'
             });
         } finally {
             setImporting(false);
-            // Reset file input
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
@@ -147,21 +147,21 @@ export default function ImportExportPage() {
                             />
                             <button
                                 className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors ${importing
-                                    ? 'bg-gray-100 text-gray-400 cursor-wait'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                        ? 'bg-gray-100 text-gray-400 cursor-wait'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
                                     }`}
                                 disabled={importing}
                             >
                                 {importing ? (
-                                    <>
+                                    <span className="flex items-center gap-2">
                                         <RefreshCw className="animate-spin" size={18} />
                                         Import en cours...
-                                    </>
+                                    </span>
                                 ) : (
-                                    <>
+                                    <span className="flex items-center gap-2">
                                         <Upload size={18} />
                                         Choisir un fichier à importer
-                                    </>
+                                    </span>
                                 )}
                             </button>
                         </div>

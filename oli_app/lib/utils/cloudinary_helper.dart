@@ -12,7 +12,7 @@ class CloudinaryHelper {
   /// [height] — desired height in pixels (default: 200)
   ///
   /// If the URL is not a Cloudinary URL, returns it as-is.
-  static String thumbnail(String url, {int width = 350, int height = 350}) {
+  static String thumbnail(String url, {int width = 200, int height = 200}) {
     // Only transform Cloudinary URLs
     if (!url.contains('cloudinary.com')) return url;
     
@@ -39,7 +39,12 @@ class CloudinaryHelper {
 
   /// Returns a small thumbnail (for horizontal carousels, lists)
   static String small(String url) {
-    return thumbnail(url, width: 300, height: 300);
+    return thumbnail(url, width: 200, height: 200);
+  }
+
+  /// Returns an extra-small thumbnail (for circles, avatars, spotlight)
+  static String xsmall(String url) {
+    return thumbnail(url, width: 120, height: 120);
   }
 
   /// Returns a large image (for full-screen views)

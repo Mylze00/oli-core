@@ -8,6 +8,7 @@ import '../../providers/market_provider.dart';
 import '../pages/product_details_page.dart';
 import '../widgets/market_product_card.dart';
 import '../widgets/market_spotlight_carousel.dart';
+import '../widgets/market_secondhand_carousel.dart';
 import '../../../../app/theme/theme_provider.dart';
 import '../../../tabs/dashboard/widgets/verified_shops_carousel.dart';
 import '../../../tabs/dashboard/widgets/product_sections.dart';
@@ -32,6 +33,10 @@ class _MarketViewState extends ConsumerState<MarketView> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _selectedCategory = "Tout";
   String _searchQuery = "";
+
+  // Cache du shuffle : ne recalcule que si les données ou les filtres changent
+  List<Product> _cachedFiltered = [];
+  String _lastFilterKey = ''; // clé = "searchQuery|category|productIds"
 
   final Map<String, String> _categories = {
     "Tout": "",
@@ -74,6 +79,14 @@ class _MarketViewState extends ConsumerState<MarketView> {
   }
 
   List<Product> _filterProducts(List<Product> products) {
+    // Clé de cache : si rien n'a changé, on retourne le résultat précédent
+    // (le shuffle reste STABLE entre les rebuilds, pas de flashs)
+    final ids = products.map((p) => p.id).join(',');
+    final key = '$_searchQuery|$_selectedCategory|$ids';
+    if (key == _lastFilterKey && _cachedFiltered.isNotEmpty) {
+      return _cachedFiltered;
+    }
+
     var filtered = products;
 
     // Filtre par recherche
@@ -96,8 +109,11 @@ class _MarketViewState extends ConsumerState<MarketView> {
       }
     }
 
-    // Mélange aléatoire + diversification vendeurs
-    return _diversify(filtered);
+    // Shuffle + diversification (UNE SEULE FOIS, puis mis en cache)
+    final result = _diversify(filtered);
+    _cachedFiltered = result;
+    _lastFilterKey = key;
+    return result;
   }
 
   /// Mélange les produits et garantit un maximum de diversité vendeur
@@ -187,9 +203,14 @@ class _MarketViewState extends ConsumerState<MarketView> {
           // Sections — filtered est déjà mélangé et diversifié
           final recentProducts = filtered.take(8).toList();
           final allGridProducts = filtered.length > 8 ? filtered.skip(8).toList() : <Product>[];
-          // Grille scindée : 6 avant le spotlight, le reste après
-          final gridBefore = allGridProducts.take(6).toList();
-          final gridAfter = allGridProducts.length > 6 ? allGridProducts.skip(6).toList() : <Product>[];
+          // 3 produits avant Spotlight, puis Seconde Main après le 9e (3+6)
+          final gridBefore = allGridProducts.take(3).toList();
+          final gridAfterAll = allGridProducts.length > 3 ? allGridProducts.skip(3).toList() : <Product>[];
+          // Seconde Main s'insère après 6 produits du gridAfter (3+6 = 9e produit)
+          final gridAfterA = gridAfterAll.take(6).toList();
+          final gridAfterB = gridAfterAll.length > 6 ? gridAfterAll.skip(6).toList() : <Product>[];
+
+
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -325,14 +346,14 @@ class _MarketViewState extends ConsumerState<MarketView> {
                     ),
                   ),
 
-                // ── 7. SPOTLIGHT CAROUSEL ──
+                // ── 7. SPOTLIGHT CAROUSEL ── (produits non encore affichés)
                 if (filtered.length >= 4)
                   SliverToBoxAdapter(
                     child: MarketSpotlightCarousel(products: filtered),
                   ),
 
-                // ── 6b. GRILLE PRODUITS (suite) ──
-                if (gridAfter.isNotEmpty)
+                // ── 6b. GRILLE (6 produits après Spotlight → total = 9) ──
+                if (gridAfterA.isNotEmpty)
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     sliver: SliverGrid(
@@ -344,13 +365,42 @@ class _MarketViewState extends ConsumerState<MarketView> {
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          final product = gridAfter[index];
+                          final product = gridAfterA[index];
                           return GestureDetector(
                             onTap: () => _navigateToProduct(product),
                             child: MarketProductCard(product: product),
                           );
                         },
-                        childCount: gridAfter.length,
+                        childCount: gridAfterA.length,
+                      ),
+                    ),
+                  ),
+
+                // ── 8. SECONDE MAIN ── après le 9e produit (3 + 6)
+                SliverToBoxAdapter(
+                  child: MarketSecondhandCarousel(products: allProducts),
+                ),
+
+                // ── 6c. GRILLE (reste) ──
+                if (gridAfterB.isNotEmpty)
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    sliver: SliverGrid(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 0.65,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final product = gridAfterB[index];
+                          return GestureDetector(
+                            onTap: () => _navigateToProduct(product),
+                            child: MarketProductCard(product: product),
+                          );
+                        },
+                        childCount: gridAfterB.length,
                       ),
                     ),
                   ),

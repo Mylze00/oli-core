@@ -275,6 +275,65 @@ exports.getMessages = async (req, res) => {
 };
 
 /**
+ * Ajouter / Retirer une réaction emoji sur un message
+ */
+exports.reactToMessage = async (req, res) => {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user.id;
+
+    if (!emoji) return res.status(400).json({ error: 'emoji requis' });
+
+    try {
+        // Récupérer les réactions actuelles
+        const msgResult = await pool.query(
+            'SELECT reactions, conversation_id FROM messages WHERE id = $1',
+            [messageId]
+        );
+        if (msgResult.rows.length === 0) return res.status(404).json({ error: 'Message introuvable' });
+
+        const msg = msgResult.rows[0];
+        const reactions = msg.reactions || {};
+
+        // Toggle
+        const current = reactions[emoji] || 0;
+        if (current > 0) {
+            reactions[emoji] = current - 1;
+            if (reactions[emoji] === 0) delete reactions[emoji];
+        } else {
+            reactions[emoji] = current + 1;
+        }
+
+        // Sauvegarder
+        await pool.query(
+            'UPDATE messages SET reactions = $1 WHERE id = $2',
+            [JSON.stringify(reactions), messageId]
+        );
+
+        // Notifier via Socket.IO
+        const io = req.app.get('io');
+        if (io) {
+            const participants = await pool.query(
+                'SELECT user_id FROM conversation_participants WHERE conversation_id = $1',
+                [msg.conversation_id]
+            );
+            participants.rows.forEach(p => {
+                io.to(`user_${p.user_id}`).emit('reaction_updated', {
+                    message_id: parseInt(messageId),
+                    reactions,
+                    conversation_id: msg.conversation_id,
+                });
+            });
+        }
+
+        res.json({ success: true, reactions });
+    } catch (err) {
+        console.error('Erreur reactToMessage:', err);
+        res.status(500).json({ error: 'Erreur réaction' });
+    }
+};
+
+/**
  * Rechercher des utilisateurs pour le chat
  */
 exports.searchUsers = async (req, res) => {

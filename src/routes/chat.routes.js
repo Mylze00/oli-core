@@ -23,4 +23,7 @@ router.get('/messages/:otherUserId', chatController.getMessages);
 // Recherche
 router.get('/users', chatController.searchUsers);
 
+// Réactions sur un message
+router.put('/messages/:messageId/react', chatController.reactToMessage);
+
 module.exports = router;

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../../../config/api_config.dart';
 import '../../../../models/product_model.dart';
 import '../../../../providers/exchange_rate_provider.dart';
+import '../../../../utils/cloudinary_helper.dart';
 import '../../../search/widgets/search_result_card.dart';
 import '../pages/product_details_page.dart';
 
@@ -256,7 +257,7 @@ class _CategoryProductsPageState extends ConsumerState<CategoryProductsPage> {
                                       borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
                                       child: product.images.isNotEmpty
                                           ? Image.network(
-                                              product.images.first,
+                                              CloudinaryHelper.thumbnail(product.images.first),
                                               fit: BoxFit.cover,
                                               width: double.infinity,
                                               errorBuilder: (_, __, ___) => Container(
