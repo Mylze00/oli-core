@@ -270,7 +270,7 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                     ) VALUES (
                         $1, $2, $3, $4, $5, 
                         $6, $7, $8, $9, $10, $11,
-                        'active', true, NOW(), NOW()
+                        'draft', false, NOW(), NOW()
                     )
                 `, [
                     req.user.id, shopId, name, description, price,

@@ -147,8 +147,8 @@ export default function ImportExportPage() {
                             />
                             <button
                                 className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors ${importing
-                                        ? 'bg-gray-100 text-gray-400 cursor-wait'
-                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    ? 'bg-gray-100 text-gray-400 cursor-wait'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
                                     }`}
                                 disabled={importing}
                             >
@@ -165,6 +165,15 @@ export default function ImportExportPage() {
                                 )}
                             </button>
                         </div>
+                    </div>
+
+                    {/* Draft info banner */}
+                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                        <span className="text-amber-500 text-base shrink-0 mt-0.5">📝</span>
+                        <p className="text-xs text-amber-800">
+                            Les produits importés seront créés en <strong>brouillon</strong>.
+                            Vous pourrez les relire, les modifier et les activer depuis <strong>Mes Produits → Brouillons</strong>.
+                        </p>
                     </div>
 
                     {/* Import Result */}
