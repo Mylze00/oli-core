@@ -288,7 +288,8 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
             const errors = [];
 
             try {
-                await bgClient.query('BEGIN');
+                // Pas de transaction globale — auto-commit par produit
+                // Ainsi une erreur sur 1 produit ne rollback pas les 499 autres
 
                 for (let i = 0; i < rows.length; i++) {
                     const row = normalizeRow(rows[i]); // Auto-détecte Oli / Alibaba / AliExpress
@@ -324,11 +325,24 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                         const weight = row.weight || row.poids || '';
                         const rawImages = row.images ? row.images.split(';').map(img => img.trim()).filter(img => img) : [];
 
-                        // ☁️ Re-uploader images vers Cloudinary
+                        // ☁️ Re-upload UNIQUEMENT si l'image vient d'un domaine CORS-problématique
+                        // Les CDN Alibaba/AliExpress (alicdn.com, ae*.alicdn.com) sont directement accessibles
+                        const SKIP_REUPLOAD_DOMAINS = ['alicdn.com', 'aliexpress.com', 'cloudinary.com'];
+                        const needsReupload = (url) => {
+                            try {
+                                const host = new URL(url).hostname;
+                                return !SKIP_REUPLOAD_DOMAINS.some(d => host.endsWith(d));
+                            } catch { return false; }
+                        };
+
                         const images = [];
-                        for (const imgUrl of rawImages) {
-                            const cloudinaryUrl = await reuploadToCloudinary(imgUrl);
-                            images.push(cloudinaryUrl);
+                        for (const imgUrl of rawImages.slice(0, 6)) { // max 6 images
+                            if (needsReupload(imgUrl)) {
+                                const cloudinaryUrl = await reuploadToCloudinary(imgUrl);
+                                images.push(cloudinaryUrl);
+                            } else {
+                                images.push(imgUrl); // URL directe, pas besoin de re-upload
+                            }
                         }
 
                         // 💱 Conversion USD → CDF si prix < 100
@@ -377,12 +391,9 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                     }
                 }
 
-                await bgClient.query('COMMIT');
-
-            } catch (err) {
-                await bgClient.query('ROLLBACK');
-                console.error('Background import error:', err);
-                errors.push({ row: 0, error: 'Erreur critique: ' + err.message });
+            } catch (bgErr) {
+                console.error('Background import error:', bgErr);
+                errors.push({ row: 0, error: 'Erreur critique: ' + bgErr.message });
             } finally {
                 // Marquer l'import comme terminé
                 await bgClient.query(`
