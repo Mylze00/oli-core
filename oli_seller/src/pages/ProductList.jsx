@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Settings, FileText } from 'lucide-react';
+import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Settings, FileText, Trash2, CheckSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { sellerAPI, shopAPI } from '../services/api';
+import { sellerAPI, shopAPI, productAPI } from '../services/api';
 
 export default function ProductList() {
     const navigate = useNavigate();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active' | 'draft'
+    const [activeTab, setActiveTab] = useState('all');
     const [activatingAll, setActivatingAll] = useState(false);
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         loadProducts();
@@ -59,6 +61,42 @@ export default function ProductList() {
         }
     };
 
+    const handleBulkDelete = async () => {
+        if (selectedIds.size === 0) return;
+        const ok = window.confirm(
+            `⚠️ Supprimer les ${selectedIds.size} produit(s) sélectionné(s) ? Cette action est irréversible.`
+        );
+        if (!ok) return;
+        setDeleting(true);
+        try {
+            for (const id of selectedIds) {
+                await productAPI.delete(id);
+            }
+            setSelectedIds(new Set());
+            await loadProducts();
+        } catch (err) {
+            alert('Erreur lors de la suppression: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const toggleSelect = (id) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.size === filteredProducts.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredProducts.map(p => p.id)));
+        }
+    };
+
     const handleSearch = (e) => {
         e.preventDefault();
         loadProducts();
@@ -97,6 +135,35 @@ export default function ProductList() {
 
     return (
         <div className="p-8">
+            {/* Floating bulk action bar */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl border border-gray-700">
+                    <CheckSquare size={18} className="text-blue-400" />
+                    <span className="font-medium text-sm">{selectedIds.size} produit(s) sélectionné(s)</span>
+                    <button
+                        onClick={() => setSelectedIds(new Set())}
+                        className="text-xs text-gray-400 hover:text-white transition-colors"
+                    >
+                        Tout désélectionner
+                    </button>
+                    <div className="w-px h-5 bg-gray-600" />
+                    <button
+                        onClick={handleBulkDelete}
+                        disabled={deleting}
+                        className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        {deleting ? (
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                            </svg>
+                        ) : (
+                            <Trash2 size={14} />
+                        )}
+                        {deleting ? 'Suppression...' : `Supprimer (${selectedIds.size})`}
+                    </button>
+                </div>
+            )}
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <div>
@@ -257,6 +324,16 @@ export default function ProductList() {
                     <table className="w-full">
                         <thead className="bg-gray-50 border-b border-gray-200">
                             <tr>
+                                {/* Checkbox select-all */}
+                                <th className="px-4 py-3 w-10">
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                        checked={filteredProducts.length > 0 && selectedIds.size === filteredProducts.length}
+                                        onChange={toggleSelectAll}
+                                        title="Tout sélectionner"
+                                    />
+                                </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Produit
                                 </th>
@@ -278,9 +355,19 @@ export default function ProductList() {
                             {filteredProducts.map((product) => (
                                 <tr
                                     key={product.id}
-                                    className={`hover:bg-gray-50 transition-colors cursor-pointer ${isDraft(product) ? 'bg-amber-50/40' : ''}`}
+                                    className={`hover:bg-gray-50 transition-colors cursor-pointer ${isDraft(product) ? 'bg-amber-50/40' : ''
+                                        } ${selectedIds.has(product.id) ? 'bg-blue-50/60' : ''}`}
                                     onClick={() => navigate(`/products/${product.id}/edit`)}
                                 >
+                                    {/* Checkbox */}
+                                    <td className="px-4 py-4" onClick={e => { e.stopPropagation(); toggleSelect(product.id); }}>
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                            checked={selectedIds.has(product.id)}
+                                            onChange={() => toggleSelect(product.id)}
+                                        />
+                                    </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
                                             {getImageUrl(product.images) ? (
