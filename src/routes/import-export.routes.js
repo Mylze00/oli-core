@@ -181,61 +181,111 @@ function parseCSV(csvString) {
  * Supporte automatiquement :
  *   - Format Oli standard (name, price, images, ...)
  *   - Format Alibaba scraper (title, mainimage, moq, ...)
- *   - Format AliExpress scraper (title, pricing/0/dollarPrice, images/0..5, thumb)
+ *   - Format AliExpress scraper (title, pricing/0/dollarPrice, images/0..5, skuData, ...)
  */
 function normalizeRow(row) {
-    // Détecter le format AliExpress : présence de clés "pricing/0/dollarPrice" ou "images/0"
-    const isAliExpress = Object.keys(row).some(k => k.startsWith('pricing/') || k.startsWith('images/'));
+    // Détecter le format AliExpress
+    const isAliExpress = Object.keys(row).some(k => k.startsWith('pricing/') || k.startsWith('images/') || k.startsWith('skuData/'));
 
     if (!isAliExpress) {
         return row; // Formats Oli standard et Alibaba — déjà gérés par le mapping CSV
     }
 
-    // ── Format AliExpress ──────────────────────────────────────────────────────
+    // ── Format AliExpress ────────────────────────────────────────────
 
-    // Titre (déjà en français grâce au scraper AliExpress)
+    // Nom
     const name = (row['title'] || row['name'] || '').replace(/<[^>]*>/g, '').trim();
 
-    // Prix : essayer plusieurs colonnes par ordre de priorité
+    // Prix : priorité au prix dollar
     const rawPrice =
         row['pricing/0/dollarPrice'] ||
         row['pricing/0/price'] ||
         row['pricing/0/min'] ||
         row['pricing/1/dollarPrice'] ||
-        row['pricing/1/price'] ||
         row['price'] || '0';
-
-    // Retirer symboles monétaires et espaces
     const priceStr = String(rawPrice).replace(/[^\d.]/g, '');
-    let price = parseFloat(priceStr) || 0;
+    const price = parseFloat(priceStr) || 0;
 
-    // Images : colonnes images/0 ... images/9, plus thumb en fallback
+    // Images : images/0 → images/10, thumb en fallback
     const imageKeys = Object.keys(row)
         .filter(k => /^images\/\d+$/.test(k))
-        .sort((a, b) => {
-            const ai = parseInt(a.split('/')[1]);
-            const bi = parseInt(b.split('/')[1]);
-            return ai - bi;
-        });
-    const imageUrls = imageKeys
-        .map(k => row[k])
-        .filter(url => url && url.startsWith('http'));
-
-    // Fallback sur thumb si aucune image trouvée
+        .sort((a, b) => parseInt(a.split('/')[1]) - parseInt(b.split('/')[1]));
+    const imageUrls = imageKeys.map(k => row[k]).filter(url => url && url.startsWith('http'));
     const thumb = row['thumb'] || row['thumbnail'] || '';
-    if (imageUrls.length === 0 && thumb.startsWith('http')) {
-        imageUrls.push(thumb);
+    if (imageUrls.length === 0 && thumb.startsWith('http')) imageUrls.push(thumb);
+    const imagesStr = imageUrls.slice(0, 6).join(';');
+
+    // Marque : supplier/companyName ou supplier/companyname
+    const brand =
+        row['supplier/companyname'] ||
+        row['supplier/companyName'] ||
+        row['brand'] || row['marque'] || '';
+
+    // Quantité : minOrder en priorité, puis quantity générique
+    const rawQty = row['minorder'] || row['minOrder'] || row['quantity'] || row['stock'] || '10';
+    const qty = parseInt(String(rawQty).replace(/[^\d]/g, '')) || 10;
+
+    // Unité : orderUnit en priorité
+    const unit = row['orderunit'] || row['orderUnit'] || row['unit'] || 'Pièce';
+
+    // Délai de livraison : leadTimeInfo/0/processPeriod (en jours)
+    const leadDays = row['leadtimeinfo/0/processperiod'] || row['leadTimeInfo/0/processPeriod'] || '';
+    const delivery_time = leadDays ? `${leadDays} jours` : '';
+
+    // URL source AliExpress (non scrapée, utile pour référence)
+    const source_url = row['productdetailurl'] || row['productDetailUrl'] || '';
+
+    // Description structurée depuis productProperties
+    const propPairs = [];
+    for (let pi = 0; pi <= 35; pi++) {
+        const pName = row[`productproperties/${pi}/name`] || row[`productProperties/${pi}/name`] || '';
+        const pVal = row[`productproperties/${pi}/value`] || row[`productProperties/${pi}/value`] || '';
+        if (pName && pVal) propPairs.push(`${pName}: ${pVal}`);
+    }
+    // Infos ventes
+    const salesVol = row['salesvolume'] || row['salesVolume'] || '';
+    const reviews = row['reviewscount'] || row['reviewsCount'] || '';
+    const evalScore = row['evaluation'] || '';
+    const extras = [];
+    if (salesVol) extras.push(`Ventes: ${salesVol}`);
+    if (reviews) extras.push(`Avis: ${reviews}`);
+    if (evalScore) extras.push(`Note: ${evalScore}/5`);
+
+    const description = [
+        ...propPairs,
+        ...extras,
+    ].join('\n');
+
+    // Catégorie : depuis productProperties si possible
+    const category = row['category'] || row['categorie'] || '';
+
+    // Couleur principale : skuData/0 où name contient "couleur"
+    // + liste de toutes les couleurs pour les variantes
+    let color = '';
+    const variantColors = []; // [{name, image}]
+    for (let si = 0; si <= 3; si++) {
+        const skuName = (row[`skudata/${si}/name`] || row[`skuData/${si}/name`] || '').toLowerCase();
+        if (skuName.includes('couleur') || skuName.includes('color')) {
+            for (let vi = 0; vi <= 80; vi++) {
+                const vName = row[`skudata/${si}/values/${vi}/name`] || row[`skuData/${si}/values/${vi}/name`] || '';
+                const vImg = row[`skudata/${si}/values/${vi}/img`] || row[`skuData/${si}/values/${vi}/img`] || '';
+                if (vName) {
+                    variantColors.push({ name: vName, image: vImg });
+                    if (!color) color = vName; // première couleur = couleur principale
+                }
+            }
+        }
+        // Tailles
+        if (skuName.includes('taille') || skuName.includes('size') || skuName.includes('volume') || skuName.includes('longueur')) {
+            for (let vi = 0; vi <= 80; vi++) {
+                const vName = row[`skudata/${si}/values/${vi}/name`] || row[`skuData/${si}/values/${vi}/name`] || '';
+                if (vName) variantColors.push({ name: vName, type: 'size' });
+            }
+        }
     }
 
-    const imagesStr = imageUrls.slice(0, 6).join(';'); // max 6 images
-
-    // Autres champs
-    const description = row['description'] || row['desc'] || '';
-    const category = row['category'] || row['categorie'] || '';
-    const brand = row['brand'] || row['marque'] || '';
-    const quantity = row['quantity'] || row['stock'] || row['moq'] || '10';
-    const unit = row['unit'] || row['unite'] || 'Pièce';
-    const weight = row['weight'] || row['poids'] || '';
+    // Condition : déduire depuis description ("Neuf" par défaut pour AliExpress)
+    const condition = 'Neuf';
 
     return {
         name,
@@ -244,9 +294,14 @@ function normalizeRow(row) {
         description,
         category,
         brand,
-        quantity,
+        quantity: String(qty),
         unit,
-        weight,
+        weight: '',
+        color,
+        delivery_time,
+        source_url,
+        condition,
+        _variants: variantColors, // utilisé en interne pour créer les variantes
         _source: 'aliexpress',
     };
 }
@@ -356,10 +411,13 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                         const brand = row.brand || row.marque || '';
                         const unit = row.unit || row.unite || 'Pièce';
                         const weight = row.weight || row.poids || '';
+                        const color = row.color || row.couleur || '';
+                        const condition = row.condition || 'Neuf';
+                        const delivery_time = row.delivery_time || '';
+                        const source_url = row.source_url || '';
                         const rawImages = row.images ? row.images.split(';').map(img => img.trim()).filter(img => img) : [];
 
                         // ☁️ Re-upload UNIQUEMENT si l'image vient d'un domaine CORS-problématique
-                        // Les CDN Alibaba/AliExpress (alicdn.com, ae*.alicdn.com) sont directement accessibles
                         const SKIP_REUPLOAD_DOMAINS = ['alicdn.com', 'aliexpress.com', 'cloudinary.com'];
                         const needsReupload = (url) => {
                             try {
@@ -369,12 +427,11 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                         };
 
                         const images = [];
-                        for (const imgUrl of rawImages.slice(0, 6)) { // max 6 images
+                        for (const imgUrl of rawImages.slice(0, 6)) {
                             if (needsReupload(imgUrl)) {
-                                const cloudinaryUrl = await reuploadToCloudinary(imgUrl);
-                                images.push(cloudinaryUrl);
+                                images.push(await reuploadToCloudinary(imgUrl));
                             } else {
-                                images.push(imgUrl); // URL directe, pas besoin de re-upload
+                                images.push(imgUrl);
                             }
                         }
 
@@ -400,18 +457,43 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                             }
                         }
 
-                        await bgClient.query(`
+                        const insertResult = await bgClient.query(`
                             INSERT INTO products (
                                 seller_id, shop_id, name, description, price,
                                 category, quantity, brand, unit, weight, images,
+                                color, condition, delivery_time,
                                 status, is_active, created_at, updated_at
                             ) VALUES (
                                 $1, $2, $3, $4, $5,
                                 $6, $7, $8, $9, $10, $11,
+                                $12, $13, $14,
                                 'draft', false, NOW(), NOW()
-                            )
+                            ) RETURNING id
                         `, [sellerId, shopId, name, description, price,
-                            category, quantity, brand, unit, weight, images]);
+                            category, quantity, brand, unit, weight, images,
+                            color, condition, delivery_time]);
+
+                        const productId = insertResult.rows[0]?.id;
+
+                        // Insérer les variantes couleurs/tailles depuis skuData
+                        if (productId && row._variants && row._variants.length > 0) {
+                            for (const variant of row._variants.slice(0, 20)) {
+                                try {
+                                    await bgClient.query(`
+                                        INSERT INTO product_variants
+                                            (product_id, type, value, stock_quantity, price_adjustment, is_active, created_at)
+                                        VALUES ($1, $2, $3, $4, $5, true, NOW())
+                                        ON CONFLICT DO NOTHING
+                                    `, [
+                                        productId,
+                                        variant.type === 'size' ? 'size' : 'color',
+                                        variant.name,
+                                        quantity,
+                                        0
+                                    ]);
+                                } catch (_) { /* ignorer les doublons */ }
+                            }
+                        }
 
                         imported++;
 
