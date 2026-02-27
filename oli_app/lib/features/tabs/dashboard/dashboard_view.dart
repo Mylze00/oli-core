@@ -247,48 +247,48 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   }
 
   /// Calcule la distribution des produits UNE SEULE FOIS
+  /// Chaque section est indépendante — personne ne "vide" le ranking
   void _computeProductDistribution(List<Product> allProducts) {
     _cachedSelectionKeyword = "";
     _cachedSelectionProducts = [];
 
+    // ── 1. Section "Sélection" : groupe par mot-clé (min 3 produits)
     final Map<String, List<Product>> groupedProducts = {};
-    
     for (var product in allProducts) {
       final words = product.name.split(' ');
       String focusKW = words.isNotEmpty ? words.first : "";
-      
       if (words.length > 1 && (focusKW.length <= 2 || stopWords.contains(focusKW))) {
         focusKW = words[1];
       }
-      
       focusKW = focusKW.replaceAll(RegExp(r'[^\w\s]+'), '');
-
       if (focusKW.length > 2) {
-         focusKW = focusKW[0].toUpperCase() + focusKW.substring(1).toLowerCase();
-         if (!groupedProducts.containsKey(focusKW)) {
-           groupedProducts[focusKW] = [];
-         }
-         groupedProducts[focusKW]!.add(product);
+        focusKW = focusKW[0].toUpperCase() + focusKW.substring(1).toLowerCase();
+        groupedProducts.putIfAbsent(focusKW, () => []).add(product);
       }
     }
-
-    final validKeys = groupedProducts.keys.where((k) => groupedProducts[k]!.length >= 5).toList();
-
+    // Seuil abaissé à 3 (au lieu de 5) pour s'adapter à une petite boutique admin
+    final validKeys = groupedProducts.keys
+        .where((k) => groupedProducts[k]!.length >= 3)
+        .toList();
     if (validKeys.isNotEmpty) {
       validKeys.shuffle();
       _cachedSelectionKeyword = validKeys.first;
-      _cachedSelectionProducts = groupedProducts[_cachedSelectionKeyword]!.take(15).toList();
+      _cachedSelectionProducts =
+          groupedProducts[_cachedSelectionKeyword]!.take(15).toList();
     }
 
-    final remainingProducts = allProducts.where((p) => !_cachedSelectionProducts.contains(p)).toList();
-    _cachedSuperOffers = remainingProducts.take(10).toList();
-    _cachedDiscoveryList = remainingProducts.length > 10 
-        ? remainingProducts.skip(10).take(5).toList() 
-        : <Product>[];
-    _cachedRankingList = remainingProducts.length > 15 
-        ? remainingProducts.skip(15).toList() 
-        : <Product>[];
-    _cachedRankingList.sort((a, b) => a.name.compareTo(b.name));
+    // ── 2. Section "Découverte" : 5 produits aléatoires parmi TOUS les produits admin
+    //    (indépendant de la sélection — jamais vide tant qu'il y a des produits)
+    final shuffledForDiscovery = List<Product>.from(allProducts)..shuffle();
+    _cachedDiscoveryList = shuffledForDiscovery.take(5).toList();
+
+    // ── 3. Section "Super Offres" (utilisée comme donnée intermédiaire)
+    _cachedSuperOffers = allProducts.take(10).toList();
+
+    // ── 4. Section "Top Classement" : TOUS les produits admin, triés par nom
+    //    Jamais vide tant que l'admin a des produits
+    _cachedRankingList = List<Product>.from(allProducts)
+      ..sort((a, b) => a.name.compareTo(b.name));
 
     _distributionComputed = true;
   }
@@ -323,9 +323,11 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       _computeProductDistribution(allProducts);
     }
 
-    final fullRankingList = _cachedRankingList.isNotEmpty 
-        ? _cachedRankingList 
-        : (_cachedDiscoveryList.isNotEmpty ? _cachedDiscoveryList : _cachedSuperOffers);
+    // Top Classement = tous les produits admin (jamais vide)
+    // Fallback sur _cachedSuperOffers si vraiment rien
+    final fullRankingList = _cachedRankingList.isNotEmpty
+        ? _cachedRankingList
+        : _cachedSuperOffers;
     
     // Lazy loading : limiter les produits affichés dans le ranking
     final effectiveRankingList = fullRankingList.take(_rankingLoadedCount).toList();
@@ -407,20 +409,20 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   ),
 
                 // 7. DISCOVERY
-                SliverPadding(
-                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                   sliver: SliverToBoxAdapter(
-                     child: Text("Découverte", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                   ),
-                ),
-                SliverToBoxAdapter(
-                  child: _cachedDiscoveryList.isEmpty 
-                    ? const SizedBox.shrink()
-                    : DiscoveryCarousel(
+                if (_cachedDiscoveryList.isNotEmpty) ...[  
+                  SliverPadding(
+                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                     sliver: SliverToBoxAdapter(
+                       child: Text("Découverte", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                     ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: DiscoveryCarousel(
                         products: _cachedDiscoveryList, 
                         onTap: _navigateToProduct
                       ),
-                ),
+                  ),
+                ],
 
                 // 8. VERIFIED SHOP PRODUCTS
                 SliverToBoxAdapter(
