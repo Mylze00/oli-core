@@ -379,6 +379,14 @@ export const productAPI = {
         return response.data;
     },
 
+    // Pour les mises à jour sans fichiers (bulk edit) — envoie en JSON
+    patchJSON: async (productId, data) => {
+        const response = await api.patch(`/products/${productId}`, data, {
+            headers: { 'Content-Type': 'application/json' }
+        });
+        return response.data;
+    },
+
     delete: async (productId) => {
         const response = await api.delete(`/products/${productId}`);
         return response.data;

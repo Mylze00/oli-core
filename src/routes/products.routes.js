@@ -80,7 +80,7 @@ router.get('/user/my-products', productController.getMyProducts);
  * PATCH /products/:id
  * Modifier un produit
  */
-router.patch('/:id', productController.update);
+router.patch('/:id', productUpload.none(), productController.update);
 
 /**
  * DELETE /products/:id

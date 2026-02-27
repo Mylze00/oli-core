@@ -103,10 +103,7 @@ export default function ProductList() {
         setDeleting(true);
         try {
             for (const id of selectedIds) {
-                const fd = new FormData();
-                fd.append('status', 'active');
-                fd.append('is_active', 'true');
-                await productAPI.update(id, fd);
+                await productAPI.patchJSON(id, { status: 'active', is_active: true });
             }
             setSelectedIds(new Set());
             await loadProducts();
@@ -130,7 +127,7 @@ export default function ProductList() {
                     if (!divisor || divisor <= 0) throw new Error('Diviseur invalide');
                     const product = products.find(p => p.id === id);
                     const currentPrice = parseFloat(product?.price || 0);
-                    payload.price = Math.round((currentPrice / divisor) * 100) / 100;
+                    payload.price = Math.round(currentPrice / divisor); // arrondi à 0 décimales
                 } else if (bulkField === 'quantity') {
                     payload.quantity = parseInt(bulkValue);
                 } else if (bulkField === 'category') {
@@ -139,10 +136,7 @@ export default function ProductList() {
                     payload.status = bulkValue;
                     payload.is_active = bulkValue === 'active';
                 }
-                // productAPI.update() attend un FormData (multipart)
-                const fd = new FormData();
-                Object.entries(payload).forEach(([k, v]) => fd.append(k, v));
-                await productAPI.update(id, fd);
+                await productAPI.patchJSON(id, payload);
 
             }
             setBulkEditOpen(false);
