@@ -191,4 +191,4 @@ class Product {
 
   /// Première image ou null
   String? get imageUrl => images.isNotEmpty ? images.first : null;
-
+}
