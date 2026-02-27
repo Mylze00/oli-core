@@ -215,11 +215,22 @@ function normalizeRow(row) {
     if (imageUrls.length === 0 && thumb.startsWith('http')) imageUrls.push(thumb);
     const imagesStr = imageUrls.slice(0, 6).join(';');
 
-    // Marque : supplier/companyName ou supplier/companyname
+    // ── Extraire les productProperties en map clé→valeur ──
+    const propMap = {};
+    for (let pi = 0; pi <= 35; pi++) {
+        const pName = (row[`productproperties/${pi}/name`] || row[`productProperties/${pi}/name`] || '').trim();
+        const pVal = (row[`productproperties/${pi}/value`] || row[`productProperties/${pi}/value`] || '').trim();
+        if (pName && pVal) propMap[pName.toLowerCase()] = pVal;
+    }
+
+    // Marque : préférer le champ "marque nom" des propriétés, sinon supplier
     const brand =
+        propMap['marque nom'] ||
+        propMap['brand name'] ||
+        propMap['marque'] ||
         row['supplier/companyname'] ||
         row['supplier/companyName'] ||
-        row['brand'] || row['marque'] || '';
+        row['brand'] || '';
 
     // Quantité : minOrder en priorité, puis quantity générique
     const rawQty = row['minorder'] || row['minOrder'] || row['quantity'] || row['stock'] || '10';
@@ -235,13 +246,14 @@ function normalizeRow(row) {
     // URL source AliExpress (non scrapée, utile pour référence)
     const source_url = row['productdetailurl'] || row['productDetailUrl'] || '';
 
-    // Description structurée depuis productProperties
-    const propPairs = [];
-    for (let pi = 0; pi <= 35; pi++) {
-        const pName = row[`productproperties/${pi}/name`] || row[`productProperties/${pi}/name`] || '';
-        const pVal = row[`productproperties/${pi}/value`] || row[`productProperties/${pi}/value`] || '';
-        if (pName && pVal) propPairs.push(`${pName}: ${pVal}`);
-    }
+    // Localisation du vendeur (pays d'expédition)
+    const placeOfDispatch = row['placeofDispatches/0/name'] || row['placeOfDispatches/0/name'] || '';
+    const countryCode = row['supplier/countryCode'] || row['supplier/countrycode'] || '';
+    const countryNames = { CN: 'Chine', US: 'États-Unis', DE: 'Allemagne', FR: 'France', GB: 'Royaume-Uni', IN: 'Inde', KR: 'Corée du Sud', JP: 'Japon', TW: 'Taïwan' };
+    const location = placeOfDispatch || countryNames[countryCode] || countryCode || 'Chine';
+
+    // Description structurée depuis productProperties (utilise propMap déjà construit)
+    const propPairs = Object.entries(propMap).map(([k, v]) => `${k}: ${v}`);
     // Infos ventes
     const salesVol = row['salesvolume'] || row['salesVolume'] || '';
     const reviews = row['reviewscount'] || row['reviewsCount'] || '';
@@ -251,13 +263,16 @@ function normalizeRow(row) {
     if (reviews) extras.push(`Avis: ${reviews}`);
     if (evalScore) extras.push(`Note: ${evalScore}/5`);
 
-    const description = [
-        ...propPairs,
-        ...extras,
-    ].join('\n');
+    const description = [...propPairs, ...extras].join('\n');
 
-    // Catégorie : depuis productProperties si possible
-    const category = row['category'] || row['categorie'] || '';
+    // Catégorie : chercher dans propMap, sinon champ direct
+    const category =
+        row['category'] ||
+        row['categorie'] ||
+        propMap['application'] ||
+        propMap['type de sac'] ||
+        propMap['traitement du type'] ||
+        '';
 
     // Couleur principale : skuData/0 où name contient "couleur"
     // + liste de toutes les couleurs pour les variantes
@@ -284,8 +299,8 @@ function normalizeRow(row) {
         }
     }
 
-    // Condition : déduire depuis description ("Neuf" par défaut pour AliExpress)
-    const condition = 'Neuf';
+    // Condition : déduire depuis propMap ou "Neuf" par défaut
+    const condition = propMap['condition'] || propMap['état'] || 'Neuf';
 
     return {
         name,
@@ -296,9 +311,10 @@ function normalizeRow(row) {
         brand,
         quantity: String(qty),
         unit,
-        weight: '',
+        weight: propMap['poids (kg)'] || propMap['poids'] || '',
         color,
         delivery_time,
+        location,
         source_url,
         condition,
         _variants: variantColors, // utilisé en interne pour créer les variantes
@@ -435,8 +451,13 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                             }
                         }
 
-                        // 💱 Conversion USD → CDF si prix < 100
-                        if (price > 0 && price < 100) {
+                        // 💱 Conversion USD → CDF (tous les prix AliExpress sont en USD)
+                        if (price > 0 && row._source === 'aliexpress') {
+                            const convertedPrice = await exchangeRateService.convertAmount(price, 'USD', 'CDF');
+                            console.log(`💱 Prix converti: ${price} USD → ${convertedPrice} CDF`);
+                            price = convertedPrice;
+                        } else if (price > 0 && price < 100) {
+                            // Autres sources avec petit prix USD probable
                             const convertedPrice = await exchangeRateService.convertAmount(price, 'USD', 'CDF');
                             console.log(`💱 Prix converti: ${price} USD → ${convertedPrice} CDF`);
                             price = convertedPrice;
@@ -457,21 +478,23 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                             }
                         }
 
+                        const location = row.location || '';
+
                         const insertResult = await bgClient.query(`
                             INSERT INTO products (
                                 seller_id, shop_id, name, description, price,
                                 category, quantity, brand, unit, weight, images,
-                                color, condition, delivery_time,
-                                status, is_active, created_at, updated_at
+                                color, condition, delivery_time, location,
+                                status, created_at, updated_at
                             ) VALUES (
                                 $1, $2, $3, $4, $5,
                                 $6, $7, $8, $9, $10, $11,
-                                $12, $13, $14,
-                                'draft', false, NOW(), NOW()
+                                $12, $13, $14, $15,
+                                'active', NOW(), NOW()
                             ) RETURNING id
                         `, [sellerId, shopId, name, description, price,
                             category, quantity, brand, unit, weight, images,
-                            color, condition, delivery_time]);
+                            color, condition, delivery_time, location]);
 
                         const productId = insertResult.rows[0]?.id;
 
