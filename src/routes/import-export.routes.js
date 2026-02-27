@@ -299,6 +299,18 @@ function normalizeRow(row) {
         }
     }
 
+    // Poids et dimensions bruts (utilisés pour le calcul des frais d'expédition)
+    const weightKgRaw = propMap['poids (kg)'] || propMap['poids'] || propMap['weight (kg)'] || propMap['weight'] || '';
+    const weightKg = parseFloat(String(weightKgRaw).replace(/[^\d.]/g, '')) || 0;
+
+    // Dimensions : ex. "7500*1700*2100 millimètres" ou "2.7*2.0*2.2 m"
+    const dimensionsStr =
+        propMap['dimension (l*w*h)'] ||
+        propMap['dimension'] ||
+        propMap['dimensions'] ||
+        propMap['taille'] ||
+        propMap['size (l*w*h)'] || '';
+
     // Condition : déduire depuis propMap ou "Neuf" par défaut
     const condition = propMap['condition'] || propMap['état'] || 'Neuf';
 
@@ -311,13 +323,15 @@ function normalizeRow(row) {
         brand,
         quantity: String(qty),
         unit,
-        weight: propMap['poids (kg)'] || propMap['poids'] || '',
+        weight: weightKgRaw,
         color,
         delivery_time,
         location,
         source_url,
         condition,
-        _variants: variantColors, // utilisé en interne pour créer les variantes
+        _weight_kg: weightKg,         // nombre pur pour le calcul des frais
+        _dimensions_str: dimensionsStr, // ex. "7500*1700*2100 millimètres"
+        _variants: variantColors,
         _source: 'aliexpress',
     };
 }
@@ -455,13 +469,52 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                         // On applique une marge de +35% sur le prix importé
                         if (price > 0 && row._source === 'aliexpress') {
                             price = Math.round(price * 1.35);
-                            console.log(`📊 Marge +35% appliquée → ${price} CDF`);
+                            console.log(`💡 Prix après marge +35% : ${price} CDF`);
+
+                            // 🚢 Calcul des frais d'expédition
+                            let shippingUsd = 0;
+                            const weightKg = row._weight_kg || 0;
+
+                            if (weightKg > 0 && weightKg < 5) {
+                                // Moins de 5 kg : 25 USD / kg
+                                shippingUsd = weightKg * 25;
+                                console.log(`📦 Expédition poids: ${weightKg} kg × 25$ = ${shippingUsd}$`);
+                            } else {
+                                // 5 kg et plus : calcul au volume (750 USD / m³)
+                                const dimStr = row._dimensions_str || '';
+                                const nums = dimStr.match(/[\d]+(?:[.,][\d]+)?/g);
+                                if (nums && nums.length >= 3) {
+                                    let [l, w, h] = nums.slice(0, 3).map(n => parseFloat(n.replace(',', '.')));
+                                    // Détecter l'unité : si valeurs > 50 → cm ou mm
+                                    const dimLower = dimStr.toLowerCase();
+                                    if (dimLower.includes('mm') || dimLower.includes('millim')) {
+                                        l /= 1000; w /= 1000; h /= 1000; // mm → m
+                                    } else if (dimLower.includes('cm') || l > 50) {
+                                        l /= 100; w /= 100; h /= 100;   // cm → m
+                                    }
+                                    const volumeM3 = l * w * h;
+                                    shippingUsd = volumeM3 * 750;
+                                    console.log(`📦 Expédition volume: ${l.toFixed(2)}×${w.toFixed(2)}×${h.toFixed(2)} m = ${volumeM3.toFixed(3)} m³ × 750$ = ${shippingUsd.toFixed(0)}$`);
+                                } else if (weightKg > 0) {
+                                    // Pas de dimensions : fallback sur poids × 25$/kg
+                                    shippingUsd = weightKg * 25;
+                                    console.log(`📦 Expédition poids fallback: ${weightKg} kg × 25$ = ${shippingUsd}$`);
+                                }
+                            }
+
+                            if (shippingUsd > 0) {
+                                const shippingCdf = await exchangeRateService.convertAmount(shippingUsd, 'USD', 'CDF');
+                                price = Math.round(price + shippingCdf);
+                                console.log(`📦 Frais expédition: ${shippingUsd.toFixed(0)}$ → ${shippingCdf} CDF. Prix final: ${price} CDF`);
+                            }
+
                         } else if (price > 0 && price < 100) {
                             // Autres sources avec petit prix USD probable
                             const convertedPrice = await exchangeRateService.convertAmount(price, 'USD', 'CDF');
                             console.log(`💱 Prix converti: ${price} USD → ${convertedPrice} CDF`);
                             price = convertedPrice;
                         }
+
 
                         // Validation
                         if (!name) {
