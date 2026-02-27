@@ -257,6 +257,21 @@ exchangeRateService.fetchLiveRate('USD').catch(err => {
     console.error('❌ Erreur lors de la mise à jour initiale des taux:', err.message);
 });
 
+// --- AUTO-MIGRATION: colonnes manquantes ---
+(async () => {
+    try {
+        const pool = require('./config/db');
+        await pool.query(`
+            ALTER TABLE products
+            ADD COLUMN IF NOT EXISTS is_good_deal BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS promo_price NUMERIC(10, 2);
+        `);
+        console.log('✅ [MIGRATION] Colonnes is_good_deal/promo_price vérifiées.');
+    } catch (e) {
+        console.warn('⚠️ [MIGRATION] is_good_deal:', e.message);
+    }
+})();
+
 // Mise à jour quotidienne
 setInterval(() => {
     exchangeRateService.updateRatesDaily();
