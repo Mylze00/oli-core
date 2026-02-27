@@ -5,16 +5,20 @@ import '../../../../widgets/verification_badge.dart';
 import '../../../user/providers/favorites_provider.dart';
 import '../pages/product_details_page.dart';
 import '../../../../providers/exchange_rate_provider.dart';
-import '../../../../utils/cloudinary_helper.dart'; // Added this import
+import '../../../../utils/cloudinary_helper.dart';
+import '../../../tabs/dashboard/widgets/product_card_common.dart';
 
 class MarketProductCard extends ConsumerWidget {
   final Product product;
   final bool isCompact;
+  /// Si true, l'overlay vendeur affiche l'animation SellerRatingBadge (nom → ★ note)
+  final bool showRatingAnimation;
 
   const MarketProductCard({
     super.key, 
     required this.product, 
-    this.isCompact = false
+    this.isCompact = false,
+    this.showRatingAnimation = false,
   });
 
   @override
@@ -144,12 +148,18 @@ class MarketProductCard extends ConsumerWidget {
                             ),
                             const SizedBox(width: 3),
                             Expanded(
-                              child: Text(
-                                product.seller,
-                                style: const TextStyle(color: Colors.white, fontSize: 8),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: showRatingAnimation
+                                  ? SellerRatingBadge(
+                                      sellerName: product.seller.isNotEmpty ? product.seller : 'OLI',
+                                      rating: 5.0,
+                                      interval: const Duration(seconds: 5),
+                                    )
+                                  : Text(
+                                      product.seller,
+                                      style: const TextStyle(color: Colors.white, fontSize: 8),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                             ),
                           ],
                         ),

@@ -252,12 +252,18 @@ class TopRankingGrid extends StatelessWidget {
   final List<Product> products;
   final int crossAxisCount;
   final double childAspectRatio;
+  /// Index global du premier produit de ce chunk dans la liste totale du classement
+  final int startIndex;
+
+  /// Positions (1-indexées) où afficher l'animation badge note
+  static const Set<int> rankingPositions = {1, 5, 15, 22, 35, 50};
 
   const TopRankingGrid({
     super.key, 
     required this.products,
     this.crossAxisCount = 3,
     this.childAspectRatio = 0.75,
+    this.startIndex = 0,
   });
 
   @override
@@ -275,7 +281,9 @@ class TopRankingGrid extends StatelessWidget {
           (context, index) {
              if (products.isEmpty) return Container(color: Colors.grey[900]);
             final product = products[index];
-            return MarketProductCard(product: product);
+            final globalPos = startIndex + index + 1; // 1-indexé
+            final showBadge = rankingPositions.contains(globalPos);
+            return MarketProductCard(product: product, showRatingAnimation: showBadge);
           },
           childCount: products.isEmpty ? 6 : products.length,
         ),

@@ -37,7 +37,7 @@ class DashboardProductCard extends ConsumerWidget {
       margin: const EdgeInsets.only(right: 7),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(6), // réduit de 12 → 6 (−50%)
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,11 +47,11 @@ class DashboardProductCard extends ConsumerWidget {
             child: Stack(
               children: [
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                  child: product.images.isNotEmpty 
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                  child: product.images.isNotEmpty
                     ? Image.network(
-                        CloudinaryHelper.small(product.images.first), 
-                        fit: BoxFit.cover, 
+                        CloudinaryHelper.small(product.images.first),
+                        fit: BoxFit.cover,
                         width: double.infinity,
                         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
                           if (wasSynchronouslyLoaded) return child;
@@ -86,7 +86,7 @@ class DashboardProductCard extends ConsumerWidget {
                 ),
                 if (badgeText != null && badgeColor != null)
                   Positioned(
-                    top: 0, 
+                    top: 0,
                     left: badgeOnRight ? null : 0,
                     right: badgeOnRight ? 0 : null,
                     child: Container(
@@ -94,10 +94,10 @@ class DashboardProductCard extends ConsumerWidget {
                       decoration: BoxDecoration(
                         color: badgeColor,
                         borderRadius: badgeOnRight
-                          ? const BorderRadius.only(topRight: Radius.circular(8), bottomLeft: Radius.circular(8))
-                          : const BorderRadius.only(topLeft: Radius.circular(8), bottomRight: Radius.circular(8)), // Original 'Deal' didn't have rounded corners like Top/Verified but let's harmonize
+                          ? const BorderRadius.only(topRight: Radius.circular(4), bottomLeft: Radius.circular(4))
+                          : const BorderRadius.only(topLeft: Radius.circular(4), bottomRight: Radius.circular(4)),
                       ),
-                      child: badgeText == "Vérifié" // Cas spécial pour icône vérifié
+                      child: badgeText == "Vérifié"
                           ? Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -117,27 +117,146 @@ class DashboardProductCard extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (badgeOnRight) // Verified card has name before price
+                if (badgeOnRight)
                    Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                
+
                 Consumer(
                   builder: (context, ref, _) {
-                    ref.watch(exchangeRateProvider); // Subscribe
+                    ref.watch(exchangeRateProvider);
                     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
                     final priceUsd = double.tryParse(product.price) ?? 0.0;
                     final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
                     return Text(formattedPrice, style: TextStyle(color: priceColor, fontWeight: FontWeight.bold, fontSize: priceFontSize));
                   },
                 ),
-                
+
                 if (subtitleWidget != null) ...[
-                   if (!badgeOnRight) const SizedBox(height: 2), // Spacing for verify card is implicit
+                   if (!badgeOnRight) const SizedBox(height: 2),
                    subtitleWidget!,
                 ]
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Badge vendeur animé : affiche le nom du vendeur (ex: "OLI") puis
+/// glisse vers le bas et révèle une note étoile (ex: ★ 4.8) en rouge.
+/// L'animation se déclenche automatiquement toutes les [interval] secondes.
+class SellerRatingBadge extends StatefulWidget {
+  final String sellerName;
+  final double rating;
+  final Duration interval;
+
+  const SellerRatingBadge({
+    super.key,
+    required this.sellerName,
+    this.rating = 5.0,
+    this.interval = const Duration(seconds: 4),
+  });
+
+  @override
+  State<SellerRatingBadge> createState() => _SellerRatingBadgeState();
+}
+
+class _SellerRatingBadgeState extends State<SellerRatingBadge> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  // 0.0 = nom visible ; 1.0 = note visible
+  late Animation<Offset> _slideOutName;  // nom sort par le bas
+  late Animation<Offset> _slideInRating; // note entre par le haut
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _slideOutName  = Tween<Offset>(begin: Offset.zero, end: const Offset(0, 1))
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
+    _slideInRating = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+    _startLoop();
+  }
+
+  Future<void> _startLoop() async {
+    while (mounted) {
+      await Future.delayed(widget.interval);
+      if (!mounted) return;
+      await _controller.forward();          // nom → note
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      await _controller.reverse();          // note → nom
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 14,
+      child: ClipRect(
+        child: Stack(
+          children: [
+            // Nom du vendeur (sort par le bas)
+            SlideTransition(
+              position: _slideOutName,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A2E),
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(color: Colors.blueAccent.withOpacity(0.6), width: 0.5),
+                    ),
+                    child: Text(
+                      widget.sellerName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Note étoile (entre par le haut)
+            SlideTransition(
+              position: _slideInRating,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.star_rounded, color: Colors.red, size: 11),
+                  const SizedBox(width: 2),
+                  Text(
+                    widget.rating % 1 == 0
+                        ? widget.rating.toInt().toString()
+                        : widget.rating.toStringAsFixed(1),
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

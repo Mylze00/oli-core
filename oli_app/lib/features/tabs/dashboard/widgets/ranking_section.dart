@@ -67,12 +67,14 @@ class RankingSectionHelper {
       // ── Bloc 3 colonnes (6 produits) ──
       final chunk3Cols = allProducts.skip(index).take(6).toList();
       if (chunk3Cols.isNotEmpty) {
+        final chunkStart = index;
+        index += chunk3Cols.length;
         slivers.add(TopRankingGrid(
           products: chunk3Cols,
           crossAxisCount: 3,
           childAspectRatio: 0.75,
+          startIndex: chunkStart,
         ));
-        index += chunk3Cols.length;
       }
 
       // ── Bloc 2 colonnes (2 produits) avec label ──
@@ -111,13 +113,15 @@ class RankingSectionHelper {
           }
 
           slivers.add(const SliverPadding(padding: EdgeInsets.only(top: 8)));
+          final chunkStart2 = index;
+          index += chunk2Cols.length;
           slivers.add(TopRankingGrid(
             products: chunk2Cols,
             crossAxisCount: 2,
             childAspectRatio: 0.85,
+            startIndex: chunkStart2,
           ));
           slivers.add(const SliverPadding(padding: EdgeInsets.only(top: 8)));
-          index += chunk2Cols.length;
         }
       }
 
