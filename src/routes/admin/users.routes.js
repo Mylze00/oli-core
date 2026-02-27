@@ -119,7 +119,7 @@ router.get('/:id', async (req, res) => {
                     COUNT(*) as total,
                     COUNT(*) FILTER (WHERE status = 'paid' OR status = 'delivered' OR status = 'shipped') as paid,
                     COALESCE(SUM(total_amount) FILTER (WHERE status = 'paid' OR status = 'delivered' OR status = 'shipped'), 0) as total_spent
-                FROM orders WHERE buyer_id = $1
+                FROM orders WHERE user_id = $1
             `, [id]);
             ordersStats = {
                 total: parseInt(ordersResult.rows[0].total),
@@ -173,7 +173,7 @@ router.get('/:id', async (req, res) => {
         try {
             const roResult = await pool.query(`
                 SELECT id, total_amount, status, created_at
-                FROM orders WHERE buyer_id = $1
+                FROM orders WHERE user_id = $1
                 ORDER BY created_at DESC LIMIT 10
             `, [id]);
             recentOrders = roResult.rows;
