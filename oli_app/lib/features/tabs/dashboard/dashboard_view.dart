@@ -1,97 +1,89 @@
-
-import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../auth/providers/auth_controller.dart';
-import '../../../models/product_model.dart';
-import '../../../../providers/exchange_rate_provider.dart';
-import '../../marketplace/presentation/pages/product_details_page.dart'; // For navigation if needed
-import '../dashboard/providers/shops_provider.dart';
-import '../../marketplace/providers/market_provider.dart';
+
+import '../../marketplace/presentation/pages/product_details_page.dart';
 import '../../marketplace/presentation/pages/market_view.dart';
 import '../../marketplace/presentation/pages/category_products_page.dart';
-import '../../search/providers/search_filters_provider.dart'; // <- Added
+import '../../marketplace/providers/market_provider.dart';
+import '../../search/providers/search_filters_provider.dart';
+import '../dashboard/providers/shops_provider.dart';
+import '../../../models/product_model.dart';
+import '../../../../app/theme/theme_provider.dart';
+import '../../../../widgets/oli_refresh_indicator.dart';
+
+// Widgets de la section dashboard
 import 'widgets/ads_carousel.dart';
 import 'widgets/home_app_bar.dart';
 import 'widgets/quick_actions_row.dart';
+import 'widgets/quick_actions_delegate.dart';
 import 'widgets/category_glass_section.dart';
 import 'widgets/verified_shops_carousel.dart';
 import 'widgets/super_offers_section.dart';
 import 'widgets/discovery_carousel.dart';
-import 'widgets/product_sections.dart';
-import '../../../../app/theme/theme_provider.dart';
-import '../../../../utils/cloudinary_helper.dart';
-import '../../../../widgets/oli_refresh_indicator.dart';
+import 'widgets/horizontal_product_section.dart';
+import 'widgets/product_sections.dart'; // VerifiedShopProductsSection
+import 'widgets/ranking_section.dart';
+
+// Logique métier extraite
+import 'dashboard_product_distribution.dart';
 
 
 class MainDashboardView extends ConsumerStatefulWidget {
   final VoidCallback? onSwitchToMarket;
   final VoidCallback? onBecameVisible;
-  
-  const MainDashboardView({super.key, this.onSwitchToMarket, this.onBecameVisible});
+
+  const MainDashboardView({
+    super.key,
+    this.onSwitchToMarket,
+    this.onBecameVisible,
+  });
 
   @override
   ConsumerState<MainDashboardView> createState() => MainDashboardViewState();
 }
 
 class MainDashboardViewState extends ConsumerState<MainDashboardView>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, DashboardProductDistribution {
+
+  // ── Contrôleurs ──────────────────────────────────────────────────────────
   final TextEditingController _searchCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+
+  // ── Catégories ───────────────────────────────────────────────────────────
   final Map<String, String> _categories = {
-    "Tout": "",
-    "Industrie": "industry",
-    "Maison": "home",
-    "Véhicules": "vehicles",
-    "Mode": "fashion",
-    "Électronique": "electronics",
-    "Sports": "sports",
-    "Beauté": "beauty",
-    "Jouets": "toys",
-    "Santé": "health",
-    "Construction": "construction",
-    "Outils": "tools",
-    "Bureau": "office",
-    "Jardin": "garden",
-    "Animaux": "pets",
-    "Bébé": "baby",
-    "Alimentation": "food",
-    "Sécurité": "security",
-    "Autres": "other",
+    'Tout': '', 'Industrie': 'industry', 'Maison': 'home',
+    'Véhicules': 'vehicles', 'Mode': 'fashion', 'Électronique': 'electronics',
+    'Sports': 'sports', 'Beauté': 'beauty', 'Jouets': 'toys',
+    'Santé': 'health', 'Construction': 'construction', 'Outils': 'tools',
+    'Bureau': 'office', 'Jardin': 'garden', 'Animaux': 'pets',
+    'Bébé': 'baby', 'Alimentation': 'food', 'Sécurité': 'security',
+    'Autres': 'other',
   };
-  String _selectedCategory = "Tout";
   bool _showCategories = false;
   bool _isScrolled = false;
-
   Timer? _hideCategoriesTimer;
 
-  // Animation pour le panneau de catégories
+  // ── Animation catégories ─────────────────────────────────────────────────
   late AnimationController _categoryAnimController;
   late Animation<Offset> _categorySlideAnimation;
   late Animation<double> _categoryFadeAnimation;
-  
-  // Lazy loading pour Top Classement
-  static const int _rankingBatchSize = 8; // Nombre de produits chargés par batch
-  int _rankingLoadedCount = _rankingBatchSize; // Initialement 8 produits visibles
+
+  // ── Lazy loading Top Classement ──────────────────────────────────────────
+  static const int _rankingBatchSize = 8;
+  int _rankingLoadedCount = _rankingBatchSize;
   bool _isLoadingMore = false;
 
-  // Cache pour la distribution des produits (calculé une seule fois)
-  String _cachedSelectionKeyword = "";
-  List<Product> _cachedSelectionProducts = [];
-  List<Product> _cachedSuperOffers = [];
-  List<Product> _cachedDiscoveryList = [];
-  List<Product> _cachedRankingList = [];
-  bool _distributionComputed = false;
-
-  static const List<String> stopWords = ['Paire', 'Lot', 'Set', 'Kit', 'Nouveau', 'Promo', 'Super', 'Pack', 'Mini', 'La', 'Le', 'Les'];
+  // ────────────────────────────────────────────────────────────────────────
+  // Lifecycle
+  // ────────────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
 
-    // Animation pour le panneau catégories coulissant
     _categoryAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -103,13 +95,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       parent: _categoryAnimController,
       curve: Curves.easeOutCubic,
     ));
-    _categoryFadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _categoryAnimController,
-      curve: Curves.easeOut,
-    ));
+    _categoryFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _categoryAnimController, curve: Curves.easeOut),
+    );
     _categoryAnimController.addStatusListener((status) {
       if (status == AnimationStatus.dismissed && mounted) {
         setState(() => _showCategories = false);
@@ -117,47 +105,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     });
   }
 
-  /// Scroll to top — called when home tab is tapped while already on home
-  void scrollToTop() {
-    _scrollController.animateTo(
-      0,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOut,
-    );
-  }
-  
-  void _onScroll() {
-    if (_isLoadingMore) return;
-    final offset = _scrollController.position.pixels;
-    final maxScroll = _scrollController.position.maxScrollExtent;
-
-    // Glass effect dès 10px de scroll
-    final nowScrolled = offset > 10;
-    if (nowScrolled != _isScrolled) {
-      setState(() => _isScrolled = nowScrolled);
-    }
-
-    // Charger plus quand l'utilisateur est à 300px du bas
-    if (offset >= maxScroll - 300) {
-      _loadMoreRankingProducts();
-    }
-  }
-  
-  void _loadMoreRankingProducts() {
-    _isLoadingMore = true;
-    setState(() {
-      _rankingLoadedCount += _rankingBatchSize;
-    });
-    // Petit délai pour éviter les appels multiples rapides
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _isLoadingMore = false;
-    });
-  }
-  
   @override
   void didUpdateWidget(MainDashboardView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Clear search when dashboard becomes visible (callback triggered)
     if (widget.onBecameVisible != oldWidget.onBecameVisible) {
       _searchCtrl.clear();
     }
@@ -172,184 +122,137 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     super.dispose();
   }
 
+  // ────────────────────────────────────────────────────────────────────────
+  // Scroll & Lazy loading
+  // ────────────────────────────────────────────────────────────────────────
+
+  void scrollToTop() {
+    _scrollController.animateTo(0,
+        duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+  }
+
+  void _onScroll() {
+    if (_isLoadingMore) return;
+    final offset = _scrollController.position.pixels;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+
+    final nowScrolled = offset > 10;
+    if (nowScrolled != _isScrolled) {
+      setState(() => _isScrolled = nowScrolled);
+    }
+    if (offset >= maxScroll - 300) {
+      _loadMoreRankingProducts();
+    }
+  }
+
+  void _loadMoreRankingProducts() {
+    _isLoadingMore = true;
+    setState(() => _rankingLoadedCount += _rankingBatchSize);
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _isLoadingMore = false;
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Navigation
+  // ────────────────────────────────────────────────────────────────────────
+
+  void _navigateToProduct(Product product) {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product)));
+  }
+
   void _onSearch(String value) {
     if (value.trim().isEmpty) return;
-    
-    // Set the search query in the market provider
-    // For now, still use Navigator.push for search since it needs the query parameter
-    // MarketView will need to read from a provider instead
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => MarketView(initialSearchQuery: value.trim())),
-    );
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => MarketView(initialSearchQuery: value.trim())));
   }
 
   void _onCategorySelected(String label) {
     _hideCategoriesTimer?.cancel();
-    
-    // Map label → key
-    final categoryKey = _categories[label] ?? '';
-    
-    // Map label → icon
     const categoryIcons = <String, IconData>{
-      'Industrie': Icons.factory,
-      'Maison': Icons.chair,
-      'Véhicules': Icons.directions_car,
-      'Mode': Icons.checkroom,
-      'Électronique': Icons.phone_android,
-      'Sports': Icons.sports_soccer,
-      'Beauté': Icons.face,
-      'Jouets': Icons.toys,
-      'Santé': Icons.medical_services,
-      'Construction': Icons.construction,
-      'Outils': Icons.build,
-      'Bureau': Icons.desk,
-      'Jardin': Icons.grass,
-      'Animaux': Icons.pets,
-      'Bébé': Icons.child_friendly,
-      'Alimentation': Icons.restaurant,
-      'Sécurité': Icons.security,
-      'Autres': Icons.category,
+      'Industrie': Icons.factory, 'Maison': Icons.chair,
+      'Véhicules': Icons.directions_car, 'Mode': Icons.checkroom,
+      'Électronique': Icons.phone_android, 'Sports': Icons.sports_soccer,
+      'Beauté': Icons.face, 'Jouets': Icons.toys,
+      'Santé': Icons.medical_services, 'Construction': Icons.construction,
+      'Outils': Icons.build, 'Bureau': Icons.desk,
+      'Jardin': Icons.grass, 'Animaux': Icons.pets,
+      'Bébé': Icons.child_friendly, 'Alimentation': Icons.restaurant,
+      'Sécurité': Icons.security, 'Autres': Icons.category,
     };
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CategoryProductsPage(
-          categoryKey: categoryKey,
-          categoryLabel: label,
-          categoryIcon: categoryIcons[label],
-        ),
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => CategoryProductsPage(
+        categoryKey: _categories[label] ?? '',
+        categoryLabel: label,
+        categoryIcon: categoryIcons[label],
       ),
-    );
+    ));
   }
 
   void _toggleCategories() {
     if (_showCategories) {
-      // Fermer avec animation
       _hideCategoriesTimer?.cancel();
       _categoryAnimController.reverse();
     } else {
-      // Ouvrir avec animation
       setState(() => _showCategories = true);
       _categoryAnimController.forward();
-      _startCategoryTimer();
+      _hideCategoriesTimer?.cancel();
+      _hideCategoriesTimer = Timer(const Duration(seconds: 6), () {
+        if (mounted && _showCategories) _categoryAnimController.reverse();
+      });
     }
   }
 
-  void _startCategoryTimer() {
-    _hideCategoriesTimer?.cancel();
-    _hideCategoriesTimer = Timer(const Duration(seconds: 6), () {
-      if (mounted && _showCategories) {
-        _categoryAnimController.reverse();
-      }
-    });
-  }
-
-  /// Calcule la distribution des produits UNE SEULE FOIS
-  /// Chaque section est indépendante — personne ne "vide" le ranking
-  void _computeProductDistribution(List<Product> allProducts) {
-    _cachedSelectionKeyword = "";
-    _cachedSelectionProducts = [];
-
-    // ── 1. Section "Sélection" : groupe par mot-clé (min 3 produits)
-    final Map<String, List<Product>> groupedProducts = {};
-    for (var product in allProducts) {
-      final words = product.name.split(' ');
-      String focusKW = words.isNotEmpty ? words.first : "";
-      if (words.length > 1 && (focusKW.length <= 2 || stopWords.contains(focusKW))) {
-        focusKW = words[1];
-      }
-      focusKW = focusKW.replaceAll(RegExp(r'[^\w\s]+'), '');
-      if (focusKW.length > 2) {
-        focusKW = focusKW[0].toUpperCase() + focusKW.substring(1).toLowerCase();
-        groupedProducts.putIfAbsent(focusKW, () => []).add(product);
-      }
-    }
-    // Seuil abaissé à 3 (au lieu de 5) pour s'adapter à une petite boutique admin
-    final validKeys = groupedProducts.keys
-        .where((k) => groupedProducts[k]!.length >= 3)
-        .toList();
-    if (validKeys.isNotEmpty) {
-      validKeys.shuffle();
-      _cachedSelectionKeyword = validKeys.first;
-      _cachedSelectionProducts =
-          groupedProducts[_cachedSelectionKeyword]!.take(15).toList();
-    }
-
-    // ── 2. Section "Découverte" : 5 produits aléatoires parmi TOUS les produits admin
-    //    (indépendant de la sélection — jamais vide tant qu'il y a des produits)
-    final shuffledForDiscovery = List<Product>.from(allProducts)..shuffle();
-    _cachedDiscoveryList = shuffledForDiscovery.take(5).toList();
-
-    // ── 3. Section "Super Offres" (utilisée comme donnée intermédiaire)
-    _cachedSuperOffers = allProducts.take(10).toList();
-
-    // ── 4. Section "Top Classement" : TOUS les produits admin, triés par nom
-    //    Jamais vide tant que l'admin a des produits
-    _cachedRankingList = List<Product>.from(allProducts)
-      ..sort((a, b) => a.name.compareTo(b.name));
-
-    _distributionComputed = true;
-  }
-
-  void _navigateToProduct(Product product) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product)));
-  }
+  // ────────────────────────────────────────────────────────────────────────
+  // Build
+  // ────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    // 0. Theme
     final isDark = ref.watch(themeProvider);
     final backgroundColor = isDark ? Colors.black : Colors.grey[400];
     final textColor = isDark ? Colors.white : Colors.black;
-    final subTextColor = isDark ? Colors.white.withOpacity(0.7) : Colors.black87;
 
-    // 1. Data Providers
-    final featuredProductsAsync = ref.watch(featuredProductsProvider);
-    final allProducts = featuredProductsAsync; // Pour l'affichage page d'accueil
-    
-    // IMPORTANT: Pour la recherche, utiliser TOUS les produits de la marketplace
-    final allProductsForSearchAsync = ref.watch(marketProductsProvider);
-    final allProductsForSearch = allProductsForSearchAsync.valueOrNull ?? [];
-    
+    // Providers de données
+    final allProducts = ref.watch(featuredProductsProvider);         // produits admin OLI
+    final allProductsForSearch =
+        ref.watch(marketProductsProvider).valueOrNull ?? [];         // tous les produits (recherche)
     final topSellers = ref.watch(topSellersProvider);
     final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
-    final verifiedShopsAsync = ref.watch(verifiedShopsProvider); 
-    final verifiedShops = verifiedShopsAsync.valueOrNull ?? [];
-    
-    // 2. Calcul de la distribution UNE SEULE FOIS (stable entre les rebuilds)
-    if (!_distributionComputed && allProducts.isNotEmpty) {
-      _computeProductDistribution(allProducts);
+    final verifiedShops = ref.watch(verifiedShopsProvider).valueOrNull ?? [];
+
+    // Distribution (une seule fois, réinitialisée au pull-to-refresh)
+    if (!distributionComputed && allProducts.isNotEmpty) {
+      computeProductDistribution(allProducts);
     }
 
-    // Top Classement = tous les produits admin (jamais vide)
-    // Fallback sur _cachedSuperOffers si vraiment rien
-    final fullRankingList = _cachedRankingList.isNotEmpty
-        ? _cachedRankingList
-        : _cachedSuperOffers;
-    
-    // Lazy loading : limiter les produits affichés dans le ranking
-    final effectiveRankingList = fullRankingList.take(_rankingLoadedCount).toList();
+    // Top Classement (jamais vide tant que l'admin a des produits)
+    final fullRankingList =
+        cachedRankingList.isNotEmpty ? cachedRankingList : cachedSuperOffers;
+    final effectiveRankingList =
+        fullRankingList.take(_rankingLoadedCount).toList();
     final hasMoreRanking = fullRankingList.length > _rankingLoadedCount;
 
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Stack(
         children: [
-          // ── MAIN SCROLLABLE CONTENT ──
+          // ── Contenu principal scrollable ──
           OliRefreshIndicator(
             onRefresh: () async {
-              await ref.read(featuredProductsProvider.notifier).fetchFeaturedProducts();
+              await ref
+                  .read(featuredProductsProvider.notifier)
+                  .fetchFeaturedProducts();
               setState(() {
                 _rankingLoadedCount = _rankingBatchSize;
-                _distributionComputed = false;
+                resetDistribution(); // ← méthode du mixin
               });
             },
             child: CustomScrollView(
               controller: _scrollController,
               slivers: [
-                // 1. APP BAR
+                // 1. App Bar
                 HomeAppBar(
                   searchCtrl: _searchCtrl,
                   onSearch: _onSearch,
@@ -358,88 +261,97 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   isScrolled: _isScrolled,
                 ),
 
-                // 2. QUICK ACTIONS (épinglé au scroll)
+                // 2. Quick Actions (épinglée)
                 SliverPersistentHeader(
                   pinned: true,
-                  delegate: _QuickActionsDelegate(
+                  delegate: QuickActionsDelegate(
                     child: QuickActionsRow(onCategoryTap: _toggleCategories),
                     backgroundColor: backgroundColor ?? Colors.black,
                     isScrolled: _isScrolled,
                   ),
                 ),
 
-                // 3. VERIFIED SHOPS CAROUSEL
+                // 3. Boutiques vérifiées
                 SliverToBoxAdapter(
                   child: VerifiedShopsCarousel(shops: verifiedShops),
                 ),
 
-                // 4. SUPER OFFERS
+                // 4. Super Offres (top sellers)
                 SliverToBoxAdapter(
-                  child: SuperOffersSection(products: topSellers.take(10).toList()),
+                  child: SuperOffersSection(
+                      products: topSellers.take(10).toList()),
                 ),
 
-                // 5. ADS
+                // 5. Publicités
                 SliverToBoxAdapter(
                   child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
                     height: 221,
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 221,
-                      child: AdsCarousel(ads: ref.watch(adsProvider)),
-                    ),
+                    child: AdsCarousel(ads: ref.watch(adsProvider)),
                   ),
                 ),
 
-                // 6. RANDOM CATEGORY SECTION (STRICT KEYWORD)
-                if (_cachedSelectionProducts.isNotEmpty)
+                // 6. Sélection par mot-clé (produits admin groupés)
+                if (cachedSelectionProducts.isNotEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
-                      child: _buildHorizontalSection(
-                        title: "Sélection : $_cachedSelectionKeyword",
-                        subtitle: "Inspiration pour vous",
-                        products: _cachedSelectionProducts,
-                        gradient: null,
-                        badgeText: "NEW",
+                      child: HorizontalProductSection(
+                        title: 'Sélection : $cachedSelectionKeyword',
+                        subtitle: 'Inspiration pour vous',
+                        products: cachedSelectionProducts,
+                        badgeText: 'NEW',
                         badgeColor: Colors.tealAccent.shade700,
-                        searchKeyword: _cachedSelectionKeyword,
+                        searchKeyword: cachedSelectionKeyword,
+                        onProductTap: _navigateToProduct,
                       ),
                     ),
                   ),
 
-                // 7. DISCOVERY
-                if (_cachedDiscoveryList.isNotEmpty) ...[  
+                // 7. Découverte (5 produits admin aléatoires)
+                if (cachedDiscoveryList.isNotEmpty) ...[
                   SliverPadding(
-                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                     sliver: SliverToBoxAdapter(
-                       child: Text("Découverte", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                     ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    sliver: SliverToBoxAdapter(
+                      child: Text('Découverte',
+                          style: TextStyle(
+                              color: textColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
+                    ),
                   ),
                   SliverToBoxAdapter(
                     child: DiscoveryCarousel(
-                        products: _cachedDiscoveryList, 
-                        onTap: _navigateToProduct
-                      ),
+                        products: cachedDiscoveryList,
+                        onTap: _navigateToProduct),
                   ),
                 ],
 
-                // 8. VERIFIED SHOP PRODUCTS
+                // 8. Grands Magasins (boutiques certifiées)
                 SliverToBoxAdapter(
-                  child: VerifiedShopProductsSection(products: verifiedShopsProducts),
+                  child:
+                      VerifiedShopProductsSection(products: verifiedShopsProducts),
                 ),
 
-                // 9. TOP RANKING (Patron répétitif : 6 produits (3 cols) -> 2 produits (2 cols))
+                // 9. Top Classement (tous les produits admin)
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
                   sliver: SliverToBoxAdapter(
-                     child: Text("Top Classement", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 18)),
+                    child: Text('Top Classement',
+                        style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18)),
                   ),
                 ),
-                
-                ..._buildPatternedRankingGrid(effectiveRankingList, textColor),
-                
-                // Indicateur de chargement si plus de produits disponibles
+
+                ...RankingSectionHelper.buildSlivers(
+                    effectiveRankingList, textColor),
+
+                // Indicateur de chargement lazy
                 if (hasMoreRanking)
                   SliverToBoxAdapter(
                     child: Padding(
@@ -455,29 +367,29 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                       ),
                     ),
                   ),
-                
+
                 const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
               ],
             ),
           ),
 
-          // ── FLOATING CATEGORIES OVERLAY ──
-          // Apparaît avec animation coulissante par-dessus le contenu
+          // ── Overlay catégories (coulissant) ──
           if (_showCategories) ...[
-            // Fond semi-transparent animé pour fermer en tapant dehors
             Positioned.fill(
               child: GestureDetector(
                 onTap: _toggleCategories,
                 child: FadeTransition(
                   opacity: _categoryFadeAnimation,
-                  child: Container(color: Colors.black.withOpacity(0.3)),
+                  child:
+                      Container(color: Colors.black.withOpacity(0.3)),
                 ),
               ),
             ),
-            // Panneau de catégories coulissant sous la QuickActionsRow
             Positioned(
-              // statusBar + appBar title + search bar bottom(60) + quickActions(90)
-              top: MediaQuery.of(context).padding.top + kToolbarHeight + 60 + 90,
+              top: MediaQuery.of(context).padding.top +
+                  kToolbarHeight +
+                  60 +
+                  90,
               left: 0,
               right: 0,
               child: SlideTransition(
@@ -485,20 +397,25 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                 child: FadeTransition(
                   opacity: _categoryFadeAnimation,
                   child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                    borderRadius:
+                        const BorderRadius.vertical(bottom: Radius.circular(16)),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                       child: Container(
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.60),
-                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                          borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(16)),
                           border: Border(
-                            bottom: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+                            bottom: BorderSide(
+                                color: Colors.white.withOpacity(0.1),
+                                width: 1),
                           ),
                         ),
-                        padding: const EdgeInsets.only(top: 8, bottom: 12),
+                        padding:
+                            const EdgeInsets.only(top: 8, bottom: 12),
                         child: CategoryGlassSection(
-                          selectedCategory: _selectedCategory,
+                          selectedCategory: 'Tout',
                           onCategorySelected: (label) {
                             _onCategorySelected(label);
                             _categoryAnimController.reverse();
@@ -516,407 +433,4 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       ),
     );
   }
-
-  /// Messages promotionnels rotatifs avec couleurs et tailles uniques
-  static const List<Map<String, dynamic>> _promoMessages = [
-    {
-      'title': 'Guérite Oli 🏪',
-      'text': 'Achetez et récupérez vos commandes dans le guérite Oli de votre supermarché',
-      'gradient1': Color(0xFF4A0E8F),
-      'gradient2': Color(0xFF2D0A5E),
-      'paddingV': 20.0,
-      'titleSize': 17.0,
-      'textSize': 13.0,
-    },
-    {
-      'title': 'Meilleurs Prix 💰',
-      'text': 'Achetez au meilleur prix avec Oli, livraison rapide garantie',
-      'gradient1': Color(0xFF0D7377),
-      'gradient2': Color(0xFF14463A),
-      'paddingV': 12.0,
-      'titleSize': 14.0,
-      'textSize': 11.0,
-    },
-    {
-      'title': 'Vendez sur Oli 🚀',
-      'text': 'Profitez des avantages en vendant sur Oli, commencez gratuitement',
-      'gradient1': Color(0xFFD84315),
-      'gradient2': Color(0xFF8F2B00),
-      'paddingV': 32.0,
-      'titleSize': 22.0,
-      'textSize': 15.0,
-    },
-  ];
-
-  /// Construit la liste de Slivers pour le Top Ranking avec le motif 3-3-2
-  List<Widget> _buildPatternedRankingGrid(List<Product> allProducts, Color textColor) {
-    List<Widget> slivers = [];
-    int index = 0;
-    int promoIndex = 0;
-    
-    // Boucle tant qu'il reste des produits
-    while (index < allProducts.length) {
-      // 1. Prendre 6 produits pour la grille 3 colonnes
-      int take3Cols = 6;
-      final chunk3Cols = allProducts.skip(index).take(take3Cols).toList();
-      if (chunk3Cols.isNotEmpty) {
-        slivers.add(
-          TopRankingGrid(
-            products: chunk3Cols,
-            crossAxisCount: 3,
-            childAspectRatio: 0.75,
-          )
-        );
-        index += chunk3Cols.length;
-      }
-
-      // 2. Prendre 2 produits pour la grille 2 colonnes (si dispo)
-      if (index < allProducts.length) {
-        int take2Cols = 2;
-        final chunk2Cols = allProducts.skip(index).take(take2Cols).toList();
-        if (chunk2Cols.isNotEmpty) {
-                    
-          // Generate a context title based on the first product's name (first word)
-          if (chunk2Cols.isNotEmpty) {
-             final firstProduct = chunk2Cols.first;
-             final words = firstProduct.name.split(' ');
-             String focusWord = words.isNotEmpty ? words.first : "";
-
-             // Utiliser la liste de stop words définie dans la classe
-             if (words.length > 1 && (focusWord.length <= 2 || stopWords.contains(focusWord))) {
-                focusWord = words[1];
-             }
-
-             if (focusWord.length > 2) {
-                slivers.add(
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    sliver: SliverToBoxAdapter(
-                      child: Row(
-                        children: [
-                          Container(width: 4, height: 16, color: Colors.blueAccent),
-                          const SizedBox(width: 8),
-                          Text(
-                            "Focus : $focusWord", 
-                            style: TextStyle(
-                              color: textColor.withOpacity(0.9), 
-                              fontWeight: FontWeight.bold, 
-                              fontSize: 14
-                            )
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-             }
-          }
-
-          slivers.add(
-             // Un peu d'espace entre les sections de grille
-             const SliverPadding(padding: EdgeInsets.only(top: 8))
-          );
-          slivers.add(
-            TopRankingGrid(
-              products: chunk2Cols,
-              crossAxisCount: 2,
-              childAspectRatio: 0.85, // Plus haut (+25%) pour 2 colonnes
-            )
-          );
-          slivers.add(
-             const SliverPadding(padding: EdgeInsets.only(top: 8))
-          );
-          index += chunk2Cols.length;
-        }
-      }
-
-      // 3. Bannière promotionnelle après chaque cycle de 8 produits
-      final promo = _promoMessages[promoIndex % _promoMessages.length];
-      final Color grad1 = promo['gradient1'] as Color;
-      final Color grad2 = promo['gradient2'] as Color;
-      final double padV = promo['paddingV'] as double;
-      final double tSize = promo['titleSize'] as double;
-      final double dSize = promo['textSize'] as double;
-      promoIndex++;
-      slivers.add(
-        SliverToBoxAdapter(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [grad1, grad2],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: grad1.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  promo['title'] as String,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: tSize,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  promo['text'] as String,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: dSize,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    return slivers;
-  }
-
-  /// Section horizontale réutilisable (copiée de MarketView pour usage local)
-  Widget _buildHorizontalSection({
-    required String title,
-    required String subtitle,
-    required List<Product> products,
-    List<Color>? gradient,
-    required String badgeText,
-    required Color badgeColor,
-    String? searchKeyword,
-  }) {
-    // Local theme logic (since this method is inside the class)
-    // Ideally pass it as param or check theme here too, but let's check provider again or assume dark for cards if not passed?
-    // Actually we need to make sure the TITLE of the section adapts. 
-    // BUT the section logic inside uses "Colors.white" for titles.
-    // We should fix this method to respect the background. Use Consumer or pass color.
-    // The easiest is to use a Consumer here or just access the values if passed.
-    // Let's assume we want to use the method as is but change the text color.
-    // However, this method is inside the State class so we can access ref if we change to ConsumerState logic properly
-    // Check if we can access 'textColor' from the build context logic? No, it's a helper method.
-    // Let's refactor the helper to take textColor or use a default.
-    // For now, I'll modify the usages to pass it or just use a hack since I closed the build method signature.
-    // Wait, I can't change signature easily without changing all callers.
-    // Callers: 
-    // 1. Random Section (line 214) -> does not pass color
-    // 2. Others commented out?
-    // Let's change signature to accept textColor, optional.
-
-    return Consumer(
-      builder: (context, ref, _) {
-       final isDark = ref.watch(themeProvider);
-       final sectionTitleColor = isDark ? Colors.white : Colors.black;
-       final sectionSubtitleColor = isDark ? Colors.white.withOpacity(0.7) : Colors.black54;
-
-       return Container(
-        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: gradient != null ? LinearGradient(
-            colors: gradient,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ) : null,
-          color: gradient == null ? Colors.transparent : null,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: TextStyle(color: sectionTitleColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: TextStyle(color: sectionSubtitleColor, fontSize: 11)),
-                  ],
-                ),
-                GestureDetector(
-                  onTap: () {
-                    final keyword = searchKeyword ?? title.replaceFirst('Sélection : ', '');
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => MarketView(initialSearchQuery: keyword)),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: sectionTitleColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(Icons.arrow_forward_ios, color: sectionTitleColor, size: 14),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 140,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: products.length,
-                itemBuilder: (context, index) {
-                  final product = products[index];
-                  return GestureDetector(
-                    onTap: () => _navigateToProduct(product),
-                    child: Container(
-                      width: 110,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2C2C2C), // Cards always dark for now
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                                  child: product.images.isNotEmpty 
-                                    ? Image.network(
-                                        CloudinaryHelper.small(product.images.first), 
-                                        fit: BoxFit.cover, 
-                                        width: double.infinity,
-                                        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                                          if (wasSynchronouslyLoaded) return child;
-                                          return AnimatedOpacity(
-                                            opacity: frame == null ? 0.0 : 1.0,
-                                            duration: const Duration(milliseconds: 400),
-                                            curve: Curves.easeOut,
-                                            child: child,
-                                          );
-                                        },
-                                        loadingBuilder: (context, child, loadingProgress) {
-                                          if (loadingProgress == null) return child;
-                                          return Container(
-                                            color: const Color(0xFF1A1A1A),
-                                            child: const Center(
-                                              child: SizedBox(
-                                                width: 14, height: 14,
-                                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                        errorBuilder: (ctx, err, stack) => const Center(child: Icon(Icons.broken_image, size: 20, color: Colors.grey)),
-                                      )
-                                    : const Center(child: Icon(Icons.image, color: Colors.grey)),
-                                ),
-                                Positioned(
-                                  top: 0, left: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: badgeColor,
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(8),
-                                        bottomRight: Radius.circular(8),
-                                      ),
-                                    ),
-                                    child: Text(badgeText, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(6.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
-                                Consumer(
-                                  builder: (context, ref, _) {
-                                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
-                                    ref.watch(exchangeRateProvider); // React to currency changes
-                                    return Text(
-                                      exchangeNotifier.formatProductPrice(double.tryParse(product.price) ?? 0.0), 
-                                      style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12)
-                                    );
-                                  }
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      );
-     }
-    );
-  }
-}
-
-/// Delegate pour épingler la QuickActionsRow lors du scroll
-class _QuickActionsDelegate extends SliverPersistentHeaderDelegate {
-  final Widget child;
-  final Color backgroundColor;
-  final bool isScrolled;
-  const _QuickActionsDelegate({
-    required this.child,
-    required this.backgroundColor,
-    this.isScrolled = false,
-  });
-
-  @override
-  double get minExtent => 90.0;
-  @override
-  double get maxExtent => 90.0;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // 1. Fond : glass ou solide selon le scroll
-        if (isScrolled)
-          ClipRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
-                color: backgroundColor.withOpacity(0.60),
-              ),
-            ),
-          )
-        else
-          ColoredBox(color: backgroundColor),
-        // 2. Icônes toujours visibles par-dessus
-        AnimatedOpacity(
-          duration: const Duration(milliseconds: 250),
-          opacity: 1.0,
-          child: child,
-        ),
-      ],
-    );
-  }
-
-  @override
-  bool shouldRebuild(_QuickActionsDelegate oldDelegate) =>
-      oldDelegate.child != child ||
-      oldDelegate.backgroundColor != backgroundColor ||
-      oldDelegate.isScrolled != isScrolled;
 }
