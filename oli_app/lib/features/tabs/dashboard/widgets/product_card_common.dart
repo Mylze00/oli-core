@@ -143,44 +143,53 @@ class DashboardProductCard extends ConsumerWidget {
   }
 }
 
-/// Badge vendeur animé : affiche le nom du vendeur (ex: "OLI") puis
-/// glisse vers le bas et révèle une note étoile (ex: ★ 4.8) en rouge.
-/// L'animation se déclenche automatiquement toutes les [interval] secondes.
+/// Carousel animé de labels produit pour les positions "top classement".
+/// Défile automatiquement entre 4 messages avec une animation slide verticale.
 class SellerRatingBadge extends StatefulWidget {
-  final String sellerName;
+  final String sellerName; // conservé pour compatibilité API mais non utilisé
   final double rating;
   final Duration interval;
 
   const SellerRatingBadge({
     super.key,
-    required this.sellerName,
+    this.sellerName = '',
     this.rating = 5.0,
-    this.interval = const Duration(seconds: 4),
+    this.interval = const Duration(seconds: 3),
   });
 
   @override
   State<SellerRatingBadge> createState() => _SellerRatingBadgeState();
 }
 
-class _SellerRatingBadgeState extends State<SellerRatingBadge> with SingleTickerProviderStateMixin {
+class _SellerRatingBadgeState extends State<SellerRatingBadge>
+    with SingleTickerProviderStateMixin {
+
+  // Labels qui défilent (ordre cyclique)
+  static const List<_BadgeLabel> _labels = [
+    _BadgeLabel(icon: Icons.replay, text: 'Taux de rachat 30%',  color: Color(0xFF4CAF50)),
+    _BadgeLabel(icon: Icons.verified_user, text: 'CE certification', color: Color(0xFF2196F3)),
+    _BadgeLabel(icon: Icons.thumb_up, text: 'Produit recommandé',  color: Color(0xFFFF9800)),
+    _BadgeLabel(icon: Icons.star_rounded, text: '5.0',             color: Colors.red, isStar: true),
+  ];
+
   late AnimationController _controller;
-  // 0.0 = nom visible ; 1.0 = note visible
-  late Animation<Offset> _slideOutName;  // nom sort par le bas
-  late Animation<Offset> _slideInRating; // note entre par le haut
+  late Animation<Offset> _slideOut; // label courant sort par le bas
+  late Animation<Offset> _slideIn;  // prochain label entre par le haut
+
+  int _current = 0;
+  int _next = 1;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 350),
       vsync: this,
     );
-
-    _slideOutName  = Tween<Offset>(begin: Offset.zero, end: const Offset(0, 1))
+    _slideOut = Tween<Offset>(begin: Offset.zero, end: const Offset(0, 1))
         .animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
-    _slideInRating = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+    _slideIn = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
         .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-
     _startLoop();
   }
 
@@ -188,10 +197,11 @@ class _SellerRatingBadgeState extends State<SellerRatingBadge> with SingleTicker
     while (mounted) {
       await Future.delayed(widget.interval);
       if (!mounted) return;
-      await _controller.forward();          // nom → note
-      await Future.delayed(const Duration(seconds: 2));
+      _next = (_current + 1) % _labels.length;
+      await _controller.forward();
       if (!mounted) return;
-      await _controller.reverse();          // note → nom
+      setState(() { _current = _next; });
+      _controller.reset();
     }
   }
 
@@ -203,61 +213,69 @@ class _SellerRatingBadgeState extends State<SellerRatingBadge> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
+    final cur  = _labels[_current];
+    final next = _labels[_next];
+
     return SizedBox(
       height: 14,
       child: ClipRect(
-        child: Stack(
-          children: [
-            // Nom du vendeur (sort par le bas)
-            SlideTransition(
-              position: _slideOutName,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1A2E),
-                      borderRadius: BorderRadius.circular(3),
-                      border: Border.all(color: Colors.blueAccent.withOpacity(0.6), width: 0.5),
-                    ),
-                    child: Text(
-                      widget.sellerName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Note étoile (entre par le haut)
-            SlideTransition(
-              position: _slideInRating,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.star_rounded, color: Colors.red, size: 11),
-                  const SizedBox(width: 2),
-                  Text(
-                    widget.rating % 1 == 0
-                        ? widget.rating.toInt().toString()
-                        : widget.rating.toStringAsFixed(1),
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return Stack(
+              children: [
+                // Label courant — sort par le bas
+                SlideTransition(
+                  position: _slideOut,
+                  child: _buildChip(cur),
+                ),
+                // Prochain label — entre par le haut
+                SlideTransition(
+                  position: _slideIn,
+                  child: _buildChip(next),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
+
+  Widget _buildChip(_BadgeLabel label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(label.icon, size: 9, color: label.color),
+        const SizedBox(width: 2),
+        Flexible(
+          child: Text(
+            label.isStar ? '${label.text}' : label.text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: label.color,
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Données d'un label du carousel
+class _BadgeLabel {
+  final IconData icon;
+  final String text;
+  final Color color;
+  final bool isStar;
+
+  const _BadgeLabel({
+    required this.icon,
+    required this.text,
+    required this.color,
+    this.isStar = false,
+  });
 }
