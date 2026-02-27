@@ -96,6 +96,27 @@ export default function ProductList() {
         }
     };
 
+    const handleBulkActivate = async () => {
+        if (selectedIds.size === 0) return;
+        const ok = window.confirm(`Activer les ${selectedIds.size} produit(s) sélectionné(s) ? Ils seront visibles sur la marketplace.`);
+        if (!ok) return;
+        setDeleting(true);
+        try {
+            for (const id of selectedIds) {
+                const fd = new FormData();
+                fd.append('status', 'active');
+                fd.append('is_active', 'true');
+                await productAPI.update(id, fd);
+            }
+            setSelectedIds(new Set());
+            await loadProducts();
+        } catch (err) {
+            alert('Erreur: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     const handleBulkEdit = async () => {
         if (!bulkValue.trim() || selectedIds.size === 0) return;
         setBulkApplying(true);
@@ -212,6 +233,13 @@ export default function ProductList() {
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
                     >
                         <PenLine size={14} /> Modifier en masse
+                    </button>
+                    <button
+                        onClick={handleBulkActivate}
+                        disabled={deleting}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        ✅ Valider ({selectedIds.size})
                     </button>
                     <button
                         onClick={handleBulkDelete}
