@@ -31,6 +31,9 @@ export default function ProductList() {
     const [bulkField, setBulkField] = useState('price');
     const [bulkValue, setBulkValue] = useState('');
     const [bulkApplying, setBulkApplying] = useState(false);
+    // Livraison — détail après sélection du mode
+    const [bulkShippingTime, setBulkShippingTime] = useState('');
+    const [bulkShippingCost, setBulkShippingCost] = useState('');
 
     const PAGE_SIZE = 200;
 
@@ -144,19 +147,18 @@ export default function ProductList() {
                 } else if (bulkField === 'category') {
                     payload.category = bulkValue.trim();
                 } else if (bulkField === 'shipping_options') {
-                    // bulkValue = l'id de la méthode choisie (ex: 'oli_standard')
                     const method = AVAILABLE_METHODS.find(m => m.id === bulkValue);
                     if (!method) throw new Error('Méthode de livraison invalide');
+                    const finalTime = bulkShippingTime.trim() || method.time;
+                    const finalCost = bulkShippingCost !== '' ? parseFloat(bulkShippingCost) : method.cost;
                     payload.shipping_options = [{
                         methodId: method.id,
                         label: method.label,
-                        time: method.time,
-                        cost: method.cost,
+                        time: finalTime,
+                        cost: finalCost,
                     }];
-                    // Mettre à jour aussi delivery_price si gratuit
-                    if (['free', 'hand_delivery'].includes(method.id)) {
-                        payload.delivery_price = 0;
-                    }
+                    payload.delivery_price = finalCost;
+                    payload.delivery_time = finalTime;
                 } else if (bulkField === 'status') {
                     payload.status = bulkValue;
                     payload.is_active = bulkValue === 'active';
@@ -166,6 +168,8 @@ export default function ProductList() {
             }
             setBulkEditOpen(false);
             setBulkValue('');
+            setBulkShippingTime('');
+            setBulkShippingCost('');
             setSelectedIds(new Set());
             await loadProducts();
         } catch (err) {
@@ -286,7 +290,7 @@ export default function ProductList() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Champ à modifier</label>
                                 <select
                                     value={bulkField}
-                                    onChange={e => { setBulkField(e.target.value); setBulkValue(''); }}
+                                    onChange={e => { setBulkField(e.target.value); setBulkValue(''); setBulkShippingTime(''); setBulkShippingCost(''); }}
                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                 >
                                     <option value="price">💰 Prix — définir un prix fixe (USD)</option>
@@ -311,24 +315,65 @@ export default function ProductList() {
                                         <option value="draft">Brouillon</option>
                                     </select>
                                 ) : bulkField === 'shipping_options' ? (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {AVAILABLE_METHODS.map(m => (
-                                            <button
-                                                key={m.id}
-                                                type="button"
-                                                onClick={() => setBulkValue(m.id)}
-                                                className={`flex items-center gap-2 p-3 rounded-lg border text-left text-sm transition-all ${bulkValue === m.id
+                                    <div className="space-y-3">
+                                        {/* Cartes de méthode */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {AVAILABLE_METHODS.map(m => (
+                                                <button
+                                                    key={m.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setBulkValue(m.id);
+                                                        setBulkShippingTime(m.time);
+                                                        setBulkShippingCost(
+                                                            ['free', 'hand_delivery'].includes(m.id) ? '0' : ''
+                                                        );
+                                                    }}
+                                                    className={`flex items-center gap-2 p-3 rounded-lg border text-left text-sm transition-all ${bulkValue === m.id
                                                         ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold shadow-sm'
                                                         : 'border-gray-200 hover:border-gray-300 text-gray-700 hover:bg-gray-50'
-                                                    }`}
-                                            >
-                                                <Truck size={14} className={bulkValue === m.id ? 'text-blue-500' : 'text-gray-400'} />
+                                                        }`}
+                                                >
+                                                    <Truck size={14} className={bulkValue === m.id ? 'text-blue-500' : 'text-gray-400'} />
+                                                    <div>
+                                                        <p className="font-medium leading-tight">{m.label}</p>
+                                                        <p className="text-xs text-gray-400">{m.time}</p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Détail délai + coût — visible après sélection */}
+                                        {bulkValue && (
+                                            <div className="grid grid-cols-2 gap-3 pt-1">
                                                 <div>
-                                                    <p className="font-medium leading-tight">{m.label}</p>
-                                                    <p className="text-xs text-gray-400">{m.time}</p>
+                                                    <label className="block text-xs text-gray-500 mb-1">Délai de livraison</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="ex: 3-5 jours"
+                                                        value={bulkShippingTime}
+                                                        onChange={e => setBulkShippingTime(e.target.value)}
+                                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                                    />
                                                 </div>
-                                            </button>
-                                        ))}
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Coût ($)</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        placeholder="0.00"
+                                                        value={bulkShippingCost}
+                                                        onChange={e => setBulkShippingCost(e.target.value)}
+                                                        disabled={['free', 'hand_delivery'].includes(bulkValue)}
+                                                        className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${['free', 'hand_delivery'].includes(bulkValue)
+                                                                ? 'bg-gray-100 text-gray-400'
+                                                                : ''
+                                                            }`}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <>
