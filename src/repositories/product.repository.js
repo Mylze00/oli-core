@@ -25,24 +25,50 @@ class ProductRepository {
     }
 
     async findTopSellers(limit) {
+        const half = Math.ceil(limit / 2);
+        // Mélange : moitié produits admin (aléatoire) + moitié top vendeurs (par vues)
         const query = `
-            SELECT p.*, 
-                   u.name as seller_name, 
-                   u.avatar_url as seller_avatar, 
-                   u.id_oli as seller_oli_id,
-                   u.is_verified as seller_is_verified,
-                   u.account_type as seller_account_type,
-                   u.has_certified_shop as seller_has_certified_shop,
-                   s.name as shop_name, 
-                   s.is_verified as shop_verified
-            FROM products p 
-            JOIN users u ON p.seller_id = u.id
-            LEFT JOIN shops s ON p.shop_id = s.id
-            WHERE p.status = 'active'
-            ORDER BY COALESCE(p.view_count, 0) DESC, p.created_at DESC
-            LIMIT $1
+            (
+                SELECT p.*, 
+                       u.name as seller_name, 
+                       u.avatar_url as seller_avatar, 
+                       u.id_oli as seller_oli_id,
+                       u.is_verified as seller_is_verified,
+                       u.account_type as seller_account_type,
+                       u.has_certified_shop as seller_has_certified_shop,
+                       s.name as shop_name, 
+                       s.is_verified as shop_verified
+                FROM products p 
+                JOIN users u ON p.seller_id = u.id
+                LEFT JOIN shops s ON p.shop_id = s.id
+                WHERE p.status = 'active'
+                  AND u.is_admin = TRUE
+                ORDER BY RANDOM()
+                LIMIT $1
+            )
+            UNION ALL
+            (
+                SELECT p.*, 
+                       u.name as seller_name, 
+                       u.avatar_url as seller_avatar, 
+                       u.id_oli as seller_oli_id,
+                       u.is_verified as seller_is_verified,
+                       u.account_type as seller_account_type,
+                       u.has_certified_shop as seller_has_certified_shop,
+                       s.name as shop_name, 
+                       s.is_verified as shop_verified
+                FROM products p 
+                JOIN users u ON p.seller_id = u.id
+                LEFT JOIN shops s ON p.shop_id = s.id
+                WHERE p.status = 'active'
+                  AND (u.is_admin IS NULL OR u.is_admin = FALSE)
+                  AND (u.is_hidden IS NULL OR u.is_hidden = FALSE)
+                ORDER BY COALESCE(p.view_count, 0) DESC, p.created_at DESC
+                LIMIT $2
+            )
+            ORDER BY RANDOM()
         `;
-        const result = await pool.query(query, [limit]);
+        const result = await pool.query(query, [half, limit - half]);
         return result.rows;
     }
 
@@ -307,10 +333,17 @@ class ProductRepository {
         const values = [];
         let i = 1;
 
+        const JSON_FIELDS = new Set(['shipping_options', 'b2b_pricing']);
+
         for (const field of fields) {
             if (updates[field] !== undefined) {
                 setClauses.push(`${field} = $${i++}`);
-                values.push(updates[field]);
+                // Les colonnes JSONB doivent être sérialisées en string pour pg
+                const val = updates[field];
+                values.push(JSON_FIELDS.has(field) && typeof val !== 'string'
+                    ? JSON.stringify(val)
+                    : val
+                );
             }
         }
 
