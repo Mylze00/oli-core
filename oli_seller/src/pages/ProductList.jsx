@@ -100,15 +100,24 @@ export default function ProductList() {
         if (!bulkValue.trim() || selectedIds.size === 0) return;
         setBulkApplying(true);
         try {
-            const payload = {};
-            if (bulkField === 'price') payload.price = parseFloat(bulkValue);
-            else if (bulkField === 'quantity') payload.quantity = parseInt(bulkValue);
-            else if (bulkField === 'category') payload.category = bulkValue.trim();
-            else if (bulkField === 'status') {
-                payload.status = bulkValue;
-                payload.is_active = bulkValue === 'active';
-            }
             for (const id of selectedIds) {
+                const payload = {};
+                if (bulkField === 'price') {
+                    payload.price = parseFloat(bulkValue);
+                } else if (bulkField === 'price_divide') {
+                    const divisor = parseFloat(bulkValue);
+                    if (!divisor || divisor <= 0) throw new Error('Diviseur invalide');
+                    const product = products.find(p => p.id === id);
+                    const currentPrice = parseFloat(product?.price || 0);
+                    payload.price = Math.round((currentPrice / divisor) * 100) / 100;
+                } else if (bulkField === 'quantity') {
+                    payload.quantity = parseInt(bulkValue);
+                } else if (bulkField === 'category') {
+                    payload.category = bulkValue.trim();
+                } else if (bulkField === 'status') {
+                    payload.status = bulkValue;
+                    payload.is_active = bulkValue === 'active';
+                }
                 await productAPI.update(id, payload);
             }
             setBulkEditOpen(false);
@@ -229,7 +238,8 @@ export default function ProductList() {
                                     onChange={e => { setBulkField(e.target.value); setBulkValue(''); }}
                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                 >
-                                    <option value="price">💰 Prix (USD)</option>
+                                    <option value="price">💰 Prix — définir un prix fixe (USD)</option>
+                                    <option value="price_divide">➗ Prix — diviser par un diviseur (CDF→USD)</option>
                                     <option value="quantity">📦 Stock / Quantité</option>
                                     <option value="category">🏷️ Catégorie</option>
                                     <option value="status">🔄 Statut</option>
@@ -249,15 +259,23 @@ export default function ProductList() {
                                         <option value="draft">Brouillon</option>
                                     </select>
                                 ) : (
-                                    <input
-                                        type={bulkField === 'price' || bulkField === 'quantity' ? 'number' : 'text'}
-                                        value={bulkValue}
-                                        onChange={e => setBulkValue(e.target.value)}
-                                        placeholder={bulkField === 'price' ? 'ex: 29.99' : bulkField === 'quantity' ? 'ex: 100' : 'ex: Chaussures'}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                        min={bulkField === 'price' || bulkField === 'quantity' ? '0' : undefined}
-                                        step={bulkField === 'price' ? '0.01' : undefined}
-                                    />
+                                    <>
+                                        <input
+                                            type="number"
+                                            value={bulkValue}
+                                            onChange={e => setBulkValue(e.target.value)}
+                                            placeholder={bulkField === 'price_divide' ? 'ex: 2300' : bulkField === 'price' ? 'ex: 29.99' : bulkField === 'quantity' ? 'ex: 100' : 'ex: Chaussures'}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            min="0"
+                                            step={bulkField === 'price' ? '0.01' : '1'}
+                                            defaultValue={bulkField === 'price_divide' ? '2300' : ''}
+                                        />
+                                        {bulkField === 'price_divide' && (
+                                            <p className="text-xs text-blue-600 mt-1">
+                                                → Nouveau prix = prix actuel ÷ {bulkValue || '2300'} (conversion CDF → USD)
+                                            </p>
+                                        )}
+                                    </>
                                 )}
                             </div>
                             <p className="text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
