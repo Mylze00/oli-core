@@ -25,56 +25,29 @@ class ProductRepository {
     }
 
     async findTopSellers(limit) {
-        const half = Math.ceil(limit / 2);
-        // Mélange : moitié produits admin (aléatoire) + moitié top vendeurs (par vues)
-        // Note: PostgreSQL interdit ORDER BY avec expression après UNION ALL si les membres
-        // ont aussi des ORDER BY. On utilise un wrapper de sous-requête.
+        // Widget "Super Offres" : uniquement les produits publiés par l'admin Oli, en aléatoire
         const query = `
-            SELECT * FROM (
-                (
-                    SELECT p.*, 
-                           u.name as seller_name, 
-                           u.avatar_url as seller_avatar, 
-                           u.id_oli as seller_oli_id,
-                           u.is_verified as seller_is_verified,
-                           u.account_type as seller_account_type,
-                           u.has_certified_shop as seller_has_certified_shop,
-                           s.name as shop_name, 
-                           s.is_verified as shop_verified
-                    FROM products p 
-                    JOIN users u ON p.seller_id = u.id
-                    LEFT JOIN shops s ON p.shop_id = s.id
-                    WHERE p.status = 'active'
-                      AND u.is_admin = TRUE
-                    ORDER BY RANDOM()
-                    LIMIT $1
-                )
-                UNION ALL
-                (
-                    SELECT p.*, 
-                           u.name as seller_name, 
-                           u.avatar_url as seller_avatar, 
-                           u.id_oli as seller_oli_id,
-                           u.is_verified as seller_is_verified,
-                           u.account_type as seller_account_type,
-                           u.has_certified_shop as seller_has_certified_shop,
-                           s.name as shop_name, 
-                           s.is_verified as shop_verified
-                    FROM products p 
-                    JOIN users u ON p.seller_id = u.id
-                    LEFT JOIN shops s ON p.shop_id = s.id
-                    WHERE p.status = 'active'
-                      AND (u.is_admin IS NULL OR u.is_admin = FALSE)
-                      AND (u.is_hidden IS NULL OR u.is_hidden = FALSE)
-                    ORDER BY COALESCE(p.view_count, 0) DESC, p.created_at DESC
-                    LIMIT $2
-                )
-            ) sub
+            SELECT p.*, 
+                   u.name as seller_name, 
+                   u.avatar_url as seller_avatar, 
+                   u.id_oli as seller_oli_id,
+                   u.is_verified as seller_is_verified,
+                   u.account_type as seller_account_type,
+                   u.has_certified_shop as seller_has_certified_shop,
+                   s.name as shop_name, 
+                   s.is_verified as shop_verified
+            FROM products p 
+            JOIN users u ON p.seller_id = u.id
+            LEFT JOIN shops s ON p.shop_id = s.id
+            WHERE p.status = 'active'
+              AND u.is_admin = TRUE
             ORDER BY RANDOM()
+            LIMIT $1
         `;
-        const result = await pool.query(query, [half, limit - half]);
+        const result = await pool.query(query, [limit]);
         return result.rows;
     }
+
 
     async findVerifiedShopsProducts(adminPhone, limit) {
         const query = `
