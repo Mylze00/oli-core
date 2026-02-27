@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Settings, FileText, Trash2, CheckSquare } from 'lucide-react';
+import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Settings, FileText, Trash2, CheckSquare, PenLine, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { sellerAPI, shopAPI, productAPI } from '../services/api';
 
@@ -15,6 +15,11 @@ export default function ProductList() {
     const [currentPage, setCurrentPage] = useState(1);
     const [hasMore, setHasMore] = useState(false);
     const [totalCount, setTotalCount] = useState(0);
+    // Bulk edit modal
+    const [bulkEditOpen, setBulkEditOpen] = useState(false);
+    const [bulkField, setBulkField] = useState('price');
+    const [bulkValue, setBulkValue] = useState('');
+    const [bulkApplying, setBulkApplying] = useState(false);
 
     const PAGE_SIZE = 200;
 
@@ -91,6 +96,32 @@ export default function ProductList() {
         }
     };
 
+    const handleBulkEdit = async () => {
+        if (!bulkValue.trim() || selectedIds.size === 0) return;
+        setBulkApplying(true);
+        try {
+            const payload = {};
+            if (bulkField === 'price') payload.price = parseFloat(bulkValue);
+            else if (bulkField === 'quantity') payload.quantity = parseInt(bulkValue);
+            else if (bulkField === 'category') payload.category = bulkValue.trim();
+            else if (bulkField === 'status') {
+                payload.status = bulkValue;
+                payload.is_active = bulkValue === 'active';
+            }
+            for (const id of selectedIds) {
+                await productAPI.update(id, payload);
+            }
+            setBulkEditOpen(false);
+            setBulkValue('');
+            setSelectedIds(new Set());
+            await loadProducts();
+        } catch (err) {
+            alert('Erreur: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setBulkApplying(false);
+        }
+    };
+
     const toggleSelect = (id) => {
         setSelectedIds(prev => {
             const next = new Set(prev);
@@ -153,31 +184,102 @@ export default function ProductList() {
         <div className="p-8">
             {/* Floating bulk action bar */}
             {selectedIds.size > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl border border-gray-700">
-                    <CheckSquare size={18} className="text-blue-400" />
-                    <span className="font-medium text-sm">{selectedIds.size} produit(s) sélectionné(s)</span>
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-gray-700">
+                    <CheckSquare size={18} className="text-blue-400 shrink-0" />
+                    <span className="font-medium text-sm whitespace-nowrap">{selectedIds.size} sélectionné(s)</span>
                     <button
                         onClick={() => setSelectedIds(new Set())}
-                        className="text-xs text-gray-400 hover:text-white transition-colors"
+                        className="text-xs text-gray-400 hover:text-white transition-colors whitespace-nowrap"
                     >
-                        Tout désélectionner
+                        Tout déselect.
                     </button>
                     <div className="w-px h-5 bg-gray-600" />
                     <button
+                        onClick={() => { setBulkEditOpen(true); setBulkValue(''); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                    >
+                        <PenLine size={14} /> Modifier en masse
+                    </button>
+                    <button
                         onClick={handleBulkDelete}
                         disabled={deleting}
-                        className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
                     >
-                        {deleting ? (
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                            </svg>
-                        ) : (
-                            <Trash2 size={14} />
-                        )}
+                        {deleting ? <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg> : <Trash2 size={14} />}
                         {deleting ? 'Suppression...' : `Supprimer (${selectedIds.size})`}
                     </button>
+                </div>
+            )}
+
+            {/* Bulk Edit Modal */}
+            {bulkEditOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+                        <div className="flex items-center justify-between mb-5">
+                            <h2 className="text-lg font-bold text-gray-900">Modifier {selectedIds.size} produit(s)</h2>
+                            <button onClick={() => setBulkEditOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Champ à modifier</label>
+                                <select
+                                    value={bulkField}
+                                    onChange={e => { setBulkField(e.target.value); setBulkValue(''); }}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                >
+                                    <option value="price">💰 Prix (USD)</option>
+                                    <option value="quantity">📦 Stock / Quantité</option>
+                                    <option value="category">🏷️ Catégorie</option>
+                                    <option value="status">🔄 Statut</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nouvelle valeur</label>
+                                {bulkField === 'status' ? (
+                                    <select
+                                        value={bulkValue}
+                                        onChange={e => setBulkValue(e.target.value)}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    >
+                                        <option value="">-- Choisir --</option>
+                                        <option value="active">Actif (visible)</option>
+                                        <option value="inactive">Inactif (masqué)</option>
+                                        <option value="draft">Brouillon</option>
+                                    </select>
+                                ) : (
+                                    <input
+                                        type={bulkField === 'price' || bulkField === 'quantity' ? 'number' : 'text'}
+                                        value={bulkValue}
+                                        onChange={e => setBulkValue(e.target.value)}
+                                        placeholder={bulkField === 'price' ? 'ex: 29.99' : bulkField === 'quantity' ? 'ex: 100' : 'ex: Chaussures'}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                        min={bulkField === 'price' || bulkField === 'quantity' ? '0' : undefined}
+                                        step={bulkField === 'price' ? '0.01' : undefined}
+                                    />
+                                )}
+                            </div>
+                            <p className="text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                ⚠️ Cette action va modifier le champ <strong>{bulkField === 'price' ? 'prix' : bulkField === 'quantity' ? 'stock' : bulkField === 'category' ? 'catégorie' : 'statut'}</strong> des <strong>{selectedIds.size} produits sélectionnés</strong>.
+                            </p>
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={() => setBulkEditOpen(false)}
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={handleBulkEdit}
+                                disabled={bulkApplying || !bulkValue.trim()}
+                                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                            >
+                                {bulkApplying ? 'Application...' : `Appliquer aux ${selectedIds.size} produits`}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
             {/* Header */}
@@ -371,20 +473,27 @@ export default function ProductList() {
                             {filteredProducts.map((product) => (
                                 <tr
                                     key={product.id}
-                                    className={`hover:bg-gray-50 transition-colors cursor-pointer ${isDraft(product) ? 'bg-amber-50/40' : ''
+                                    className={`hover:bg-gray-50 transition-colors ${isDraft(product) ? 'bg-amber-50/40' : ''
                                         } ${selectedIds.has(product.id) ? 'bg-blue-50/60' : ''}`}
-                                    onClick={() => navigate(`/products/${product.id}/edit`)}
                                 >
-                                    {/* Checkbox */}
-                                    <td className="px-4 py-4" onClick={e => { e.stopPropagation(); toggleSelect(product.id); }}>
+                                    {/* Checkbox — clic sur toute la cellule */}
+                                    <td
+                                        className="px-4 py-4 cursor-pointer"
+                                        onClick={() => toggleSelect(product.id)}
+                                    >
                                         <input
                                             type="checkbox"
                                             className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                                             checked={selectedIds.has(product.id)}
                                             onChange={() => toggleSelect(product.id)}
+                                            onClick={e => e.stopPropagation()}
                                         />
                                     </td>
-                                    <td className="px-6 py-4">
+                                    {/* Produit (nom+image) — clic navigue vers l'éditeur */}
+                                    <td
+                                        className="px-6 py-4 cursor-pointer"
+                                        onClick={() => navigate(`/products/${product.id}/edit`)}
+                                    >
                                         <div className="flex items-center gap-3">
                                             {getImageUrl(product.images) ? (
                                                 <img
