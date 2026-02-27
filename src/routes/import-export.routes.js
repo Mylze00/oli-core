@@ -451,11 +451,11 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                             }
                         }
 
-                        // 💱 Conversion USD → CDF (tous les prix AliExpress sont en USD)
+                        // 📊 Les prix AliExpress sont déjà en CDF — pas de conversion
+                        // On applique une marge de +35% sur le prix importé
                         if (price > 0 && row._source === 'aliexpress') {
-                            const convertedPrice = await exchangeRateService.convertAmount(price, 'USD', 'CDF');
-                            console.log(`💱 Prix converti: ${price} USD → ${convertedPrice} CDF`);
-                            price = convertedPrice;
+                            price = Math.round(price * 1.35);
+                            console.log(`📊 Marge +35% appliquée → ${price} CDF`);
                         } else if (price > 0 && price < 100) {
                             // Autres sources avec petit prix USD probable
                             const convertedPrice = await exchangeRateService.convertAmount(price, 'USD', 'CDF');
