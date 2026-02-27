@@ -41,7 +41,7 @@ async function reuploadToCloudinary(imageUrl) {
 // Configuration multer pour fichiers CSV en mémoire
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 }, // Max 5MB
+    limits: { fileSize: 10 * 1024 * 1024 }, // Max 10MB
     fileFilter: (req, file, cb) => {
         if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
             cb(null, true);
@@ -62,26 +62,79 @@ const requireSeller = (req, res, next) => {
 };
 
 /**
- * Fonction utilitaire pour parser le CSV manuellement
- * (sans dépendance externe csv-parser)
+ * Fonction utilitaire pour parser le CSV — conforme RFC 4180
+ * Gère correctement les guillemets doubles ("") dans les champs entre guillemets
  */
 function parseCSV(csvString) {
-    const lines = csvString.split('\n').filter(line => line.trim());
+    // Normaliser les fins de ligne (CRLF → LF)
+    const text = csvString.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    // Tokenizer RFC 4180 : parcourt chaque caractère
+    function parseRow(line, sep) {
+        const fields = [];
+        let field = '';
+        let inQuotes = false;
+        let i = 0;
+        while (i < line.length) {
+            const ch = line[i];
+            if (inQuotes) {
+                if (ch === '"') {
+                    // Guillemet double ("") = guillemet littéral
+                    if (i + 1 < line.length && line[i + 1] === '"') {
+                        field += '"';
+                        i += 2;
+                        continue;
+                    }
+                    // Fin de champ entre guillemets
+                    inQuotes = false;
+                } else {
+                    field += ch;
+                }
+            } else {
+                if (ch === '"') {
+                    inQuotes = true;
+                } else if (ch === sep) {
+                    fields.push(field);
+                    field = '';
+                } else {
+                    field += ch;
+                }
+            }
+            i++;
+        }
+        fields.push(field);
+        return fields;
+    }
+
+    // Découper en lignes (respecter les champs multi-lignes entre guillemets)
+    const lines = [];
+    let current = '';
+    let inQ = false;
+    for (let ci = 0; ci < text.length; ci++) {
+        const ch = text[ci];
+        if (ch === '"') {
+            inQ = !inQ;
+            current += ch;
+        } else if (ch === '\n' && !inQ) {
+            if (current.trim()) lines.push(current);
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+    if (current.trim()) lines.push(current);
+
     if (lines.length < 2) return [];
 
-    // Auto-détecter le séparateur (virgule ou point-virgule)
+    // Auto-détecter le séparateur
     const headerLine = lines[0];
     const separator = headerLine.includes(';') ? ';' : ',';
-
     console.log(`📄 CSV Separator detected: "${separator}"`);
 
-    // Première ligne = headers (normaliser les noms français)
-    const rawHeaders = headerLine.split(separator).map(h => h.trim().replace(/^"|"$/g, ''));
+    const rawHeaders = parseRow(headerLine, separator);
     const headers = rawHeaders.map(h => {
         const normalized = h.toLowerCase().trim();
-        // Mapper les en-têtes français, anglais ET Alibaba vers les noms attendus
         const mapping = {
-            // Format Oli standard (FR)
             'nom': 'name',
             'prix': 'price',
             'stock': 'quantity',
@@ -94,7 +147,6 @@ function parseCSV(csvString) {
             'unite': 'unit',
             'poids': 'weight',
             'actif': 'is_active',
-            // Format Alibaba scrape
             'mainimage': 'images',
             'title': 'name',
             'companyname': 'brand',
@@ -109,33 +161,14 @@ function parseCSV(csvString) {
         return mapping[normalized] || normalized;
     });
 
-    console.log(`📋 Headers mapped:`, headers);
+    console.log(`📋 Headers (${headers.length}):`, headers.slice(0, 10));
 
     const results = [];
     for (let i = 1; i < lines.length; i++) {
-        const values = [];
-        let current = '';
-        let inQuotes = false;
-
-        for (const char of lines[i]) {
-            if (char === '"') {
-                inQuotes = !inQuotes;
-            } else if (char === separator && !inQuotes) {
-                // Nettoyer la valeur : enlever les guillemets au début/fin et trim
-                const cleanValue = current.trim().replace(/^"|"$/g, '');
-                values.push(cleanValue);
-                current = '';
-            } else {
-                current += char;
-            }
-        }
-        // Dernière valeur de la ligne
-        const cleanValue = current.trim().replace(/^"|"$/g, '');
-        values.push(cleanValue);
-
+        const values = parseRow(lines[i], separator);
         const row = {};
         headers.forEach((header, index) => {
-            row[header] = values[index] || '';
+            row[header] = values[index] !== undefined ? values[index] : '';
         });
         results.push(row);
     }
@@ -357,9 +390,14 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                             errors.push({ row: i + 2, field: 'name', error: 'Nom requis' });
                             continue;
                         }
+                        // Produits AliExpress sans pricing : mettre 1 USD par défaut
                         if (isNaN(price) || price <= 0) {
-                            errors.push({ row: i + 2, field: 'price', error: 'Prix invalide' });
-                            continue;
+                            if (row._source === 'aliexpress') {
+                                price = 1;
+                            } else {
+                                errors.push({ row: i + 2, field: 'price', error: 'Prix invalide' });
+                                continue;
+                            }
                         }
 
                         await bgClient.query(`
