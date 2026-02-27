@@ -165,15 +165,30 @@ class Product {
       viewCount: int.tryParse(json['viewCount']?.toString() ?? '0') ?? 0,
       sellerSalesCount: int.tryParse(json['sellerSalesCount']?.toString() ?? '0') ?? 0,
       expressDeliveryPrice: double.tryParse((json['expressDeliveryPrice'] ?? json['express_delivery_price'])?.toString() ?? ''),
-      shippingOptions: (json['shippingOptions'] != null || json['shipping_options'] != null)
-          ? ((json['shippingOptions'] ?? json['shipping_options']) as List)
-              .map((e) => ShippingOption.fromJson(e))
-              .toList()
-          : [],
+      shippingOptions: () {
+        final raw = json['shippingOptions'] ?? json['shipping_options'];
+        if (raw == null) return <ShippingOption>[];
+        List<dynamic> list;
+        if (raw is List) {
+          list = raw;
+        } else if (raw is String && raw.isNotEmpty) {
+          try {
+            final decoded = jsonDecode(raw);
+            list = decoded is List ? decoded : [];
+          } catch (_) {
+            return <ShippingOption>[];
+          }
+        } else {
+          return <ShippingOption>[];
+        }
+        return list
+            .whereType<Map<String, dynamic>>()
+            .map((e) => ShippingOption.fromJson(e))
+            .toList();
+      }(),
     );
   }
 
   /// Première image ou null
   String? get imageUrl => images.isNotEmpty ? images.first : null;
-}
 

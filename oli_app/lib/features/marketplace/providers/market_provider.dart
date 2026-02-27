@@ -144,8 +144,17 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
       
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        final newProducts = data.map((item) => Product.fromJson(item)).toList();
-        
+        // Parsing par produit : un produit malformé (ex: shipping_options
+        // sauvegardé en string par le bulk edit) ne casse pas tout le chargement
+        final newProducts = <Product>[];
+        for (final item in data) {
+          try {
+            newProducts.add(Product.fromJson(item as Map<String, dynamic>));
+          } catch (e) {
+            debugPrint('⚠️ Featured product skipped (parse error): $e');
+          }
+        }
+
         if (shuffle) {
           newProducts.shuffle();
         }
