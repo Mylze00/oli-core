@@ -127,7 +127,7 @@ export default function ProductList() {
                     if (!divisor || divisor <= 0) throw new Error('Diviseur invalide');
                     const product = products.find(p => p.id === id);
                     const currentPrice = parseFloat(product?.price || 0);
-                    payload.price = Math.round(currentPrice / divisor); // arrondi à 0 décimales
+                    payload.price = Math.round((currentPrice / divisor) * 100) / 100;
                 } else if (bulkField === 'quantity') {
                     payload.quantity = parseInt(bulkValue);
                 } else if (bulkField === 'category') {
