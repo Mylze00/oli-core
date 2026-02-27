@@ -4,7 +4,7 @@ import '../../../../models/product_model.dart';
 import '../../../../app/theme/theme_provider.dart';
 import '../../../../providers/exchange_rate_provider.dart';
 import '../../../../utils/cloudinary_helper.dart';
-import '../../presentation/pages/market_view.dart';
+import '../../../marketplace/presentation/pages/market_view.dart';
 
 /// Widget réutilisable pour afficher une section horizontale de produits
 /// avec titre, sous-titre, badge et scroll horizontal.
