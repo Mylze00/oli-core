@@ -12,6 +12,7 @@ export default function ProductList() {
     const [activatingAll, setActivatingAll] = useState(false);
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [deleting, setDeleting] = useState(false);
+    const [activating, setActivating] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [hasMore, setHasMore] = useState(false);
     const [totalCount, setTotalCount] = useState(0);
@@ -100,7 +101,7 @@ export default function ProductList() {
         if (selectedIds.size === 0) return;
         const ok = window.confirm(`Activer les ${selectedIds.size} produit(s) sélectionné(s) ? Ils seront visibles sur la marketplace.`);
         if (!ok) return;
-        setDeleting(true);
+        setActivating(true);
         try {
             for (const id of selectedIds) {
                 await productAPI.patchJSON(id, { status: 'active', is_active: true });
@@ -110,7 +111,7 @@ export default function ProductList() {
         } catch (err) {
             alert('Erreur: ' + (err.response?.data?.error || err.message));
         } finally {
-            setDeleting(false);
+            setActivating(false);
         }
     };
 
@@ -230,10 +231,10 @@ export default function ProductList() {
                     </button>
                     <button
                         onClick={handleBulkActivate}
-                        disabled={deleting}
+                        disabled={activating}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
                     >
-                        ✅ Valider ({selectedIds.size})
+                        {activating ? 'Activation...' : `✅ Valider (${selectedIds.size})`}
                     </button>
                     <button
                         onClick={handleBulkDelete}
