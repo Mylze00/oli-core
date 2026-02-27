@@ -101,9 +101,17 @@ export default function ProductList() {
             for (const id of selectedIds) {
                 await productAPI.delete(id);
             }
+            // Optimistic update : retirer localement AVANT le refresh
+            // pour éviter le crash React "insertBefore: node is not a child"
+            const deletedIds = new Set(selectedIds);
+            setSelectedIds(new Set());
+            setProducts(prev => prev.filter(p => !deletedIds.has(p.id)));
+            // Recharger en arrière-plan pour synchroniser (sans bloquer le UI)
+            loadProducts();
+        } catch (err) {
+            // En cas d'erreur, forcer un reload complet pour resynchroniser
             setSelectedIds(new Set());
             await loadProducts();
-        } catch (err) {
             alert('Erreur lors de la suppression: ' + (err.response?.data?.error || err.message));
         } finally {
             setDeleting(false);
@@ -367,8 +375,8 @@ export default function ProductList() {
                                                         onChange={e => setBulkShippingCost(e.target.value)}
                                                         disabled={['free', 'hand_delivery'].includes(bulkValue)}
                                                         className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${['free', 'hand_delivery'].includes(bulkValue)
-                                                                ? 'bg-gray-100 text-gray-400'
-                                                                : ''
+                                                            ? 'bg-gray-100 text-gray-400'
+                                                            : ''
                                                             }`}
                                                     />
                                                 </div>
