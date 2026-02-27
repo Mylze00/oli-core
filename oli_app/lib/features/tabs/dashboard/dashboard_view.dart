@@ -222,7 +222,17 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
     final verifiedShops = ref.watch(verifiedShopsProvider).valueOrNull ?? [];
 
-    // Distribution (une seule fois, réinitialisée au pull-to-refresh)
+    // Déclencher la distribution avec setState quand les produits arrivent
+    // ref.listen garantit un rebuild propre après l'appel asynchrone du provider
+    ref.listen<List<Product>>(featuredProductsProvider, (prev, next) {
+      if (next.isNotEmpty && !distributionComputed && mounted) {
+        setState(() {
+          computeProductDistribution(next);
+        });
+      }
+    });
+
+    // Safeguard synchrone : si les produits sont déjà là au 1er build
     if (!distributionComputed && allProducts.isNotEmpty) {
       computeProductDistribution(allProducts);
     }
