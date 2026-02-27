@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Settings, FileText, Trash2, CheckSquare, PenLine, X } from 'lucide-react';
+import { Plus, Edit2, Eye, EyeOff, Search, Layers, Download, Settings, FileText, Trash2, CheckSquare, PenLine, X, Truck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { sellerAPI, shopAPI, productAPI } from '../services/api';
+
+// Modes de livraison disponibles
+const AVAILABLE_METHODS = [
+    { id: 'oli_express', label: 'Oli Express', time: '1-2h', cost: 0 },
+    { id: 'oli_standard', label: 'Oli Standard', time: '2-5 jours', cost: 0 },
+    { id: 'partner', label: 'Livreur Partenaire', time: 'Variable', cost: 0 },
+    { id: 'hand_delivery', label: 'Remise en Main Propre', time: 'À convenir', cost: 0 },
+    { id: 'pick_go', label: 'Pick & Go', time: 'Retrait immédiat', cost: 0 },
+    { id: 'free', label: 'Livraison Gratuite', time: '3-7 jours', cost: 0 },
+];
 
 export default function ProductList() {
     const navigate = useNavigate();
@@ -133,6 +143,20 @@ export default function ProductList() {
                     payload.quantity = parseInt(bulkValue);
                 } else if (bulkField === 'category') {
                     payload.category = bulkValue.trim();
+                } else if (bulkField === 'shipping_options') {
+                    // bulkValue = l'id de la méthode choisie (ex: 'oli_standard')
+                    const method = AVAILABLE_METHODS.find(m => m.id === bulkValue);
+                    if (!method) throw new Error('Méthode de livraison invalide');
+                    payload.shipping_options = [{
+                        methodId: method.id,
+                        label: method.label,
+                        time: method.time,
+                        cost: method.cost,
+                    }];
+                    // Mettre à jour aussi delivery_price si gratuit
+                    if (['free', 'hand_delivery'].includes(method.id)) {
+                        payload.delivery_price = 0;
+                    }
                 } else if (bulkField === 'status') {
                     payload.status = bulkValue;
                     payload.is_active = bulkValue === 'active';
@@ -270,6 +294,7 @@ export default function ProductList() {
                                     <option value="quantity">📦 Stock / Quantité</option>
                                     <option value="category">🏷️ Catégorie</option>
                                     <option value="status">🔄 Statut</option>
+                                    <option value="shipping_options">🚚 Mode de Livraison</option>
                                 </select>
                             </div>
                             <div>
@@ -285,6 +310,26 @@ export default function ProductList() {
                                         <option value="inactive">Inactif (masqué)</option>
                                         <option value="draft">Brouillon</option>
                                     </select>
+                                ) : bulkField === 'shipping_options' ? (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {AVAILABLE_METHODS.map(m => (
+                                            <button
+                                                key={m.id}
+                                                type="button"
+                                                onClick={() => setBulkValue(m.id)}
+                                                className={`flex items-center gap-2 p-3 rounded-lg border text-left text-sm transition-all ${bulkValue === m.id
+                                                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold shadow-sm'
+                                                        : 'border-gray-200 hover:border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                <Truck size={14} className={bulkValue === m.id ? 'text-blue-500' : 'text-gray-400'} />
+                                                <div>
+                                                    <p className="font-medium leading-tight">{m.label}</p>
+                                                    <p className="text-xs text-gray-400">{m.time}</p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
                                 ) : (
                                     <>
                                         <input
