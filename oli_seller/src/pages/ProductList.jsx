@@ -118,7 +118,11 @@ export default function ProductList() {
                     payload.status = bulkValue;
                     payload.is_active = bulkValue === 'active';
                 }
-                await productAPI.update(id, payload);
+                // productAPI.update() attend un FormData (multipart)
+                const fd = new FormData();
+                Object.entries(payload).forEach(([k, v]) => fd.append(k, v));
+                await productAPI.update(id, fd);
+
             }
             setBulkEditOpen(false);
             setBulkValue('');
