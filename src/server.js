@@ -170,6 +170,12 @@ app.use("/auth", authRoutes);
 
 app.use("/products", optionalAuth, productsRoutes);
 app.use("/api/price-strategy", require('./routes/price-strategy.routes')); // 💰 Stratégie prix
+
+// 🤖 Worker prix - routes de contrôle
+const priceWorker = require('./services/price-worker');
+app.get('/api/price-worker/stats', (req, res) => res.json(priceWorker.getStats()));
+app.post('/api/price-worker/run', (req, res) => { priceWorker.runPriceAnalysis(); res.json({ message: 'Worker lancé en arrière-plan' }); });
+
 app.use("/api/shops", optionalAuth, shopsRoutes);
 app.use("/orders", requireAuth, ordersRoutes);
 app.use("/wallet", requireAuth, walletRoutes);
@@ -284,4 +290,7 @@ server.listen(config.PORT, "0.0.0.0", () => {
     console.log(`📡 WebSocket ready`);
     console.log(`🌐 Base URL: ${config.BASE_URL}`);
     console.log(`💱 Exchange rate auto-update: every 24h`);
+
+    // 🤖 Démarrer le worker de correction des prix
+    priceWorker.startWorker();
 });
