@@ -291,6 +291,7 @@ server.listen(config.PORT, "0.0.0.0", () => {
     console.log(`🌐 Base URL: ${config.BASE_URL}`);
     console.log(`💱 Exchange rate auto-update: every 24h`);
 
-    // 🤖 Démarrer le worker de correction des prix
-    priceWorker.startWorker();
+    // 🤖 Worker prix DÉSACTIVÉ - à ne lancer que manuellement via /api/price-worker/run
+    // priceWorker.startWorker();
+    console.log('🤖 Price Worker: mode MANUEL uniquement (via POST /api/price-worker/run)');
 });
