@@ -1,6 +1,6 @@
 /**
  * price-strategy.routes.js
- * Routes pour la stratégie de prix et l'analyse concurrence via CSV
+ * Routes pour la stratégie de prix et l'analyse concurrence via CSV + médiane DB
  */
 
 const express = require('express');
@@ -11,16 +11,15 @@ const { calculerStrategieProduit, loadCompetitorCSV, invalidateCache } = require
 /**
  * POST /api/price-strategy/analyze
  * Analyse la stratégie de prix sans modifier le produit
- * Body: { nom?, prixAchat, poids, longueur?, largeur?, hauteur?, prixConcurrent?, product_id? }
  */
 router.post('/analyze', async (req, res) => {
     try {
         let { nom, prixAchat, poids, longueur, largeur, hauteur, prixConcurrent, product_id } = req.body;
+        let category = null;
 
-        // Si product_id fourni → charger les données depuis la DB
         if (product_id) {
             const result = await db.query(
-                'SELECT name, price, weight FROM products WHERE id = $1 LIMIT 1',
+                'SELECT name, price, weight, category FROM products WHERE id = $1 LIMIT 1',
                 [product_id]
             );
             if (!result.rows || result.rows.length === 0) {
@@ -29,27 +28,51 @@ router.post('/analyze', async (req, res) => {
             nom = nom || result.rows[0].name;
             prixAchat = prixAchat || parseFloat(result.rows[0].price) / 1.35;
             poids = poids || parseFloat(result.rows[0].weight) || 0.5;
+            category = result.rows[0].category;
         }
 
         if (!prixAchat || isNaN(parseFloat(prixAchat))) {
-            return res.status(400).json({ error: 'prixAchat est requis et doit être un nombre' });
+            return res.status(400).json({ error: 'prixAchat est requis et doit etre un nombre' });
+        }
+
+        // Fallback concurrent : mediane des prix de meme categorie
+        let sourceConc = 'aucune';
+        if (!prixConcurrent && category) {
+            const medResult = await db.query(
+                "SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price) AS median_price FROM products WHERE category = $1 AND status = 'active' AND price > 0",
+                [category]
+            );
+            if (medResult.rows[0] && medResult.rows[0].median_price) {
+                prixConcurrent = parseFloat(medResult.rows[0].median_price);
+                sourceConc = 'mediane categorie: ' + category;
+            }
+        }
+
+        // Fallback global
+        if (!prixConcurrent) {
+            const globalResult = await db.query(
+                "SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price) AS median_price FROM products WHERE status = 'active' AND price > 0"
+            );
+            if (globalResult.rows[0] && globalResult.rows[0].median_price) {
+                prixConcurrent = parseFloat(globalResult.rows[0].median_price);
+                sourceConc = 'mediane globale';
+            }
         }
 
         const analysis = calculerStrategieProduit({
             nom, prixAchat, poids, longueur, largeur, hauteur, prixConcurrent
         });
 
-        res.json({ success: true, analysis });
+        res.json({ success: true, analysis, source_concurrent: sourceConc });
     } catch (err) {
-        console.error('❌ price-strategy/analyze:', err);
+        console.error('price-strategy/analyze error:', err);
         res.status(500).json({ error: 'Erreur serveur', details: err.message });
     }
 });
 
 /**
  * POST /api/price-strategy/apply
- * Applique le prix conseillé sur un produit existant en DB
- * Body: { product_id, apply_price: true, prixAchat?, poids? }
+ * Applique le prix conseille sur un produit existant en DB
  */
 router.post('/apply', async (req, res) => {
     try {
@@ -60,7 +83,7 @@ router.post('/apply', async (req, res) => {
         }
 
         const result = await db.query(
-            'SELECT id, name, price, weight FROM products WHERE id = $1 LIMIT 1',
+            'SELECT id, name, price, weight, category FROM products WHERE id = $1 LIMIT 1',
             [product_id]
         );
         if (!result.rows || result.rows.length === 0) {
@@ -71,6 +94,18 @@ router.post('/apply', async (req, res) => {
         const prixAchatCalc = parseFloat(prixAchat) || parseFloat(product.price) / 1.35;
         const poidsCalc = parseFloat(poids) || parseFloat(product.weight) || 0.5;
 
+        // Mediane categorie comme prix concurrent
+        let prixConcurrent = null;
+        if (product.category) {
+            const medResult = await db.query(
+                "SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price) AS median_price FROM products WHERE category = $1 AND status = 'active' AND price > 0",
+                [product.category]
+            );
+            if (medResult.rows[0] && medResult.rows[0].median_price) {
+                prixConcurrent = parseFloat(medResult.rows[0].median_price);
+            }
+        }
+
         const analysis = calculerStrategieProduit({
             nom: product.name,
             prixAchat: prixAchatCalc,
@@ -78,6 +113,7 @@ router.post('/apply', async (req, res) => {
             longueur: longueur || 20,
             largeur: largeur || 20,
             hauteur: hauteur || 10,
+            prixConcurrent,
         });
 
         if (apply_price) {
@@ -89,22 +125,21 @@ router.post('/apply', async (req, res) => {
 
         res.json({ success: true, product_id, applied: !!apply_price, analysis });
     } catch (err) {
-        console.error('❌ price-strategy/apply:', err);
+        console.error('price-strategy/apply error:', err);
         res.status(500).json({ error: 'Erreur serveur', details: err.message });
     }
 });
 
 /**
  * POST /api/price-strategy/apply-bulk
- * Applique la stratégie sur tous les produits actifs
- * Body: { apply_price?: boolean, poids_defaut?: number }
+ * Applique la strategie sur tous les produits actifs
  */
 router.post('/apply-bulk', async (req, res) => {
     try {
         const { apply_price = false, poids_defaut = 0.5 } = req.body;
 
         const result = await db.query(
-            "SELECT id, name, price, weight FROM products WHERE status = 'active' LIMIT 500"
+            "SELECT id, name, price, weight, category FROM products WHERE status = 'active' LIMIT 500"
         );
         const products = result.rows || [];
 
@@ -113,9 +148,22 @@ router.post('/apply-bulk', async (req, res) => {
             const prixAchat = parseFloat(product.price) / 1.35;
             const poids = parseFloat(product.weight) || poids_defaut;
 
+            // Mediane categorie
+            let prixConcurrent = null;
+            if (product.category) {
+                const medResult = await db.query(
+                    "SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price) AS median_price FROM products WHERE category = $1 AND status = 'active' AND price > 0",
+                    [product.category]
+                );
+                if (medResult.rows[0] && medResult.rows[0].median_price) {
+                    prixConcurrent = parseFloat(medResult.rows[0].median_price);
+                }
+            }
+
             const analysis = calculerStrategieProduit({
                 nom: product.name, prixAchat, poids,
                 longueur: 20, largeur: 20, hauteur: 10,
+                prixConcurrent,
             });
 
             if (apply_price) {
@@ -130,14 +178,13 @@ router.post('/apply-bulk', async (req, res) => {
 
         res.json({ success: true, total: results.length, applied: apply_price, results });
     } catch (err) {
-        console.error('❌ price-strategy/apply-bulk:', err);
+        console.error('price-strategy/apply-bulk error:', err);
         res.status(500).json({ error: 'Erreur serveur', details: err.message });
     }
 });
 
 /**
  * POST /api/price-strategy/reload-csv
- * Recharge le cache CSV (utile en dev local)
  */
 router.post('/reload-csv', (req, res) => {
     invalidateCache();
