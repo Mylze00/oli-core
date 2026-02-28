@@ -11,7 +11,28 @@ export default function ImportExportPage() {
     const [importResult, setImportResult] = useState(null);
     const [history, setHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
-    const [activeImportId, setActiveImportId] = useState(null); // Pour le polling async
+    const [activeImportId, setActiveImportId] = useState(null);
+
+    // Presets de livraison
+    const SHIPPING_PRESETS = [
+        {
+            id: 'standard_5', label: 'Oli Standard — 5$ / 10 jours + Gratuit 60j', config: [
+                { methodId: 'oli_standard', label: 'Oli Standard', time: '10 jours', cost: 5.0 },
+                { methodId: 'free', label: 'Livraison Gratuite', time: '60 jours', cost: 0.0 }
+            ]
+        },
+        {
+            id: 'standard_2_5', label: 'Oli Standard — 2.5$ / 10 jours uniquement', config: [
+                { methodId: 'oli_standard', label: 'Oli Standard', time: '10 jours', cost: 2.5 }
+            ]
+        },
+        {
+            id: 'free_only', label: 'Livraison Gratuite uniquement (60 jours)', config: [
+                { methodId: 'free', label: 'Livraison Gratuite', time: '60 jours', cost: 0.0 }
+            ]
+        },
+    ];
+    const [shippingPresetId, setShippingPresetId] = useState('standard_5');
 
     useEffect(() => {
         loadHistory();
@@ -38,7 +59,8 @@ export default function ImportExportPage() {
         setImportResult(null);
 
         try {
-            const result = await sellerAPI.importProducts(file);
+            const preset = SHIPPING_PRESETS.find(p => p.id === shippingPresetId);
+            const result = await sellerAPI.importProducts(file, preset ? preset.config : null);
             // Backend now responds immediately with import_id
             setImportResult({ ...result, success: true, pending: true });
             setActiveImportId(result.import_id);
@@ -159,6 +181,21 @@ export default function ImportExportPage() {
                     </p>
 
                     <div className="space-y-3">
+                        {/* Sélecteur de livraison */}
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">🚚 Mode de livraison à injecter</label>
+                            <select
+                                value={shippingPresetId}
+                                onChange={e => setShippingPresetId(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                disabled={importing}
+                            >
+                                {SHIPPING_PRESETS.map(p => (
+                                    <option key={p.id} value={p.id}>{p.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
                         <button
                             onClick={handleDownloadTemplate}
                             className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"

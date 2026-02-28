@@ -378,6 +378,23 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
         );
         const shopId = shopResult.rows[0]?.id || null;
 
+        // Options de livraison : depuis le form ou valeur par défaut
+        let importShippingOptions = null;
+        if (req.body.shipping_config) {
+            try {
+                importShippingOptions = JSON.stringify(JSON.parse(req.body.shipping_config));
+                console.log('🚚 Livraison custom:', req.body.shipping_config);
+            } catch (_) {
+                console.warn('⚠️  shipping_config invalide, utilisation des options par défaut');
+            }
+        }
+        if (!importShippingOptions) {
+            importShippingOptions = JSON.stringify([
+                { methodId: 'oli_standard', label: 'Oli Standard', time: '10 jours', cost: 5.0 },
+                { methodId: 'free', label: 'Livraison Gratuite', time: '60 jours', cost: 0.0 }
+            ]);
+        }
+
         // Créer un enregistrement d'import
         const importRecord = await client.query(`
             INSERT INTO import_history (seller_id, filename, total_rows, status)
@@ -478,11 +495,8 @@ router.post('/import', requireAuth, requireSeller, upload.single('file'), async 
                             price = convertedPrice;
                         }
 
-                        // 🚚 Options de livraison fixes pour imports AliExpress
-                        const shippingOptions = row._source === 'aliexpress' ? JSON.stringify([
-                            { methodId: 'oli_standard', label: 'Oli Standard', time: '10 jours', cost: 5.0 },
-                            { methodId: 'free', label: 'Livraison Gratuite', time: '60 jours', cost: 0.0 }
-                        ]) : null;
+                        // 🚚 Options de livraison depuis la config d'import
+                        const shippingOptions = row._source === 'aliexpress' ? importShippingOptions : null;
 
 
                         // Validation

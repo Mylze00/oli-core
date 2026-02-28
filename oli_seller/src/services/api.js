@@ -152,9 +152,12 @@ export const sellerAPI = {
         return `${api.defaults.baseURL}/api/import-export/template`;
     },
 
-    importProducts: async (file) => {
+    importProducts: async (file, shippingConfig = null) => {
         const formData = new FormData();
         formData.append('file', file);
+        if (shippingConfig) {
+            formData.append('shipping_config', typeof shippingConfig === 'string' ? shippingConfig : JSON.stringify(shippingConfig));
+        }
         const response = await api.post('/api/import-export/import', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
