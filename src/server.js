@@ -169,6 +169,7 @@ app.use("/auth", authRoutes);
 
 
 app.use("/products", optionalAuth, productsRoutes);
+app.use("/api/price-strategy", require('./routes/price-strategy.routes')); // 💰 Stratégie prix
 app.use("/api/shops", optionalAuth, shopsRoutes);
 app.use("/orders", requireAuth, ordersRoutes);
 app.use("/wallet", requireAuth, walletRoutes);
