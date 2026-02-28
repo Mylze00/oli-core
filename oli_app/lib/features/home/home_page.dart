@@ -6,6 +6,7 @@ import 'package:easy_localization/easy_localization.dart';
 
 import '../tabs/dashboard/dashboard_view.dart';
 import '../chat/conversations_page.dart';
+import '../chat/providers/unread_count_provider.dart';
 import '../marketplace/presentation/pages/market_view.dart';
 import '../tabs/profile/profile_wallet_page.dart';
 import '../shop/screens/publish_article_page.dart';
@@ -52,6 +53,12 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
     final adjusted = index > 2 ? index - 1 : index;
+
+    // Si l'utilisateur navigue vers l'onglet Messages → refresh des non-lus
+    if (adjusted == 1) {
+      ref.read(unreadCountProvider.notifier).refresh();
+    }
+
     if (adjusted == 0 && _currentIndex == 0) {
       _dashboardStateKey.currentState?.scrollToTop();
       return;
@@ -73,6 +80,8 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final unreadCount = ref.watch(unreadCountProvider);
+
     return Scaffold(
       backgroundColor: Colors.black,
       extendBody: true,
@@ -80,6 +89,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       bottomNavigationBar: _OliBottomNav(
         currentIndex: _currentIndex,
         onTap: _onTabSelected,
+        unreadMessages: unreadCount,
       ),
     );
   }
@@ -92,8 +102,13 @@ class _HomePageState extends ConsumerState<HomePage> {
 class _OliBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final int unreadMessages;
 
-  const _OliBottomNav({required this.currentIndex, required this.onTap});
+  const _OliBottomNav({
+    required this.currentIndex,
+    required this.onTap,
+    this.unreadMessages = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +116,7 @@ class _OliBottomNav extends StatelessWidget {
     // pageIndex = index dans _pages (-1 = bouton Vendre)
     final items = [
       _NavItem(icon: Icons.home_filled,        label: 'nav.home'.tr(),    barIndex: 0, pageIndex: 0),
-      _NavItem(icon: Icons.chat_bubble_outline, label: 'nav.chats'.tr(),   barIndex: 1, pageIndex: 1),
+      _NavItem(icon: Icons.chat_bubble_outline, label: 'nav.chats'.tr(),   barIndex: 1, pageIndex: 1, badge: unreadMessages),
       _NavItem(icon: null,                     label: ' ',                barIndex: 2, pageIndex: -1, isSell: true),
       _NavItem(icon: Icons.store_outlined,     label: 'nav.market'.tr(),  barIndex: 3, pageIndex: 2),
       _NavItem(icon: Icons.person_outline,     label: 'nav.profile'.tr(), barIndex: 4, pageIndex: 3),
@@ -152,6 +167,7 @@ class _NavItem {
   final int barIndex;
   final int pageIndex;
   final bool isSell;
+  final int badge;
 
   const _NavItem({
     required this.icon,
@@ -159,6 +175,7 @@ class _NavItem {
     required this.barIndex,
     required this.pageIndex,
     this.isSell = false,
+    this.badge = 0,
   });
 }
 
@@ -194,10 +211,22 @@ class _NavTabItem extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              item.icon,
-              color: isSelected ? Colors.white : Colors.white54,
-              size: isSelected ? 24 : 22,
+            // Icône avec badge
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  item.icon,
+                  color: isSelected ? Colors.white : Colors.white54,
+                  size: isSelected ? 24 : 22,
+                ),
+                if (item.badge > 0)
+                  Positioned(
+                    top: -6,
+                    right: -8,
+                    child: _Badge(count: item.badge),
+                  ),
+              ],
             ),
             AnimatedSize(
               duration: const Duration(milliseconds: 280),
@@ -220,6 +249,43 @@ class _NavTabItem extends StatelessWidget {
                   : const SizedBox.shrink(),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Badge vert avec nombre
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Badge extends StatelessWidget {
+  final int count;
+  const _Badge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : count.toString();
+    return AnimatedScale(
+      scale: count > 0 ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 200),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xFF25D366), // Vert WhatsApp
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.black, width: 1.5),
+        ),
+        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            height: 1.1,
+          ),
+          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -308,8 +374,8 @@ class _SellButtonState extends State<_SellButton>
                       decoration: BoxDecoration(
                         color: color.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(20),
-                        border:
-                            Border.all(color: color.withOpacity(0.5), width: 1),
+                        border: Border.all(
+                            color: color.withOpacity(0.5), width: 1),
                       ),
                       child: Text(
                         'Vendre',
@@ -327,8 +393,8 @@ class _SellButtonState extends State<_SellButton>
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.15),
                       shape: BoxShape.circle,
-                      border:
-                          Border.all(color: color.withOpacity(0.5), width: 1),
+                      border: Border.all(
+                          color: color.withOpacity(0.5), width: 1),
                     ),
                     child: Icon(Icons.add, color: color, size: 22),
                   ),
