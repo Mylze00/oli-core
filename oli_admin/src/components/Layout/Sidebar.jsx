@@ -14,7 +14,8 @@ import {
     CheckBadgeIcon, // 🆕 Icone pour Certifications
     ChatBubbleLeftRightIcon, // 🆕 Icone pour Support
     CircleStackIcon, // 🗄️ Icone pour Base de données
-    GiftIcon // 📦 Icone pour Demandes Produit
+    GiftIcon, // 📦 Icone pour Demandes Produit
+    CpuChipIcon, // 🤖 Icone pour Worker Prix
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -32,6 +33,7 @@ const navigation = [
     { name: 'Services', href: '/services', icon: BoltIcon }, // ✨
     { name: 'Support', href: '/support', icon: ChatBubbleLeftRightIcon }, // 🆕
     { name: 'Certifications', href: '/verifications', icon: CheckBadgeIcon }, // 🆕
+    { name: 'Worker Prix', href: '/price-worker', icon: CpuChipIcon }, // 🤖
     { name: 'Base de données', href: '/database', icon: CircleStackIcon }, // 🗄️
 ];
 
