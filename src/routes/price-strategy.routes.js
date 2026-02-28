@@ -355,4 +355,88 @@ router.post('/rollback', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/price-strategy/restore-csv
+ * Restaure les prix depuis le CSV original import_boutique_shoppi.csv
+ * Body: { apply: boolean, taux_change?: number }
+ */
+router.post('/restore-csv', async (req, res) => {
+    try {
+        const { apply = false, taux_change = 2800 } = req.body;
+        const fs = require('fs');
+        const path = require('path');
+
+        // Lire le CSV original
+        const csvPath = path.join(__dirname, '../../data/import_boutique_shoppi.csv');
+        if (!fs.existsSync(csvPath)) {
+            return res.status(404).json({ error: 'CSV non trouve', path: csvPath });
+        }
+
+        const csvContent = fs.readFileSync(csvPath, 'utf-8');
+        const lines = csvContent.split('\n');
+        const header = lines[0]; // ID;Nom;Description;Prix;Stock;Catégorie;...
+
+        // Parser les prix du CSV (séparateur ;)
+        const csvPrices = {};
+        for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(';');
+            if (cols.length < 4) continue;
+            const nom = (cols[1] || '').trim();
+            const prixFC = parseFloat(cols[3]) || 0;
+            if (nom && prixFC > 0) {
+                csvPrices[nom.toLowerCase()] = prixFC;
+            }
+        }
+
+        console.log(`CSV: ${Object.keys(csvPrices).length} produits avec prix`);
+
+        // Trouver dans la DB les produits qui matchent
+        const result = await db.query(
+            "SELECT id, name, price FROM products WHERE status = 'active'"
+        );
+        const dbProducts = result.rows || [];
+
+        let matched = 0, updated = 0, notFound = 0;
+        const details = [];
+
+        for (const p of dbProducts) {
+            const key = (p.name || '').trim().toLowerCase();
+            const prixFC = csvPrices[key];
+            if (!prixFC) continue;
+            matched++;
+
+            const prixUSD = parseFloat((prixFC / taux_change).toFixed(2));
+            const prixActuel = parseFloat(p.price) || 0;
+
+            if (Math.abs(prixUSD - prixActuel) > 0.01) {
+                if (apply) {
+                    await db.query('UPDATE products SET price = $1 WHERE id = $2', [prixUSD, p.id]);
+                }
+                updated++;
+                details.push({
+                    id: p.id,
+                    nom: p.name.substring(0, 45),
+                    prix_fc: prixFC,
+                    prix_usd_csv: prixUSD,
+                    prix_actuel: prixActuel,
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            csv_total: Object.keys(csvPrices).length,
+            db_total: dbProducts.length,
+            matched,
+            a_mettre_a_jour: updated,
+            applied: apply,
+            taux_change,
+            exemples: details.slice(0, 50),
+        });
+    } catch (err) {
+        console.error('price-strategy/restore-csv error:', err);
+        res.status(500).json({ error: 'Erreur serveur', details: err.message });
+    }
+});
+
 module.exports = router;
