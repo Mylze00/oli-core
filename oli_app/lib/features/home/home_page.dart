@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -20,17 +21,15 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage> {
   int _currentIndex = 0;
 
-  // Tabs principaux (sans le bouton Vendre)
   late List<Widget> _pages;
-  int _dashboardKey = 0;
   final _dashboardStateKey = GlobalKey<MainDashboardViewState>();
-  
+
   @override
   void initState() {
     super.initState();
     _buildPages();
   }
-  
+
   void _buildPages() {
     _pages = [
       MainDashboardView(
@@ -38,38 +37,30 @@ class _HomePageState extends ConsumerState<HomePage> {
         onSwitchToMarket: () => _switchToMarket(),
         onBecameVisible: () {},
       ),
-      ConversationsPage(),
+      const ConversationsPage(),
       MarketView(),
-      ProfileAndWalletPage(),
+      const ProfileAndWalletPage(),
     ];
   }
-  
-  void _switchToMarket() {
-    setState(() => _currentIndex = 2);
-  }
+
+  void _switchToMarket() => setState(() => _currentIndex = 2);
 
   void _onTabSelected(int index) {
-    // Bouton Vendre (index 2 dans la barre)
+    // index 2 = bouton Vendre (central)
     if (index == 2) {
       _openPublishPage();
       return;
     }
-
-    // Décalage d'index après le bouton Vendre
-    final adjustedIndex = index > 2 ? index - 1 : index;
-
-    // Si déjà sur l'accueil → scroll to top
-    if (adjustedIndex == 0 && _currentIndex == 0) {
+    final adjusted = index > 2 ? index - 1 : index;
+    if (adjusted == 0 && _currentIndex == 0) {
       _dashboardStateKey.currentState?.scrollToTop();
       return;
     }
-
     setState(() {
-      if (adjustedIndex == 0 && _currentIndex != 0) {
+      if (adjusted == 0 && _currentIndex != 0) {
         ref.read(searchFiltersProvider.notifier).reset();
       }
-      
-      _currentIndex = adjustedIndex;
+      _currentIndex = adjusted;
     });
   }
 
@@ -84,61 +75,176 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF0A0A0A),
-        selectedItemColor: Colors.blueAccent,
-        unselectedItemColor: Colors.grey,
-        currentIndex: _currentIndex >= 2 ? _currentIndex + 1 : _currentIndex,
-        type: BottomNavigationBarType.fixed,
+      extendBody: true,
+      body: IndexedStack(index: _currentIndex, children: _pages),
+      bottomNavigationBar: _OliBottomNav(
+        currentIndex: _currentIndex,
         onTap: _onTabSelected,
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.home_filled),
-            label: 'nav.home'.tr(),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.chat_outlined),
-            label: 'nav.chats'.tr(),
-          ),
-          BottomNavigationBarItem(
-            icon: const _AnimatedSellIcon(),
-            label: ' ',
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.store_outlined),
-            label: 'nav.market'.tr(),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.person_outline),
-            label: 'nav.profile'.tr(),
-          ),
-        ],
       ),
     );
   }
 }
 
-/// Bouton animé : flip 3D "page de livre" entre "+" et "Vendre"
-/// Change de couleur toutes les 2 secondes
-class _AnimatedSellIcon extends StatefulWidget {
-  const _AnimatedSellIcon();
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom bottom nav bar — style glassmorphism pill (WhatsApp-inspired)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _OliBottomNav extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const _OliBottomNav({required this.currentIndex, required this.onTap});
 
   @override
-  State<_AnimatedSellIcon> createState() => _AnimatedSellIconState();
+  Widget build(BuildContext context) {
+    // barIndex = position dans la barre (0..4)
+    // pageIndex = index dans _pages (-1 = bouton Vendre)
+    final items = [
+      _NavItem(icon: Icons.home_filled,        label: 'nav.home'.tr(),    barIndex: 0, pageIndex: 0),
+      _NavItem(icon: Icons.chat_bubble_outline, label: 'nav.chats'.tr(),   barIndex: 1, pageIndex: 1),
+      _NavItem(icon: null,                     label: ' ',                barIndex: 2, pageIndex: -1, isSell: true),
+      _NavItem(icon: Icons.store_outlined,     label: 'nav.market'.tr(),  barIndex: 3, pageIndex: 2),
+      _NavItem(icon: Icons.person_outline,     label: 'nav.profile'.tr(), barIndex: 4, pageIndex: 3),
+    ];
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(40),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              height: 68,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(40),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.12),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: items.map((item) {
+                  if (item.isSell) {
+                    return _SellButton(onTap: () => onTap(item.barIndex));
+                  }
+                  final isSelected = item.pageIndex == currentIndex;
+                  return _NavTabItem(
+                    item: item,
+                    isSelected: isSelected,
+                    onTap: () => onTap(item.barIndex),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _AnimatedSellIconState extends State<_AnimatedSellIcon>
-    with SingleTickerProviderStateMixin {
-  
-  late AnimationController _flipController;
-  int _colorIndex = 0;
-  bool _showingBack = false;
+class _NavItem {
+  final IconData? icon;
+  final String label;
+  final int barIndex;
+  final int pageIndex;
+  final bool isSell;
 
-  static const List<Color> _colors = [
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.barIndex,
+    required this.pageIndex,
+    this.isSell = false,
+  });
+}
+
+class _NavTabItem extends StatelessWidget {
+  final _NavItem item;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavTabItem({
+    required this.item,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 16 : 10,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.white.withOpacity(0.14)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              item.icon,
+              color: isSelected ? Colors.white : Colors.white54,
+              size: isSelected ? 24 : 22,
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              child: isSelected
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(width: 6),
+                        Text(
+                          item.label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bouton central "Vendre" — flip 3D animé avec couleurs changeantes
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SellButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _SellButton({required this.onTap});
+
+  @override
+  State<_SellButton> createState() => _SellButtonState();
+}
+
+class _SellButtonState extends State<_SellButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  int _colorIdx = 0;
+  bool _showBack = false;
+
+  static const _colors = [
     Colors.blueAccent,
     Colors.orangeAccent,
     Colors.pinkAccent,
@@ -149,96 +255,86 @@ class _AnimatedSellIconState extends State<_AnimatedSellIcon>
   @override
   void initState() {
     super.initState();
-    
-    _flipController = AnimationController(
+    _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
-    );
-
-    _flipController.addListener(() {
-      // À mi-rotation (0.5), on bascule le contenu affiché
-      final isBack = _flipController.value >= 0.5;
-      if (isBack != _showingBack) {
-        setState(() => _showingBack = isBack);
-      }
-    });
-
-    // Lance le cycle : flip toutes les 2 secondes
-    _startFlipCycle();
+    )..addListener(() {
+        final back = _ctrl.value >= 0.5;
+        if (back != _showBack) setState(() => _showBack = back);
+      });
+    _startCycle();
   }
 
-  void _startFlipCycle() async {
+  void _startCycle() async {
     while (mounted) {
       await Future.delayed(const Duration(seconds: 2));
       if (!mounted) return;
-      
-      if (_flipController.isCompleted) {
-        // Retourne à "+"
-        _flipController.reverse();
-      } else if (_flipController.isDismissed) {
-        // Change de couleur avant le flip suivant
-        setState(() {
-          _colorIndex = (_colorIndex + 1) % _colors.length;
-        });
-        // Va vers "Vendre"
-        _flipController.forward();
+      if (_ctrl.isCompleted) {
+        _ctrl.reverse();
+      } else if (_ctrl.isDismissed) {
+        setState(() => _colorIdx = (_colorIdx + 1) % _colors.length);
+        _ctrl.forward();
       }
     }
   }
 
   @override
   void dispose() {
-    _flipController.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = _colors[_colorIndex];
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: SizedBox(
-      width: 60,
-      height: 30,
+    final color = _colors[_colorIdx];
+    return GestureDetector(
+      onTap: widget.onTap,
       child: AnimatedBuilder(
-        animation: _flipController,
-        builder: (context, child) {
-          final angle = _flipController.value * 3.14159;
-          
+        animation: _ctrl,
+        builder: (_, __) {
+          final angle = _ctrl.value * 3.14159;
           return Transform(
             alignment: Alignment.center,
             transform: Matrix4.identity()
               ..setEntry(3, 2, 0.001)
               ..rotateY(angle),
-            child: _showingBack
+            child: _showBack
                 ? Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.identity()..rotateY(3.14159),
-                    child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border:
+                            Border.all(color: color.withOpacity(0.5), width: 1),
+                      ),
                       child: Text(
                         'Vendre',
                         style: TextStyle(
                           color: color,
-                          fontSize: 18,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'olive_palm',
                         ),
                       ),
                     ),
                   )
-                : Center(
-                    child: Icon(
-                      Icons.add,
-                      color: color,
-                      size: 23,
+                : Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                      border:
+                          Border.all(color: color.withOpacity(0.5), width: 1),
                     ),
+                    child: Icon(Icons.add, color: color, size: 22),
                   ),
           );
         },
       ),
-      ),
     );
   }
 }
-
