@@ -19,27 +19,27 @@ router.post('/analyze', async (req, res) => {
 
         // Si product_id fourni → charger les données depuis la DB
         if (product_id) {
-            const [rows] = await db.query(
-                'SELECT name, price, weight FROM products WHERE id = ? LIMIT 1',
+            const result = await db.query(
+                'SELECT name, price, weight FROM products WHERE id = $1 LIMIT 1',
                 [product_id]
             );
-            if (!rows || rows.length === 0) {
+            if (!result.rows || result.rows.length === 0) {
                 return res.status(404).json({ error: 'Produit introuvable' });
             }
-            nom = nom || rows[0].name;
-            prixAchat = prixAchat || parseFloat(rows[0].price) / 1.35; // estimer le prix achat
-            poids = poids || parseFloat(rows[0].weight) || 0.5;
+            nom = nom || result.rows[0].name;
+            prixAchat = prixAchat || parseFloat(result.rows[0].price) / 1.35;
+            poids = poids || parseFloat(result.rows[0].weight) || 0.5;
         }
 
         if (!prixAchat || isNaN(parseFloat(prixAchat))) {
             return res.status(400).json({ error: 'prixAchat est requis et doit être un nombre' });
         }
 
-        const result = calculerStrategieProduit({
+        const analysis = calculerStrategieProduit({
             nom, prixAchat, poids, longueur, largeur, hauteur, prixConcurrent
         });
 
-        res.json({ success: true, analysis: result });
+        res.json({ success: true, analysis });
     } catch (err) {
         console.error('❌ price-strategy/analyze:', err);
         res.status(500).json({ error: 'Erreur serveur', details: err.message });
@@ -49,8 +49,7 @@ router.post('/analyze', async (req, res) => {
 /**
  * POST /api/price-strategy/apply
  * Applique le prix conseillé sur un produit existant en DB
- * Body: { product_id, apply_price: true }
- * Requiert : être propriétaire du produit OU admin
+ * Body: { product_id, apply_price: true, prixAchat?, poids? }
  */
 router.post('/apply', async (req, res) => {
     try {
@@ -60,22 +59,20 @@ router.post('/apply', async (req, res) => {
             return res.status(400).json({ error: 'product_id requis' });
         }
 
-        // Charger le produit
-        const [rows] = await db.query(
-            'SELECT id, name, price, weight FROM products WHERE id = ? LIMIT 1',
+        const result = await db.query(
+            'SELECT id, name, price, weight FROM products WHERE id = $1 LIMIT 1',
             [product_id]
         );
-        if (!rows || rows.length === 0) {
+        if (!result.rows || result.rows.length === 0) {
             return res.status(404).json({ error: 'Produit introuvable' });
         }
 
-        const product = rows[0];
-        const nomProduit = product.name;
+        const product = result.rows[0];
         const prixAchatCalc = parseFloat(prixAchat) || parseFloat(product.price) / 1.35;
         const poidsCalc = parseFloat(poids) || parseFloat(product.weight) || 0.5;
 
-        const result = calculerStrategieProduit({
-            nom: nomProduit,
+        const analysis = calculerStrategieProduit({
+            nom: product.name,
             prixAchat: prixAchatCalc,
             poids: poidsCalc,
             longueur: longueur || 20,
@@ -83,20 +80,14 @@ router.post('/apply', async (req, res) => {
             hauteur: hauteur || 10,
         });
 
-        // Appliquer le prix si demandé
         if (apply_price) {
             await db.query(
-                'UPDATE products SET price = ? WHERE id = ?',
-                [result.prixVenteNumber, product_id]
+                'UPDATE products SET price = $1 WHERE id = $2',
+                [analysis.prixVenteNumber, product_id]
             );
         }
 
-        res.json({
-            success: true,
-            product_id,
-            applied: !!apply_price,
-            analysis: result,
-        });
+        res.json({ success: true, product_id, applied: !!apply_price, analysis });
     } catch (err) {
         console.error('❌ price-strategy/apply:', err);
         res.status(500).json({ error: 'Erreur serveur', details: err.message });
@@ -105,16 +96,17 @@ router.post('/apply', async (req, res) => {
 
 /**
  * POST /api/price-strategy/apply-bulk
- * Applique la stratégie de prix sur TOUS les produits du vendeur connecté
+ * Applique la stratégie sur tous les produits actifs
  * Body: { apply_price?: boolean, poids_defaut?: number }
  */
 router.post('/apply-bulk', async (req, res) => {
     try {
         const { apply_price = false, poids_defaut = 0.5 } = req.body;
 
-        const [products] = await db.query(
-            'SELECT id, name, price, weight FROM products WHERE status = "active" LIMIT 500'
+        const result = await db.query(
+            "SELECT id, name, price, weight FROM products WHERE status = 'active' LIMIT 500"
         );
+        const products = result.rows || [];
 
         const results = [];
         for (const product of products) {
@@ -122,15 +114,13 @@ router.post('/apply-bulk', async (req, res) => {
             const poids = parseFloat(product.weight) || poids_defaut;
 
             const analysis = calculerStrategieProduit({
-                nom: product.name,
-                prixAchat,
-                poids,
+                nom: product.name, prixAchat, poids,
                 longueur: 20, largeur: 20, hauteur: 10,
             });
 
             if (apply_price) {
                 await db.query(
-                    'UPDATE products SET price = ? WHERE id = ?',
+                    'UPDATE products SET price = $1 WHERE id = $2',
                     [analysis.prixVenteNumber, product.id]
                 );
             }
@@ -138,12 +128,7 @@ router.post('/apply-bulk', async (req, res) => {
             results.push({ product_id: product.id, nom: product.name, ...analysis });
         }
 
-        res.json({
-            success: true,
-            total: results.length,
-            applied: apply_price,
-            results,
-        });
+        res.json({ success: true, total: results.length, applied: apply_price, results });
     } catch (err) {
         console.error('❌ price-strategy/apply-bulk:', err);
         res.status(500).json({ error: 'Erreur serveur', details: err.message });
