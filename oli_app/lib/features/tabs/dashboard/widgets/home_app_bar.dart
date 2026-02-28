@@ -119,16 +119,26 @@ class HomeAppBar extends ConsumerWidget {
           padding: EdgeInsets.only(right: 8.0),
           child: CurrencySelectorWidget(),
         ),
-        // Theme toggle button - Hidden temporarily
-        // IconButton(
-        //   icon: Icon(
-        //     ref.watch(themeProvider) ? Icons.light_mode : Icons.dark_mode,
-        //     color: Colors.white,
-        //   ),
-        //   onPressed: () {
-        //     ref.read(themeProvider.notifier).toggleTheme();
-        //   },
-        // ),
+        // Bouton bascule thème clair / sombre
+        Consumer(
+          builder: (context, ref, _) {
+            final isDark = ref.watch(themeProvider);
+            return IconButton(
+              tooltip: isDark ? 'Passer en mode clair' : 'Passer en mode sombre',
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, anim) => RotationTransition(turns: anim, child: child),
+                child: Icon(
+                  isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                  key: ValueKey(isDark),
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
+              onPressed: () => ref.read(themeProvider.notifier).toggleTheme(),
+            );
+          },
+        ),
         Consumer(
           builder: (context, ref, child) {
             final notificationState = ref.watch(notificationProvider);
