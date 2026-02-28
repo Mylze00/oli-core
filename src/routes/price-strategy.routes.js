@@ -152,40 +152,12 @@ router.post('/apply-bulk', async (req, res) => {
 
 /**
  * POST /api/price-strategy/reload-csv
- * Recharge le cache CSV (après avoir mis un nouveau fichier dans data/competitors/)
+ * Recharge le cache CSV (utile en dev local)
  */
 router.post('/reload-csv', (req, res) => {
     invalidateCache();
     const competitors = loadCompetitorCSV();
     res.json({ success: true, loaded: competitors.length });
-});
-
-/**
- * POST /api/price-strategy/upload-csv
- * Upload un CSV concurrent directement sur le serveur
- * Body: multipart/form-data avec champ "file"
- */
-const multer = require('multer');
-const fs = require('fs');
-const uploadDir = require('path').join(__dirname, '../../data/competitors');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-    destination: uploadDir,
-    filename: (req, file, cb) => cb(null, `competitor_${Date.now()}.csv`),
-});
-const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } }); // max 20MB
-
-router.post('/upload-csv', upload.single('file'), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'Aucun fichier reçu' });
-    invalidateCache();
-    const competitors = loadCompetitorCSV();
-    res.json({
-        success: true,
-        filename: req.file.filename,
-        size: req.file.size,
-        totalLoaded: competitors.length,
-    });
 });
 
 module.exports = router;
