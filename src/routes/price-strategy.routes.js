@@ -133,13 +133,31 @@ router.post('/apply', async (req, res) => {
 /**
  * POST /api/price-strategy/apply-bulk
  * Applique la strategie sur tous les produits actifs
+ * Body: { apply_price?: boolean, poids_defaut?: number, page?: number, limit?: number }
  */
 router.post('/apply-bulk', async (req, res) => {
     try {
-        const { apply_price = false, poids_defaut = 0.5 } = req.body;
+        const { apply_price = false, poids_defaut = 0.5, page = 1, limit = 500 } = req.body;
+        const offset = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+        const lim = Math.min(parseInt(limit), 1000);
 
+        // 1. Compter le total
+        const countResult = await db.query("SELECT COUNT(*) AS total FROM products WHERE status = 'active'");
+        const totalProducts = parseInt(countResult.rows[0].total);
+
+        // 2. Pre-calculer TOUTES les medianes par categorie en 1 requete
+        const medResult = await db.query(
+            "SELECT category, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price) AS median_price FROM products WHERE status = 'active' AND price > 0 GROUP BY category"
+        );
+        const medianes = {};
+        for (const row of medResult.rows) {
+            medianes[row.category] = parseFloat(row.median_price);
+        }
+
+        // 3. Charger les produits de cette page
         const result = await db.query(
-            "SELECT id, name, price, weight, category FROM products WHERE status = 'active' LIMIT 500"
+            "SELECT id, name, price, weight, category FROM products WHERE status = 'active' ORDER BY id OFFSET $1 LIMIT $2",
+            [offset, lim]
         );
         const products = result.rows || [];
 
@@ -147,18 +165,7 @@ router.post('/apply-bulk', async (req, res) => {
         for (const product of products) {
             const prixAchat = parseFloat(product.price) / 1.35;
             const poids = parseFloat(product.weight) || poids_defaut;
-
-            // Mediane categorie
-            let prixConcurrent = null;
-            if (product.category) {
-                const medResult = await db.query(
-                    "SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price) AS median_price FROM products WHERE category = $1 AND status = 'active' AND price > 0",
-                    [product.category]
-                );
-                if (medResult.rows[0] && medResult.rows[0].median_price) {
-                    prixConcurrent = parseFloat(medResult.rows[0].median_price);
-                }
-            }
+            const prixConcurrent = medianes[product.category] || null;
 
             const analysis = calculerStrategieProduit({
                 nom: product.name, prixAchat, poids,
@@ -173,10 +180,19 @@ router.post('/apply-bulk', async (req, res) => {
                 );
             }
 
-            results.push({ product_id: product.id, nom: product.name, ...analysis });
+            results.push({ product_id: product.id, nom: product.name, categorie: product.category, ...analysis });
         }
 
-        res.json({ success: true, total: results.length, applied: apply_price, results });
+        const totalPages = Math.ceil(totalProducts / lim);
+        res.json({
+            success: true,
+            total_products: totalProducts,
+            page: parseInt(page),
+            total_pages: totalPages,
+            count: results.length,
+            applied: apply_price,
+            results,
+        });
     } catch (err) {
         console.error('price-strategy/apply-bulk error:', err);
         res.status(500).json({ error: 'Erreur serveur', details: err.message });
