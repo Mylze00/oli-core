@@ -174,7 +174,14 @@ app.use("/api/price-strategy", require('./routes/price-strategy.routes')); // �
 // 🤖 Worker prix - routes de contrôle
 const priceWorker = require('./services/price-worker');
 app.get('/api/price-worker/stats', (req, res) => res.json(priceWorker.getStats()));
-app.post('/api/price-worker/run', (req, res) => { priceWorker.runPriceAnalysis(); res.json({ message: 'Worker lancé en arrière-plan' }); });
+app.post('/api/price-worker/run', async (req, res) => {
+    try {
+        const stats = await priceWorker.runPriceAnalysis({ manual: true });
+        res.json({ success: true, stats });
+    } catch (err) {
+        res.status(500).json({ error: 'Worker échoué', details: err.message });
+    }
+});
 
 app.use("/api/shops", optionalAuth, shopsRoutes);
 app.use("/orders", requireAuth, ordersRoutes);
