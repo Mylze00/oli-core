@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash, ArrowLeft, Truck, Save, Loader2, X, PackageSearch } from 'lucide-react';
+import { Plus, Trash, ArrowLeft, Truck, Save, Loader2, X, PackageSearch, Layers, Tag } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { sellerAPI, productAPI } from '../services/api';
@@ -73,6 +73,19 @@ export default function ProductEditor() {
     const [images, setImages] = useState([]); // Nouvelles images (File objects)
     const [existingImages, setExistingImages] = useState([]); // Images existantes (URLs)
     const [removedImages, setRemovedImages] = useState([]); // Images à supprimer
+
+    // --- Variantes (couleurs / tailles) ---
+    const [colors, setColors] = useState([]);
+    const [sizes, setSizes] = useState([]);
+    const [colorInput, setColorInput] = useState('');
+    const [sizeInput, setSizeInput] = useState('');
+
+    const addChip = (list, setList, inputVal, setInput) => {
+        const val = inputVal.trim();
+        if (val && !list.includes(val)) setList([...list, val]);
+        setInput('');
+    };
+    const removeChip = (list, setList, val) => setList(list.filter(v => v !== val));
 
     const units = [
         "Pièce", "Kg", "Litre", "Carton (6)", "Carton (12)", "Carton (24)",
@@ -163,6 +176,15 @@ export default function ProductEditor() {
                     time: opt.time || ''
                 })));
             }
+
+            // Variantes
+            try {
+                const variantsData = await sellerAPI.getVariants(productId);
+                const vColors = [...new Set((variantsData || []).filter(v => v.type === 'color').map(v => v.value))];
+                const vSizes = [...new Set((variantsData || []).filter(v => v.type === 'size').map(v => v.value))];
+                setColors(vColors);
+                setSizes(vSizes);
+            } catch (_) { /* pas de variantes */ }
 
             // Discount
             if (p.discount_price) {
@@ -312,12 +334,20 @@ export default function ProductEditor() {
                 const keptImages = existingImages.filter(url => !removedImages.includes(url));
                 formData.append('existing_images', JSON.stringify(keptImages));
                 formData.append('removed_images', JSON.stringify(removedImages));
-
-                // Mapper basePrice → price pour le backend
                 formData.set('price', product.basePrice);
 
                 await productAPI.update(productId, formData);
-                alert("Produit mis à jour avec succès !");
+
+                // Synchroniser les variantes couleurs + tailles
+                const allVariants = [
+                    ...colors.map(v => ({ type: 'color', value: v })),
+                    ...sizes.map(v => ({ type: 'size', value: v })),
+                ];
+                if (allVariants.length > 0) {
+                    try { await sellerAPI.addVariantsBulk(productId, allVariants); } catch (_) { }
+                }
+
+                navigate('/products');
             } else {
                 // En mode création avec prefill : envoyer aussi les images URL pré-remplies
                 if (existingImages.length > 0) {
@@ -578,7 +608,78 @@ export default function ProductEditor() {
                     </div>
                 </div>
 
-                {/* Image Upload Section */}
+                {/* ═══ VARIANTES (COULEURS / TAILLES) ═══ */}
+                <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
+                    <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
+                        <Layers size={20} className="text-purple-500" /> Variantes du produit
+                    </h2>
+                    <p className="text-sm text-gray-400 mb-4">Couleurs et tailles disponibles — l'acheteur pourra choisir.</p>
+
+                    {/* Couleurs */}
+                    <div className="mb-5">
+                        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                            <Tag size={14} className="text-pink-400" /> Couleurs
+                        </label>
+                        <div className="flex gap-2 mb-2">
+                            <input
+                                type="text"
+                                className="flex-1 border p-2 rounded-lg text-sm focus:ring-2 focus:ring-purple-300 outline-none"
+                                placeholder="ex: Rouge, Bleu nuit..."
+                                value={colorInput}
+                                onChange={e => setColorInput(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addChip(colors, setColors, colorInput, setColorInput))}
+                            />
+                            <button type="button" onClick={() => addChip(colors, setColors, colorInput, setColorInput)}
+                                className="px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium">
+                                <Plus size={16} />
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {colors.length === 0 && <span className="text-xs text-gray-400 italic">Aucune couleur — entrez un nom et appuyez +</span>}
+                            {colors.map(c => (
+                                <span key={c} className="flex items-center gap-1 bg-purple-50 border border-purple-200 text-purple-800 text-xs font-medium px-2.5 py-1 rounded-full">
+                                    {c}
+                                    <button type="button" onClick={() => removeChip(colors, setColors, c)} className="text-purple-400 hover:text-red-500 ml-0.5">
+                                        <X size={11} />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Tailles */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                            <Tag size={14} className="text-indigo-400" /> Tailles
+                        </label>
+                        <div className="flex gap-2 mb-2">
+                            <input
+                                type="text"
+                                className="flex-1 border p-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-300 outline-none"
+                                placeholder="ex: S, M, L, XL, 42..."
+                                value={sizeInput}
+                                onChange={e => setSizeInput(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addChip(sizes, setSizes, sizeInput, setSizeInput))}
+                            />
+                            <button type="button" onClick={() => addChip(sizes, setSizes, sizeInput, setSizeInput)}
+                                className="px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium">
+                                <Plus size={16} />
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {sizes.length === 0 && <span className="text-xs text-gray-400 italic">Aucune taille — entrez une valeur et appuyez +</span>}
+                            {sizes.map(s => (
+                                <span key={s} className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-medium px-2.5 py-1 rounded-full">
+                                    {s}
+                                    <button type="button" onClick={() => removeChip(sizes, setSizes, s)} className="text-indigo-400 hover:text-red-500 ml-0.5">
+                                        <X size={11} />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
                 <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
                     <h2 className="text-lg font-bold mb-4">Photos du produit</h2>
 
@@ -797,6 +898,21 @@ export default function ProductEditor() {
                     </button>
                 </div>
             </form>
+
+            {/* Bouton sticky "Valider" en mode édition */}
+            {isEditMode && (
+                <div className="fixed bottom-6 right-6 z-50">
+                    <button
+                        type="button"
+                        disabled={saving}
+                        onClick={handleSubmit}
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-3 rounded-full shadow-xl transition-all disabled:opacity-50 hover:scale-105 active:scale-95"
+                    >
+                        {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                        {saving ? 'Sauvegarde...' : 'Valider les modifications'}
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
