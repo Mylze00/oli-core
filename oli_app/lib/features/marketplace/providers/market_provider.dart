@@ -111,14 +111,22 @@ final marketProductsProvider = StateNotifierProvider<MarketProductsNotifier, Asy
 class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
   Timer? _refreshTimer;
   bool _isLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _offset = 0;
   String? _error;
+
+  static const int _initialPageSize = 100;
+  static const int _morePageSize = 30;
 
   FeaturedProductsNotifier() : super([]) {
     fetchFeaturedProducts();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) => fetchFeaturedProducts());
+    _refreshTimer = Timer.periodic(const Duration(minutes: 10), (_) => fetchFeaturedProducts());
   }
 
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMore => _hasMore;
   String? get error => _error;
 
   @override
@@ -127,19 +135,20 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
     super.dispose();
   }
 
-  Future<void> fetchFeaturedProducts({bool shuffle = true}) async {
+  Future<void> fetchFeaturedProducts() async {
+    if (_isLoading) return;
     _isLoading = true;
+    _isLoadingMore = false;
+    _hasMore = true;
+    _offset = 0;
     _error = null;
 
     try {
-      final featuredUrl = '${ApiConfig.productsFeatured}?limit=150'; // ← Réduit de 500 → 150
-      final uri = Uri.parse(featuredUrl);
+      final uri = Uri.parse('${ApiConfig.productsFeatured}?limit=$_initialPageSize');
       final response = await http.get(uri);
-      
+
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        // Parsing par produit : un produit malformé (ex: shipping_options
-        // sauvegardé en string par le bulk edit) ne casse pas tout le chargement
         final newProducts = <Product>[];
         for (final item in data) {
           try {
@@ -148,20 +157,50 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
             debugPrint('⚠️ Featured product skipped (parse error): $e');
           }
         }
-
-        if (shuffle) {
-          newProducts.shuffle();
-        }
-
+        newProducts.shuffle();
+        _offset = newProducts.length;
+        _hasMore = newProducts.length >= _initialPageSize;
         state = newProducts;
         _error = null;
       } else {
-        _error = "Erreur serveur: ${response.statusCode}";
+        _error = 'Erreur serveur: ${response.statusCode}';
       }
     } catch (e) {
-      _error = "Erreur réseau: $e";
+      _error = 'Erreur réseau: $e';
     } finally {
       _isLoading = false;
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+    _isLoadingMore = true;
+
+    try {
+      final uri = Uri.parse('${ApiConfig.productsFeatured}?limit=$_morePageSize&offset=$_offset');
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final moreProducts = <Product>[];
+        for (final item in data) {
+          try {
+            moreProducts.add(Product.fromJson(item as Map<String, dynamic>));
+          } catch (e) {
+            debugPrint('⚠️ Featured loadMore skipped: $e');
+          }
+        }
+        if (moreProducts.isNotEmpty) {
+          moreProducts.shuffle();
+          _offset += moreProducts.length;
+          state = [...state, ...moreProducts];
+        }
+        _hasMore = moreProducts.length >= _morePageSize;
+      }
+    } catch (e) {
+      debugPrint('Erreur loadMore featured: $e');
+    } finally {
+      _isLoadingMore = false;
     }
   }
 }

@@ -2,8 +2,9 @@ const productService = require('../services/product.service');
 
 exports.getFeatured = async (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 20;
-        const products = await productService.getFeaturedProducts(limit);
+        const limit = parseInt(req.query.limit) || 100;
+        const offset = parseInt(req.query.offset) || 0;
+        const products = await productService.getFeaturedProducts(limit, offset);
         res.json(products);
     } catch (err) {
         console.error("Erreur GET /products/featured:", err);

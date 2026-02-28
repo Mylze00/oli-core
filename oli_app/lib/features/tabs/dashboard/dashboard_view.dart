@@ -140,8 +140,11 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     if (nowScrolled != _isScrolled) {
       setState(() => _isScrolled = nowScrolled);
     }
-    if (offset >= maxScroll - 300) {
+    // Infinite scroll : charger plus de produits featured + ranking
+    if (offset >= maxScroll - 400) {
       _loadMoreRankingProducts();
+      // Charger de nouveaux produits featured (30 par batch)
+      ref.read(featuredProductsProvider.notifier).loadMore();
     }
   }
 
@@ -256,7 +259,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   .fetchFeaturedProducts();
               setState(() {
                 _rankingLoadedCount = _rankingBatchSize;
-                resetDistribution(); // ← méthode du mixin
+                resetDistribution();
               });
             },
             child: CustomScrollView(

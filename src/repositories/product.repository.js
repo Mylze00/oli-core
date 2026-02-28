@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 
 class ProductRepository {
-    async findFeatured(adminPhone, limit) {
+    async findFeatured(adminPhone, limit, offset = 0) {
         const query = `
             SELECT p.*, 
                    u.name as seller_name, 
@@ -17,10 +17,10 @@ class ProductRepository {
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE u.phone = $1
               AND p.status = 'active'
-            ORDER BY p.created_at DESC
-            LIMIT $2
+            ORDER BY RANDOM()
+            LIMIT $2 OFFSET $3
         `;
-        const result = await pool.query(query, [adminPhone, limit]);
+        const result = await pool.query(query, [adminPhone, limit, offset]);
         return result.rows;
     }
 

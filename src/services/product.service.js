@@ -57,9 +57,9 @@ class ProductService {
         };
     }
 
-    async getFeaturedProducts(limit = 500) {
+    async getFeaturedProducts(limit = 100, offset = 0) {
         const ADMIN_PHONE = '+243827088682';
-        const products = await productRepository.findFeatured(ADMIN_PHONE, limit);
+        const products = await productRepository.findFeatured(ADMIN_PHONE, limit, offset);
 
         return products.map(p => {
             const formatted = this._formatProduct(p);
