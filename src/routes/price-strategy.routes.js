@@ -312,9 +312,9 @@ router.post('/rollback', async (req, res) => {
         }
         const adminId = adminResult.rows[0].id;
 
-        // 2. Trouver les produits NON-admin avec prix typiques du worker
+        // 2. Trouver TOUS les produits NON-admin modifies aujourd'hui
         const result = await db.query(
-            "SELECT p.id, p.name AS product_name, p.price, p.seller_id, u.name AS seller_name FROM products p LEFT JOIN users u ON p.seller_id = u.id WHERE p.seller_id != $1 AND p.status = 'active' AND (ROUND(p.price::numeric, 2) IN (2.22, 20.25, 375.00, 2500.00, 3.43)) ORDER BY p.id",
+            "SELECT p.id, p.name AS product_name, p.price, p.seller_id, u.name AS seller_name FROM products p LEFT JOIN users u ON p.seller_id = u.id WHERE p.seller_id != $1 AND p.updated_at >= CURRENT_DATE ORDER BY p.seller_id, p.id",
             [adminId]
         );
         const affectes = result.rows || [];
@@ -326,6 +326,14 @@ router.post('/rollback', async (req, res) => {
             }
         }
 
+        // Grouper par vendeur pour le résumé
+        const parVendeur = {};
+        for (const p of affectes) {
+            const seller = p.seller_name || 'Inconnu';
+            if (!parVendeur[seller]) parVendeur[seller] = { count: 0, seller_id: p.seller_id };
+            parVendeur[seller].count++;
+        }
+
         res.json({
             success: true,
             admin_id: adminId,
@@ -333,12 +341,12 @@ router.post('/rollback', async (req, res) => {
             total_affectes: affectes.length,
             applied: apply_rollback,
             restore_price: apply_rollback ? (restore_price || 1) : null,
-            produits: affectes.map(p => ({
+            par_vendeur: parVendeur,
+            produits: affectes.slice(0, 100).map(p => ({
                 id: p.id,
                 nom: (p.product_name || '').substring(0, 50),
                 prix_actuel: '$' + parseFloat(p.price).toFixed(2),
                 seller: p.seller_name,
-                seller_id: p.seller_id,
             })),
         });
     } catch (err) {
