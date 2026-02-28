@@ -70,6 +70,7 @@ class MarketProductCard extends ConsumerWidget {
                           CloudinaryHelper.thumbnail(product.images[0]),
                           width: double.infinity,
                           fit: BoxFit.cover,
+                          cacheWidth: 300, // ← Limite RAM : décode à 300px max
                           // Fade-in animation when image loads
                           frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
                             if (wasSynchronouslyLoaded) return child;

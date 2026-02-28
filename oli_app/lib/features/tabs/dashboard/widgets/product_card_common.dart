@@ -53,6 +53,7 @@ class DashboardProductCard extends ConsumerWidget {
                         CloudinaryHelper.small(product.images.first),
                         fit: BoxFit.cover,
                         width: double.infinity,
+                        cacheWidth: 200, // ← Limite la RAM : redimensionne en décodage
                         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
                           if (wasSynchronouslyLoaded) return child;
                           return AnimatedOpacity(

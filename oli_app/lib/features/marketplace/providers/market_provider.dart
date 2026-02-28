@@ -21,7 +21,7 @@ class MarketState {
 class MarketProductsNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   int _offset = 0;
   bool _hasMore = true;
-  static const int _pageSize = 200;
+  static const int _pageSize = 50; // ← Limité à 50 pour réduire la RAM
 
   MarketProductsNotifier() : super(const AsyncValue.loading()) {
     fetchProducts();
@@ -29,19 +29,13 @@ class MarketProductsNotifier extends StateNotifier<AsyncValue<List<Product>>> {
 
   bool get hasMore => _hasMore;
 
-  /// Charge TOUS les produits (toutes les pages) pour que chaque utilisateur soit visible
+  /// Charge la première page de produits uniquement (lazy-load via loadMore)
   Future<void> fetchProducts({String? search, String? category, String? sellerId}) async {
     _offset = 0;
     _hasMore = true;
     state = const AsyncValue.loading();
-    
-    // Charger la première page
+    // Ne charge que la 1ère page — l'UI appelle loadMore() au besoin
     await _loadProducts(search: search, category: category, sellerId: sellerId, append: false);
-    
-    // Charger automatiquement les pages suivantes
-    while (_hasMore) {
-      await _loadProducts(search: search, category: category, sellerId: sellerId, append: true);
-    }
   }
 
   Future<void> loadMore({String? search, String? category, String? sellerId}) async {
@@ -138,7 +132,7 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
     _error = null;
 
     try {
-      final featuredUrl = '${ApiConfig.productsFeatured}?limit=500';
+      final featuredUrl = '${ApiConfig.productsFeatured}?limit=150'; // ← Réduit de 500 → 150
       final uri = Uri.parse(featuredUrl);
       final response = await http.get(uri);
       
