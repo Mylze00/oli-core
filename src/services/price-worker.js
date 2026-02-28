@@ -38,7 +38,7 @@ async function findAdminSellerId() {
 
     // Chercher par nom 'OLI' ou 'oli' ou le shop vérifié
     const result = await db.query(
-        "SELECT id FROM users WHERE LOWER(username) = 'oli' OR LOWER(first_name) = 'oli' OR role = 'admin' ORDER BY id LIMIT 1"
+        "SELECT id FROM users WHERE LOWER(name) = 'oli' ORDER BY id LIMIT 1"
     );
     if (result.rows.length > 0) {
         CONFIG.ADMIN_SELLER_ID = result.rows[0].id;

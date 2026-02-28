@@ -305,7 +305,7 @@ router.post('/rollback', async (req, res) => {
 
         // 1. Trouver le seller_id admin OLI
         const adminResult = await db.query(
-            "SELECT id, username FROM users WHERE LOWER(username) = 'oli' OR role = 'admin' ORDER BY id LIMIT 1"
+            "SELECT id, name FROM users WHERE LOWER(name) = 'oli' ORDER BY id LIMIT 1"
         );
         if (!adminResult.rows.length) {
             return res.status(404).json({ error: 'Admin OLI non trouve' });
@@ -313,15 +313,13 @@ router.post('/rollback', async (req, res) => {
         const adminId = adminResult.rows[0].id;
 
         // 2. Trouver les produits NON-admin avec prix typiques du worker
-        // Le worker met: $2.22 (mediane), $20.25 (fallback 15*1.35), $375 (aberrant)
         const result = await db.query(
-            "SELECT p.id, p.name, p.price, p.seller_id, u.username FROM products p LEFT JOIN users u ON p.seller_id = u.id WHERE p.seller_id != $1 AND p.status = 'active' AND (p.price = 2.22 OR p.price = 20.25 OR p.price = 375.00 OR p.price = 2500.00 OR p.price = 3.43) ORDER BY p.id",
+            "SELECT p.id, p.name AS product_name, p.price, p.seller_id, u.name AS seller_name FROM products p LEFT JOIN users u ON p.seller_id = u.id WHERE p.seller_id != $1 AND p.status = 'active' AND (ROUND(p.price::numeric, 2) IN (2.22, 20.25, 375.00, 2500.00, 3.43)) ORDER BY p.id",
             [adminId]
         );
         const affectes = result.rows || [];
 
         if (apply_rollback && affectes.length > 0) {
-            // Restaurer: si restore_price donne, utiliser; sinon remettre a 1
             const prix = restore_price || 1;
             for (const p of affectes) {
                 await db.query('UPDATE products SET price = $1 WHERE id = $2', [prix, p.id]);
@@ -331,15 +329,15 @@ router.post('/rollback', async (req, res) => {
         res.json({
             success: true,
             admin_id: adminId,
-            admin_username: adminResult.rows[0].username,
+            admin_name: adminResult.rows[0].name,
             total_affectes: affectes.length,
             applied: apply_rollback,
             restore_price: apply_rollback ? (restore_price || 1) : null,
             produits: affectes.map(p => ({
                 id: p.id,
-                nom: p.name.substring(0, 50),
+                nom: (p.product_name || '').substring(0, 50),
                 prix_actuel: '$' + parseFloat(p.price).toFixed(2),
-                seller: p.username,
+                seller: p.seller_name,
                 seller_id: p.seller_id,
             })),
         });
