@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const db = require('../config/db');
 const { calculerStrategieProduit, loadCompetitorCSV, invalidateCache } = require('../services/pricing.strategy');
 
 /**
