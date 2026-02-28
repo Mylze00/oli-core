@@ -208,4 +208,91 @@ router.post('/reload-csv', (req, res) => {
     res.json({ success: true, loaded: competitors.length });
 });
 
+/**
+ * POST /api/price-strategy/fix-aberrant
+ * Detecte et corrige les prix aberrants (prix en FC stockes comme USD)
+ * Body: { 
+ *   taux_change: number (ex: 2800),  // 1 USD = 2800 FC
+ *   seuil_max_usd: number (ex: 10000), // au-dessus = aberrant
+ *   apply_fix: boolean,  // true = modifier en DB
+ *   page: number, limit: number 
+ * }
+ */
+router.post('/fix-aberrant', async (req, res) => {
+    try {
+        const {
+            taux_change = 2800,
+            seuil_max_usd = 10000,
+            apply_fix = false,
+            page = 1,
+            limit = 500
+        } = req.body;
+
+        const offset = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+        const lim = Math.min(parseInt(limit), 1000);
+
+        // Compter les produits aberrants
+        const countResult = await db.query(
+            "SELECT COUNT(*) AS total FROM products WHERE status = 'active' AND price > $1",
+            [seuil_max_usd]
+        );
+        const totalAberrant = parseInt(countResult.rows[0].total);
+
+        // Charger les produits aberrants de cette page
+        const result = await db.query(
+            "SELECT id, name, price, weight, category FROM products WHERE status = 'active' AND price > $1 ORDER BY price DESC OFFSET $2 LIMIT $3",
+            [seuil_max_usd, offset, lim]
+        );
+        const products = result.rows || [];
+
+        const results = [];
+        for (const product of products) {
+            const prixOriginal = parseFloat(product.price);
+            // Le prix stocke est en FC → convertir en USD
+            const prixAchatUSD = prixOriginal / taux_change;
+            const poids = parseFloat(product.weight) || 0.5;
+
+            const analysis = calculerStrategieProduit({
+                nom: product.name,
+                prixAchat: prixAchatUSD,
+                poids,
+                longueur: 30, largeur: 30, hauteur: 20,
+            });
+
+            if (apply_fix) {
+                await db.query(
+                    'UPDATE products SET price = $1 WHERE id = $2',
+                    [analysis.prixVenteNumber, product.id]
+                );
+            }
+
+            results.push({
+                product_id: product.id,
+                nom: product.name.substring(0, 60),
+                prix_actuel: '$' + prixOriginal.toFixed(2),
+                prix_achat_estime_usd: '$' + prixAchatUSD.toFixed(2),
+                nouveau_prix: analysis.prixVenteConseille,
+                transport: analysis.mode,
+                frais_transport: analysis.fraisExpe,
+            });
+        }
+
+        const totalPages = Math.ceil(totalAberrant / lim);
+        res.json({
+            success: true,
+            total_aberrants: totalAberrant,
+            page: parseInt(page),
+            total_pages: totalPages,
+            count: results.length,
+            taux_change_utilise: taux_change,
+            seuil_usd: seuil_max_usd,
+            applied: apply_fix,
+            results,
+        });
+    } catch (err) {
+        console.error('price-strategy/fix-aberrant error:', err);
+        res.status(500).json({ error: 'Erreur serveur', details: err.message });
+    }
+});
+
 module.exports = router;
