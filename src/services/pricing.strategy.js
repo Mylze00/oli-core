@@ -5,7 +5,38 @@
 
 const fs = require('fs');
 const path = require('path');
-const csv = require('csv-parse/sync');
+
+// ── Mini-parser CSV natif (sans dépendance externe) ───────────────────────
+function parseCSV(content) {
+    const lines = content.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return [];
+    // Parse header
+    const headers = splitCSVLine(lines[0]);
+    const rows = [];
+    for (let i = 1; i < Math.min(lines.length, 501); i++) { // max 500 lignes/fichier
+        const values = splitCSVLine(lines[i]);
+        if (values.length === 0) continue;
+        const row = {};
+        headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
+        rows.push(row);
+    }
+    return rows;
+}
+
+function splitCSVLine(line) {
+    const result = [];
+    let cur = '';
+    let inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { inQuote = !inQuote; }
+        else if (c === ',' && !inQuote) { result.push(cur.trim()); cur = ''; }
+        else { cur += c; }
+    }
+    result.push(cur.trim());
+    return result;
+}
+
 
 // ── Chemin du dossier des CSV concurrents ──────────────────────────────────
 const COMPETITORS_DIR = path.join(__dirname, '../../data/competitors');
@@ -31,12 +62,7 @@ function loadCompetitorCSV() {
     for (const file of files) {
         try {
             const content = fs.readFileSync(path.join(COMPETITORS_DIR, file), 'utf8');
-            const rows = csv.parse(content, {
-                columns: true,
-                skip_empty_lines: true,
-                relax_quotes: true,
-                trim: true,
-            });
+            const rows = parseCSV(content);
             for (const row of rows) {
                 const title = row['title'] || row['Title'] || '';
                 // Prix minimum = pricing/0/dollarPrice (colonne Alibaba scraper)
