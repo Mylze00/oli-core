@@ -175,16 +175,28 @@ function VariantsTab({ activeId, variants, setVariants }) {
     );
 }
 
+// ── Fallback : 7 modes Oli si l'API ne répond pas ───────────────────────────
+const FALLBACK_MODES = [
+    { id: 'oli_standard', label: 'Livraison Standard', time_label: '10 jours', default_cost: 2.50, is_distance_based: false },
+    { id: 'oli_express', label: 'Oli Express 24h', time_label: '24 heures', default_cost: 5.00, is_distance_based: false },
+    { id: 'hand_delivery', label: 'Retrait en main propre', time_label: 'Sur rendez-vous', default_cost: 0, is_distance_based: false },
+    { id: 'free', label: 'Livraison gratuite', time_label: '60 jours', default_cost: 0, is_distance_based: false },
+    { id: 'pick_go', label: 'PickGo', time_label: '1-4 heures', default_cost: 1.00, is_distance_based: false },
+    { id: 'moto', label: 'Livraison moto', time_label: 'Calculé/distance', default_cost: 0, is_distance_based: true },
+    { id: 'maritime', label: 'Livraison maritime', time_label: '60 jours', default_cost: 15.00, is_distance_based: false },
+];
+
 // ─── Onglet Livraison ─────────────────────────────────────────────────────────
 function DeliveryTab({ shipping, setShipping }) {
-    const [modes, setModes] = useState([]);
-    const [loadingModes, setLoadingModes] = useState(true);
+    const [modes, setModes] = useState(FALLBACK_MODES);
 
     useEffect(() => {
         api.get('/api/delivery-methods')
-            .then(r => setModes(r.data || []))
-            .catch(() => setModes([]))
-            .finally(() => setLoadingModes(false));
+            .then(r => {
+                const data = Array.isArray(r.data) && r.data.length > 0 ? r.data : FALLBACK_MODES;
+                setModes(data);
+            })
+            .catch(() => { }); // garder le fallback en cas d'erreur
     }, []);
 
     const isEnabled = (id) => shipping.some(s => (s.id || s.methodId) === id);
@@ -204,9 +216,6 @@ function DeliveryTab({ shipping, setShipping }) {
     const updateCost = (id, val) =>
         setShipping(prev => prev.map(s => (s.id || s.methodId) === id ? { ...s, cost: parseFloat(val) || 0 } : s));
 
-    if (loadingModes) return (
-        <div className="flex justify-center py-8"><ArrowPathIcon className="h-5 w-5 animate-spin text-blue-400" /></div>
-    );
 
     return (
         <div className="space-y-2">
