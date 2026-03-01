@@ -279,6 +279,7 @@ router.get('/unverified', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 10;
         const offset = parseInt(req.query.offset) || 0;
+        const seller = (req.query.seller || '').trim(); // filtre par nom/téléphone vendeur
 
         // Migration inline idempotente
         try {
@@ -287,16 +288,18 @@ router.get('/unverified', async (req, res) => {
             await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS verified_by INT`);
         } catch (me) { /* already exists */ }
 
-        // Produits non vérifiés (actifs)
+        // Produits non vérifiés (actifs), avec filtre vendeur optionnel
         const result = await pool.query(
             `SELECT p.id, p.name, p.price, p.images, p.category, p.description, p.status,
                     COALESCE(p.is_verified, FALSE) as is_verified, p.created_at,
                     u.name as seller_name, u.phone as seller_phone, u.avatar_url as seller_avatar
              FROM products p JOIN users u ON p.seller_id = u.id
              WHERE COALESCE(p.is_verified, FALSE) = FALSE AND p.status = 'active'
+               AND ($3 = '' OR LOWER(COALESCE(u.name,'')) LIKE LOWER('%' || $3 || '%')
+                            OR COALESCE(u.phone,'') LIKE '%' || $3 || '%')
              ORDER BY p.created_at ASC
              LIMIT $1 OFFSET $2`,
-            [limit, offset]
+            [limit, offset, seller]
         );
 
         // Stats par catégorie — prix safe via regexp (ignore non-numériques)

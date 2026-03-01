@@ -272,6 +272,7 @@ export default function ProductComparator() {
     const [variants, setVariants] = useState([]);
     const [variantsLoading, setVL] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [sellerFilter, setSellerFilter] = useState('');
 
     const [form, setForm] = useState({ name: '', description: '', price: '', brand_certified: false, brand_display_name: '' });
     const [shipping, setShipping] = useState([]);
@@ -282,10 +283,11 @@ export default function ProductComparator() {
     const img = active?.images?.[0] ? getImageUrl(active.images[0]) : null;
 
     // ── Charger la file ───────────────────────────────────────────────────────
-    const loadQueue = useCallback(async (offset = 0, startIdx = 0) => {
+    const loadQueue = useCallback(async (offset = 0, startIdx = 0, seller = '') => {
         setLoading(true); setError(null);
         try {
-            const { data } = await api.get(`/admin/products/unverified?limit=10&offset=${offset}`);
+            const sellerParam = seller ? `&seller=${encodeURIComponent(seller)}` : '';
+            const { data } = await api.get(`/admin/products/unverified?limit=10&offset=${offset}${sellerParam}`);
             if (!data || data.error) throw new Error(data?.error || 'Erreur API');
             const products = data.products || [];
             setQueue(products);
@@ -307,7 +309,14 @@ export default function ProductComparator() {
         setConfirmDelete(false);
     };
 
-    useEffect(() => { loadQueue(0, 0); }, [loadQueue]);
+    // Chargement initial + debounce filtre vendeur
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setPageOffset(0);
+            loadQueue(0, 0, sellerFilter);
+        }, sellerFilter ? 500 : 0);
+        return () => clearTimeout(timer);
+    }, [loadQueue, sellerFilter]);
     useEffect(() => { if (queue[queueIdx]) applyProduct(queue[queueIdx]); }, [queueIdx, queue]);
 
     // Charger variantes
@@ -424,9 +433,25 @@ export default function ProductComparator() {
 
             {/* ── File gauche ── */}
             <div className="w-52 flex-shrink-0 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-                <div className="px-3 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">File</span>
-                    <span className="text-xs bg-blue-100 text-blue-600 font-semibold px-2 py-0.5 rounded-full">{totalUnverified}</span>
+                <div className="px-3 py-3 border-b border-gray-100 flex-shrink-0">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">File</span>
+                        <span className="text-xs bg-blue-100 text-blue-600 font-semibold px-2 py-0.5 rounded-full">{totalUnverified}</span>
+                    </div>
+                    <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300 text-xs">🔍</span>
+                        <input
+                            type="text"
+                            placeholder="Filtrer par vendeur..."
+                            className="w-full pl-7 pr-6 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50"
+                            value={sellerFilter}
+                            onChange={e => setSellerFilter(e.target.value)}
+                        />
+                        {sellerFilter && (
+                            <button onClick={() => setSellerFilter('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-xs">✕</button>
+                        )}
+                    </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
                     {queue.map((p, idx) => (
