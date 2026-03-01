@@ -62,10 +62,11 @@ function QueueCard({ product, isActive, onClick }) {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function ProductComparator() {
-    const [queue, setQueue] = useState([]);         // Liste des 10 produits
+    const [queue, setQueue] = useState([]);
     const [totalUnverified, setTotalUnverified] = useState(0);
-    const [activeId, setActiveId] = useState(null); // ID du produit sélectionné
+    const [activeId, setActiveId] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [editPrice, setEditPrice] = useState('');
     const [savingPrice, setSavingPrice] = useState(false);
     const [verifying, setVerifying] = useState(false);
@@ -76,11 +77,12 @@ export default function ProductComparator() {
     const stats = active?.category_stats || null;
     const img = active?.images?.[0] ? getImageUrl(active.images[0]) : 'https://via.placeholder.com/200?text=No+img';
 
-    // Charger la file d'attente
     const loadQueue = useCallback(async (currentOffset = 0) => {
         setLoading(true);
+        setError(null);
         try {
             const { data } = await api.get(`/admin/products/unverified?limit=10&offset=${currentOffset}`);
+            if (!data || data.error) throw new Error(data?.error || 'Erreur API');
             setQueue(data.products || []);
             setTotalUnverified(data.total_unverified || 0);
             if (data.products?.length > 0) {
@@ -89,7 +91,10 @@ export default function ProductComparator() {
             } else {
                 setActiveId(null);
             }
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error('loadQueue error:', e);
+            setError(e.response?.data?.error || e.message || 'Erreur de chargement');
+        }
         finally { setLoading(false); }
     }, []);
 

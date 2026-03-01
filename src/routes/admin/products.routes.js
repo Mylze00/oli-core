@@ -257,8 +257,14 @@ router.get('/:id/compare', async (req, res) => {
         res.json({
             product,
             category_stats: {
-                competitors: competitorsResult.rows,
-            });
+                total: parseInt(stats?.total_in_category) || 0,
+                price_min: parseFloat(stats?.price_min) || 0,
+                price_max: parseFloat(stats?.price_max) || 0,
+                price_avg: parseFloat(stats?.price_avg) || 0,
+                price_median: parseFloat(stats?.price_median) || 0,
+            },
+            competitors: competitorsResult.rows,
+        });
     } catch (err) {
         console.error('Erreur GET /admin/products/:id/compare:', err);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -274,12 +280,19 @@ router.get('/unverified', async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const offset = parseInt(req.query.offset) || 0;
 
+        // Migration inline idempotente — assure que la colonne existe
+        try {
+            await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
+            await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP`);
+            await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS verified_by INT`);
+        } catch (me) { /* colonne déjà existante */ }
+
         const result = await pool.query(
             `SELECT p.id, p.name, p.price, p.images, p.category, p.description, p.status,
-                    p.is_verified, p.created_at,
+                    COALESCE(p.is_verified, FALSE) as is_verified, p.created_at,
                     u.name as seller_name, u.phone as seller_phone, u.avatar_url as seller_avatar
              FROM products p JOIN users u ON p.seller_id = u.id
-             WHERE p.is_verified = FALSE AND p.status = 'active'
+             WHERE COALESCE(p.is_verified, FALSE) = FALSE AND p.status = 'active'
              ORDER BY p.created_at ASC
              LIMIT $1 OFFSET $2`,
             [limit, offset]
