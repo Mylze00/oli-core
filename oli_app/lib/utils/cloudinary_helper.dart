@@ -32,6 +32,19 @@ class CloudinaryHelper {
     return '${before}c_fill,w_$width,h_$height,q_auto,f_auto/$afterUpload';
   }
 
+  /// Returns a card-optimized image URL — 50% quality to save data (for product cards)
+  static String card(String url, {int width = 130, int height = 130}) {
+    if (!url.contains('cloudinary.com')) return url;
+    final uploadIndex = url.indexOf('/upload/');
+    if (uploadIndex == -1) return url;
+    final afterUpload = url.substring(uploadIndex + 8);
+    if (afterUpload.startsWith('c_') || afterUpload.startsWith('w_') || afterUpload.startsWith('f_')) {
+      return url;
+    }
+    final before = url.substring(0, uploadIndex + 8);
+    return '${before}c_fill,w_$width,h_$height,q_50,f_auto/$afterUpload';
+  }
+
   /// Returns a medium-quality image URL (for product detail pages, etc.)
   static String medium(String url, {int width = 400, int height = 400}) {
     return thumbnail(url, width: width, height: height);

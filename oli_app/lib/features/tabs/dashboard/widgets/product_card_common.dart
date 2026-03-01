@@ -24,7 +24,7 @@ class DashboardProductCard extends ConsumerWidget {
     this.badgeColor,
     this.badgeOnRight = false,
     this.subtitleWidget,
-    this.width = 104,
+    this.width = 135,
     this.priceFontSize = 15,
     this.cardColor = const Color(0xFF2C2C2C),
     this.imageBackgroundColor = const Color(0xFF1A1A1A),
@@ -43,17 +43,17 @@ class DashboardProductCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            height: 100,
+            height: 130,
             child: Stack(
               children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                   child: product.images.isNotEmpty
                     ? Image.network(
-                        CloudinaryHelper.small(product.images.first),
+                        CloudinaryHelper.card(product.images.first),
                         fit: BoxFit.cover,
                         width: double.infinity,
-                        cacheWidth: 200, // ← Limite la RAM : redimensionne en décodage
+                        cacheWidth: 130, // ← Limite la RAM : redimensionne en décodage
                         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
                           if (wasSynchronouslyLoaded) return child;
                           return AnimatedOpacity(
