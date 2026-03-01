@@ -24,7 +24,7 @@ class DashboardProductCard extends ConsumerWidget {
     this.badgeColor,
     this.badgeOnRight = false,
     this.subtitleWidget,
-    this.width = 135,
+    this.width = 104,
     this.priceFontSize = 15,
     this.cardColor = const Color(0xFF2C2C2C),
     this.imageBackgroundColor = const Color(0xFF1A1A1A),
