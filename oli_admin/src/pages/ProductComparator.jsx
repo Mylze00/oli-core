@@ -21,15 +21,16 @@ const COLORS = [
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'];
 const MATERIALS = ['Coton', 'Polyester', 'Cuir', 'Soie', 'Lin', 'Laine', 'Nylon', 'Velours', 'Denim', 'Plastique', 'Métal', 'Bois', 'Céramique', 'Verre', 'Caoutchouc'];
 
-// ─── Modes livraison standards Oli ───────────────────────────────────────────
-const DELIVERY_MODES = [
-    { id: 'oli_standard', label: 'Oli Standard', time: '5-7 jours', defaultCost: 2.5 },
-    { id: 'oli_express', label: 'Oli Express', time: '1-2 jours', defaultCost: 5.0 },
-    { id: 'free', label: 'Livraison gratuite', time: '7-14 jours', defaultCost: 0 },
-    { id: 'pickup', label: 'Retrait en main propre', time: 'Sur RDV', defaultCost: 0 },
-    { id: 'moto', label: 'Livraison moto', time: 'Même jour', defaultCost: 3.0 },
-    { id: 'standard', label: 'Livraison standard', time: '3-5 jours', defaultCost: 1.5 },
-];
+// Icônes emoji pour les modes de livraison (matchent les IDs en DB)
+const DELIVERY_ICONS = {
+    oli_standard: '📦',
+    oli_express: '⚡',
+    hand_delivery: '🤝',
+    free: '🎁',
+    pick_go: '🏪',
+    moto: '🏍️',
+    maritime: '🚢',
+};
 
 // ─── Barre prix ───────────────────────────────────────────────────────────────
 function PriceBar({ value, min, max, median, avg }) {
@@ -176,23 +177,42 @@ function VariantsTab({ activeId, variants, setVariants }) {
 
 // ─── Onglet Livraison ─────────────────────────────────────────────────────────
 function DeliveryTab({ shipping, setShipping }) {
-    const isEnabled = (id) => shipping.some(s => s.id === id || s.methodId === id);
-    const getMode = (id) => shipping.find(s => s.id === id || s.methodId === id);
+    const [modes, setModes] = useState([]);
+    const [loadingModes, setLoadingModes] = useState(true);
+
+    useEffect(() => {
+        api.get('/delivery-methods')
+            .then(r => setModes(r.data || []))
+            .catch(() => setModes([]))
+            .finally(() => setLoadingModes(false));
+    }, []);
+
+    const isEnabled = (id) => shipping.some(s => (s.id || s.methodId) === id);
+    const getCost = (id) => { const s = shipping.find(s => (s.id || s.methodId) === id); return s?.cost ?? 0; };
 
     const toggle = (mode) => {
         if (isEnabled(mode.id)) {
             setShipping(prev => prev.filter(s => (s.id || s.methodId) !== mode.id));
         } else {
-            setShipping(prev => [...prev, { methodId: mode.id, id: mode.id, label: mode.label, cost: mode.defaultCost, time: mode.time }]);
+            setShipping(prev => [...prev, {
+                methodId: mode.id, id: mode.id, label: mode.label,
+                cost: parseFloat(mode.default_cost) || 0,
+                time: mode.time_label || '',
+            }]);
         }
     };
-    const updateCost = (id, val) => setShipping(prev => prev.map(s => (s.id === id || s.methodId === id) ? { ...s, cost: parseFloat(val) || 0 } : s));
+    const updateCost = (id, val) =>
+        setShipping(prev => prev.map(s => (s.id || s.methodId) === id ? { ...s, cost: parseFloat(val) || 0 } : s));
+
+    if (loadingModes) return (
+        <div className="flex justify-center py-8"><ArrowPathIcon className="h-5 w-5 animate-spin text-blue-400" /></div>
+    );
 
     return (
-        <div className="space-y-3">
-            {DELIVERY_MODES.map(mode => {
+        <div className="space-y-2">
+            {modes.map(mode => {
                 const enabled = isEnabled(mode.id);
-                const current = getMode(mode.id);
+                const icon = DELIVERY_ICONS[mode.id] || '📦';
                 return (
                     <div key={mode.id} className={`rounded-xl border transition-colors ${enabled ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-white'}`}>
                         <div className="flex items-center gap-3 p-3">
@@ -200,18 +220,25 @@ function DeliveryTab({ shipping, setShipping }) {
                                 className={`w-10 h-6 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-blue-500' : 'bg-gray-200'}`}>
                                 <div className={`w-4 h-4 bg-white rounded-full shadow m-1 transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
                             </button>
-                            <div className="flex-1">
-                                <p className={`text-sm font-semibold ${enabled ? 'text-blue-800' : 'text-gray-700'}`}>{mode.label}</p>
-                                <p className="text-xs text-gray-400">{mode.time}</p>
+                            <span className="text-xl flex-shrink-0">{icon}</span>
+                            <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-semibold truncate ${enabled ? 'text-blue-800' : 'text-gray-700'}`}>{mode.label}</p>
+                                <p className="text-xs text-gray-400">
+                                    {mode.time_label}
+                                    {mode.is_distance_based && <span className="ml-1 text-amber-500">· prix calculé/km</span>}
+                                </p>
                             </div>
-                            {enabled && (
+                            {enabled && !mode.is_distance_based && (
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                     <span className="text-xs text-gray-400">$</span>
                                     <input type="number" min="0" step="0.5"
                                         className="w-16 px-2 py-1 border border-blue-200 rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
-                                        value={current?.cost ?? mode.defaultCost}
+                                        value={getCost(mode.id)}
                                         onChange={e => updateCost(mode.id, e.target.value)} />
                                 </div>
+                            )}
+                            {enabled && mode.is_distance_based && (
+                                <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 flex-shrink-0">Auto/km</span>
                             )}
                         </div>
                     </div>
