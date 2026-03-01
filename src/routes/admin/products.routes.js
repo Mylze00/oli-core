@@ -360,4 +360,102 @@ router.patch('/:id/price', async (req, res) => {
     }
 });
 
+/**
+ * PATCH /admin/products/:id/quick-edit
+ * Édition rapide admin : nom, description, prix, shipping_options, brand_certified
+ */
+router.patch('/:id/quick-edit', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, price, shipping_options, brand_certified, brand_display_name } = req.body;
+
+        // Migration inline pour brand
+        try {
+            await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS brand_certified BOOLEAN DEFAULT FALSE`);
+            await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS brand_display_name VARCHAR(255)`);
+        } catch (me) { /* already exists */ }
+
+        // Construire la mise à jour dynamiquement
+        const fields = [];
+        const values = [];
+        let i = 1;
+
+        if (name !== undefined) { fields.push(`name = $${i++}`); values.push(name); }
+        if (description !== undefined) { fields.push(`description = $${i++}`); values.push(description); }
+        if (price !== undefined) { fields.push(`price = $${i++}`); values.push(parseFloat(price) || 0); }
+        if (shipping_options !== undefined) { fields.push(`shipping_options = $${i++}`); values.push(JSON.stringify(shipping_options)); }
+        if (brand_certified !== undefined) { fields.push(`brand_certified = $${i++}`); values.push(brand_certified); }
+        if (brand_display_name !== undefined) { fields.push(`brand_display_name = $${i++}`); values.push(brand_display_name || null); }
+
+        if (fields.length === 0) return res.status(400).json({ error: 'Rien à mettre à jour' });
+
+        fields.push(`updated_at = NOW()`);
+        values.push(id);
+
+        const result = await pool.query(
+            `UPDATE products SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`,
+            values
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Produit introuvable' });
+        res.json({ message: 'Produit mis à jour', product: result.rows[0] });
+    } catch (err) {
+        console.error('Erreur PATCH /admin/products/:id/quick-edit:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /admin/products/:id/variants
+ * Récupère les variantes d'un produit
+ */
+router.get('/:id/variants', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(
+            `SELECT id, variant_type, variant_value, price_adjustment, stock_quantity, is_active
+             FROM product_variants WHERE product_id = $1 ORDER BY variant_type, variant_value`,
+            [id]
+        );
+        res.json({ variants: result.rows });
+    } catch (err) {
+        console.error('Erreur GET variants:', err.message);
+        res.json({ variants: [] }); // Ne pas bloquer si table absente
+    }
+});
+
+/**
+ * POST /admin/products/:id/variants
+ * Ajouter ou mettre à jour une variante
+ */
+router.post('/:id/variants', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { variant_type, variant_value, price_adjustment = 0, stock_quantity = 0 } = req.body;
+        const result = await pool.query(
+            `INSERT INTO product_variants (product_id, variant_type, variant_value, price_adjustment, stock_quantity)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (product_id, variant_type, variant_value)
+             DO UPDATE SET price_adjustment = $4, stock_quantity = $5, updated_at = NOW()
+             RETURNING *`,
+            [id, variant_type, variant_value, parseFloat(price_adjustment), parseInt(stock_quantity)]
+        );
+        res.json({ variant: result.rows[0] });
+    } catch (err) {
+        console.error('Erreur POST variant:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * DELETE /admin/products/:pid/variants/:vid
+ */
+router.delete('/:pid/variants/:vid', async (req, res) => {
+    try {
+        await pool.query(`DELETE FROM product_variants WHERE id = $1 AND product_id = $2`, [req.params.vid, req.params.pid]);
+        res.json({ message: 'Variante supprimée' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
