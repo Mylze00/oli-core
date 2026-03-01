@@ -139,7 +139,7 @@ export default function PriceWorker() {
 
     // Appliquer rollback
     const applyRollback = async () => {
-        if (!window.confirm('⚠️ Rollback : remettre les prix modifiés aujourd\\'hui à $1 ? ')) return;
+        if (!window.confirm(`⚠️ Rollback : remettre les prix modifiés aujourd'hui à $1 ? `)) return;
         setLoadingKey('rollback', true);
         try {
             const res = await api.post('/api/price-strategy/rollback', {
