@@ -292,6 +292,7 @@ router.get('/unverified', async (req, res) => {
         const result = await pool.query(
             `SELECT p.id, p.name, p.price, p.images, p.category, p.description, p.status,
                     COALESCE(p.is_verified, FALSE) as is_verified, p.created_at,
+                    p.shipping_options, p.brand_certified, p.brand_display_name,
                     u.name as seller_name, u.phone as seller_phone, u.avatar_url as seller_avatar
              FROM products p JOIN users u ON p.seller_id = u.id
              WHERE COALESCE(p.is_verified, FALSE) = FALSE AND p.status = 'active'

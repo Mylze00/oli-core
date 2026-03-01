@@ -97,7 +97,7 @@ function VariantsTab({ activeId, variants, setVariants }) {
         } else {
             setLoading(true);
             try {
-                const { data } = await api.post(`/admin/products/${activeId}/variants`, { variant_type: type, variant_value: value, price_adjustment: 0, stock_quantity: 0 });
+                const { data } = await api.post(`/admin/products/${activeId}/variants`, { variant_type: type, variant_value: value, price_adjustment: 0, stock_quantity: 10 });
                 setVariants(prev => [...prev, data.variant]);
             } catch (e) { alert(e.response?.data?.error || e.message); }
             finally { setLoading(false); }
@@ -186,7 +186,30 @@ const FALLBACK_MODES = [
     { id: 'maritime', label: 'Livraison maritime', time_label: '60 jours', default_cost: 15.00, is_distance_based: false },
 ];
 
-// ─── Onglet Livraison ─────────────────────────────────────────────────────────
+// ── Calcul date de livraison estimée ──────────────────────────────────────────
+function calcDeliveryDate(timeLabel) {
+    if (!timeLabel) return null;
+    const now = new Date();
+    const label = timeLabel.toLowerCase();
+    let days = 0;
+    if (label.includes('heure')) {
+        const h = parseInt(label) || 1;
+        now.setHours(now.getHours() + h);
+        return `Aujourd'hui vers ${now.getHours()}h${String(now.getMinutes()).padStart(2, '0')}`;
+    } else if (label.includes('jour')) {
+        days = parseInt(label) || 1;
+    } else if (label.includes('distance') || label.includes('calculé')) {
+        return 'Selon la distance';
+    } else if (label.includes('rdv') || label.includes('rendez')) {
+        return 'Sur rendez-vous';
+    }
+    if (days > 0) {
+        now.setDate(now.getDate() + days);
+        return `Le ${now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+    }
+    return timeLabel;
+}
+
 function DeliveryTab({ shipping, setShipping }) {
     const [modes, setModes] = useState(FALLBACK_MODES);
 
@@ -233,7 +256,10 @@ function DeliveryTab({ shipping, setShipping }) {
                             <div className="flex-1 min-w-0">
                                 <p className={`text-sm font-semibold truncate ${enabled ? 'text-blue-800' : 'text-gray-700'}`}>{mode.label}</p>
                                 <p className="text-xs text-gray-400">
-                                    {mode.time_label}
+                                    <span className="text-gray-500">{mode.time_label}</span>
+                                    {!mode.is_distance_based && mode.time_label && (
+                                        <span className="ml-1 text-blue-400">· Arrivée : {calcDeliveryDate(mode.time_label)}</span>
+                                    )}
                                     {mode.is_distance_based && <span className="ml-1 text-amber-500">· prix calculé/km</span>}
                                 </p>
                             </div>
