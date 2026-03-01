@@ -257,16 +257,77 @@ router.get('/:id/compare', async (req, res) => {
         res.json({
             product,
             category_stats: {
-                total: parseInt(stats.total_in_category) || 0,
-                price_min: parseFloat(stats.price_min) || 0,
-                price_max: parseFloat(stats.price_max) || 0,
-                price_avg: parseFloat(stats.price_avg) || 0,
-                price_median: parseFloat(stats.price_median) || 0,
-            },
-            competitors: competitorsResult.rows,
-        });
+                competitors: competitorsResult.rows,
+            });
     } catch (err) {
         console.error('Erreur GET /admin/products/:id/compare:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * GET /admin/products/unverified
+ * File d'attente : produits non vérifiés avec stats prix catégorie
+ */
+router.get('/unverified', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = parseInt(req.query.offset) || 0;
+
+        const result = await pool.query(
+            `SELECT p.id, p.name, p.price, p.images, p.category, p.description, p.status,
+                    p.is_verified, p.created_at,
+                    u.name as seller_name, u.phone as seller_phone, u.avatar_url as seller_avatar
+             FROM products p JOIN users u ON p.seller_id = u.id
+             WHERE p.is_verified = FALSE AND p.status = 'active'
+             ORDER BY p.created_at ASC
+             LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
+
+        // Pour chaque produit, ajouter les stats prix de sa catégorie
+        const products = await Promise.all(result.rows.map(async (p) => {
+            const stats = await pool.query(
+                `SELECT MIN(price::numeric) as price_min, MAX(price::numeric) as price_max,
+                        ROUND(AVG(price::numeric), 2) as price_avg,
+                        ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price::numeric), 2) as price_median,
+                        COUNT(*) as total
+                 FROM products
+                 WHERE category = $1 AND status = 'active' AND price::numeric > 0`,
+                [p.category]
+            );
+            return { ...p, category_stats: stats.rows[0] };
+        }));
+
+        // Total non-vérifiés
+        const countResult = await pool.query(
+            `SELECT COUNT(*) as total FROM products WHERE is_verified = FALSE AND status = 'active'`
+        );
+
+        res.json({ products, total_unverified: parseInt(countResult.rows[0].total) });
+    } catch (err) {
+        console.error('Erreur GET /admin/products/unverified:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * PATCH /admin/products/:id/price
+ * Modifier le prix d'un produit (admin)
+ */
+router.patch('/:id/price', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { price } = req.body;
+        if (!price || isNaN(parseFloat(price))) return res.status(400).json({ error: 'Prix invalide' });
+        const result = await pool.query(
+            `UPDATE products SET price = $1, updated_at = NOW() WHERE id = $2 RETURNING id, name, price`,
+            [parseFloat(price), id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Produit introuvable' });
+        res.json({ message: 'Prix mis à jour', product: result.rows[0] });
+    } catch (err) {
+        console.error('Erreur PATCH /admin/products/:id/price:', err);
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });
