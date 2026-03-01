@@ -280,13 +280,14 @@ router.get('/unverified', async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const offset = parseInt(req.query.offset) || 0;
 
-        // Migration inline idempotente — assure que la colonne existe
+        // Migration inline idempotente
         try {
             await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
             await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP`);
             await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS verified_by INT`);
-        } catch (me) { /* colonne déjà existante */ }
+        } catch (me) { /* already exists */ }
 
+        // Produits non vérifiés (actifs)
         const result = await pool.query(
             `SELECT p.id, p.name, p.price, p.images, p.category, p.description, p.status,
                     COALESCE(p.is_verified, FALSE) as is_verified, p.created_at,
@@ -298,29 +299,43 @@ router.get('/unverified', async (req, res) => {
             [limit, offset]
         );
 
-        // Pour chaque produit, ajouter les stats prix de sa catégorie
+        // Stats par catégorie — prix safe via regexp (ignore non-numériques)
         const products = await Promise.all(result.rows.map(async (p) => {
-            const stats = await pool.query(
-                `SELECT MIN(price::numeric) as price_min, MAX(price::numeric) as price_max,
+            try {
+                const stats = await pool.query(
+                    `SELECT
+                        MIN(price::numeric) as price_min,
+                        MAX(price::numeric) as price_max,
                         ROUND(AVG(price::numeric), 2) as price_avg,
                         ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price::numeric), 2) as price_median,
                         COUNT(*) as total
-                 FROM products
-                 WHERE category = $1 AND status = 'active' AND price::numeric > 0`,
-                [p.category]
-            );
-            return { ...p, category_stats: stats.rows[0] };
+                     FROM products
+                     WHERE category = $1
+                       AND status = 'active'
+                       AND price ~ '^[0-9]+(\\.?[0-9]*)$'
+                       AND price::numeric > 0`,
+                    [p.category]
+                );
+                return { ...p, category_stats: stats.rows[0] || null };
+            } catch (se) {
+                console.warn(`Stats error for category ${p.category}:`, se.message);
+                return { ...p, category_stats: null };
+            }
         }));
 
-        // Total non-vérifiés
-        const countResult = await pool.query(
-            `SELECT COUNT(*) as total FROM products WHERE is_verified = FALSE AND status = 'active'`
-        );
+        // Comptage total
+        let total_unverified = 0;
+        try {
+            const countResult = await pool.query(
+                `SELECT COUNT(*) as total FROM products WHERE COALESCE(is_verified, FALSE) = FALSE AND status = 'active'`
+            );
+            total_unverified = parseInt(countResult.rows[0].total);
+        } catch (ce) { /* ignore */ }
 
-        res.json({ products, total_unverified: parseInt(countResult.rows[0].total) });
+        res.json({ products, total_unverified });
     } catch (err) {
-        console.error('Erreur GET /admin/products/unverified:', err);
-        res.status(500).json({ error: 'Erreur serveur' });
+        console.error('Erreur GET /admin/products/unverified:', err.message);
+        res.status(500).json({ error: err.message });
     }
 });
 
