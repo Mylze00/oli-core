@@ -444,18 +444,27 @@ export default function ProductComparator() {
                     {/* Header */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex-shrink-0">
                         <div className="flex">
-                            <div className="w-32 h-32 flex-shrink-0 bg-gray-100 overflow-hidden">
-                                {img && <img src={img} alt="" className="w-full h-full object-cover"
-                                    onError={e => { e.target.onerror = null; e.target.style.opacity = '0'; }} />}
+                            {/* Image produit avec fallback */}
+                            <div className="w-32 h-32 flex-shrink-0 bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden relative flex items-center justify-center">
+                                {img
+                                    ? <img src={img} alt="" className="w-full h-full object-cover absolute inset-0"
+                                        onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }} />
+                                    : null}
+                                {/* Fallback icône si pas d'image ou image cassée */}
+                                <span className="text-4xl select-none">🛍️</span>
                             </div>
                             <div className="p-4 flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0">
                                         <h2 className="text-sm font-bold text-gray-900 truncate">{active.name}</h2>
                                         <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                                            <TagIcon className="h-3 w-3" />{active.category}
+                                            <TagIcon className="h-3 w-3" />
+                                            <span>{active.category}</span>
                                             <span className="mx-1">·</span>
-                                            <UserIcon className="h-3 w-3" />{active.seller_name}
+                                            <UserIcon className="h-3 w-3" />
+                                            <span className="font-medium text-gray-600">
+                                                {active.seller_name || active.seller_phone || 'Vendeur'}
+                                            </span>
                                         </p>
                                     </div>
                                     <span className="text-lg font-bold text-blue-600 flex-shrink-0">${parseFloat(active.price || 0).toFixed(2)}</span>
