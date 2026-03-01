@@ -128,10 +128,10 @@ class _OliBottomNav extends StatelessWidget {
             child: Container(
               height: 68,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.07),
+                color: Colors.black.withOpacity(0.50),
                 borderRadius: BorderRadius.circular(40),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.12),
+                  color: Colors.black.withOpacity(0.30),
                   width: 1,
                 ),
               ),
