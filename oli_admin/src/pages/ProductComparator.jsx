@@ -97,7 +97,7 @@ function VariantsTab({ activeId, variants, setVariants }) {
         } else {
             setLoading(true);
             try {
-                const { data } = await api.post(`/admin/products/${activeId}/variants`, { variant_type: type, variant_value: value, price_adjustment: 0, stock_quantity: 10 });
+                const { data } = await api.post(`/admin/products/${activeId}/variants`, { variant_type: type, variant_value: value, price_adjustment: 0, stock_quantity: 20 });
                 setVariants(prev => [...prev, data.variant]);
             } catch (e) { alert(e.response?.data?.error || e.message); }
             finally { setLoading(false); }
