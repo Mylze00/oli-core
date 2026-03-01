@@ -35,12 +35,12 @@ function PriceBar({ value, min, max, median, avg }) {
 }
 
 // ─── Carte file ───────────────────────────────────────────────────────────────
-function QueueCard({ product, isActive, skipped, onClick }) {
+function QueueCard({ product, isActive, onClick }) {
     const img = product.images?.[0] ? getImageUrl(product.images[0]) : null;
     return (
         <button onClick={onClick}
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition text-left border
-                ${isActive ? 'bg-blue-50 border-blue-200' : skipped ? 'opacity-40 border-transparent' : 'hover:bg-gray-50 border-transparent'}`}>
+                ${isActive ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-transparent'}`}>
             <div className="w-9 h-9 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
                 {img ? <img src={img} alt="" className="w-full h-full object-cover"
                     onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }} /> : null}
@@ -66,16 +66,15 @@ const TABS = [
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function ProductComparator() {
     const [queue, setQueue] = useState([]);
-    const [skipped, setSkipped] = useState(new Set());
+    const [queueIdx, setQueueIdx] = useState(0);  // index courant dans queue
     const [totalUnverified, setTotal] = useState(0);
-    const [activeId, setActiveId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('infos');
     const [saving, setSaving] = useState(false);
     const [verifying, setVerifying] = useState(false);
     const [successId, setSuccessId] = useState(null);
-    const [offset, setOffset] = useState(0);
+    const [pageOffset, setPageOffset] = useState(0);
     const [variants, setVariants] = useState([]);
     const [variantsLoading, setVL] = useState(false);
 
@@ -84,33 +83,43 @@ export default function ProductComparator() {
     const [shipping, setShipping] = useState([]);
     const [newVariant, setNewVariant] = useState({ variant_type: 'color', variant_value: '', price_adjustment: 0, stock_quantity: 0 });
 
-    const active = queue.find(p => p.id === activeId) || null;
+    // Produit courant
+    const active = queue[queueIdx] || null;
+    const activeId = active?.id || null;
     const stats = active?.category_stats || null;
     const img = active?.images?.[0] ? getImageUrl(active.images[0]) : null;
 
-    // ── Charger file ─────────────────────────────────────────────────────────
-    const loadQueue = useCallback(async (currentOffset = 0) => {
+    // ── Charger la file ───────────────────────────────────────────────────────
+    const loadQueue = useCallback(async (offset = 0, startIdx = 0) => {
         setLoading(true); setError(null);
         try {
-            const { data } = await api.get(`/admin/products/unverified?limit=10&offset=${currentOffset}`);
+            const { data } = await api.get(`/admin/products/unverified?limit=10&offset=${offset}`);
             if (!data || data.error) throw new Error(data?.error || 'Erreur API');
-            setQueue(data.products || []);
+            const products = data.products || [];
+            setQueue(products);
             setTotal(data.total_unverified || 0);
-            if (data.products?.length > 0) selectProduct(data.products[0]);
+            setQueueIdx(Math.min(startIdx, Math.max(0, products.length - 1)));
+            if (products.length > 0) applyProduct(products[Math.min(startIdx, products.length - 1)]);
+            else setForm({ name: '', description: '', price: '', brand_certified: false, brand_display_name: '' });
         } catch (e) { setError(e.response?.data?.error || e.message); }
         finally { setLoading(false); }
     }, []);
 
-    useEffect(() => { loadQueue(0); }, [loadQueue]);
-
-    // ── Sélectionner produit ──────────────────────────────────────────────────
-    const selectProduct = (p) => {
-        setActiveId(p.id);
+    // Applique les données d'un produit dans le formulaire
+    const applyProduct = (p) => {
+        if (!p) return;
         setForm({ name: p.name || '', description: p.description || '', price: p.price || '', brand_certified: p.brand_certified || false, brand_display_name: p.brand_display_name || '' });
         setShipping(p.shipping_options || []);
         setActiveTab('infos');
         setVariants([]);
     };
+
+    useEffect(() => { loadQueue(0, 0); }, [loadQueue]);
+
+    // Appliquer le produit quand l'index change
+    useEffect(() => {
+        if (queue[queueIdx]) applyProduct(queue[queueIdx]);
+    }, [queueIdx, queue]);
 
     // Charger variantes quand onglet actif
     useEffect(() => {
@@ -122,54 +131,61 @@ export default function ProductComparator() {
             .finally(() => setVL(false));
     }, [activeTab, activeId]);
 
-    // ── Skip ─────────────────────────────────────────────────────────────────
+    // ── Skip : avancer dans la file sans vérifier ────────────────────────────
     const skip = () => {
-        if (!activeId) return;
-        const newSkipped = new Set(skipped).add(activeId);
-        setSkipped(newSkipped);
-        const nextProduct = queue.find(p => !newSkipped.has(p.id) && p.id !== activeId);
-        if (nextProduct) selectProduct(nextProduct);
+        const nextIdx = queueIdx + 1;
+        if (nextIdx < queue.length) {
+            setQueueIdx(nextIdx);
+        } else {
+            // Fin de la page — recharger la suivante
+            const newOffset = pageOffset + 10;
+            setPageOffset(newOffset);
+            loadQueue(newOffset, 0);
+        }
     };
 
-    // ── Sauvegarder & Vérifier ───────────────────────────────────────────────
+    // ── Sauvegarde via quick-edit ─────────────────────────────────────────────
     const save = async () => {
-        if (!active) return;
+        if (!activeId) return;
         setSaving(true);
         try {
             await api.patch(`/admin/products/${activeId}/quick-edit`, {
-                name: form.name,
-                description: form.description,
-                price: form.price,
-                shipping_options: shipping,
-                brand_certified: form.brand_certified,
+                name: form.name, description: form.description, price: form.price,
+                shipping_options: shipping, brand_certified: form.brand_certified,
                 brand_display_name: form.brand_display_name || null,
             });
         } catch (e) { alert('Erreur sauvegarde: ' + (e.response?.data?.error || e.message)); }
         finally { setSaving(false); }
     };
 
+    // ── Vérifier et passer au suivant ─────────────────────────────────────────
     const verifyAndNext = async () => {
-        if (!active) return;
+        if (!activeId) return;
         setVerifying(true);
         try {
             await save();
             await api.patch(`/admin/products/${activeId}/verify`);
             setSuccessId(activeId);
+            setTotal(t => Math.max(0, t - 1));
+
             setTimeout(() => {
                 setSuccessId(null);
-                const newQueue = queue.filter(p => p.id !== activeId);
-                const newSkipped = new Set(skipped); newSkipped.delete(activeId);
-                setSkipped(newSkipped);
-                setTotal(t => Math.max(0, t - 1));
-                if (newQueue.length <= 2) { const no = offset + 10; setOffset(no); loadQueue(no); }
-                else {
-                    const next = newQueue.find(p => !newSkipped.has(p.id));
-                    setQueue(newQueue);
-                    if (next) selectProduct(next);
-                    else { setQueue(newQueue); setActiveId(null); }
-                }
+                // Retirer le produit du tableau
+                setQueue(prev => {
+                    const newQ = prev.filter(p => p.id !== activeId);
+                    // Rester au même index (qui pointe maintenant sur le suivant)
+                    const newIdx = Math.min(queueIdx, Math.max(0, newQ.length - 1));
+                    setQueueIdx(newIdx);
+                    if (newQ.length === 0) {
+                        // Plus rien → recharger
+                        const newOffset = pageOffset + 10;
+                        setPageOffset(newOffset);
+                        loadQueue(newOffset, 0);
+                    }
+                    return newQ;
+                });
             }, 500);
-        } catch (e) { alert('Erreur vérification'); }
+        } catch (e) { alert('Erreur vérification: ' + (e.response?.data?.error || e.message)); }
         finally { setVerifying(false); }
     };
 
@@ -227,9 +243,9 @@ export default function ProductComparator() {
                     <span className="text-xs bg-blue-100 text-blue-600 font-semibold px-2 py-0.5 rounded-full">{totalUnverified}</span>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-                    {queue.map(p => (
+                    {queue.map((p, idx) => (
                         <div key={p.id} className={`transition-all duration-400 ${successId === p.id ? 'opacity-0 scale-95 h-0 overflow-hidden' : ''}`}>
-                            <QueueCard product={p} isActive={p.id === activeId} skipped={skipped.has(p.id)} onClick={() => selectProduct(p)} />
+                            <QueueCard product={p} isActive={idx === queueIdx} onClick={() => setQueueIdx(idx)} />
                         </div>
                     ))}
                 </div>
