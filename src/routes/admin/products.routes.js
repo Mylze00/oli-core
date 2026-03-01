@@ -304,16 +304,16 @@ router.get('/unverified', async (req, res) => {
             try {
                 const stats = await pool.query(
                     `SELECT
-                        MIN(price::numeric) as price_min,
-                        MAX(price::numeric) as price_max,
-                        ROUND(AVG(price::numeric), 2) as price_avg,
-                        ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price::numeric), 2) as price_median,
+                        ROUND(MIN(CAST(price AS NUMERIC)), 2) as price_min,
+                        ROUND(MAX(CAST(price AS NUMERIC)), 2) as price_max,
+                        ROUND(AVG(CAST(price AS NUMERIC)), 2) as price_avg,
+                        ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY CAST(price AS NUMERIC))::NUMERIC, 2) as price_median,
                         COUNT(*) as total
                      FROM products
                      WHERE category = $1
                        AND status = 'active'
-                       AND price ~ '^[0-9]+(\\.?[0-9]*)$'
-                       AND price::numeric > 0`,
+                       AND price ~ '^[0-9]+(\.?[0-9]*)$'
+                       AND CAST(price AS NUMERIC) > 0`,
                     [p.category]
                 );
                 return { ...p, category_stats: stats.rows[0] || null };
