@@ -47,14 +47,12 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _switchToMarket() => setState(() => _currentIndex = 2);
 
   void _onTabSelected(int index) {
-    // index 2 = bouton Vendre (central)
     if (index == 2) {
       _openPublishPage();
       return;
     }
     final adjusted = index > 2 ? index - 1 : index;
 
-    // Si l'utilisateur navigue vers l'onglet Messages → refresh des non-lus
     if (adjusted == 1) {
       ref.read(unreadCountProvider.notifier).refresh();
     }
@@ -96,7 +94,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Custom bottom nav bar — style glassmorphism pill (WhatsApp-inspired)
+// Custom bottom nav bar — glassmorphism pill, labels fixes en bas
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _OliBottomNav extends StatelessWidget {
@@ -112,12 +110,10 @@ class _OliBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // barIndex = position dans la barre (0..4)
-    // pageIndex = index dans _pages (-1 = bouton Vendre)
     final items = [
       _NavItem(icon: Icons.home_filled,        label: 'nav.home'.tr(),    barIndex: 0, pageIndex: 0),
       _NavItem(icon: Icons.chat_bubble_outline, label: 'nav.chats'.tr(),   barIndex: 1, pageIndex: 1, badge: unreadMessages),
-      _NavItem(icon: null,                     label: ' ',                barIndex: 2, pageIndex: -1, isSell: true),
+      _NavItem(icon: null,                     label: 'Vendre',           barIndex: 2, pageIndex: -1, isSell: true),
       _NavItem(icon: Icons.store_outlined,     label: 'nav.market'.tr(),  barIndex: 3, pageIndex: 2),
       _NavItem(icon: Icons.person_outline,     label: 'nav.profile'.tr(), barIndex: 4, pageIndex: 3),
     ];
@@ -143,7 +139,7 @@ class _OliBottomNav extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: items.map((item) {
                   if (item.isSell) {
-                    return _SellButton(onTap: () => onTap(item.barIndex));
+                    return _SellButton(label: item.label, onTap: () => onTap(item.barIndex));
                   }
                   final isSelected = item.pageIndex == currentIndex;
                   return _NavTabItem(
@@ -179,6 +175,7 @@ class _NavItem {
   });
 }
 
+// Onglet standard : icône + label fixe en bas
 class _NavTabItem extends StatelessWidget {
   final _NavItem item;
   final bool isSelected;
@@ -192,61 +189,44 @@ class _NavTabItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final color = isSelected ? Colors.white : Colors.white54;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 280),
+        duration: const Duration(milliseconds: 250),
         curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16 : 10,
-          vertical: 8,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withOpacity(0.14)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
+          color: isSelected ? Colors.white.withOpacity(0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(28),
         ),
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Icône avec badge
             Stack(
               clipBehavior: Clip.none,
               children: [
-                Icon(
-                  item.icon,
-                  color: isSelected ? Colors.white : Colors.white54,
-                  size: isSelected ? 24 : 22,
-                ),
+                Icon(item.icon, color: color, size: 22),
                 if (item.badge > 0)
                   Positioned(
-                    top: -6,
+                    top: -5,
                     right: -8,
                     child: _Badge(count: item.badge),
                   ),
               ],
             ),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 280),
-              curve: Curves.easeOutCubic,
-              child: isSelected
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(width: 6),
-                        Text(
-                          item.label,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    )
-                  : const SizedBox.shrink(),
+            const SizedBox(height: 3),
+            // Label toujours visible
+            Text(
+              item.label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+              ),
             ),
           ],
         ),
@@ -256,7 +236,7 @@ class _NavTabItem extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Badge vert avec nombre
+// Badge vert
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _Badge extends StatelessWidget {
@@ -266,39 +246,36 @@ class _Badge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = count > 99 ? '99+' : count.toString();
-    return AnimatedScale(
-      scale: count > 0 ? 1.0 : 0.0,
-      duration: const Duration(milliseconds: 200),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-        decoration: BoxDecoration(
-          color: const Color(0xFF25D366), // Vert WhatsApp
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.black, width: 1.5),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: const Color(0xFF25D366),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black, width: 1.5),
+      ),
+      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          height: 1.2,
         ),
-        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            height: 1.1,
-          ),
-          textAlign: TextAlign.center,
-        ),
+        textAlign: TextAlign.center,
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bouton central "Vendre" — flip 3D animé avec couleurs changeantes
+// Bouton "Vendre" central — flip 3D stable, sans bordure, label fixe en bas
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SellButton extends StatefulWidget {
+  final String label;
   final VoidCallback onTap;
-  const _SellButton({required this.onTap});
+  const _SellButton({required this.label, required this.onTap});
 
   @override
   State<_SellButton> createState() => _SellButtonState();
@@ -353,53 +330,57 @@ class _SellButtonState extends State<_SellButton>
   @override
   Widget build(BuildContext context) {
     final color = _colors[_colorIdx];
+
     return GestureDetector(
       onTap: widget.onTap,
-      child: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (_, __) {
-          final angle = _ctrl.value * 3.14159;
-          return Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.001)
-              ..rotateY(angle),
-            child: _showBack
-                ? Transform(
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Zone icône fixe 22×22 — on anime SEULEMENT l'icône à l'intérieur
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: AnimatedBuilder(
+                animation: _ctrl,
+                builder: (_, __) {
+                  final angle = _ctrl.value * 3.14159;
+                  // L'icône tourne, mais le SizedBox reste fixe → pas de déplacement
+                  return Transform(
                     alignment: Alignment.center,
-                    transform: Matrix4.identity()..rotateY(3.14159),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: color.withOpacity(0.5), width: 1),
-                      ),
-                      child: Text(
-                        'Vendre',
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'olive_palm',
-                        ),
-                      ),
-                    ),
-                  )
-                : Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                          color: color.withOpacity(0.5), width: 1),
-                    ),
-                    child: Icon(Icons.add, color: color, size: 22),
-                  ),
-          );
-        },
+                    transform: Matrix4.identity()
+                      ..setEntry(3, 2, 0.001)
+                      ..rotateY(angle),
+                    child: _showBack
+                        ? Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.identity()..rotateY(3.14159),
+                            child: Icon(
+                              Icons.sell_outlined,
+                              color: color,
+                              size: 22,
+                            ),
+                          )
+                        : Icon(Icons.add, color: color, size: 22),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 3),
+            // Label fixe — ne bouge pas, ne tourne pas
+            Text(
+              widget.label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'olive_palm',
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
