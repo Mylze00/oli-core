@@ -3,17 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { getImageUrl } from '../utils/image';
 import { StarIcon as StarOutline, TrashIcon, XMarkIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import {
-    StarIcon,
-    CubeIcon,
-    CheckCircleIcon,
-    NoSymbolIcon,
-    FireIcon,
-    MagnifyingGlassIcon,
-    TagIcon,
-    EyeIcon,
-    ChevronRightIcon,
-} from '@heroicons/react/24/solid';
+import { StarIcon, CubeIcon, CheckCircleIcon, NoSymbolIcon, FireIcon, MagnifyingGlassIcon, TagIcon, EyeIcon, ChevronRightIcon, CheckBadgeIcon as CheckBadgeSolid } from '@heroicons/react/24/solid';
 
 function StatCard({ label, value, icon: Icon, color }) {
     const c = { blue: 'bg-blue-50 text-blue-600', green: 'bg-green-50 text-green-600', red: 'bg-red-50 text-red-600', amber: 'bg-amber-50 text-amber-600', rose: 'bg-rose-50 text-rose-600' };
@@ -44,7 +34,7 @@ function FilterPill({ label, count, active, onClick }) {
 /* ═══════════════════════════════════
    PRODUCT DETAIL MODAL
    ═══════════════════════════════════ */
-function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onToggleGoodDeal, onDelete, onHide }) {
+function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onToggleGoodDeal, onDelete, onHide, onToggleVerify }) {
     if (!product) return null;
 
     const allImages = [];
@@ -100,6 +90,7 @@ function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onT
                             )}
                             {product.is_featured && <span className="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-semibold flex items-center"><StarIcon className="h-3 w-3 mr-1" />Vedette</span>}
                             {product.is_good_deal && <span className="text-xs bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-semibold flex items-center"><FireIcon className="h-3 w-3 mr-1" />Bon Deal</span>}
+                            {product.is_verified && <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold flex items-center"><CheckBadgeSolid className="h-3 w-3 mr-1" />Vérifié</span>}
                         </div>
                     </div>
 
@@ -149,7 +140,7 @@ function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onT
                     </p>
 
                     {/* Actions */}
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex gap-2 pt-2 flex-wrap">
                         <button onClick={() => { onToggleFeatured(product); }}
                             className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.is_featured ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         >
@@ -167,6 +158,12 @@ function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onT
                         >
                             <EyeSlashIcon className="h-4 w-4" />
                             {product.status === 'hidden' ? 'Afficher' : 'Masquer'}
+                        </button>
+                        <button onClick={() => { onToggleVerify(product); }}
+                            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.is_verified ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                            <CheckBadgeSolid className="h-4 w-4" />
+                            {product.is_verified ? '✓ Vérifié' : 'Vérifier'}
                         </button>
                         <button onClick={() => { onDelete(product.id); onClose(); }}
                             className="py-2.5 px-4 rounded-xl text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition flex items-center gap-2"
@@ -253,6 +250,16 @@ export default function Products() {
         } catch (err) { alert('Erreur'); }
     };
 
+    const toggleVerify = async (product) => {
+        try {
+            const { data } = await api.patch(`/admin/products/${product.id}/verify`);
+            const newVal = data.product.is_verified;
+            const updated = products.map(p => p.id === product.id ? { ...p, is_verified: newVal } : p);
+            setProducts(updated);
+            if (selectedProduct?.id === product.id) setSelectedProduct({ ...product, is_verified: newVal });
+        } catch (err) { alert('Erreur vérification'); }
+    };
+
     const handleHide = async (product) => {
         try {
             const { data } = await api.patch(`/admin/products/${product.id}/toggle-visibility`);
@@ -302,6 +309,7 @@ export default function Products() {
                     getDisplayImage={getDisplayImage}
                     onToggleFeatured={toggleFeatured}
                     onToggleGoodDeal={toggleGoodDeal}
+                    onToggleVerify={toggleVerify}
                     onDelete={handleDelete}
                     onHide={handleHide}
                 />
@@ -337,6 +345,7 @@ export default function Products() {
                 <FilterPill label="👁 Masqués" count={stats.hidden} active={filter === 'hidden'} onClick={() => setFilter('hidden')} />
                 <FilterPill label="⛔ Bannis" count={stats.banned} active={filter === 'banned'} onClick={() => setFilter('banned')} />
                 <FilterPill label="⭐ En avant" count={stats.featured} active={filter === 'featured'} onClick={() => setFilter('featured')} />
+                <FilterPill label="✅ Vérifiés" active={filter === 'verified'} onClick={() => setFilter('verified')} />
             </div>
 
             {/* Products Table */}
@@ -428,7 +437,10 @@ export default function Products() {
                                     {product.is_good_deal && (
                                         <span className="text-xs text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full font-medium flex items-center"><FireIcon className="h-3 w-3 mr-0.5" />Deal</span>
                                     )}
-                                    {!product.is_featured && !product.is_good_deal && <span className="text-xs text-gray-300">—</span>}
+                                    {product.is_verified && (
+                                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium flex items-center"><CheckBadgeSolid className="h-3 w-3 mr-0.5" />Vérifié</span>
+                                    )}
+                                    {!product.is_featured && !product.is_good_deal && !product.is_verified && <span className="text-xs text-gray-300">—</span>}
                                 </div>
 
                                 {/* Date */}

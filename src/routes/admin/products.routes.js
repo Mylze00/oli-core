@@ -7,6 +7,18 @@ const router = express.Router();
 const pool = require('../../config/db');
 const { BASE_URL } = require('../../config');
 
+// ─── Migration auto au démarrage ───────────────────────────────────────────
+(async () => {
+    try {
+        await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
+        await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP`);
+        await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS verified_by INT`);
+        console.log('✅ Migration products is_verified OK');
+    } catch (e) {
+        console.warn('Migration products is_verified:', e.message);
+    }
+})();
+
 /**
  * GET /admin/products
  * Liste tous les produits avec stats globales
@@ -177,11 +189,86 @@ router.patch('/:id/good-deal', async (req, res) => {
 });
 
 /**
- * GET /admin/products/reported
+ * PATCH /admin/products/:id/verify
+ * Toggle étiquette "Produit Vérifié" (is_verified)
  */
-router.get('/reported', async (req, res) => {
-    try { res.json([]); }
-    catch (err) { console.error('Erreur GET /admin/products/reported:', err); res.status(500).json({ error: 'Erreur serveur' }); }
+router.patch('/:id/verify', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const adminId = req.user.id;
+        const current = await pool.query('SELECT is_verified FROM products WHERE id = $1', [id]);
+        if (current.rows.length === 0) return res.status(404).json({ error: 'Produit introuvable' });
+        const newVal = !current.rows[0].is_verified;
+        const result = await pool.query(
+            `UPDATE products SET is_verified = $1, verified_at = $2, verified_by = $3, updated_at = NOW() WHERE id = $4 RETURNING id, name, is_verified, verified_at`,
+            [newVal, newVal ? new Date() : null, newVal ? adminId : null, id]
+        );
+        res.json({
+            message: newVal ? '✅ Produit vérifié' : 'Vérification retirée',
+            product: result.rows[0]
+        });
+    } catch (err) {
+        console.error('Erreur PATCH /admin/products/:id/verify:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * GET /admin/products/:id/compare
+ * Comparateur de prix : stats catégorie + 10 concurrents
+ */
+router.get('/:id/compare', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Produit cible
+        const prodResult = await pool.query(
+            `SELECT p.*, u.name as seller_name, u.phone as seller_phone, u.avatar_url as seller_avatar
+             FROM products p JOIN users u ON p.seller_id = u.id WHERE p.id = $1`,
+            [id]
+        );
+        if (prodResult.rows.length === 0) return res.status(404).json({ error: 'Produit introuvable' });
+        const product = prodResult.rows[0];
+
+        // Stats de prix pour la même catégorie
+        const statsResult = await pool.query(
+            `SELECT
+               COUNT(*) as total_in_category,
+               MIN(price::numeric) as price_min,
+               MAX(price::numeric) as price_max,
+               ROUND(AVG(price::numeric), 2) as price_avg,
+               ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price::numeric), 2) as price_median
+             FROM products
+             WHERE category = $1 AND status = 'active' AND price::numeric > 0`,
+            [product.category]
+        );
+        const stats = statsResult.rows[0];
+
+        // 10 concurrents les plus proches en prix
+        const competitorsResult = await pool.query(
+            `SELECT p.id, p.name, p.price, p.images, p.is_verified, u.name as seller_name
+             FROM products p JOIN users u ON p.seller_id = u.id
+             WHERE p.category = $1 AND p.status = 'active' AND p.id != $2
+             ORDER BY ABS(p.price::numeric - $3::numeric) ASC
+             LIMIT 10`,
+            [product.category, id, product.price]
+        );
+
+        res.json({
+            product,
+            category_stats: {
+                total: parseInt(stats.total_in_category) || 0,
+                price_min: parseFloat(stats.price_min) || 0,
+                price_max: parseFloat(stats.price_max) || 0,
+                price_avg: parseFloat(stats.price_avg) || 0,
+                price_median: parseFloat(stats.price_median) || 0,
+            },
+            competitors: competitorsResult.rows,
+        });
+    } catch (err) {
+        console.error('Erreur GET /admin/products/:id/compare:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
 });
 
 module.exports = router;

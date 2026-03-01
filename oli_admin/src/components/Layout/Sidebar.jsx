@@ -16,6 +16,7 @@ import {
     CircleStackIcon, // 🗄️ Icone pour Base de données
     GiftIcon, // 📦 Icone pour Demandes Produit
     CpuChipIcon, // 🤖 Icone pour Worker Prix
+    ChartBarIcon, // 🔍 Comparateur Prix
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -34,6 +35,7 @@ const navigation = [
     { name: 'Support', href: '/support', icon: ChatBubbleLeftRightIcon }, // 🆕
     { name: 'Certifications', href: '/verifications', icon: CheckBadgeIcon }, // 🆕
     { name: 'Worker Prix', href: '/price-worker', icon: CpuChipIcon }, // 🤖
+    { name: 'Comparateur Prix', href: '/product-comparator', icon: ChartBarIcon }, // 🔍
     { name: 'Base de données', href: '/database', icon: CircleStackIcon }, // 🗄️
 ];
 

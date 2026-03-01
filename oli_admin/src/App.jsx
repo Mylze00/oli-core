@@ -19,6 +19,7 @@ import DatabaseManager from './pages/DatabaseManager'; // 🗄️ Gestion DB
 import Delivery from './pages/Delivery'; // 🚚 Livreurs
 import Finances from './pages/Finances'; // 💰 Finances
 import PriceWorker from './pages/PriceWorker'; // 🤖 Worker Prix
+import ProductComparator from './pages/ProductComparator'; // 🔍 Comparateur Prix
 
 function App() {
   return (
@@ -45,6 +46,7 @@ function App() {
             <Route path="/delivery" element={<Delivery />} /> {/* 🚚 */}
             <Route path="/finances" element={<Finances />} /> {/* 💰 */}
             <Route path="/price-worker" element={<PriceWorker />} /> {/* 🤖 */}
+            <Route path="/product-comparator" element={<ProductComparator />} /> {/* 🔍 */}
           </Route>
         </Route>
 
