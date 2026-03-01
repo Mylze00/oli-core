@@ -4,9 +4,32 @@ import { getImageUrl } from '../utils/image';
 import {
     CheckBadgeIcon, ArrowPathIcon, TagIcon, UserIcon,
     PencilSquareIcon, TruckIcon, SwatchIcon, ArrowRightIcon,
-    PlusIcon, TrashIcon, InboxIcon, StarIcon,
+    PlusIcon, TrashIcon, InboxIcon, StarIcon, EyeSlashIcon, XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { CheckBadgeIcon as CheckBadgeSolid } from '@heroicons/react/24/solid';
+
+// ─── Constantes variantes ─────────────────────────────────────────────────────
+const COLORS = [
+    { name: 'Rouge', hex: '#ef4444' }, { name: 'Bleu', hex: '#3b82f6' },
+    { name: 'Vert', hex: '#22c55e' }, { name: 'Jaune', hex: '#eab308' },
+    { name: 'Orange', hex: '#f97316' }, { name: 'Violet', hex: '#a855f7' },
+    { name: 'Rose', hex: '#ec4899' }, { name: 'Noir', hex: '#1f2937' },
+    { name: 'Blanc', hex: '#f3f4f6' }, { name: 'Gris', hex: '#9ca3af' },
+    { name: 'Marron', hex: '#92400e' }, { name: 'Beige', hex: '#d4a47a' },
+    { name: 'Gold', hex: '#f59e0b' }, { name: 'Argent', hex: '#cbd5e1' },
+];
+const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'];
+const MATERIALS = ['Coton', 'Polyester', 'Cuir', 'Soie', 'Lin', 'Laine', 'Nylon', 'Velours', 'Denim', 'Plastique', 'Métal', 'Bois', 'Céramique', 'Verre', 'Caoutchouc'];
+
+// ─── Modes livraison standards Oli ───────────────────────────────────────────
+const DELIVERY_MODES = [
+    { id: 'oli_standard', label: 'Oli Standard', time: '5-7 jours', defaultCost: 2.5 },
+    { id: 'oli_express', label: 'Oli Express', time: '1-2 jours', defaultCost: 5.0 },
+    { id: 'free', label: 'Livraison gratuite', time: '7-14 jours', defaultCost: 0 },
+    { id: 'pickup', label: 'Retrait en main propre', time: 'Sur RDV', defaultCost: 0 },
+    { id: 'moto', label: 'Livraison moto', time: 'Même jour', defaultCost: 3.0 },
+    { id: 'standard', label: 'Livraison standard', time: '3-5 jours', defaultCost: 1.5 },
+];
 
 // ─── Barre prix ───────────────────────────────────────────────────────────────
 function PriceBar({ value, min, max, median, avg }) {
@@ -16,7 +39,7 @@ function PriceBar({ value, min, max, median, avg }) {
     const avgPct = Math.min(100, Math.max(0, ((avg - min) / range) * 100));
     return (
         <div>
-            <div className="relative h-4 bg-gray-100 rounded-full overflow-visible mb-1">
+            <div className="relative h-3 bg-gray-100 rounded-full mb-1">
                 <div className="h-full rounded-full bg-blue-400 transition-all" style={{ width: `${pct}%` }} />
                 <div className="absolute top-0 h-full w-0.5 bg-amber-500" style={{ left: `${medPct}%` }} />
                 <div className="absolute top-0 h-full w-0.5 bg-green-500" style={{ left: `${avgPct}%` }} />
@@ -25,10 +48,6 @@ function PriceBar({ value, min, max, median, avg }) {
                 <span>${parseFloat(min || 0).toFixed(2)}</span>
                 <span className="font-bold text-blue-600">${parseFloat(value || 0).toFixed(2)}</span>
                 <span>${parseFloat(max || 0).toFixed(2)}</span>
-            </div>
-            <div className="flex gap-3 mt-1 text-xs text-gray-400">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-400 rounded-full" />Méd. ${parseFloat(median || 0).toFixed(2)}</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-500 rounded-full" />Moy. ${parseFloat(avg || 0).toFixed(2)}</span>
             </div>
         </div>
     );
@@ -42,8 +61,8 @@ function QueueCard({ product, isActive, onClick }) {
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition text-left border
                 ${isActive ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-transparent'}`}>
             <div className="w-9 h-9 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
-                {img ? <img src={img} alt="" className="w-full h-full object-cover"
-                    onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }} /> : null}
+                {img && <img src={img} alt="" className="w-full h-full object-cover"
+                    onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }} />}
             </div>
             <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-gray-800 truncate">{product.name}</p>
@@ -63,10 +82,149 @@ const TABS = [
     { id: 'brand', label: 'Badge Brand', icon: StarIcon },
 ];
 
+// ─── Onglet Variantes ─────────────────────────────────────────────────────────
+function VariantsTab({ activeId, variants, setVariants }) {
+    const [loading, setLoading] = useState(false);
+
+    const toggleVariant = async (type, value) => {
+        const exists = variants.find(v => v.variant_type === type && v.variant_value === value);
+        if (exists) {
+            try {
+                await api.delete(`/admin/products/${activeId}/variants/${exists.id}`);
+                setVariants(prev => prev.filter(v => v.id !== exists.id));
+            } catch (e) { alert(e.response?.data?.error || e.message); }
+        } else {
+            setLoading(true);
+            try {
+                const { data } = await api.post(`/admin/products/${activeId}/variants`, { variant_type: type, variant_value: value, price_adjustment: 0, stock_quantity: 0 });
+                setVariants(prev => [...prev, data.variant]);
+            } catch (e) { alert(e.response?.data?.error || e.message); }
+            finally { setLoading(false); }
+        }
+    };
+
+    const isActive = (type, value) => variants.some(v => v.variant_type === type && v.variant_value === value);
+
+    return (
+        <div className="space-y-5">
+            {loading && <div className="flex justify-center"><ArrowPathIcon className="h-5 w-5 animate-spin text-blue-400" /></div>}
+
+            {/* Couleurs */}
+            <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Couleurs</p>
+                <div className="flex flex-wrap gap-2">
+                    {COLORS.map(c => {
+                        const active = isActive('color', c.name);
+                        return (
+                            <button key={c.name} onClick={() => toggleVariant('color', c.name)} title={c.name}
+                                className={`relative w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${active ? 'border-blue-500 scale-110 shadow-md' : 'border-gray-200'}`}
+                                style={{ backgroundColor: c.hex }}>
+                                {active && <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold drop-shadow">✓</span>}
+                            </button>
+                        );
+                    })}
+                </div>
+                {variants.filter(v => v.variant_type === 'color').length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                        {variants.filter(v => v.variant_type === 'color').map(v => (
+                            <span key={v.id} className="text-xs bg-gray-100 px-2 py-0.5 rounded-full text-gray-600">{v.variant_value}</span>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Tailles */}
+            <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Tailles</p>
+                <div className="flex flex-wrap gap-2">
+                    {SIZES.map(s => {
+                        const active = isActive('size', s);
+                        return (
+                            <button key={s} onClick={() => toggleVariant('size', s)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition
+                                    ${active ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'}`}>
+                                {s}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Matières */}
+            <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Matières</p>
+                <div className="flex flex-wrap gap-2">
+                    {MATERIALS.map(m => {
+                        const active = isActive('material', m);
+                        return (
+                            <button key={m} onClick={() => toggleVariant('material', m)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition
+                                    ${active ? 'bg-purple-600 text-white border-purple-600 shadow-sm' : 'text-gray-600 border-gray-200 hover:border-purple-300 hover:text-purple-600'}`}>
+                                {m}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {variants.length === 0 && !loading && (
+                <p className="text-xs text-gray-400 text-center py-2">Cliquez sur les éléments pour les ajouter</p>
+            )}
+        </div>
+    );
+}
+
+// ─── Onglet Livraison ─────────────────────────────────────────────────────────
+function DeliveryTab({ shipping, setShipping }) {
+    const isEnabled = (id) => shipping.some(s => s.id === id || s.methodId === id);
+    const getMode = (id) => shipping.find(s => s.id === id || s.methodId === id);
+
+    const toggle = (mode) => {
+        if (isEnabled(mode.id)) {
+            setShipping(prev => prev.filter(s => (s.id || s.methodId) !== mode.id));
+        } else {
+            setShipping(prev => [...prev, { methodId: mode.id, id: mode.id, label: mode.label, cost: mode.defaultCost, time: mode.time }]);
+        }
+    };
+    const updateCost = (id, val) => setShipping(prev => prev.map(s => (s.id === id || s.methodId === id) ? { ...s, cost: parseFloat(val) || 0 } : s));
+
+    return (
+        <div className="space-y-3">
+            {DELIVERY_MODES.map(mode => {
+                const enabled = isEnabled(mode.id);
+                const current = getMode(mode.id);
+                return (
+                    <div key={mode.id} className={`rounded-xl border transition-colors ${enabled ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                        <div className="flex items-center gap-3 p-3">
+                            <button onClick={() => toggle(mode)}
+                                className={`w-10 h-6 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-blue-500' : 'bg-gray-200'}`}>
+                                <div className={`w-4 h-4 bg-white rounded-full shadow m-1 transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                            </button>
+                            <div className="flex-1">
+                                <p className={`text-sm font-semibold ${enabled ? 'text-blue-800' : 'text-gray-700'}`}>{mode.label}</p>
+                                <p className="text-xs text-gray-400">{mode.time}</p>
+                            </div>
+                            {enabled && (
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                    <span className="text-xs text-gray-400">$</span>
+                                    <input type="number" min="0" step="0.5"
+                                        className="w-16 px-2 py-1 border border-blue-200 rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                                        value={current?.cost ?? mode.defaultCost}
+                                        onChange={e => updateCost(mode.id, e.target.value)} />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function ProductComparator() {
     const [queue, setQueue] = useState([]);
-    const [queueIdx, setQueueIdx] = useState(0);  // index courant dans queue
+    const [queueIdx, setQueueIdx] = useState(0);
     const [totalUnverified, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -77,13 +235,11 @@ export default function ProductComparator() {
     const [pageOffset, setPageOffset] = useState(0);
     const [variants, setVariants] = useState([]);
     const [variantsLoading, setVL] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
 
-    // Form state
     const [form, setForm] = useState({ name: '', description: '', price: '', brand_certified: false, brand_display_name: '' });
     const [shipping, setShipping] = useState([]);
-    const [newVariant, setNewVariant] = useState({ variant_type: 'color', variant_value: '', price_adjustment: 0, stock_quantity: 0 });
 
-    // Produit courant
     const active = queue[queueIdx] || null;
     const activeId = active?.id || null;
     const stats = active?.category_stats || null;
@@ -98,30 +254,27 @@ export default function ProductComparator() {
             const products = data.products || [];
             setQueue(products);
             setTotal(data.total_unverified || 0);
-            setQueueIdx(Math.min(startIdx, Math.max(0, products.length - 1)));
-            if (products.length > 0) applyProduct(products[Math.min(startIdx, products.length - 1)]);
+            const idx = Math.min(startIdx, Math.max(0, products.length - 1));
+            setQueueIdx(idx);
+            if (products[idx]) applyProduct(products[idx]);
             else setForm({ name: '', description: '', price: '', brand_certified: false, brand_display_name: '' });
         } catch (e) { setError(e.response?.data?.error || e.message); }
         finally { setLoading(false); }
     }, []);
 
-    // Applique les données d'un produit dans le formulaire
     const applyProduct = (p) => {
         if (!p) return;
         setForm({ name: p.name || '', description: p.description || '', price: p.price || '', brand_certified: p.brand_certified || false, brand_display_name: p.brand_display_name || '' });
         setShipping(p.shipping_options || []);
         setActiveTab('infos');
         setVariants([]);
+        setConfirmDelete(false);
     };
 
     useEffect(() => { loadQueue(0, 0); }, [loadQueue]);
+    useEffect(() => { if (queue[queueIdx]) applyProduct(queue[queueIdx]); }, [queueIdx, queue]);
 
-    // Appliquer le produit quand l'index change
-    useEffect(() => {
-        if (queue[queueIdx]) applyProduct(queue[queueIdx]);
-    }, [queueIdx, queue]);
-
-    // Charger variantes quand onglet actif
+    // Charger variantes
     useEffect(() => {
         if (activeTab !== 'variants' || !activeId) return;
         setVL(true);
@@ -131,20 +284,39 @@ export default function ProductComparator() {
             .finally(() => setVL(false));
     }, [activeTab, activeId]);
 
-    // ── Skip : avancer dans la file sans vérifier ────────────────────────────
-    const skip = () => {
-        const nextIdx = queueIdx + 1;
-        if (nextIdx < queue.length) {
+    // ── Navigation ────────────────────────────────────────────────────────────
+    const goToNext = useCallback((currentQueue, currentIdx, currentOffset) => {
+        const nextIdx = currentIdx + 1;
+        if (nextIdx < currentQueue.length) {
             setQueueIdx(nextIdx);
         } else {
-            // Fin de la page — recharger la suivante
-            const newOffset = pageOffset + 10;
+            const newOffset = currentOffset + 10;
             setPageOffset(newOffset);
             loadQueue(newOffset, 0);
         }
+    }, [loadQueue]);
+
+    const removeFromQueue = (id) => {
+        setQueue(prev => {
+            const newQ = prev.filter(p => p.id !== id);
+            const newIdx = Math.min(queueIdx, Math.max(0, newQ.length - 1));
+            setQueueIdx(newIdx);
+            if (newQ.length === 0) {
+                const newOffset = pageOffset + 10;
+                setPageOffset(newOffset);
+                loadQueue(newOffset, 0);
+            }
+            return newQ;
+        });
     };
 
-    // ── Sauvegarde via quick-edit ─────────────────────────────────────────────
+    const skip = () => {
+        const nextIdx = queueIdx + 1;
+        if (nextIdx < queue.length) setQueueIdx(nextIdx);
+        else { const no = pageOffset + 10; setPageOffset(no); loadQueue(no, 0); }
+    };
+
+    // ── Save ──────────────────────────────────────────────────────────────────
     const save = async () => {
         if (!activeId) return;
         setSaving(true);
@@ -158,7 +330,7 @@ export default function ProductComparator() {
         finally { setSaving(false); }
     };
 
-    // ── Vérifier et passer au suivant ─────────────────────────────────────────
+    // ── Verify ────────────────────────────────────────────────────────────────
     const verifyAndNext = async () => {
         if (!activeId) return;
         setVerifying(true);
@@ -167,84 +339,62 @@ export default function ProductComparator() {
             await api.patch(`/admin/products/${activeId}/verify`);
             setSuccessId(activeId);
             setTotal(t => Math.max(0, t - 1));
-
-            setTimeout(() => {
-                setSuccessId(null);
-                // Retirer le produit du tableau
-                setQueue(prev => {
-                    const newQ = prev.filter(p => p.id !== activeId);
-                    // Rester au même index (qui pointe maintenant sur le suivant)
-                    const newIdx = Math.min(queueIdx, Math.max(0, newQ.length - 1));
-                    setQueueIdx(newIdx);
-                    if (newQ.length === 0) {
-                        // Plus rien → recharger
-                        const newOffset = pageOffset + 10;
-                        setPageOffset(newOffset);
-                        loadQueue(newOffset, 0);
-                    }
-                    return newQ;
-                });
-            }, 500);
-        } catch (e) { alert('Erreur vérification: ' + (e.response?.data?.error || e.message)); }
+            setTimeout(() => { setSuccessId(null); removeFromQueue(activeId); }, 500);
+        } catch (e) { alert('Erreur: ' + (e.response?.data?.error || e.message)); }
         finally { setVerifying(false); }
     };
 
-    // ── Livraison helpers ────────────────────────────────────────────────────
-    const addShipping = () => setShipping(s => [...s, { methodId: `custom_${Date.now()}`, label: 'Nouvelle livraison', cost: 0, time: '3-5 jours' }]);
-    const updateShipping = (idx, key, val) => setShipping(s => s.map((item, i) => i === idx ? { ...item, [key]: val } : item));
-    const removeShipping = (idx) => setShipping(s => s.filter((_, i) => i !== idx));
-
-    // ── Variantes helpers ────────────────────────────────────────────────────
-    const addVariant = async () => {
-        if (!newVariant.variant_value.trim()) return;
+    // ── Retirer (masquer) ─────────────────────────────────────────────────────
+    const hideProduct = async () => {
+        if (!activeId) return;
         try {
-            const { data } = await api.post(`/admin/products/${activeId}/variants`, newVariant);
-            setVariants(v => [...v.filter(x => x.id !== data.variant.id), data.variant]);
-            setNewVariant(p => ({ ...p, variant_value: '', price_adjustment: 0, stock_quantity: 0 }));
-        } catch (e) { alert(e.response?.data?.error || e.message); }
+            await api.patch(`/admin/products/${activeId}/toggle-visibility`);
+            setSuccessId(activeId);
+            setTimeout(() => { setSuccessId(null); removeFromQueue(activeId); }, 400);
+        } catch (e) { alert('Erreur: ' + (e.response?.data?.error || e.message)); }
     };
-    const deleteVariant = async (vid) => {
+
+    // ── Supprimer ─────────────────────────────────────────────────────────────
+    const deleteProduct = async () => {
+        if (!activeId || !confirmDelete) return;
         try {
-            await api.delete(`/admin/products/${activeId}/variants/${vid}`);
-            setVariants(v => v.filter(x => x.id !== vid));
-        } catch (e) { alert(e.response?.data?.error || e.message); }
+            await api.delete(`/admin/products/${activeId}`);
+            setSuccessId(activeId);
+            setTotal(t => Math.max(0, t - 1));
+            setTimeout(() => { setSuccessId(null); removeFromQueue(activeId); }, 400);
+        } catch (e) { alert('Erreur: ' + (e.response?.data?.error || e.message)); }
+        finally { setConfirmDelete(false); }
     };
 
     // ── RENDU ─────────────────────────────────────────────────────────────────
-    if (loading) return (
-        <div className="flex justify-center items-center h-96">
-            <ArrowPathIcon className="h-8 w-8 text-blue-500 animate-spin" />
-        </div>
-    );
-
+    if (loading) return <div className="flex justify-center items-center h-96"><ArrowPathIcon className="h-8 w-8 text-blue-500 animate-spin" /></div>;
     if (error) return (
         <div className="p-6 bg-red-50 rounded-2xl border border-red-100 m-6">
-            <p className="font-semibold text-red-700">Erreur de chargement</p>
+            <p className="font-semibold text-red-700">Erreur</p>
             <p className="text-sm text-red-500 mt-1">{error}</p>
-            <button onClick={() => loadQueue(0)} className="mt-3 px-4 py-2 bg-red-600 text-white rounded-xl text-sm">Réessayer</button>
+            <button onClick={() => loadQueue(0, 0)} className="mt-3 px-4 py-2 bg-red-600 text-white rounded-xl text-sm">Réessayer</button>
         </div>
     );
-
     if (queue.length === 0) return (
         <div className="p-16 text-center">
             <InboxIcon className="h-16 w-16 text-gray-200 mx-auto mb-4" />
             <p className="text-gray-500 font-semibold">Tout est vérifié ✅</p>
-            <button onClick={() => loadQueue(0)} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm">Rafraîchir</button>
+            <button onClick={() => loadQueue(0, 0)} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm">Rafraîchir</button>
         </div>
     );
 
     return (
-        <div className="flex gap-5 h-[calc(100vh-72px)] p-5 bg-gray-50 overflow-hidden">
+        <div className="flex gap-4 h-[calc(100vh-72px)] p-4 bg-gray-50 overflow-hidden">
 
             {/* ── File gauche ── */}
-            <div className="w-56 flex-shrink-0 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-                <div className="px-3 py-3 border-b border-gray-100 flex items-center justify-between">
+            <div className="w-52 flex-shrink-0 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+                <div className="px-3 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                     <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">File</span>
                     <span className="text-xs bg-blue-100 text-blue-600 font-semibold px-2 py-0.5 rounded-full">{totalUnverified}</span>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
                     {queue.map((p, idx) => (
-                        <div key={p.id} className={`transition-all duration-400 ${successId === p.id ? 'opacity-0 scale-95 h-0 overflow-hidden' : ''}`}>
+                        <div key={p.id} className={`transition-all duration-300 ${successId === p.id ? 'opacity-0 -translate-x-4 h-0 overflow-hidden' : ''}`}>
                             <QueueCard product={p} isActive={idx === queueIdx} onClick={() => setQueueIdx(idx)} />
                         </div>
                     ))}
@@ -253,12 +403,12 @@ export default function ProductComparator() {
 
             {/* ── Panneau principal ── */}
             {active && (
-                <div className="flex-1 flex flex-col gap-4 overflow-y-auto min-w-0">
+                <div className="flex-1 flex flex-col gap-3 overflow-hidden min-w-0">
 
-                    {/* Header produit */}
+                    {/* Header */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex-shrink-0">
                         <div className="flex">
-                            <div className="w-36 h-36 flex-shrink-0 bg-gray-100 overflow-hidden">
+                            <div className="w-32 h-32 flex-shrink-0 bg-gray-100 overflow-hidden">
                                 {img && <img src={img} alt="" className="w-full h-full object-cover"
                                     onError={e => { e.target.onerror = null; e.target.style.opacity = '0'; }} />}
                             </div>
@@ -272,17 +422,10 @@ export default function ProductComparator() {
                                             <UserIcon className="h-3 w-3" />{active.seller_name}
                                         </p>
                                     </div>
-                                    <div className="flex flex-col items-end gap-1">
-                                        <span className="text-lg font-bold text-blue-600">${parseFloat(active.price || 0).toFixed(2)}</span>
-                                        {active.brand_certified && (
-                                            <span className="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
-                                                <StarIcon className="h-3 w-3" />{active.brand_display_name || 'Brand Certifié'}
-                                            </span>
-                                        )}
-                                    </div>
+                                    <span className="text-lg font-bold text-blue-600 flex-shrink-0">${parseFloat(active.price || 0).toFixed(2)}</span>
                                 </div>
                                 {stats && (
-                                    <div className="mt-3">
+                                    <div className="mt-2">
                                         <PriceBar value={parseFloat(form.price) || parseFloat(active.price)} min={parseFloat(stats.price_min)} max={parseFloat(stats.price_max)} median={parseFloat(stats.price_median)} avg={parseFloat(stats.price_avg)} />
                                     </div>
                                 )}
@@ -292,46 +435,48 @@ export default function ProductComparator() {
 
                     {/* Onglets */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
-                        <div className="flex border-b border-gray-100 px-2 pt-2 gap-1">
+                        <div className="flex border-b border-gray-100 px-2 pt-2 gap-1 flex-shrink-0 overflow-x-auto">
                             {TABS.map(t => (
                                 <button key={t.id} onClick={() => setActiveTab(t.id)}
-                                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-lg transition border-b-2 ${activeTab === t.id ? 'text-blue-600 border-blue-500 bg-blue-50' : 'text-gray-400 border-transparent hover:text-gray-600'}`}>
+                                    className={`flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-t-lg transition border-b-2 whitespace-nowrap flex-shrink-0
+                                        ${activeTab === t.id ? 'text-blue-600 border-blue-500 bg-blue-50' : 'text-gray-400 border-transparent hover:text-gray-600'}`}>
                                     <t.icon className="h-3.5 w-3.5" />{t.label}
                                 </button>
                             ))}
                         </div>
+                        <div className="flex-1 overflow-y-auto p-4">
 
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-
-                            {/* ── Onglet Infos ─────────────── */}
+                            {/* Infos */}
                             {activeTab === 'infos' && (
-                                <>
+                                <div className="space-y-4">
                                     <div>
-                                        <label className="text-xs font-semibold text-gray-600 mb-1 block">Nom du produit</label>
+                                        <label className="text-xs font-semibold text-gray-600 mb-1 block">Nom</label>
                                         <input className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                            value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Nom du produit" />
+                                            value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                                     </div>
                                     <div>
                                         <label className="text-xs font-semibold text-gray-600 mb-1 block">Description</label>
                                         <textarea rows={5} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                            value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Description du produit..." />
+                                            value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
                                     </div>
-                                </>
+                                </div>
                             )}
 
-                            {/* ── Onglet Prix ──────────────── */}
+                            {/* Prix */}
                             {activeTab === 'price' && (
-                                <div>
-                                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Prix de vente ($)</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
-                                        <input type="number" step="0.01" min="0"
-                                            className="w-full pl-7 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                            value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-xs font-semibold text-gray-600 mb-1 block">Prix ($)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                                            <input type="number" step="0.01" min="0"
+                                                className="w-full pl-7 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                                value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
+                                        </div>
                                     </div>
                                     {stats && (
-                                        <div className="mt-4 grid grid-cols-2 gap-3">
-                                            {[['Min catégorie', stats.price_min, 'text-green-600'], ['Médiane', stats.price_median, 'text-amber-600'], ['Moyenne', stats.price_avg, 'text-blue-600'], ['Max catégorie', stats.price_max, 'text-red-500']].map(([l, v, c]) => (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {[['Min', stats.price_min, 'text-green-600'], ['Médiane', stats.price_median, 'text-amber-600'], ['Moyenne', stats.price_avg, 'text-blue-600'], ['Max', stats.price_max, 'text-red-500']].map(([l, v, c]) => (
                                                 <div key={l} className="bg-gray-50 rounded-xl p-3 text-center">
                                                     <p className="text-xs text-gray-400">{l}</p>
                                                     <p className={`text-base font-bold ${c}`}>${parseFloat(v || 0).toFixed(2)}</p>
@@ -342,112 +487,40 @@ export default function ProductComparator() {
                                 </div>
                             )}
 
-                            {/* ── Onglet Livraison ─────────── */}
+                            {/* Livraison */}
                             {activeTab === 'delivery' && (
-                                <div className="space-y-3">
-                                    {shipping.length === 0 && (
-                                        <p className="text-xs text-gray-400 text-center py-4">Aucune option de livraison configurée</p>
-                                    )}
-                                    {shipping.map((s, i) => (
-                                        <div key={i} className="border border-gray-200 rounded-xl p-3 space-y-2">
-                                            <div className="flex gap-2">
-                                                <input className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                                    value={s.label} onChange={e => updateShipping(i, 'label', e.target.value)} placeholder="Libellé" />
-                                                <button onClick={() => removeShipping(i)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                                                    <TrashIcon className="h-4 w-4" />
-                                                </button>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <div className="flex-1">
-                                                    <label className="text-xs text-gray-400 mb-0.5 block">Coût ($)</label>
-                                                    <input type="number" min="0" step="0.5" className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                                        value={s.cost} onChange={e => updateShipping(i, 'cost', parseFloat(e.target.value) || 0)} />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <label className="text-xs text-gray-400 mb-0.5 block">Délai</label>
-                                                    <input className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                                        value={s.time} onChange={e => updateShipping(i, 'time', e.target.value)} placeholder="ex: 3-5 jours" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <button onClick={addShipping} className="w-full py-2 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-blue-300 hover:text-blue-500 transition flex items-center justify-center gap-2">
-                                        <PlusIcon className="h-4 w-4" />Ajouter une option
-                                    </button>
-                                </div>
+                                <DeliveryTab shipping={shipping} setShipping={setShipping} />
                             )}
 
-                            {/* ── Onglet Variantes ─────────── */}
+                            {/* Variantes */}
                             {activeTab === 'variants' && (
-                                <div className="space-y-3">
-                                    {variantsLoading ? (
-                                        <div className="flex justify-center py-6"><ArrowPathIcon className="h-5 w-5 animate-spin text-blue-400" /></div>
-                                    ) : (
-                                        <>
-                                            {variants.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Aucune variante</p>}
-                                            {variants.map(v => (
-                                                <div key={v.id} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
-                                                    <span className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded-lg border">{v.variant_type}</span>
-                                                    <span className="text-sm font-medium text-gray-800 flex-1">{v.variant_value}</span>
-                                                    <span className="text-xs text-gray-400">Ajust. {v.price_adjustment >= 0 ? '+' : ''}{v.price_adjustment}$</span>
-                                                    <span className="text-xs text-gray-400">Stock: {v.stock_quantity}</span>
-                                                    <button onClick={() => deleteVariant(v.id)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                                                        <TrashIcon className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                            {/* Ajouter variante */}
-                                            <div className="border border-gray-200 rounded-xl p-3 space-y-2 mt-2">
-                                                <p className="text-xs font-semibold text-gray-600">Ajouter une variante</p>
-                                                <div className="flex gap-2">
-                                                    <select className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                                        value={newVariant.variant_type} onChange={e => setNewVariant(v => ({ ...v, variant_type: e.target.value }))}>
-                                                        {['color', 'size', 'material', 'style'].map(t => <option key={t} value={t}>{t}</option>)}
-                                                    </select>
-                                                    <input className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                                        value={newVariant.variant_value} onChange={e => setNewVariant(v => ({ ...v, variant_value: e.target.value }))} placeholder="Valeur (ex: Rouge, XL...)" />
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <input type="number" step="0.5" className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                                        value={newVariant.price_adjustment} onChange={e => setNewVariant(v => ({ ...v, price_adjustment: e.target.value }))} placeholder="Ajust. prix" />
-                                                    <input type="number" className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                                        value={newVariant.stock_quantity} onChange={e => setNewVariant(v => ({ ...v, stock_quantity: e.target.value }))} placeholder="Stock" />
-                                                    <button onClick={addVariant} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center gap-1">
-                                                        <PlusIcon className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
+                                variantsLoading
+                                    ? <div className="flex justify-center py-6"><ArrowPathIcon className="h-5 w-5 animate-spin text-blue-400" /></div>
+                                    : <VariantsTab activeId={activeId} variants={variants} setVariants={setVariants} />
                             )}
 
-                            {/* ── Onglet Badge Brand ───────── */}
+                            {/* Badge Brand */}
                             {activeTab === 'brand' && (
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border border-amber-100">
                                         <div>
-                                            <p className="text-sm font-semibold text-amber-800 flex items-center gap-2"><StarIcon className="h-4 w-4" />Badge Produit Certifié</p>
-                                            <p className="text-xs text-amber-600 mt-0.5">Affiche un badge sur la fiche produit pour certifier l'authenticité</p>
+                                            <p className="text-sm font-semibold text-amber-800 flex items-center gap-2"><StarIcon className="h-4 w-4" />Badge Certifié</p>
+                                            <p className="text-xs text-amber-600 mt-0.5">Certifie l'authenticité du produit</p>
                                         </div>
                                         <button onClick={() => setForm(f => ({ ...f, brand_certified: !f.brand_certified }))}
                                             className={`w-12 h-6 rounded-full transition-colors flex-shrink-0 ${form.brand_certified ? 'bg-amber-500' : 'bg-gray-200'}`}>
                                             <div className={`w-5 h-5 bg-white rounded-full shadow m-0.5 transition-transform ${form.brand_certified ? 'translate-x-6' : 'translate-x-0'}`} />
                                         </button>
                                     </div>
-
                                     {form.brand_certified && (
                                         <div>
-                                            <label className="text-xs font-semibold text-gray-600 mb-2 block">Nom affiché sur le badge <span className="text-gray-300 font-normal">(optionnel)</span></label>
+                                            <label className="text-xs font-semibold text-gray-600 mb-1 block">Nom du badge <span className="text-gray-300 font-normal">(optionnel)</span></label>
                                             <input className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                                                 value={form.brand_display_name} onChange={e => setForm(f => ({ ...f, brand_display_name: e.target.value }))}
-                                                placeholder="ex: Nike, Samsung, Apple... (laisser vide pour badge sans nom)" />
-
-                                            {/* Preview */}
-                                            <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                                <p className="text-xs text-gray-400 mb-2 font-medium">Aperçu du badge :</p>
-                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border
-                                                    ${form.brand_display_name ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                                placeholder="ex: Nike, Samsung..." />
+                                            <div className="mt-3 p-3 bg-gray-50 rounded-xl">
+                                                <p className="text-xs text-gray-400 mb-1.5">Aperçu :</p>
+                                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border bg-amber-50 text-amber-700 border-amber-200">
                                                     <CheckBadgeSolid className="h-4 w-4" />
                                                     {form.brand_display_name || 'Produit Certifié Authentique'}
                                                 </span>
@@ -459,21 +532,48 @@ export default function ProductComparator() {
                         </div>
                     </div>
 
-                    {/* Boutons actions */}
-                    <div className="flex gap-3 flex-shrink-0">
-                        <button onClick={skip}
-                            className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 text-gray-600 rounded-2xl text-sm font-medium hover:bg-gray-50 transition shadow-sm">
-                            <ArrowRightIcon className="h-4 w-4" />Passer
-                        </button>
-                        <button onClick={save} disabled={saving}
-                            className="flex items-center gap-2 px-5 py-3 bg-gray-800 text-white rounded-2xl text-sm font-medium hover:bg-gray-900 disabled:opacity-50 transition shadow-sm">
-                            {saving ? <ArrowPathIcon className="h-4 w-4 animate-spin" /> : <PencilSquareIcon className="h-4 w-4" />}
-                            Enregistrer
-                        </button>
-                        <button onClick={verifyAndNext} disabled={verifying}
-                            className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-sm font-bold transition shadow-md shadow-blue-200">
-                            {verifying ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <><CheckBadgeSolid className="h-5 w-5" />Vérifier &amp; Suivant</>}
-                        </button>
+                    {/* ── Boutons actions ── */}
+                    <div className="flex-shrink-0 space-y-2">
+                        {/* Ligne 1 : actions dangereuses */}
+                        <div className="flex gap-2">
+                            <button onClick={hideProduct}
+                                className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-orange-200 text-orange-600 rounded-xl text-xs font-semibold hover:bg-orange-50 transition shadow-sm">
+                                <EyeSlashIcon className="h-4 w-4" />Retirer
+                            </button>
+                            {confirmDelete ? (
+                                <div className="flex-1 flex gap-2">
+                                    <button onClick={deleteProduct}
+                                        className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition">
+                                        ⚠️ Confirmer la suppression
+                                    </button>
+                                    <button onClick={() => setConfirmDelete(false)}
+                                        className="px-3 py-2.5 bg-white border border-gray-200 text-gray-500 rounded-xl text-xs hover:bg-gray-50">
+                                        <XMarkIcon className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button onClick={() => setConfirmDelete(true)}
+                                    className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-red-200 text-red-600 rounded-xl text-xs font-semibold hover:bg-red-50 transition shadow-sm">
+                                    <TrashIcon className="h-4 w-4" />Supprimer
+                                </button>
+                            )}
+                        </div>
+                        {/* Ligne 2 : navigation */}
+                        <div className="flex gap-2">
+                            <button onClick={skip}
+                                className="flex items-center gap-1.5 px-4 py-3 bg-white border border-gray-200 text-gray-600 rounded-2xl text-sm font-medium hover:bg-gray-50 transition shadow-sm">
+                                <ArrowRightIcon className="h-4 w-4" />Passer
+                            </button>
+                            <button onClick={save} disabled={saving}
+                                className="flex items-center gap-1.5 px-4 py-3 bg-gray-800 text-white rounded-2xl text-sm font-medium hover:bg-gray-900 disabled:opacity-50 transition shadow-sm">
+                                {saving ? <ArrowPathIcon className="h-4 w-4 animate-spin" /> : <PencilSquareIcon className="h-4 w-4" />}
+                                Enregistrer
+                            </button>
+                            <button onClick={verifyAndNext} disabled={verifying}
+                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-sm font-bold transition shadow-md shadow-blue-200">
+                                {verifying ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <><CheckBadgeSolid className="h-5 w-5" />Vérifier &amp; Suivant</>}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
