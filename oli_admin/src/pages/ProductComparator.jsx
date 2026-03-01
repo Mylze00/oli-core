@@ -181,7 +181,7 @@ function DeliveryTab({ shipping, setShipping }) {
     const [loadingModes, setLoadingModes] = useState(true);
 
     useEffect(() => {
-        api.get('/delivery-methods')
+        api.get('/api/delivery-methods')
             .then(r => setModes(r.data || []))
             .catch(() => setModes([]))
             .finally(() => setLoadingModes(false));
