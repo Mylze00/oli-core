@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../app/theme/theme_provider.dart';
 import '../../../shop/shop_details_page.dart';
 import '../../../shop/all_shops_page.dart';
 import '../../../../models/shop_model.dart';
 
-class VerifiedShopsCarousel extends StatelessWidget {
+class VerifiedShopsCarousel extends ConsumerWidget {
   final List<Shop> shops;
 
   const VerifiedShopsCarousel({super.key, required this.shops});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (shops.isEmpty) return const SizedBox.shrink();
+    final isDark = ref.watch(themeProvider);
+    final textColor = isDark ? Colors.white : Colors.black87;
 
     return Column(
       children: [
@@ -20,14 +24,14 @@ class VerifiedShopsCarousel extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
+               Row(
                 children: [
-                  Icon(Icons.storefront, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
+                  Icon(Icons.storefront, color: textColor, size: 18),
+                  const SizedBox(width: 8),
                   Text(
                     "Boutiques Vérifiées",
                     style: TextStyle(
-                      color: Colors.white,
+                      color: textColor,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -42,23 +46,28 @@ class VerifiedShopsCarousel extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: isDark
+                        ? Colors.white.withOpacity(0.15)
+                        : Colors.black.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.white.withOpacity(0.3)),
+                    border: Border.all(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.3)
+                            : Colors.black.withOpacity(0.15)),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         "Voir tout",
                         style: TextStyle(
-                          color: Colors.white,
+                          color: textColor,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_ios, color: Colors.white, size: 12),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_ios, color: textColor, size: 12),
                     ],
                   ),
                 ),
@@ -103,7 +112,8 @@ class VerifiedShopsCarousel extends StatelessWidget {
                         maxLines: 1,
                         textAlign: TextAlign.center,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                            color: textColor, fontSize: 11, fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),

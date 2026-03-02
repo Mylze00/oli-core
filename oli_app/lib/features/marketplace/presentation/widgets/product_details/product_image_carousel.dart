@@ -41,7 +41,7 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
-              height: 340,
+              height: 390,
               child: Container(
                 color: const Color(0xFF1A1A1A),
                 width: double.infinity,
@@ -240,7 +240,7 @@ class _CarouselImageTileState extends State<_CarouselImageTile>
         return AnimatedBuilder(
           animation: _shimmer,
           builder: (_, __) => Container(
-            height: 300,
+            height: 345,
             color: Color.lerp(
               const Color(0xFF1A1A1A),
               const Color(0xFF2E2E2E),

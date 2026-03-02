@@ -16,6 +16,7 @@ class ProductActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
         SizedBox(
@@ -40,14 +41,14 @@ class ProductActionButtons extends StatelessWidget {
           child: OutlinedButton(
               onPressed: onAddToCart,
               style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white70),
+                  side: BorderSide(color: isDark ? Colors.white70 : Colors.black54),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(25))),
-              child: const Text("Ajouter au panier",
+              child: Text("Ajouter au panier",
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: Colors.white))),
+                      color: isDark ? Colors.white : Colors.black87))),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -57,14 +58,14 @@ class ProductActionButtons extends StatelessWidget {
               onPressed: onToggleFollow,
               style: OutlinedButton.styleFrom(
                   side: BorderSide(
-                      color: isFollowing ? Colors.blueAccent : Colors.white70),
+                      color: isFollowing ? Colors.blueAccent : (isDark ? Colors.white70 : Colors.black54)),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(25))),
               child: Text(isFollowing ? "OBJET SUIVI" : "Suivre cet objet",
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: isFollowing ? Colors.blueAccent : Colors.white))),
+                      color: isFollowing ? Colors.blueAccent : (isDark ? Colors.white : Colors.black87)))),
         ),
       ],
     );

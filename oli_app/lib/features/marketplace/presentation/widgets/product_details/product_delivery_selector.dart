@@ -40,6 +40,7 @@ class ProductDeliverySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final p = product;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,11 +65,11 @@ class ProductDeliverySelector extends StatelessWidget {
             final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
             return Text(
                 "${exchangeNotifier.formatProductPrice(p.deliveryPrice)} de livraison",
-                style: const TextStyle(color: Colors.white70, fontSize: 14));
+                style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14));
           }),
           Text("Livraison estimée : ${_calculateDeliveryDate(p.deliveryTime)}",
-              style: const TextStyle(color: Colors.white70, fontSize: 14)),
-          const Divider(color: Colors.white24, height: 24),
+              style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14)),
+          Divider(color: isDark ? Colors.white24 : Colors.black12, height: 24),
         ],
       ],
     );
@@ -88,30 +89,31 @@ class _DynamicDeliverySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.blue.withOpacity(0.04),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withOpacity(0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(12),
+          Padding(
+            padding: const EdgeInsets.all(12),
             child: Text("CHOISISSEZ VOTRE LIVRAISON",
-                style: TextStyle(
+                style: const TextStyle(
                     color: Colors.blueAccent,
                     fontWeight: FontWeight.bold,
                     fontSize: 12)),
           ),
-          ...options.map((opt) => _buildOption(context, opt)).toList(),
+          ...options.map((opt) => _buildOption(context, opt, isDark)).toList(),
         ],
       ),
     );
   }
 
-  Widget _buildOption(BuildContext context, ShippingOption opt) {
+  Widget _buildOption(BuildContext context, ShippingOption opt, bool isDark) {
     final bool isSelected = selectedOption?.methodId == opt.methodId;
 
     return InkWell(
@@ -119,8 +121,7 @@ class _DynamicDeliverySelector extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          border:
-              Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+          border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.06))),
           color: isSelected
               ? Colors.blueAccent.withOpacity(0.1)
               : Colors.transparent,
@@ -129,7 +130,7 @@ class _DynamicDeliverySelector extends StatelessWidget {
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? Colors.blueAccent : Colors.white54,
+              color: isSelected ? Colors.blueAccent : (isDark ? Colors.white54 : Colors.black38),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -138,11 +139,10 @@ class _DynamicDeliverySelector extends StatelessWidget {
                 children: [
                   Text(opt.label,
                       style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.white70,
+                          color: isSelected ? Colors.blueAccent : (isDark ? Colors.white : Colors.black87),
                           fontWeight: FontWeight.bold)),
                   Text("Arrivée estimée : ${_formatDate(opt.time)}",
-                      style:
-                          const TextStyle(color: Colors.white54, fontSize: 12)),
+                      style: TextStyle(color: isDark ? Colors.white54 : Colors.black45, fontSize: 12)),
                 ],
               ),
             ),
@@ -153,7 +153,7 @@ class _DynamicDeliverySelector extends StatelessWidget {
                     ? "GRATUIT"
                     : exchangeNotifier.formatProductPrice(opt.cost),
                 style: TextStyle(
-                    color: opt.cost == 0 ? Colors.greenAccent : Colors.white,
+                    color: opt.cost == 0 ? Colors.greenAccent : (isDark ? Colors.white : Colors.black87),
                     fontWeight: FontWeight.bold),
               );
             }),
@@ -165,8 +165,9 @@ class _DynamicDeliverySelector extends StatelessWidget {
 
   String _formatDate(String deliveryTime) {
     if (deliveryTime.isEmpty) return "Inconnue";
-    final int? days = int.tryParse(deliveryTime);
-    if (days != null) {
+    final match = RegExp(r'\d+').firstMatch(deliveryTime);
+    if (match != null) {
+      final int days = int.parse(match.group(0)!);
       final date = DateTime.now().add(Duration(days: days));
       return "${_getDayName(date.weekday)} ${date.day} ${_getMonthName(date.month)}";
     }
@@ -180,18 +181,18 @@ class _DynamicDeliverySelector extends StatelessWidget {
 
   String _getMonthName(int month) {
     const months = [
-      'Jan',
-      'Fév',
-      'Mars',
-      'Avr',
-      'Mai',
-      'Juin',
-      'Juil',
-      'Août',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Déc'
+      'janvier',
+      'février',
+      'mars',
+      'avril',
+      'mai',
+      'juin',
+      'juillet',
+      'août',
+      'septembre',
+      'octobre',
+      'novembre',
+      'décembre'
     ];
     return months[month - 1];
   }
@@ -228,11 +229,12 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white10,
+        color: isDark ? Colors.white10 : Colors.blue.withOpacity(0.04),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white24),
+        border: Border.all(color: isDark ? Colors.white24 : Colors.blue.withOpacity(0.15)),
       ),
       child: Column(
         children: [
@@ -242,18 +244,20 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
                 "Livraison estimée : ${_calculateDate(widget.deliveryTime)}",
             price: widget.standardPrice,
             isSelected: _selectedEvent == 'Standard',
+            isDark: isDark,
             onTap: () {
               setState(() => _selectedEvent = 'Standard');
               widget.onMethodChanged('Standard', widget.standardPrice);
             },
           ),
-          const Divider(height: 1, color: Colors.white24),
+          Divider(height: 1, color: isDark ? Colors.white24 : Colors.black12),
           _buildOption(
             title: "Express (24h)",
             subtitle: "Livraison ultra-rapide",
             price: widget.expressPrice,
             color: Colors.orangeAccent,
             isSelected: _selectedEvent == 'Express',
+            isDark: isDark,
             onTap: () {
               setState(() => _selectedEvent = 'Express');
               widget.onMethodChanged('Express', widget.expressPrice);
@@ -266,9 +270,9 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
 
   String _calculateDate(String deliveryTime) {
     if (deliveryTime.isEmpty) return "Inconnue";
-
-    final int? days = int.tryParse(deliveryTime);
-    if (days != null) {
+    final match = RegExp(r'\d+').firstMatch(deliveryTime);
+    if (match != null) {
+      final int days = int.parse(match.group(0)!);
       final date = DateTime.now().add(Duration(days: days));
       return "${_getDayName(date.weekday)} ${date.day} ${_getMonthName(date.month)}";
     }
@@ -282,18 +286,18 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
 
   String _getMonthName(int month) {
     const months = [
-      'Jan',
-      'Fév',
-      'Mars',
-      'Avr',
-      'Mai',
-      'Juin',
-      'Juil',
-      'Août',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Déc'
+      'janvier',
+      'février',
+      'mars',
+      'avril',
+      'mai',
+      'juin',
+      'juillet',
+      'août',
+      'septembre',
+      'octobre',
+      'novembre',
+      'décembre'
     ];
     return months[month - 1];
   }
@@ -304,6 +308,7 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
     required double price,
     required bool isSelected,
     required VoidCallback onTap,
+    required bool isDark,
     Color color = Colors.blueAccent,
   }) {
     return InkWell(
@@ -315,7 +320,7 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? color : Colors.white54,
+              color: isSelected ? color : (isDark ? Colors.white54 : Colors.black38),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -324,11 +329,10 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
                 children: [
                   Text(title,
                       style: TextStyle(
-                          color: isSelected ? color : Colors.white,
+                          color: isSelected ? color : (isDark ? Colors.white : Colors.black87),
                           fontWeight: FontWeight.bold)),
                   Text(subtitle,
-                      style:
-                          const TextStyle(color: Colors.white54, fontSize: 12)),
+                      style: TextStyle(color: isDark ? Colors.white54 : Colors.black45, fontSize: 12)),
                 ],
               ),
             ),
@@ -336,8 +340,8 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
               final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
               return Text(
                 exchangeNotifier.formatProductPrice(price),
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
               );
             }),
           ],

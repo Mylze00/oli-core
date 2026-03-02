@@ -5,27 +5,28 @@ class ProductProtectionWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
                 "Protection des commandes OLI",
                 style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white),
+                    color: isDark ? Colors.white : Colors.black87),
               ),
-              Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+              Icon(Icons.arrow_forward_ios, color: isDark ? Colors.white54 : Colors.black45, size: 16),
             ],
           ),
           const SizedBox(height: 16),
@@ -41,8 +42,8 @@ class ProductProtectionWidget extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Paiements sécurisés",
-                        style: TextStyle(color: Colors.white, fontSize: 14)),
+                    Text("Paiements sécurisés",
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 6,
@@ -67,33 +68,33 @@ class ProductProtectionWidget extends StatelessWidget {
 
           // Livraison
           Row(
-            children: const [
-              Icon(Icons.local_shipping_outlined,
+            children: [
+              const Icon(Icons.local_shipping_outlined,
                   color: Colors.greenAccent, size: 20),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Text("Livraison via OLI Logistics",
-                  style: TextStyle(color: Colors.white, fontSize: 14)),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
             ],
           ),
           const SizedBox(height: 12),
 
           // Remboursement
           Row(
-            children: const [
-              Icon(Icons.currency_exchange,
+            children: [
+              const Icon(Icons.currency_exchange,
                   color: Colors.greenAccent, size: 20),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Text("Protection de remboursement",
-                  style: TextStyle(color: Colors.white, fontSize: 14)),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
             ],
           ),
           const SizedBox(height: 16),
 
           // Footer
-          const Text(
+          Text(
             "Seules les commandes passées et payées via OLI sont protégées gratuitement par OLI Assurance",
             style: TextStyle(
-                color: Colors.white54,
+                color: isDark ? Colors.white54 : Colors.black45,
                 fontSize: 12,
                 fontStyle: FontStyle.italic),
           ),

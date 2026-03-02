@@ -143,16 +143,33 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     // Infinite scroll : charger plus de produits featured + ranking
     if (offset >= maxScroll - 400) {
       _loadMoreRankingProducts();
-      // Charger de nouveaux produits featured (30 par batch)
-      ref.read(featuredProductsProvider.notifier).loadMore();
     }
   }
 
   void _loadMoreRankingProducts() {
     _isLoadingMore = true;
-    setState(() => _rankingLoadedCount += _rankingBatchSize);
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _isLoadingMore = false;
+    final currentList = ref.read(featuredProductsProvider);
+    final fullList = currentList.isNotEmpty ? currentList : cachedSuperOffers;
+
+    // 1. Afficher le prochain batch de la liste déjà chargée
+    if (_rankingLoadedCount < fullList.length) {
+      setState(() => _rankingLoadedCount += _rankingBatchSize);
+    }
+
+    // 2. Toujours demander plus au serveur
+    ref.read(featuredProductsProvider.notifier).loadMore();
+
+    // 3. Reset avec setState + re-trigger si on est encore en bas
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      setState(() => _isLoadingMore = false);
+      // Si l'utilisateur est toujours en bas, déclencher le prochain batch
+      if (_scrollController.hasClients) {
+        final pos = _scrollController.position;
+        if (pos.pixels >= pos.maxScrollExtent - 400) {
+          _loadMoreRankingProducts();
+        }
+      }
     });
   }
 
@@ -214,8 +231,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
-    final backgroundColor = isDark ? Colors.black : Colors.grey[400];
-    final textColor = isDark ? Colors.white : Colors.black;
+    final backgroundColor = isDark ? Colors.black : const Color(0xFFD9D9D9);
+    final textColor = isDark ? Colors.white : Colors.black87;
 
     // Providers de données
     final allProducts = ref.watch(featuredProductsProvider);         // produits admin OLI
@@ -245,7 +262,10 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
         cachedRankingList.isNotEmpty ? cachedRankingList : cachedSuperOffers;
     final effectiveRankingList =
         fullRankingList.take(_rankingLoadedCount).toList();
-    final hasMoreRanking = fullRankingList.length > _rankingLoadedCount;
+    // hasMoreRanking = vrai si liste pas encore entièrement affichée OU si serveur a encore des données
+    final featuredNotifier = ref.read(featuredProductsProvider.notifier);
+    final hasMoreRanking =
+        fullRankingList.length > _rankingLoadedCount || featuredNotifier.hasMore;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -416,12 +436,16 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                       filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.60),
+                          color: isDark
+                              ? Colors.black.withOpacity(0.60)
+                              : Colors.white.withOpacity(0.90),
                           borderRadius: const BorderRadius.vertical(
                               bottom: Radius.circular(16)),
                           border: Border(
                             bottom: BorderSide(
-                                color: Colors.white.withOpacity(0.1),
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.black.withOpacity(0.08),
                                 width: 1),
                           ),
                         ),

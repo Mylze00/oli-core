@@ -11,6 +11,7 @@ import '../marketplace/presentation/pages/market_view.dart';
 import '../tabs/profile/profile_wallet_page.dart';
 import '../shop/screens/publish_article_page.dart';
 import '../search/providers/search_filters_provider.dart';
+import '../../app/theme/theme_provider.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -79,15 +80,17 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   Widget build(BuildContext context) {
     final unreadCount = ref.watch(unreadCountProvider);
+    final isDark = ref.watch(themeProvider);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: isDark ? Colors.black : const Color(0xFFD9D9D9),
       extendBody: true,
       body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: _OliBottomNav(
         currentIndex: _currentIndex,
         onTap: _onTabSelected,
         unreadMessages: unreadCount,
+        isDark: isDark,
       ),
     );
   }
@@ -101,11 +104,13 @@ class _OliBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
   final int unreadMessages;
+  final bool isDark;
 
   const _OliBottomNav({
     required this.currentIndex,
     required this.onTap,
     this.unreadMessages = 0,
+    this.isDark = true,
   });
 
   @override
@@ -128,10 +133,14 @@ class _OliBottomNav extends StatelessWidget {
             child: Container(
               height: 68,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.50),
+                color: isDark
+                    ? Colors.black.withOpacity(0.50)
+                    : Colors.white.withOpacity(0.88),
                 borderRadius: BorderRadius.circular(40),
                 border: Border.all(
-                  color: Colors.black.withOpacity(0.30),
+                  color: isDark
+                      ? Colors.black.withOpacity(0.30)
+                      : Colors.black.withOpacity(0.08),
                   width: 1,
                 ),
               ),
@@ -189,7 +198,13 @@ class _NavTabItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? Colors.white : Colors.white54;
+    // isDark est passé depuis _OliBottomNav via la nav bar, on le récupère via le contexte parent
+    // On utilise une simple heuristique : la couleur de fond du scaffold
+    final brightness = Theme.of(context).brightness;
+    final isDarkNav = brightness == Brightness.dark;
+    final color = isSelected
+        ? (isDarkNav ? Colors.white : Colors.black87)
+        : (isDarkNav ? Colors.white54 : Colors.black38);
 
     return GestureDetector(
       onTap: onTap,
@@ -199,7 +214,11 @@ class _NavTabItem extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white.withOpacity(0.12) : Colors.transparent,
+          color: isSelected
+              ? (isDarkNav
+                  ? Colors.white.withOpacity(0.12)
+                  : Colors.black.withOpacity(0.08))
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(28),
         ),
         child: Column(

@@ -114,7 +114,7 @@ class HorizontalProductSection extends ConsumerWidget {
                     width: 110,
                     margin: const EdgeInsets.only(right: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2C2C2C),
+                      color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Column(
@@ -153,7 +153,9 @@ class HorizontalProductSection extends ConsumerWidget {
                                             return child;
                                           }
                                           return Container(
-                                            color: const Color(0xFF1A1A1A),
+                                            color: isDark
+                                                ? const Color(0xFF1A1A1A)
+                                                : Colors.grey[200],
                                             child: const Center(
                                               child: SizedBox(
                                                 width: 14,
@@ -211,8 +213,9 @@ class HorizontalProductSection extends ConsumerWidget {
                               Text(product.name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 10)),
+                                  style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black87,
+                                      fontSize: 10)),
                               Consumer(builder: (context, ref, _) {
                                 final notifier =
                                     ref.read(exchangeRateProvider.notifier);
@@ -221,9 +224,9 @@ class HorizontalProductSection extends ConsumerWidget {
                                   notifier.formatProductPrice(
                                       double.tryParse(product.price) ?? 0.0),
                                   style: TextStyle(
-                                      color: badgeColor,
+                                      color: isDark ? badgeColor : Colors.red,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12),
+                                      fontSize: isDark ? 12 : 18),
                                 );
                               }),
                             ],

@@ -7,6 +7,7 @@ import 'features/auth/screens/login_page.dart';
 import 'features/home/home_page.dart';
 import 'features/auth/providers/auth_controller.dart';
 import 'core/services/fcm_service.dart';
+import 'app/theme/theme_provider.dart';
 
 import 'firebase_options.dart';
 
@@ -47,6 +48,7 @@ class OliApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
+    final isDark = ref.watch(themeProvider);
 
     return MaterialApp(
       title: 'Oli App',
@@ -54,14 +56,29 @@ class OliApp extends ConsumerWidget {
       localizationsDelegates: context.localizationDelegates,
       supportedLocales: context.supportedLocales,
       locale: context.locale,
+      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
         fontFamily: 'Inter',
         useMaterial3: true,
+        brightness: Brightness.light,
         primaryColor: const Color(0xFF1E7DBA),
-        scaffoldBackgroundColor: Colors.white,
+        scaffoldBackgroundColor: const Color(0xFFD9D9D9),
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1E7DBA),
           primary: const Color(0xFF1E7DBA),
+          brightness: Brightness.light,
+        ),
+      ),
+      darkTheme: ThemeData(
+        fontFamily: 'Inter',
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        primaryColor: const Color(0xFF1E7DBA),
+        scaffoldBackgroundColor: Colors.black,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF1E7DBA),
+          primary: const Color(0xFF1E7DBA),
+          brightness: Brightness.dark,
         ),
       ),
       home: _getHomeWidget(authState),

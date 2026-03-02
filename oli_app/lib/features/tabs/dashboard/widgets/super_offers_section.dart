@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../marketplace/presentation/pages/product_details_page.dart';
 import '../../../../models/product_model.dart';
+import '../../../../app/theme/theme_provider.dart';
 import 'product_card_common.dart';
 import '../pages/super_offers_page.dart';
 
-class SuperOffersSection extends StatefulWidget {
+class SuperOffersSection extends ConsumerStatefulWidget {
   final List<Product> products;
 
   const SuperOffersSection({super.key, required this.products});
 
   @override
-  State<SuperOffersSection> createState() => _SuperOffersSectionState();
+  ConsumerState<SuperOffersSection> createState() => _SuperOffersSectionState();
 }
 
-class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTickerProviderStateMixin {
+class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with SingleTickerProviderStateMixin {
   late AnimationController _shimmerController;
   late Animation<double> _shimmerAnimation;
 
@@ -48,11 +50,16 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ref.watch(themeProvider);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orangeAccent.withOpacity(0.5), width: 1.5),
+        border: Border.all(
+            color: isDark
+                ? Colors.orangeAccent.withOpacity(0.5)
+                : Colors.blue.withOpacity(0.3),
+            width: 1.5),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
@@ -62,11 +69,18 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.black,
                 image: DecorationImage(
-                  image: const AssetImage("assets/images/super_offers_bg.jpg"),
+                  image: AssetImage(
+                    isDark
+                        ? "assets/images/super_offers_bg.jpg"
+                        : "assets/images/super_offers_bg_light.jpg.jpg",
+                  ),
                   fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.5), BlendMode.darken),
+                  colorFilter: isDark
+                      ? ColorFilter.mode(
+                          Colors.black.withOpacity(0.5), BlendMode.darken)
+                      : ColorFilter.mode(
+                          Colors.white.withOpacity(0.10), BlendMode.lighten),
                 ),
               ),
               child: Column(
@@ -79,14 +93,24 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                            Row(
-                            children: [
-                               const FireAnimationWidget(),
-                               const SizedBox(width: 8),
-                               const Text("Super Offres", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18, shadows: [BoxShadow(color: Colors.black, blurRadius: 4)])),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          const Text("Les plus populaires du moment", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500, shadows: [BoxShadow(color: Colors.black, blurRadius: 4)])),
+                    children: [
+                       const FireAnimationWidget(),
+                       const SizedBox(width: 8),
+                       Text("Super Offres",
+                           style: TextStyle(
+                               color: isDark ? Colors.white : Colors.blue[900],
+                               fontWeight: FontWeight.bold,
+                               fontSize: 18,
+                               shadows: const [BoxShadow(color: Colors.black26, blurRadius: 4)])),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text("Les plus populaires du moment",
+                      style: TextStyle(
+                          color: isDark ? Colors.white : Colors.blue[800],
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          shadows: const [BoxShadow(color: Colors.black12, blurRadius: 4)])),
                         ],
                       ),
                       GestureDetector(
@@ -109,7 +133,7 @@ class _SuperOffersSectionState extends State<SuperOffersSection> with SingleTick
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
-                    height: 160,
+                    height: 164,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: widget.products.isEmpty ? 3 : (widget.products.length > 10 ? 10 : widget.products.length),

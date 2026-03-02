@@ -41,10 +41,12 @@ class DashboardProductCard extends ConsumerWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            height: 130,
+            height: 115,
             child: Stack(
+              fit: StackFit.expand,
               children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
@@ -53,7 +55,7 @@ class DashboardProductCard extends ConsumerWidget {
                         CloudinaryHelper.card(product.images.first),
                         fit: BoxFit.cover,
                         width: double.infinity,
-                        cacheWidth: 130, // ← Limite la RAM : redimensionne en décodage
+                        cacheWidth: 130,
                         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
                           if (wasSynchronouslyLoaded) return child;
                           return AnimatedOpacity(
@@ -114,30 +116,47 @@ class DashboardProductCard extends ConsumerWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (badgeOnRight)
-                   Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12)),
-
-                Consumer(
-                  builder: (context, ref, _) {
-                    ref.watch(exchangeRateProvider);
-                    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
-                    final priceUsd = double.tryParse(product.price) ?? 0.0;
-                    final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-                    return Text(formattedPrice, style: TextStyle(color: priceColor, fontWeight: FontWeight.bold, fontSize: priceFontSize));
-                  },
-                ),
-
-                if (subtitleWidget != null) ...[
-                   if (!badgeOnRight) const SizedBox(height: 2),
-                   subtitleWidget!,
-                ]
-              ],
+                  Text(
+                    product.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cardColor == Colors.white
+                          ? Colors.black87
+                          : Colors.white70,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      ref.watch(exchangeRateProvider);
+                      final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+                      final priceUsd = double.tryParse(product.price) ?? 0.0;
+                      final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
+                      return Text(
+                        formattedPrice,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: priceColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: priceFontSize,
+                        ),
+                      );
+                    },
+                  ),
+                  if (subtitleWidget != null) subtitleWidget!,
+                  const SizedBox(height: 6),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

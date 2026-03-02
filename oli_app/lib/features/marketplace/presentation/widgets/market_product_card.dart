@@ -234,22 +234,8 @@ class MarketProductCard extends ConsumerWidget {
                         ),
                       ),
                     
-                    // Badge STOCK BAS (Bottom Left)
-                    if (product.quantity < 5 && product.quantity > 0)
-                      Positioned(
-                        bottom: 24, left: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFBE0B), // Yellow/Gold
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            "Stock: ${product.quantity}",
-                            style: const TextStyle(color: Colors.black87, fontSize: 8, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
+                    // Badge STOCK BAS masqué
+                    // (désactivé — masquer l'info stock sur les cartes)
                     
                     // Badge BEST SELLER (Top Right, shifted left from heart)
                     if (product.viewCount > 100)
@@ -310,14 +296,14 @@ class MarketProductCard extends ConsumerWidget {
                            children: [
                              Text(
                                formattedDiscount,
-                               style: const TextStyle(color: Color(0xFFFF9500), fontWeight: FontWeight.bold, fontSize: 11) // Orange/Gold for discount
+                               style: const TextStyle(color: Color(0xFFFF9500), fontWeight: FontWeight.bold, fontSize: 13)
                              ),
                              const SizedBox(width: 4),
                              Text(
                                formattedPrice,
                                style: const TextStyle(
-                                 color: Colors.grey, 
-                                 fontSize: 9, 
+                                 color: Colors.grey,
+                                 fontSize: 11,
                                  decoration: TextDecoration.lineThrough
                                )
                              ),
@@ -327,7 +313,7 @@ class MarketProductCard extends ConsumerWidget {
                       
                       return Text(
                         formattedPrice,
-                        style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)
+                        style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13)
                       );
                     },
                   ),

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { getImageUrl } from '../utils/image';
-import { StarIcon as StarOutline, TrashIcon, XMarkIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { StarIcon as StarOutline, TrashIcon, XMarkIcon, EyeSlashIcon, TableCellsIcon, Squares2X2Icon } from '@heroicons/react/24/outline';
 import { StarIcon, CubeIcon, CheckCircleIcon, NoSymbolIcon, FireIcon, MagnifyingGlassIcon, TagIcon, EyeIcon, ChevronRightIcon, CheckBadgeIcon as CheckBadgeSolid } from '@heroicons/react/24/solid';
 
 function StatCard({ label, value, icon: Icon, color }) {
@@ -188,6 +188,7 @@ export default function Products() {
     const [filter, setFilter] = useState('all');
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [page, setPage] = useState(1);
+    const [viewMode, setViewMode] = useState('table'); // 'table' | 'grid'
     const PAGE_SIZE = 50;
 
     useEffect(() => { setPage(1); fetchProducts(); }, [filter]);
@@ -321,11 +322,30 @@ export default function Products() {
                     <h1 className="text-2xl font-bold text-gray-900">Produits</h1>
                     <p className="text-sm text-gray-400 mt-1">Gestion, modération et mise en avant des produits</p>
                 </div>
-                <div className="relative">
-                    <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type="text" placeholder="Rechercher produit, vendeur, catégorie..."
-                        className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm w-80 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={search} onChange={(e) => setSearch(e.target.value)} />
+                <div className="flex items-center gap-3">
+                    {/* Toggle vue */}
+                    <div className="flex items-center bg-gray-100 rounded-xl p-1">
+                        <button
+                            onClick={() => setViewMode('table')}
+                            className={`p-2 rounded-lg transition ${viewMode === 'table' ? 'bg-white shadow text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                            title="Vue tableau"
+                        >
+                            <TableCellsIcon className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('grid')}
+                            className={`p-2 rounded-lg transition ${viewMode === 'grid' ? 'bg-white shadow text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                            title="Vue grille"
+                        >
+                            <Squares2X2Icon className="h-4 w-4" />
+                        </button>
+                    </div>
+                    <div className="relative">
+                        <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input type="text" placeholder="Rechercher produit, vendeur, catégorie..."
+                            className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm w-80 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={search} onChange={(e) => setSearch(e.target.value)} />
+                    </div>
                 </div>
             </div>
 
@@ -354,7 +374,63 @@ export default function Products() {
                     <CubeIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                     <p className="text-gray-500 font-medium">Aucun produit trouvé</p>
                 </div>
+            ) : viewMode === 'grid' ? (
+                /* ═══ VUE GRILLE ═══ */
+                <div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                        {paginatedProducts.map((product) => (
+                            <div key={product.id}
+                                className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all group"
+                                onClick={() => setSelectedProduct(product)}
+                            >
+                                <div className="relative aspect-square overflow-hidden bg-gray-50">
+                                    <img
+                                        src={getDisplayImage(product)}
+                                        alt={product.name}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/200?text=No+img'; }}
+                                    />
+                                    {/* Badges overlay */}
+                                    <div className="absolute top-2 left-2 flex flex-col gap-1">
+                                        {product.is_featured && <span className="text-xs bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-bold">⭐</span>}
+                                        {product.is_good_deal && <span className="text-xs bg-rose-500 text-white px-1.5 py-0.5 rounded-md font-bold">🔥</span>}
+                                        {product.is_verified && <span className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded-md font-bold">✓</span>}
+                                    </div>
+                                    {/* Status badge */}
+                                    <div className="absolute top-2 right-2">
+                                        {product.status === 'banned' && <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-md font-bold">Ban</span>}
+                                        {product.status === 'hidden' && <span className="text-xs bg-purple-500 text-white px-1.5 py-0.5 rounded-md font-bold">Masqué</span>}
+                                    </div>
+                                </div>
+                                <div className="p-3">
+                                    <p className="text-xs font-semibold text-gray-900 line-clamp-2 leading-tight mb-1">{product.name}</p>
+                                    <p className="text-sm font-bold text-blue-600">{product.price} $</p>
+                                    {product.category && (
+                                        <p className="text-xs text-gray-400 mt-0.5 truncate">{product.category}</p>
+                                    )}
+                                    <p className="text-xs text-gray-400 mt-1 truncate">{product.seller_name || 'Vendeur'}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {/* Pagination grille */}
+                    <div className="mt-6 flex items-center justify-between">
+                        <span className="text-xs text-gray-400">{filteredProducts.length} produits — page {safePage}/{totalPages}</span>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage <= 1}
+                                className="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40 transition font-medium">
+                                ← Précédent
+                            </button>
+                            <span className="text-xs text-gray-500 font-semibold">{safePage}</span>
+                            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
+                                className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition font-medium">
+                                Suivant →
+                            </button>
+                        </div>
+                    </div>
+                </div>
             ) : (
+                /* ═══ VUE TABLEAU (existante) ═══ */
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     {/* Table Header */}
                     <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wider">

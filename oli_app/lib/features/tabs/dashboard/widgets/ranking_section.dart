@@ -136,15 +136,15 @@ class RankingSectionHelper {
 
       slivers.add(SliverToBoxAdapter(
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV),
+          margin: const EdgeInsets.symmetric(vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV * 2),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [grad1, grad2],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.zero,
             boxShadow: [
               BoxShadow(
                 color: grad1.withOpacity(0.3),

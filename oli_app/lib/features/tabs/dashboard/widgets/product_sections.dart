@@ -169,7 +169,7 @@ class VerifiedShopProductsSection extends StatelessWidget {
                   Text("Supermarchés et commerces vérifiés", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
                   const SizedBox(height: 12),
                   SizedBox(
-                    height: 160,
+                    height: 178,
                     child: Builder(
                       builder: (context) {
                         // Diversifier: max 1 produit par boutique (dédup par shopId en priorité, sinon shopName)

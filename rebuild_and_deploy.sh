@@ -15,7 +15,7 @@ flutter build web --release --no-wasm-dry-run
 
 echo "🚀 Étape 4/4: Déploiement Firebase..."
 cd ~/oli-core/oli_app
-firebase deploy --only hosting:oli-app
+firebase deploy --only hosting
 
 echo "✅ Déploiement terminé avec succès!"
 echo "🌐 Visite: https://oli-app.web.app"

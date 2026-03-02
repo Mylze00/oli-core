@@ -10,12 +10,13 @@ class ProductProvenanceTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -30,10 +31,15 @@ class ProductProvenanceTable extends StatelessWidget {
           Table(
             columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(2)},
             border: TableBorder(
-                horizontalInside: BorderSide(color: Colors.white.withOpacity(0.05))),
+                horizontalInside: BorderSide(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.black.withOpacity(0.06))),
             children: [
-              _buildLocationRow(),
+              _buildLocationRow(isDark),
               _buildProvenanceRow(
+                context,
+                isDark,
                 "Vendeur",
                 (product.shopName != null && product.shopName!.isNotEmpty)
                     ? product.shopName!
@@ -49,8 +55,8 @@ class ProductProvenanceTable extends StatelessWidget {
                   }
                 },
               ),
-              _buildProvenanceRow("Type Vendeur", product.sellerAccountType.toUpperCase()),
-              _buildProvenanceRow("Mise en ligne", _getTimeSinceUpload(product.createdAt)),
+              _buildProvenanceRow(context, isDark, "Type Vendeur", product.sellerAccountType.toUpperCase()),
+              _buildProvenanceRow(context, isDark, "Mise en ligne", _getTimeSinceUpload(product.createdAt)),
             ],
           ),
         ],
@@ -66,15 +72,14 @@ class ProductProvenanceTable extends StatelessWidget {
     if (diff.inHours > 0) return "Il y a ${diff.inHours} heures";
     return "Il y a quelques minutes";
   }
-  
-  /// Build location row with geocoding
-  TableRow _buildLocationRow() {
+
+  TableRow _buildLocationRow(bool isDark) {
     return TableRow(
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text("Localisation",
-              style: TextStyle(color: Colors.grey, fontSize: 13)),
+              style: TextStyle(color: isDark ? Colors.grey : Colors.black54, fontSize: 13)),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -93,8 +98,8 @@ class ProductProvenanceTable extends StatelessWidget {
               }
               return Text(
                 snapshot.data ?? "Non spécifié",
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
@@ -106,14 +111,14 @@ class ProductProvenanceTable extends StatelessWidget {
     );
   }
 
-  TableRow _buildProvenanceRow(String label, String value,
+  TableRow _buildProvenanceRow(BuildContext context, bool isDark, String label, String value,
       {bool isLink = false, VoidCallback? onTap}) {
     return TableRow(
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(label,
-              style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+              style: TextStyle(color: isDark ? Colors.grey[400] : Colors.black54, fontSize: 13)),
         ),
         GestureDetector(
           onTap: onTap,
@@ -122,7 +127,7 @@ class ProductProvenanceTable extends StatelessWidget {
             child: Text(
               value,
               style: TextStyle(
-                color: isLink ? Colors.blueAccent : Colors.white,
+                color: isLink ? Colors.blueAccent : (isDark ? Colors.white : Colors.black87),
                 fontSize: 13,
                 fontWeight: isLink ? FontWeight.bold : FontWeight.w500,
                 decoration: isLink ? TextDecoration.underline : null,

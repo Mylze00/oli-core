@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../../../app/theme/theme_provider.dart';
 import '../../../../config/api_config.dart';
 import '../../providers/market_provider.dart';
 import 'market_view.dart';
@@ -229,13 +230,15 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     final p = widget.product;
     final isFollowing = ref.watch(favoritesProvider.notifier).isFavorite(p.id);
     ref.watch(favoritesProvider);
-    
+    final isDark = ref.watch(themeProvider);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: isDark ? Colors.black : const Color(0xFFD9D9D9),
       appBar: AppBar(
-        title: const Text("Détail", style: TextStyle(color: Colors.white, fontSize: 16)),
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text("Détail", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
+        elevation: isDark ? 0 : 1,
         actions: [
           // Bouton Modifier (visible uniquement pour le propriétaire)
           Consumer(
@@ -287,23 +290,23 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                 Expanded(
                   child: Text(
                     p.name, 
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
                   ),
                 ),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white10,
+                    color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.visibility, color: Colors.white54, size: 14),
+                      Icon(Icons.visibility, color: isDark ? Colors.white54 : Colors.black45, size: 14),
                       const SizedBox(width: 4),
                       Text(
                         "${p.viewCount}", 
-                        style: const TextStyle(color: Colors.white70, fontSize: 12)
+                        style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 12)
                       ),
                     ],
                   ),
@@ -362,7 +365,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                   },
                 ),
                 
-                Text("Etat : ${p.condition}", style: const TextStyle(color: Colors.white, fontSize: 14)),
+                Text("Etat : ${p.condition}", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
                 const SizedBox(height: 16),
                 
                 ProductActionButtons(
@@ -384,24 +387,24 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                 const SizedBox(height: 12),
                 
                 // Description du produit affichée directement
-                const Text(
+                Text(
                   "Description",
                   style: TextStyle(
-                    color: Colors.white,
+                    color: isDark ? Colors.white : Colors.black87,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 8),
                 if (p.description.isNotEmpty)
-                  _ExpandableDescription(description: p.description)
+                  _ExpandableDescription(description: p.description, isDark: isDark)
                 else
-                  const Text(
+                  Text(
                     "Aucune description disponible.",
-                    style: TextStyle(color: Colors.white38, fontSize: 14, fontStyle: FontStyle.italic),
+                    style: TextStyle(color: isDark ? Colors.white38 : Colors.black38, fontSize: 14, fontStyle: FontStyle.italic),
                   ),
                 const SizedBox(height: 8),
-                Text("Quantité Disponible : ${p.quantity}", style: const TextStyle(color: Colors.white70)),
+                Text("Quantité Disponible : ${p.quantity}", style: TextStyle(color: isDark ? Colors.white70 : Colors.black54)),
                 const SizedBox(height: 40),
               ]
             ),
@@ -416,7 +419,8 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
 
 class _ExpandableDescription extends StatefulWidget {
   final String description;
-  const _ExpandableDescription({required this.description});
+  final bool isDark;
+  const _ExpandableDescription({required this.description, this.isDark = true});
 
   @override
   State<_ExpandableDescription> createState() => _ExpandableDescriptionState();
@@ -434,7 +438,7 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
           widget.description,
           maxLines: _expanded ? null : 4,
           overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-          style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+          style: TextStyle(color: widget.isDark ? Colors.white70 : Colors.black54, fontSize: 14, height: 1.5),
         ),
         const SizedBox(height: 4),
         GestureDetector(

@@ -251,9 +251,9 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _HelpItem(emoji: "🚀", title: "Oli Express", desc: "Livraison rapide en 1-2h dans votre ville."),
+            _HelpItem(emoji: "🚀", title: "Oli Express", desc: "Livraison rapide  dans votre ville."),
             SizedBox(height: 8),
-            _HelpItem(emoji: "📦", title: "Oli Standard", desc: "Livraison classique en 2-5 jours."),
+            _HelpItem(emoji: "📦", title: "Oli Standard", desc: "Livraison classique."),
             SizedBox(height: 8),
             _HelpItem(emoji: "🏍️", title: "Livreur Partenaire", desc: "Un livreur indépendant récupère le colis."),
             SizedBox(height: 8),
@@ -896,7 +896,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
             onPressed: () {
               setState(() {
                 _shippingOptions.add(ShippingOption(
-                  methodId: 'oli_standard', label: 'Oli Standard', time: '2-5 jours', cost: 0.0
+                  methodId: 'oli_standard', label: 'Oli Standard', time: '10 jours', cost: 0.0
                 ));
               });
             },

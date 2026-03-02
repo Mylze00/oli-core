@@ -17,6 +17,11 @@ final conversationsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) a
   
   final storage = SecureStorageService();
   final token = await storage.getToken();
+  if (token == null || token.isEmpty) {
+    debugPrint('⚠️ conversationsProvider: token absent, skip');
+    return [];
+  }
+  
   final dio = Dio();
   
   try {
@@ -27,6 +32,12 @@ final conversationsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) a
     
     if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(response.data);
+    }
+  } on DioException catch (e) {
+    if (e.response?.statusCode == 401) {
+      debugPrint('⚠️ conversations 401 : token expiré ou invalide');
+    } else {
+      debugPrint('❌ Erreur chargement conversations: $e');
     }
   } catch (e) {
     debugPrint('❌ Erreur chargement conversations: $e');
@@ -443,10 +454,13 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
         ],
       ),
       floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              onPressed: _pickContact,
-              backgroundColor: theme.primaryColor,
-              child: const Icon(Icons.person_add, color: Colors.white),
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 72),
+              child: FloatingActionButton(
+                onPressed: _pickContact,
+                backgroundColor: theme.primaryColor,
+                child: const Icon(Icons.person_add, color: Colors.white),
+              ),
             )
           : null,
     );

@@ -32,11 +32,12 @@ class HomeAppBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
+    final isDark = ref.watch(themeProvider);
 
     return SliverAppBar(
       pinned: true,
       floating: false,
-      backgroundColor: Colors.black,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       shadowColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
@@ -51,7 +52,8 @@ class HomeAppBar extends ConsumerWidget {
           Flexible(
             child: Text(
               authState.userData?['name'] ?? 'Utilisateur',
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              style: TextStyle(
+              color: isDark ? Colors.white : Colors.black87, fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -70,11 +72,13 @@ class HomeAppBar extends ConsumerWidget {
         children: [
           // Gradient de base
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.blue, Colors.black],
+                colors: isDark
+                    ? [Colors.blue, Colors.black]
+                    : [const Color(0xFF1E7DBA), const Color(0xFFD9D9D9)],
               ),
             ),
           ),
@@ -86,7 +90,9 @@ class HomeAppBar extends ConsumerWidget {
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                 child: Container(
-                  color: Colors.black.withOpacity(0.45),
+                  color: isDark
+                      ? Colors.black.withOpacity(0.45)
+                      : Colors.white.withOpacity(0.80),
                 ),
               ),
             ),
@@ -131,7 +137,7 @@ class HomeAppBar extends ConsumerWidget {
                 child: Icon(
                   isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
                   key: ValueKey(isDark),
-                  color: Colors.white,
+                  color: isDark ? Colors.white : Colors.black87,
                   size: 22,
                 ),
               ),
@@ -147,7 +153,8 @@ class HomeAppBar extends ConsumerWidget {
             return Stack(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 26),
+                  icon: Icon(Icons.notifications_outlined,
+                      color: isDark ? Colors.white : Colors.black87, size: 26),
                   onPressed: () {
                     Navigator.push(
                       context,
