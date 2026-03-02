@@ -9,7 +9,8 @@ import '../../../../../../core/storage/secure_storage_service.dart';
 // Provider qui fetche les méthodes de livraison fraîches depuis le backend
 final deliveryMethodsProvider = FutureProvider.family<List<ShippingOption>, String>((ref, productId) async {
   final storage = SecureStorageService();
-  final token = await storage.getToken();
+  final userData = await storage.getUserData();
+  final token = userData['token'];
   final dio = Dio();
   try {
     final response = await dio.get(
@@ -25,6 +26,7 @@ final deliveryMethodsProvider = FutureProvider.family<List<ShippingOption>, Stri
   }
   return [];
 });
+
 
 class ProductDeliverySelector extends ConsumerStatefulWidget {
   final Product product;
