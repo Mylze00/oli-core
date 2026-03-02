@@ -160,9 +160,6 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     // 2. Demander plus au serveur (featured)
     ref.read(featuredProductsProvider.notifier).loadMore();
 
-    // 3. Demander plus au serveur (tous les produits)
-    ref.read(marketProductsProvider.notifier).loadMore();
-
     // 4. Reset avec setState + re-trigger si on est encore en bas
     Future.delayed(const Duration(milliseconds: 800), () {
       if (!mounted) return;
@@ -260,15 +257,19 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       computeProductDistribution(allProducts);
     }
 
-    // Top Classement (jamais vide tant que l'admin a des produits)
+    // Top Classement
     final fullRankingList =
         cachedRankingList.isNotEmpty ? cachedRankingList : cachedSuperOffers;
     final effectiveRankingList =
         fullRankingList.take(_rankingLoadedCount).toList();
-    // hasMoreRanking = vrai si liste pas encore entièrement affichée OU si serveur a encore des données
     final featuredNotifier = ref.read(featuredProductsProvider.notifier);
     final hasMoreRanking =
         fullRankingList.length > _rankingLoadedCount || featuredNotifier.hasMore;
+
+    // Produits OLI restants (non encore affichés dans Top Classement)
+    final shownIds = effectiveRankingList.map((p) => p.id).toSet();
+    final remainingOliProducts =
+        allProducts.where((p) => !shownIds.contains(p.id)).toList();
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -406,8 +407,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
 
                 const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
 
-                // 10. Tous les produits (chargement progressif)
-                if (allProductsForSearch.isNotEmpty) ...[              
+                // 10. Produits OLI restants (après Top Classement)
+                if (remainingOliProducts.isNotEmpty) ...[              
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                     sliver: SliverToBoxAdapter(
@@ -426,13 +427,13 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                     sliver: SliverGrid(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          final product = allProductsForSearch[index];
+                          final product = remainingOliProducts[index];
                           return GestureDetector(
                             onTap: () => _navigateToProduct(product),
                             child: MarketProductCard(product: product),
                           );
                         },
-                        childCount: allProductsForSearch.length,
+                        childCount: remainingOliProducts.length,
                       ),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 3,
@@ -442,8 +443,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                       ),
                     ),
                   ),
-                  // Indicateur bas si encore des produits
-                  if (allProductsForSearch.length % 50 == 0)
+                  // Indicateur seulement si le serveur a encore des données
+                  if (featuredNotifier.hasMore)
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
