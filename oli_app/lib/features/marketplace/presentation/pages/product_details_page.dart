@@ -319,22 +319,18 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
           if (p.brandCertified)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.35), blurRadius: 8, offset: const Offset(0, 2))],
-                ),
+              child: ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [Color(0xFFFF8C00), Color(0xFF6B1A00)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ).createShader(bounds),
+                blendMode: BlendMode.srcIn,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.verified_rounded, color: Colors.white, size: 18),
-                    const SizedBox(width: 8),
+                    const Icon(Icons.verified_rounded, color: Colors.white, size: 14),
+                    const SizedBox(width: 6),
                     Text(
                       p.brandDisplayName?.isNotEmpty == true
                           ? '${p.brandDisplayName!} — Produit Original'
@@ -342,7 +338,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                        fontSize: 10.4,
                         letterSpacing: 0.3,
                       ),
                     ),

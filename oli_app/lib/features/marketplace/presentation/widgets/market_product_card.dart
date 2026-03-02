@@ -260,6 +260,38 @@ class MarketProductCard extends ConsumerWidget {
                           ),
                         ),
                       ),
+                    // Badge Brand Certifié — overlay bas-gauche image
+                    if (product.brandCertified)
+                      Positioned(
+                        bottom: 4,
+                        left: 4,
+                        child: ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Color(0xFFFF8C00), Color(0xFF6B1A00)],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ).createShader(bounds),
+                          blendMode: BlendMode.srcIn,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.verified_rounded, color: Colors.white, size: 7),
+                              const SizedBox(width: 2),
+                              Text(
+                                product.brandDisplayName?.isNotEmpty == true
+                                    ? product.brandDisplayName!
+                                    : 'Original',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 6,
+                                  fontWeight: FontWeight.bold,
+                                  shadows: [Shadow(color: Colors.black54, blurRadius: 2)],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -270,29 +302,6 @@ class MarketProductCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
-                  if (product.brandCertified) ...[
-                    const SizedBox(height: 3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFFA500)]),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.verified_rounded, color: Colors.white, size: 8),
-                          const SizedBox(width: 3),
-                          Text(
-                            product.brandDisplayName?.isNotEmpty == true
-                                ? product.brandDisplayName!
-                                : 'Original',
-                            style: const TextStyle(color: Colors.white, fontSize: 7.5, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 2),
                   // Formater le prix en fonction de la devise sÃ©lectionnÃ©e
                   Builder(
