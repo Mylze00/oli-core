@@ -65,23 +65,29 @@ function PriceBar({ value, min, max, median, avg }) {
     );
 }
 
-// ─── Carte file ───────────────────────────────────────────────────────────────
-function QueueCard({ product, isActive, onClick }) {
+// ─── Carte file ────────────────────────────────────────────────────────────────────────────────
+function QueueCard({ product, isActive, isSelected, onSelect, onClick }) {
     const img = product.images?.[0] ? getImageUrl(product.images[0]) : null;
     return (
-        <button onClick={onClick}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition text-left border
-                ${isActive ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-transparent'}`}>
-            <div className="w-9 h-9 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
-                {img && <img src={img} alt="" className="w-full h-full object-cover"
-                    onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }} />}
-            </div>
-            <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-800 truncate">{product.name}</p>
-                <p className="text-xs text-gray-400 flex items-center gap-1"><TagIcon className="h-3 w-3" />{product.category}</p>
-            </div>
-            <span className="text-xs font-bold text-blue-600 flex-shrink-0">${parseFloat(product.price || 0).toFixed(2)}</span>
-        </button>
+        <div className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-xl transition border
+            ${isActive ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-transparent'}
+            ${isSelected ? 'ring-1 ring-blue-400' : ''}`}>
+            {/* Checkbox */}
+            <input type="checkbox" checked={isSelected} onChange={e => { e.stopPropagation(); onSelect(); }}
+                className="w-3.5 h-3.5 accent-blue-500 flex-shrink-0 cursor-pointer" />
+            {/* Reste cliquable pour sélectionner le produit actif */}
+            <button onClick={onClick} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                <div className="w-8 h-8 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
+                    {img && <img src={img} alt="" className="w-full h-full object-cover"
+                        onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-800 truncate">{product.name}</p>
+                    <p className="text-xs text-gray-400 flex items-center gap-1"><TagIcon className="h-3 w-3" />{product.category}</p>
+                </div>
+                <span className="text-xs font-bold text-blue-600 flex-shrink-0">${parseFloat(product.price || 0).toFixed(2)}</span>
+            </button>
+        </div>
     );
 }
 
@@ -314,6 +320,11 @@ export default function ProductComparator() {
     const [form, setForm] = useState({ name: '', description: '', price: '', category: '', brand_certified: false, brand_display_name: '' });
     const [shipping, setShipping] = useState([]);
 
+    // ── Bulk edit ──
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [bulkForm, setBulkForm] = useState({ category: '', price: '', shipping_id: '', shipping_label: '', shipping_time: '', shipping_cost: '' });
+    const [bulkApplying, setBulkApplying] = useState(false);
+
     const active = queue[queueIdx] || null;
     const activeId = active?.id || null;
     const stats = active?.category_stats || null;
@@ -413,6 +424,30 @@ export default function ProductComparator() {
         finally { setSaving(false); }
     };
 
+    // ── Bulk Apply ────────────────────────────────────────────────────────────────────────────────
+    const applyBulk = async () => {
+        if (selectedIds.size === 0) return;
+        const payload = {};
+        if (bulkForm.category) payload.category = bulkForm.category;
+        if (bulkForm.price && !isNaN(parseFloat(bulkForm.price))) payload.price = bulkForm.price;
+        if (bulkForm.shipping_id) {
+            payload.shipping_options = [{
+                methodId: bulkForm.shipping_id, id: bulkForm.shipping_id,
+                label: bulkForm.shipping_label, time: bulkForm.shipping_time,
+                cost: parseFloat(bulkForm.shipping_cost) || 0,
+            }];
+        }
+        if (Object.keys(payload).length === 0) { alert('Sélectionnez au moins un champ à modifier.'); return; }
+        setBulkApplying(true);
+        const ids = [...selectedIds];
+        await Promise.all(ids.map(id => api.patch(`/admin/products/${id}/quick-edit`, payload).catch(console.error)));
+        setBulkApplying(false);
+        setSelectedIds(new Set());
+        setBulkForm({ category: '', price: '', shipping_id: '', shipping_label: '', shipping_time: '', shipping_cost: '' });
+        loadQueue(pageOffset, queueIdx, sellerFilter);
+        alert(`✅ Appliqué à ${ids.length} produit(s)`);
+    };
+
     // ── Verify ────────────────────────────────────────────────────────────────
     const verifyAndNext = async () => {
         if (!activeId) return;
@@ -492,9 +527,84 @@ export default function ProductComparator() {
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                    {/* Header select-all */}
+                    <div className="flex items-center justify-between mb-1 px-1">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox"
+                                checked={selectedIds.size === queue.length && queue.length > 0}
+                                onChange={e => setSelectedIds(e.target.checked ? new Set(queue.map(p => p.id)) : new Set())}
+                                className="w-3.5 h-3.5 accent-blue-500" />
+                            <span className="text-xs text-gray-400">
+                                {selectedIds.size > 0 ? `${selectedIds.size} sélectionné(s)` : 'Tout sél.'}
+                            </span>
+                        </label>
+                        {selectedIds.size > 0 && (
+                            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-red-400">✕ Vider</button>
+                        )}
+                    </div>
+
+                    {/* Panneau bulk — visible si au moins 1 sélectionné */}
+                    {selectedIds.size > 0 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 mb-2 space-y-2">
+                            <p className="text-xs font-bold text-blue-700">📋 Modifier {selectedIds.size} produit(s)</p>
+                            {/* Catégorie */}
+                            <div>
+                                <label className="text-xs text-gray-500 mb-0.5 block">Catégorie</label>
+                                <select className="w-full text-xs px-2 py-1 border border-gray-200 rounded-lg bg-white"
+                                    value={bulkForm.category} onChange={e => setBulkForm(f => ({ ...f, category: e.target.value }))}>
+                                    <option value="">— inchangé —</option>
+                                    {CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                                </select>
+                            </div>
+                            {/* Prix */}
+                            <div>
+                                <label className="text-xs text-gray-500 mb-0.5 block">Prix ($)</label>
+                                <input type="number" step="0.01" placeholder="inchangé"
+                                    className="w-full text-xs px-2 py-1 border border-gray-200 rounded-lg"
+                                    value={bulkForm.price} onChange={e => setBulkForm(f => ({ ...f, price: e.target.value }))} />
+                            </div>
+                            {/* mode livraison */}
+                            <div>
+                                <label className="text-xs text-gray-500 mb-0.5 block">Mode livraison</label>
+                                <select className="w-full text-xs px-2 py-1 border border-gray-200 rounded-lg bg-white"
+                                    value={bulkForm.shipping_id}
+                                    onChange={e => {
+                                        const m = FALLBACK_MODES.find(x => x.id === e.target.value);
+                                        setBulkForm(f => ({
+                                            ...f,
+                                            shipping_id: e.target.value,
+                                            shipping_label: m?.label || '',
+                                            shipping_time: m?.time_label || '',
+                                            shipping_cost: '',
+                                        }));
+                                    }}>
+                                    <option value="">— inchangé —</option>
+                                    {FALLBACK_MODES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                                </select>
+                                {bulkForm.shipping_id && !['free', 'hand_delivery', 'pick_go'].includes(bulkForm.shipping_id) && (
+                                    <input type="number" step="0.01" placeholder="Coût ($)"
+                                        className="w-full mt-1 text-xs px-2 py-1 border border-gray-200 rounded-lg"
+                                        value={bulkForm.shipping_cost}
+                                        onChange={e => setBulkForm(f => ({ ...f, shipping_cost: e.target.value }))} />
+                                )}
+                            </div>
+                            <button onClick={applyBulk} disabled={bulkApplying}
+                                className="w-full py-1.5 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 transition">
+                                {bulkApplying ? 'Application...' : `✅ Appliquer à ${selectedIds.size} produit(s)`}
+                            </button>
+                        </div>
+                    )}
+
                     {queue.map((p, idx) => (
                         <div key={p.id} className={`transition-all duration-300 ${successId === p.id ? 'opacity-0 -translate-x-4 h-0 overflow-hidden' : ''}`}>
-                            <QueueCard product={p} isActive={idx === queueIdx} onClick={() => setQueueIdx(idx)} />
+                            <QueueCard product={p} isActive={idx === queueIdx}
+                                isSelected={selectedIds.has(p.id)}
+                                onSelect={() => setSelectedIds(prev => {
+                                    const next = new Set(prev);
+                                    next.has(p.id) ? next.delete(p.id) : next.add(p.id);
+                                    return next;
+                                })}
+                                onClick={() => setQueueIdx(idx)} />
                         </div>
                     ))}
                 </div>
