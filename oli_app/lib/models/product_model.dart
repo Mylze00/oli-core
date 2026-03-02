@@ -62,6 +62,8 @@ class Product {
   final int sellerSalesCount;
   final double? expressDeliveryPrice; // Deprecated by shippingOptions but kept for backward compatibility
   final List<ShippingOption> shippingOptions;
+  final bool brandCertified;
+  final String? brandDisplayName;
 
   Product({
     required this.id,
@@ -99,6 +101,8 @@ class Product {
     this.sellerSalesCount = 0,
     this.expressDeliveryPrice,
     this.shippingOptions = const [],
+    this.brandCertified = false,
+    this.brandDisplayName,
   });
 
   /// Factory pour parser la réponse API (supporte camelCase ET snake_case)
@@ -186,6 +190,8 @@ class Product {
             .map((e) => ShippingOption.fromJson(e))
             .toList();
       }(),
+      brandCertified: json['brand_certified'] ?? json['brandCertified'] ?? false,
+      brandDisplayName: json['brand_display_name'] ?? json['brandDisplayName'],
     );
   }
 

@@ -315,6 +315,42 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
             ),
           ),
 
+          // ── Badge Brand Certifié ──
+          if (p.brandCertified)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.35), blurRadius: 8, offset: const Offset(0, 2))],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.verified_rounded, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      p.brandDisplayName?.isNotEmpty == true
+                          ? '${p.brandDisplayName!} — Produit Original'
+                          : 'Produit Certifié Authentique',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           ProductSellerInfo(
             product: p,
             onSellerTap: () {
