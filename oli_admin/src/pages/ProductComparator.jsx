@@ -324,6 +324,7 @@ export default function ProductComparator() {
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [bulkForm, setBulkForm] = useState({ category: '', price: '', shipping_id: '', shipping_label: '', shipping_time: '', shipping_cost: '' });
     const [bulkApplying, setBulkApplying] = useState(false);
+    const [bulkVerifying, setBulkVerifying] = useState(false);
 
     const active = queue[queueIdx] || null;
     const activeId = active?.id || null;
@@ -446,6 +447,18 @@ export default function ProductComparator() {
         setBulkForm({ category: '', price: '', shipping_id: '', shipping_label: '', shipping_time: '', shipping_cost: '' });
         loadQueue(pageOffset, queueIdx, sellerFilter);
         alert(`✅ Appliqué à ${ids.length} produit(s)`);
+    };
+
+    const bulkVerify = async () => {
+        if (selectedIds.size === 0) return;
+        if (!window.confirm(`Vérifier et valider ${selectedIds.size} produit(s) sélectionné(s) ?`)) return;
+        setBulkVerifying(true);
+        const ids = [...selectedIds];
+        await Promise.all(ids.map(id => api.patch(`/admin/products/${id}/verify`).catch(console.error)));
+        setBulkVerifying(false);
+        setSelectedIds(new Set());
+        loadQueue(pageOffset, 0, sellerFilter);
+        alert(`✅ ${ids.length} produit(s) vérifié(s) avec succès`);
     };
 
     // ── Verify ────────────────────────────────────────────────────────────────
@@ -591,6 +604,10 @@ export default function ProductComparator() {
                             <button onClick={applyBulk} disabled={bulkApplying}
                                 className="w-full py-1.5 text-xs rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 transition">
                                 {bulkApplying ? 'Application...' : `✅ Appliquer à ${selectedIds.size} produit(s)`}
+                            </button>
+                            <button onClick={bulkVerify} disabled={bulkVerifying}
+                                className="w-full py-1.5 text-xs rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition">
+                                {bulkVerifying ? 'Vérification...' : `✔ Vérifier ${selectedIds.size} produit(s)`}
                             </button>
                         </div>
                     )}
