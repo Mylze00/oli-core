@@ -291,7 +291,7 @@ router.get('/unverified', async (req, res) => {
         // Produits non vérifiés (actifs), avec filtre vendeur optionnel
         const result = await pool.query(
             `SELECT p.id, p.name, p.price, p.images, p.category, p.description, p.status,
-                    COALESCE(p.is_verified, FALSE) as is_verified, p.created_at,
+                    COALESCE(p.is_verified, FALSE) as is_verified, p.created_at, p.quantity,
                     p.shipping_options, p.brand_certified, p.brand_display_name,
                     u.name as seller_name, u.phone as seller_phone, u.avatar_url as seller_avatar
              FROM products p JOIN users u ON p.seller_id = u.id
@@ -371,7 +371,7 @@ router.patch('/:id/price', async (req, res) => {
 router.patch('/:id/quick-edit', async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, description, price, shipping_options, brand_certified, brand_display_name } = req.body;
+        const { name, description, price, category, shipping_options, brand_certified, brand_display_name } = req.body;
 
         // Migration inline pour brand
         try {
@@ -387,6 +387,7 @@ router.patch('/:id/quick-edit', async (req, res) => {
         if (name !== undefined) { fields.push(`name = $${i++}`); values.push(name); }
         if (description !== undefined) { fields.push(`description = $${i++}`); values.push(description); }
         if (price !== undefined) { fields.push(`price = $${i++}`); values.push(parseFloat(price) || 0); }
+        if (category !== undefined && category !== '') { fields.push(`category = $${i++}`); values.push(category); }
         if (shipping_options !== undefined) { fields.push(`shipping_options = $${i++}`); values.push(JSON.stringify(shipping_options)); }
         if (brand_certified !== undefined) { fields.push(`brand_certified = $${i++}`); values.push(brand_certified); }
         if (brand_display_name !== undefined) { fields.push(`brand_display_name = $${i++}`); values.push(brand_display_name || null); }

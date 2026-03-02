@@ -20,6 +20,17 @@ const COLORS = [
 ];
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'];
 const MATERIALS = ['Coton', 'Polyester', 'Cuir', 'Soie', 'Lin', 'Laine', 'Nylon', 'Velours', 'Denim', 'Plastique', 'Métal', 'Bois', 'Céramique', 'Verre', 'Caoutchouc'];
+const CATEGORIES = [
+    { key: 'industry', label: 'Industrie' }, { key: 'home', label: 'Maison' },
+    { key: 'vehicles', label: 'Véhicules' }, { key: 'fashion', label: 'Mode' },
+    { key: 'electronics', label: 'Électronique' }, { key: 'sports', label: 'Sports' },
+    { key: 'beauty', label: 'Beauté' }, { key: 'toys', label: 'Jouets' },
+    { key: 'health', label: 'Santé' }, { key: 'construction', label: 'Construction' },
+    { key: 'tools', label: 'Outils' }, { key: 'office', label: 'Bureau' },
+    { key: 'garden', label: 'Jardin' }, { key: 'pets', label: 'Animaux' },
+    { key: 'baby', label: 'Bébé' }, { key: 'food', label: 'Alimentation' },
+    { key: 'security', label: 'Sécurité' }, { key: 'other', label: 'Autres' },
+];
 
 // Icônes emoji pour les modes de livraison (matchent les IDs en DB)
 const DELIVERY_ICONS = {
@@ -300,7 +311,7 @@ export default function ProductComparator() {
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [sellerFilter, setSellerFilter] = useState('');
 
-    const [form, setForm] = useState({ name: '', description: '', price: '', brand_certified: false, brand_display_name: '' });
+    const [form, setForm] = useState({ name: '', description: '', price: '', category: '', brand_certified: false, brand_display_name: '' });
     const [shipping, setShipping] = useState([]);
 
     const active = queue[queueIdx] || null;
@@ -328,7 +339,7 @@ export default function ProductComparator() {
 
     const applyProduct = (p) => {
         if (!p) return;
-        setForm({ name: p.name || '', description: p.description || '', price: p.price || '', brand_certified: p.brand_certified || false, brand_display_name: p.brand_display_name || '' });
+        setForm({ name: p.name || '', description: p.description || '', price: p.price || '', category: p.category || '', brand_certified: p.brand_certified || false, brand_display_name: p.brand_display_name || '' });
         setShipping(p.shipping_options || []);
         setActiveTab('infos');
         setVariants([]);
@@ -394,6 +405,7 @@ export default function ProductComparator() {
         try {
             await api.patch(`/admin/products/${activeId}/quick-edit`, {
                 name: form.name, description: form.description, price: form.price,
+                category: form.category,
                 shipping_options: shipping, brand_certified: form.brand_certified,
                 brand_display_name: form.brand_display_name || null,
             });
@@ -569,6 +581,21 @@ export default function ProductComparator() {
                                         <label className="text-xs font-semibold text-gray-600 mb-1 block">Nom</label>
                                         <input className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                                             value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-semibold text-gray-600 mb-1 block">Catégorie</label>
+                                        <select
+                                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+                                            value={form.category}
+                                            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                                            <option value="">— Sélectionner une catégorie —</option>
+                                            {CATEGORIES.map(c => (
+                                                <option key={c.key} value={c.key}>{c.label}</option>
+                                            ))}
+                                        </select>
+                                        {active?.category && form.category !== active.category && (
+                                            <p className="text-xs text-amber-500 mt-1">⚠ Catégorie actuelle : <span className="font-medium">{active.category}</span></p>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="text-xs font-semibold text-gray-600 mb-1 block">Description</label>
