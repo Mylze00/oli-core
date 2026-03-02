@@ -53,6 +53,8 @@ class ProductService {
             sellerSalesCount: p.seller_total_sales || 0,
             expressDeliveryPrice: parseFloat(p.express_delivery_price) || null,
             shippingOptions: p.shipping_options || [],
+            brandCertified: p.brand_certified || false,
+            brandDisplayName: p.brand_display_name || null,
             isFeatured: p.isFeatured // For featured query
         };
     }
