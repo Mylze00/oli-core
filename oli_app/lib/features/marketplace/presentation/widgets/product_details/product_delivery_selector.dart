@@ -1,9 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import '../../../../../../models/product_model.dart';
 import '../../../../../../providers/exchange_rate_provider.dart';
+import '../../../../../../config/api_config.dart';
+import '../../../../../../core/storage/secure_storage_service.dart';
 
-class ProductDeliverySelector extends StatelessWidget {
+// Provider qui fetche les méthodes de livraison fraîches depuis le backend
+final deliveryMethodsProvider = FutureProvider.family<List<ShippingOption>, String>((ref, productId) async {
+  final storage = SecureStorageService();
+  final token = await storage.getToken();
+  final dio = Dio();
+  try {
+    final response = await dio.get(
+      '${ApiConfig.baseUrl}/api/delivery-methods/product/$productId',
+      options: token != null ? Options(headers: {'Authorization': 'Bearer $token'}) : null,
+    );
+    if (response.statusCode == 200 && response.data is List) {
+      final List raw = response.data as List;
+      return raw.map((e) => ShippingOption.fromJson(e as Map<String, dynamic>)).toList();
+    }
+  } catch (e) {
+    debugPrint('⚠️ deliveryMethods fetch error: $e');
+  }
+  return [];
+});
+
+class ProductDeliverySelector extends ConsumerStatefulWidget {
   final Product product;
   final ShippingOption? selectedShipping;
   final Function(ShippingOption) onShippingChanged;
@@ -17,19 +40,21 @@ class ProductDeliverySelector extends StatelessWidget {
     required this.onLegacyMethodChanged,
   });
 
+  @override
+  ConsumerState<ProductDeliverySelector> createState() => _ProductDeliverySelectorState();
+}
+
+class _ProductDeliverySelectorState extends ConsumerState<ProductDeliverySelector> {
   String _calculateDeliveryDate(String deliveryTime) {
     try {
       final RegExp regExp = RegExp(r'\d+');
       final match = regExp.firstMatch(deliveryTime);
-
       if (match != null) {
         final int days = int.parse(match.group(0)!);
         final DateTime deliveryDate = DateTime.now().add(Duration(days: days));
-
         final String day = deliveryDate.day.toString().padLeft(2, '0');
         final String month = deliveryDate.month.toString().padLeft(2, '0');
         final String year = deliveryDate.year.toString();
-
         return "Le $day/$month/$year";
       }
     } catch (e) {
@@ -41,38 +66,72 @@ class ProductDeliverySelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final p = product;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (p.shippingOptions.isNotEmpty) ...[
-          _DynamicDeliverySelector(
-            options: p.shippingOptions,
-            selectedOption: selectedShipping,
-            onChanged: onShippingChanged,
-          ),
-          const SizedBox(height: 16),
-        ] else if (p.expressDeliveryPrice != null) ...[
-          _DeliveryMethodSelector(
-            standardPrice: p.deliveryPrice,
-            expressPrice: p.expressDeliveryPrice!,
-            deliveryTime: p.deliveryTime,
-            onMethodChanged: onLegacyMethodChanged,
-          ),
-          const SizedBox(height: 16),
-        ] else ...[
-          Consumer(builder: (context, ref, _) {
-            final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
-            return Text(
-                "${exchangeNotifier.formatProductPrice(p.deliveryPrice)} de livraison",
-                style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14));
-          }),
-          Text("Livraison estimée : ${_calculateDeliveryDate(p.deliveryTime)}",
-              style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14)),
-          Divider(color: isDark ? Colors.white24 : Colors.black12, height: 24),
-        ],
-      ],
+    final p = widget.product;
+
+    // Fetch frais via API
+    final deliveryAsync = ref.watch(deliveryMethodsProvider(p.id));
+
+    return deliveryAsync.when(
+      loading: () => const SizedBox(
+        height: 56,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      error: (_, __) => _buildFallback(context, isDark, p),
+      data: (liveOptions) {
+        // Si l'API retourne des options → les utiliser (données fraîches admin)
+        // Sinon fallback sur les options statiques du modèle
+        final options = liveOptions.isNotEmpty
+            ? liveOptions
+            : p.shippingOptions;
+
+        if (options.isNotEmpty) {
+          // Auto-sélection si rien n'est sélectionné encore
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (widget.selectedShipping == null && options.isNotEmpty) {
+              widget.onShippingChanged(options.first);
+            }
+          });
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _DynamicDeliverySelector(
+                options: options,
+                selectedOption: widget.selectedShipping,
+                onChanged: widget.onShippingChanged,
+              ),
+              const SizedBox(height: 16),
+            ],
+          );
+        }
+
+        return _buildFallback(context, isDark, p);
+      },
     );
+  }
+
+  Widget _buildFallback(BuildContext context, bool isDark, Product p) {
+    if (p.expressDeliveryPrice != null) {
+      return Column(children: [
+        _DeliveryMethodSelector(
+          standardPrice: p.deliveryPrice,
+          expressPrice: p.expressDeliveryPrice!,
+          deliveryTime: p.deliveryTime,
+          onMethodChanged: widget.onLegacyMethodChanged,
+        ),
+        const SizedBox(height: 16),
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Consumer(builder: (context, ref, _) {
+        final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+        return Text(
+            "${exchangeNotifier.formatProductPrice(p.deliveryPrice)} de livraison",
+            style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14));
+      }),
+      Text("Livraison estimée : ${_calculateDeliveryDate(p.deliveryTime)}",
+          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 14)),
+      Divider(color: isDark ? Colors.white24 : Colors.black12, height: 24),
+    ]);
   }
 }
 
@@ -181,18 +240,8 @@ class _DynamicDeliverySelector extends StatelessWidget {
 
   String _getMonthName(int month) {
     const months = [
-      'janvier',
-      'février',
-      'mars',
-      'avril',
-      'mai',
-      'juin',
-      'juillet',
-      'août',
-      'septembre',
-      'octobre',
-      'novembre',
-      'décembre'
+      'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
     ];
     return months[month - 1];
   }
@@ -240,8 +289,7 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
         children: [
           _buildOption(
             title: "Standard",
-            subtitle:
-                "Livraison estimée : ${_calculateDate(widget.deliveryTime)}",
+            subtitle: "Livraison estimée : ${_calculateDate(widget.deliveryTime)}",
             price: widget.standardPrice,
             isSelected: _selectedEvent == 'Standard',
             isDark: isDark,
@@ -286,18 +334,8 @@ class _DeliveryMethodSelectorState extends State<_DeliveryMethodSelector> {
 
   String _getMonthName(int month) {
     const months = [
-      'janvier',
-      'février',
-      'mars',
-      'avril',
-      'mai',
-      'juin',
-      'juillet',
-      'août',
-      'septembre',
-      'octobre',
-      'novembre',
-      'décembre'
+      'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
     ];
     return months[month - 1];
   }
