@@ -313,7 +313,7 @@ export default function ProductComparator() {
         setLoading(true); setError(null);
         try {
             const sellerParam = seller ? `&seller=${encodeURIComponent(seller)}` : '';
-            const { data } = await api.get(`/admin/products/unverified?limit=10&offset=${offset}${sellerParam}`);
+            const { data } = await api.get(`/admin/products/unverified?limit=20&offset=${offset}${sellerParam}`);
             if (!data || data.error) throw new Error(data?.error || 'Erreur API');
             const products = data.products || [];
             setQueue(products);
@@ -361,7 +361,7 @@ export default function ProductComparator() {
         if (nextIdx < currentQueue.length) {
             setQueueIdx(nextIdx);
         } else {
-            const newOffset = currentOffset + 10;
+            const newOffset = currentOffset + 20;
             setPageOffset(newOffset);
             loadQueue(newOffset, 0);
         }
@@ -373,7 +373,7 @@ export default function ProductComparator() {
             const newIdx = Math.min(queueIdx, Math.max(0, newQ.length - 1));
             setQueueIdx(newIdx);
             if (newQ.length === 0) {
-                const newOffset = pageOffset + 10;
+                const newOffset = pageOffset + 20;
                 setPageOffset(newOffset);
                 loadQueue(newOffset, 0);
             }
@@ -384,7 +384,7 @@ export default function ProductComparator() {
     const skip = () => {
         const nextIdx = queueIdx + 1;
         if (nextIdx < queue.length) setQueueIdx(nextIdx);
-        else { const no = pageOffset + 10; setPageOffset(no); loadQueue(no, 0); }
+        else { const no = pageOffset + 20; setPageOffset(no); loadQueue(no, 0); }
     };
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -485,6 +485,26 @@ export default function ProductComparator() {
                             <QueueCard product={p} isActive={idx === queueIdx} onClick={() => setQueueIdx(idx)} />
                         </div>
                     ))}
+                </div>
+                {/* Pagination sidebar */}
+                <div className="flex-shrink-0 border-t border-gray-100 px-3 py-2 flex items-center justify-between gap-2">
+                    <button
+                        onClick={() => { const no = Math.max(0, pageOffset - 20); setPageOffset(no); loadQueue(no, 0, sellerFilter); }}
+                        disabled={pageOffset === 0}
+                        className="flex-1 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition font-medium"
+                    >
+                        ← Préc.
+                    </button>
+                    <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
+                        {Math.floor(pageOffset / 20) + 1} / {Math.max(1, Math.ceil(totalUnverified / 20))}
+                    </span>
+                    <button
+                        onClick={() => { const no = pageOffset + 20; setPageOffset(no); loadQueue(no, 0, sellerFilter); }}
+                        disabled={pageOffset + 20 >= totalUnverified}
+                        className="flex-1 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition font-medium"
+                    >
+                        Suiv. →
+                    </button>
                 </div>
             </div>
 
