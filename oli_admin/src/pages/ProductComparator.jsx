@@ -499,24 +499,66 @@ export default function ProductComparator() {
                     ))}
                 </div>
                 {/* Pagination sidebar */}
-                <div className="flex-shrink-0 border-t border-gray-100 px-3 py-2 flex items-center justify-between gap-2">
-                    <button
-                        onClick={() => { const no = Math.max(0, pageOffset - 20); setPageOffset(no); loadQueue(no, 0, sellerFilter); }}
-                        disabled={pageOffset === 0}
-                        className="flex-1 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition font-medium"
-                    >
-                        ← Préc.
-                    </button>
-                    <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
-                        {Math.floor(pageOffset / 20) + 1} / {Math.max(1, Math.ceil(totalUnverified / 20))}
-                    </span>
-                    <button
-                        onClick={() => { const no = pageOffset + 20; setPageOffset(no); loadQueue(no, 0, sellerFilter); }}
-                        disabled={pageOffset + 20 >= totalUnverified}
-                        className="flex-1 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition font-medium"
-                    >
-                        Suiv. →
-                    </button>
+                <div className="flex-shrink-0 border-t border-gray-100 px-3 py-2 space-y-1.5">
+                    {/* Boutons Préc / Page / Suiv */}
+                    <div className="flex items-center justify-between gap-2">
+                        <button
+                            onClick={() => { const no = Math.max(0, pageOffset - 20); setPageOffset(no); loadQueue(no, 0, sellerFilter); }}
+                            disabled={pageOffset === 0}
+                            className="flex-1 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition font-medium"
+                        >
+                            ← Préc.
+                        </button>
+                        <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
+                            {Math.floor(pageOffset / 20) + 1} / {Math.max(1, Math.ceil(totalUnverified / 20))}
+                        </span>
+                        <button
+                            onClick={() => { const no = pageOffset + 20; setPageOffset(no); loadQueue(no, 0, sellerFilter); }}
+                            disabled={pageOffset + 20 >= totalUnverified}
+                            className="flex-1 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition font-medium"
+                        >
+                            Suiv. →
+                        </button>
+                    </div>
+                    {/* Saisie directe de page */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400 whitespace-nowrap">Aller p.</span>
+                        <input
+                            type="number"
+                            min="1"
+                            max={Math.max(1, Math.ceil(totalUnverified / 20))}
+                            placeholder={String(Math.floor(pageOffset / 20) + 1)}
+                            className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 text-center bg-gray-50"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    const page = parseInt(e.target.value);
+                                    const maxPage = Math.max(1, Math.ceil(totalUnverified / 20));
+                                    if (!isNaN(page) && page >= 1 && page <= maxPage) {
+                                        const no = (page - 1) * 20;
+                                        setPageOffset(no);
+                                        loadQueue(no, 0, sellerFilter);
+                                        e.target.value = '';
+                                    }
+                                }
+                            }}
+                        />
+                        <button
+                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium whitespace-nowrap"
+                            onClick={(e) => {
+                                const input = e.target.previousSibling;
+                                const page = parseInt(input.value);
+                                const maxPage = Math.max(1, Math.ceil(totalUnverified / 20));
+                                if (!isNaN(page) && page >= 1 && page <= maxPage) {
+                                    const no = (page - 1) * 20;
+                                    setPageOffset(no);
+                                    loadQueue(no, 0, sellerFilter);
+                                    input.value = '';
+                                }
+                            }}
+                        >
+                            OK
+                        </button>
+                    </div>
                 </div>
             </div>
 
