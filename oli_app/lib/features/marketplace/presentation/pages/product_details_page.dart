@@ -319,24 +319,19 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
           if (p.brandCertified)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
-                  colors: [Color(0xFFFF8C00), Color(0xFF6B1A00)],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ).createShader(bounds),
-                blendMode: BlendMode.srcIn,
+              child: Align(
+                alignment: Alignment.centerLeft,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.verified_rounded, color: Colors.white, size: 14),
+                    const Icon(Icons.verified_rounded, color: Color(0xFFFF8C00), size: 14),
                     const SizedBox(width: 6),
                     Text(
                       p.brandDisplayName?.isNotEmpty == true
                           ? '${p.brandDisplayName!} — Produit Original'
                           : 'Produit Certifié Authentique',
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Color(0xFFFF8C00),
                         fontWeight: FontWeight.bold,
                         fontSize: 10.4,
                         letterSpacing: 0.3,

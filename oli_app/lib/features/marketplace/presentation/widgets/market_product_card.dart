@@ -265,31 +265,23 @@ class MarketProductCard extends ConsumerWidget {
                       Positioned(
                         bottom: 4,
                         left: 4,
-                        child: ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [Color(0xFFFF8C00), Color(0xFF6B1A00)],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ).createShader(bounds),
-                          blendMode: BlendMode.srcIn,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.verified_rounded, color: Colors.white, size: 7),
-                              const SizedBox(width: 2),
-                              Text(
-                                product.brandDisplayName?.isNotEmpty == true
-                                    ? product.brandDisplayName!
-                                    : 'Original',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 6,
-                                  fontWeight: FontWeight.bold,
-                                  shadows: [Shadow(color: Colors.black54, blurRadius: 2)],
-                                ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.verified_rounded, color: Color(0xFFFF8C00), size: 7),
+                            const SizedBox(width: 2),
+                            Text(
+                              product.brandDisplayName?.isNotEmpty == true
+                                  ? product.brandDisplayName!
+                                  : 'Original',
+                              style: const TextStyle(
+                                color: Color(0xFFFF8C00),
+                                fontSize: 6,
+                                fontWeight: FontWeight.bold,
+                                shadows: [Shadow(color: Colors.black87, blurRadius: 3)],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                   ],
