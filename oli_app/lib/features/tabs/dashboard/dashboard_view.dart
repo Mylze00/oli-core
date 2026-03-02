@@ -25,6 +25,7 @@ import 'widgets/discovery_carousel.dart';
 import 'widgets/horizontal_product_section.dart';
 import 'widgets/product_sections.dart'; // VerifiedShopProductsSection
 import 'widgets/ranking_section.dart';
+import '../../marketplace/presentation/widgets/market_product_card.dart';
 
 // Logique métier extraite
 import 'dashboard_product_distribution.dart';
@@ -156,14 +157,16 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       setState(() => _rankingLoadedCount += _rankingBatchSize);
     }
 
-    // 2. Toujours demander plus au serveur
+    // 2. Demander plus au serveur (featured)
     ref.read(featuredProductsProvider.notifier).loadMore();
 
-    // 3. Reset avec setState + re-trigger si on est encore en bas
+    // 3. Demander plus au serveur (tous les produits)
+    ref.read(marketProductsProvider.notifier).loadMore();
+
+    // 4. Reset avec setState + re-trigger si on est encore en bas
     Future.delayed(const Duration(milliseconds: 800), () {
       if (!mounted) return;
       setState(() => _isLoadingMore = false);
-      // Si l'utilisateur est toujours en bas, déclencher le prochain batch
       if (_scrollController.hasClients) {
         final pos = _scrollController.position;
         if (pos.pixels >= pos.maxScrollExtent - 400) {
@@ -400,6 +403,62 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                       ),
                     ),
                   ),
+
+                const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+
+                // 10. Tous les produits (chargement progressif)
+                if (allProductsForSearch.isNotEmpty) ...[              
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    sliver: SliverToBoxAdapter(
+                      child: Text(
+                        'Tous les produits',
+                        style: TextStyle(
+                          color: textColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    sliver: SliverGrid(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final product = allProductsForSearch[index];
+                          return GestureDetector(
+                            onTap: () => _navigateToProduct(product),
+                            child: MarketProductCard(product: product),
+                          );
+                        },
+                        childCount: allProductsForSearch.length,
+                      ),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 0.62,
+                        crossAxisSpacing: 4,
+                        mainAxisSpacing: 4,
+                      ),
+                    ),
+                  ),
+                  // Indicateur bas si encore des produits
+                  if (allProductsForSearch.length % 50 == 0)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: SizedBox(
+                            width: 22, height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: textColor.withOpacity(0.4),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
 
                 const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
               ],
