@@ -84,7 +84,7 @@ const TABS = [
 ];
 
 // ─── Onglet Variantes ─────────────────────────────────────────────────────────
-function VariantsTab({ activeId, variants, setVariants }) {
+function VariantsTab({ activeId, variants, setVariants, productQuantity = 1 }) {
     const [loading, setLoading] = useState(false);
 
     const toggleVariant = async (type, value) => {
@@ -97,7 +97,7 @@ function VariantsTab({ activeId, variants, setVariants }) {
         } else {
             setLoading(true);
             try {
-                const { data } = await api.post(`/admin/products/${activeId}/variants`, { variant_type: type, variant_value: value, price_adjustment: 0, stock_quantity: 20 });
+                const { data } = await api.post(`/admin/products/${activeId}/variants`, { variant_type: type, variant_value: value, price_adjustment: 0, stock_quantity: productQuantity });
                 setVariants(prev => [...prev, data.variant]);
             } catch (e) { alert(e.response?.data?.error || e.message); }
             finally { setLoading(false); }
@@ -612,7 +612,7 @@ export default function ProductComparator() {
                             {activeTab === 'variants' && (
                                 variantsLoading
                                     ? <div className="flex justify-center py-6"><ArrowPathIcon className="h-5 w-5 animate-spin text-blue-400" /></div>
-                                    : <VariantsTab activeId={activeId} variants={variants} setVariants={setVariants} />
+                                    : <VariantsTab activeId={activeId} variants={variants} setVariants={setVariants} productQuantity={active?.quantity || 1} />
                             )}
 
                             {/* Badge Brand */}
