@@ -18,7 +18,18 @@ const COLORS = [
     { name: 'Marron', hex: '#92400e' }, { name: 'Beige', hex: '#d4a47a' },
     { name: 'Gold', hex: '#f59e0b' }, { name: 'Argent', hex: '#cbd5e1' },
 ];
-const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'];
+const SIZES = [
+    // Tailles vêtements adultes
+    'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL',
+    // Pointures adultes
+    '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46',
+    // Tailles bébé (âge · longueur pied · pointure EU)
+    '0-3 mois (9,0-9,5cm · 16)',
+    '3-6 mois (10,0-10,5cm · 17-18)',
+    '6-12 mois (11,0-12,0cm · 19-20)',
+    '12-18 mois (12,5-13,5cm · 21-22)',
+    '18-24 mois (14,0-15,0cm · 23-24)',
+];
 const MATERIALS = ['Coton', 'Polyester', 'Cuir', 'Soie', 'Lin', 'Laine', 'Nylon', 'Velours', 'Denim', 'Plastique', 'Métal', 'Bois', 'Céramique', 'Verre', 'Caoutchouc'];
 const CATEGORIES = [
     { key: 'industry', label: 'Industrie' }, { key: 'home', label: 'Maison' },
