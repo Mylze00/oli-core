@@ -327,6 +327,7 @@ export default function ProductComparator() {
     const [variantsLoading, setVL] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [sellerFilter, setSellerFilter] = useState('');
+    const [selectedImageIdx, setSelectedImageIdx] = useState(0);
 
     const [form, setForm] = useState({ name: '', description: '', price: '', category: '', brand_certified: false, brand_display_name: '' });
     const [shipping, setShipping] = useState([]);
@@ -367,6 +368,7 @@ export default function ProductComparator() {
         setActiveTab('infos');
         setVariants([]);
         setConfirmDelete(false);
+        setSelectedImageIdx(0);
     };
 
     // Chargement initial + debounce filtre vendeur
@@ -707,14 +709,48 @@ export default function ProductComparator() {
                     {/* Header */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex-shrink-0">
                         <div className="flex">
-                            {/* Image produit avec fallback */}
-                            <div className="w-32 h-32 flex-shrink-0 bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden relative flex items-center justify-center">
-                                {img
-                                    ? <img src={img} alt="" className="w-full h-full object-cover absolute inset-0"
-                                        onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }} />
-                                    : null}
-                                {/* Fallback icône si pas d'image ou image cassée */}
-                                <span className="text-4xl select-none">🛍️</span>
+                            {/* Colonne image principale + miniatures */}
+                            <div className="flex-shrink-0 flex flex-col bg-gradient-to-br from-gray-100 to-gray-200">
+                                {/* Image principale */}
+                                <div className="w-48 h-48 relative flex items-center justify-center overflow-hidden">
+                                    {active.images && active.images.length > 0
+                                        ? <img
+                                            src={getImageUrl(active.images[selectedImageIdx] || active.images[0])}
+                                            alt=""
+                                            className="w-full h-full object-cover absolute inset-0"
+                                            onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }}
+                                        />
+                                        : null}
+                                    <span className="text-4xl select-none relative z-10 opacity-20">🛍️</span>
+                                    {/* Compteur images */}
+                                    {active.images && active.images.length > 1 && (
+                                        <span className="absolute top-1 right-1 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded-full z-20">
+                                            {selectedImageIdx + 1}/{active.images.length}
+                                        </span>
+                                    )}
+                                </div>
+                                {/* Miniatures */}
+                                {active.images && active.images.length > 1 && (
+                                    <div className="flex gap-1 p-1.5 overflow-x-auto bg-white/60 border-t border-gray-100" style={{ maxWidth: '192px' }}>
+                                        {active.images.map((imgUrl, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={() => setSelectedImageIdx(i)}
+                                                className={`flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden border-2 transition-all ${i === selectedImageIdx
+                                                    ? 'border-blue-500 shadow-sm scale-105'
+                                                    : 'border-transparent hover:border-gray-300'
+                                                    }`}
+                                            >
+                                                <img
+                                                    src={getImageUrl(imgUrl)}
+                                                    alt={`img ${i + 1}`}
+                                                    className="w-full h-full object-cover"
+                                                    onError={e => { e.target.onerror = null; e.target.src = ''; }}
+                                                />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                             <div className="p-4 flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-2">
