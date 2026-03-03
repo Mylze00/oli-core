@@ -38,7 +38,8 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
         // ── Carousel principal + overlays ──────────────────────────────────
         Stack(
           children: [
-            Padding(\r\n          padding: const EdgeInsets.symmetric(horizontal: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: SizedBox(
