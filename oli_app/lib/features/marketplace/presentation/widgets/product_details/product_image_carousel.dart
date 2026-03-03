@@ -33,144 +33,201 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
     final p = widget.product;
     final images = p.images;
 
-    return Stack(
+    return Column(
       children: [
-        // ── Carrousel principal ──────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: SizedBox(
-              height: 390,
-              child: Container(
-                color: const Color(0xFF1A1A1A),
-                width: double.infinity,
-                child: images.isEmpty
-                    ? const Center(
-                        child: Icon(Icons.image, size: 60, color: Colors.grey),
-                      )
-                    : PageView.builder(
-                        controller: _pageController,
-                        itemCount: images.length,
-                        onPageChanged: (index) {
-                          setState(() => _currentImageIndex = index);
-                        },
-                        itemBuilder: (context, index) {
-                          return GestureDetector(
-                            onTap: () => _openFullscreen(context, images, index),
-                            child: _CarouselImageTile(
-                              url: images[index],
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ),
-          ),
-        ),
-
-        // ── Boutons Partage + Panier ──────────────────────────────────────
-        Positioned(
-          top: 10,
-          right: 24,
-          child: Row(
-            children: [
-              _ActionCircle(
-                icon: Icons.ios_share,
-                onTap: widget.onShare,
-              ),
-              const SizedBox(width: 10),
-              Consumer(
-                builder: (context, ref, _) {
-                  return _ActionCircle(
-                    icon: Icons.shopping_cart_outlined,
-                    onTap: () {
-                      ref.read(cartProvider.notifier).addItem(
-                            CartItem(
-                              productId: p.id.toString(),
-                              productName: p.name,
-                              price: double.tryParse(p.price) ?? 0.0,
-                              quantity: 1,
-                              imageUrl: images.isNotEmpty ? images.first : null,
-                              sellerName: p.seller,
-                              sellerId: p.sellerId,
-                            ),
-                          );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Row(
-                            children: [
-                              Icon(Icons.check_circle, color: Colors.white),
-                              SizedBox(width: 8),
-                              Text('Produit ajouté au panier'),
-                            ],
+        // ── Carousel principal + overlays ──────────────────────────────────
+        Stack(
+          children: [
+            Padding(\r\n          padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: SizedBox(
+                  height: 390,
+                  child: Container(
+                    color: const Color(0xFF1A1A1A),
+                    width: double.infinity,
+                    child: images.isEmpty
+                        ? const Center(
+                            child: Icon(Icons.image, size: 60, color: Colors.grey),
+                          )
+                        : PageView.builder(
+                            controller: _pageController,
+                            itemCount: images.length,
+                            onPageChanged: (index) {
+                              setState(() => _currentImageIndex = index);
+                            },
+                            itemBuilder: (context, index) {
+                              return GestureDetector(
+                                onTap: () => _openFullscreen(context, images, index),
+                                child: _CarouselImageTile(
+                                  url: images[index],
+                                ),
+                              );
+                            },
                           ),
-                          backgroundColor: Colors.green,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                          margin: const EdgeInsets.all(16),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-
-        // ── Indicateur de pages (points) ─────────────────────────────────
-        if (images.length > 1)
-          Positioned(
-            bottom: 12,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                images.length,
-                (i) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  width: i == _currentImageIndex ? 18 : 8,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(4),
-                    color: i == _currentImageIndex
-                        ? Colors.blueAccent
-                        : Colors.white.withOpacity(0.4),
                   ),
                 ),
               ),
             ),
-          ),
 
-        // ── Compteur "1 / N" ─────────────────────────────────────────────
-        if (images.length > 1)
-          Positioned(
-            top: 12,
-            left: 24,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(20),
+            // ── Boutons Partage + Panier ────────────────────────────────────
+            Positioned(
+              top: 10,
+              right: 24,
+              child: Row(
+                children: [
+                  _ActionCircle(
+                    icon: Icons.ios_share,
+                    onTap: widget.onShare,
+                  ),
+                  const SizedBox(width: 10),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      return _ActionCircle(
+                        icon: Icons.shopping_cart_outlined,
+                        onTap: () {
+                          ref.read(cartProvider.notifier).addItem(
+                                CartItem(
+                                  productId: p.id.toString(),
+                                  productName: p.name,
+                                  price: double.tryParse(p.price) ?? 0.0,
+                                  quantity: 1,
+                                  imageUrl: images.isNotEmpty ? images.first : null,
+                                  sellerName: p.seller,
+                                  sellerId: p.sellerId,
+                                ),
+                              );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Row(
+                                children: [
+                                  Icon(Icons.check_circle, color: Colors.white),
+                                  SizedBox(width: 8),
+                                  Text('Produit ajouté au panier'),
+                                ],
+                              ),
+                              backgroundColor: Colors.green,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                              margin: const EdgeInsets.all(16),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
               ),
-              child: Text(
-                '${_currentImageIndex + 1} / ${images.length}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+            ),
+
+            // ── Indicateur de pages (points) ───────────────────────────────
+            if (images.length > 1)
+              Positioned(
+                bottom: 12,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    images.length,
+                    (i) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      width: i == _currentImageIndex ? 18 : 8,
+                      height: 8,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        color: i == _currentImageIndex
+                            ? Colors.blueAccent
+                            : Colors.white.withOpacity(0.4),
+                      ),
+                    ),
+                  ),
                 ),
+              ),
+
+            // ── Compteur "1 / N" ───────────────────────────────────────────
+            if (images.length > 1)
+              Positioned(
+                top: 12,
+                left: 24,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_currentImageIndex + 1} / ${images.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+
+        // ── Galerie de miniatures ──────────────────────────────────────────
+        if (images.length > 1)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: SizedBox(
+              height: 64,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: images.length,
+                itemBuilder: (context, i) {
+                  final isActive = i == _currentImageIndex;
+                  return GestureDetector(
+                    onTap: () {
+                      _pageController.animateToPage(
+                        i,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 60,
+                      height: 64,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isActive ? Colors.blueAccent : Colors.transparent,
+                          width: 2.5,
+                        ),
+                        boxShadow: isActive
+                            ? [BoxShadow(color: Colors.blueAccent.withOpacity(0.4), blurRadius: 6)]
+                            : null,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          images[i],
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.broken_image,
+                            size: 24,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
       ],
     );
   }
+
 
   /// Ouvre un viewer plein écran au tap sur une image
   void _openFullscreen(BuildContext context, List<String> images, int initialIndex) {
