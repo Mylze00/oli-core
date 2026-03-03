@@ -13,12 +13,15 @@ class MarketProductCard extends ConsumerWidget {
   final bool isCompact;
   /// Si true, l'overlay vendeur affiche l'animation SellerRatingBadge (nom → ★ note)
   final bool showRatingAnimation;
+  /// Si true, masque l'overlay vendeur (gradient + avatar + nom) en bas de l'image
+  final bool hideSellerOverlay;
 
   const MarketProductCard({
     super.key, 
     required this.product, 
     this.isCompact = false,
     this.showRatingAnimation = false,
+    this.hideSellerOverlay = false,
   });
 
   @override
@@ -103,7 +106,8 @@ class MarketProductCard extends ConsumerWidget {
                           errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 30, color: Colors.grey),
                         ),
                     
-                    // Info Vendeur (Overlay Bottom)
+                    // Info Vendeur (Overlay Bottom) — masqué sur dashboard
+                    if (!hideSellerOverlay)
                     Positioned(
                       bottom: 0, left: 0, right: 0,
                       child: Container(

@@ -283,7 +283,7 @@ class TopRankingGrid extends StatelessWidget {
             final product = products[index];
             final globalPos = startIndex + index + 1; // 1-indexé
             final showBadge = rankingPositions.contains(globalPos);
-            return MarketProductCard(product: product, showRatingAnimation: showBadge);
+            return MarketProductCard(product: product, showRatingAnimation: showBadge, hideSellerOverlay: true);
           },
           childCount: products.isEmpty ? 6 : products.length,
         ),
