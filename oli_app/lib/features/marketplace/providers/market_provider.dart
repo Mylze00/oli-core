@@ -116,8 +116,8 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
   int _offset = 0;
   String? _error;
 
-  static const int _initialPageSize = 100;
-  static const int _morePageSize = 30;
+  static const int _initialPageSize = 200;
+  static const int _morePageSize = 100;
 
   FeaturedProductsNotifier() : super([]) {
     fetchFeaturedProducts();

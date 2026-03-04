@@ -263,43 +263,51 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- CRON JOB: Mise à jour quotidienne des taux de change ---
-const exchangeRateService = require('./services/exchange-rate.service');
-const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000; // 24 heures en millisecondes
+// --- CRON JOB & AUTO-MIGRATION (désactivés en mode test) ---
+if (process.env.NODE_ENV !== 'test') {
+    const exchangeRateService = require('./services/exchange-rate.service');
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
-// Mise à jour initiale au démarrage
-exchangeRateService.fetchLiveRate('USD').catch(err => {
-    console.error('❌ Erreur lors de la mise à jour initiale des taux:', err.message);
-});
+    // Mise à jour initiale au démarrage
+    exchangeRateService.fetchLiveRate('USD').catch(err => {
+        console.error('❌ Erreur lors de la mise à jour initiale des taux:', err.message);
+    });
 
-// --- AUTO-MIGRATION: colonnes manquantes ---
-(async () => {
-    try {
-        const pool = require('./config/db');
-        await pool.query(`
-            ALTER TABLE products
-            ADD COLUMN IF NOT EXISTS is_good_deal BOOLEAN DEFAULT FALSE,
-            ADD COLUMN IF NOT EXISTS promo_price NUMERIC(10, 2);
-        `);
-        console.log('✅ [MIGRATION] Colonnes is_good_deal/promo_price vérifiées.');
-    } catch (e) {
-        console.warn('⚠️ [MIGRATION] is_good_deal:', e.message);
-    }
-})();
+    // --- AUTO-MIGRATION: colonnes manquantes ---
+    (async () => {
+        try {
+            const pool = require('./config/db');
+            await pool.query(`
+                ALTER TABLE products
+                ADD COLUMN IF NOT EXISTS is_good_deal BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS promo_price NUMERIC(10, 2);
+            `);
+            console.log('✅ [MIGRATION] Colonnes is_good_deal/promo_price vérifiées.');
+        } catch (e) {
+            console.warn('⚠️ [MIGRATION] is_good_deal:', e.message);
+        }
+    })();
 
-// Mise à jour quotidienne
-setInterval(() => {
-    exchangeRateService.updateRatesDaily();
-}, TWENTY_FOUR_HOURS);
+    // Mise à jour quotidienne
+    setInterval(() => {
+        exchangeRateService.updateRatesDaily();
+    }, TWENTY_FOUR_HOURS);
+}
 
 // --- DÉMARRAGE DU SERVEUR ---
-server.listen(config.PORT, "0.0.0.0", () => {
-    console.log(`🚀 OLI SERVER v1.0 - Port ${config.PORT} (${config.NODE_ENV})`);
-    console.log(`📡 WebSocket ready`);
-    console.log(`🌐 Base URL: ${config.BASE_URL}`);
-    console.log(`💱 Exchange rate auto-update: every 24h`);
+// Ne pas démarrer le serveur si on est en mode test (supertest gère ça)
+if (process.env.NODE_ENV !== 'test') {
+    server.listen(config.PORT, "0.0.0.0", () => {
+        console.log(`🚀 OLI SERVER v1.0 - Port ${config.PORT} (${config.NODE_ENV})`);
+        console.log(`📡 WebSocket ready`);
+        console.log(`🌐 Base URL: ${config.BASE_URL}`);
+        console.log(`💱 Exchange rate auto-update: every 24h`);
 
-    // 🤖 Worker prix DÉSACTIVÉ - à ne lancer que manuellement via /api/price-worker/run
-    // priceWorker.startWorker();
-    console.log('🤖 Price Worker: mode MANUEL uniquement (via POST /api/price-worker/run)');
-});
+        // 🤖 Worker prix DÉSACTIVÉ - à ne lancer que manuellement via /api/price-worker/run
+        // priceWorker.startWorker();
+        console.log('🤖 Price Worker: mode MANUEL uniquement (via POST /api/price-worker/run)');
+    });
+}
+
+// Export pour les tests (supertest)
+module.exports = app;

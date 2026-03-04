@@ -79,9 +79,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
 
   // ── Lazy loading 5 sections anonymes ───────────────────────────────
   static const int _anonSectionCount = 5;
-  static const int _anonSectionSize  = 64;  // produits max par section
-  static const int _anonBatchSize    = 8;   // produits chargés par scroll
-  int _anonLoadedCount = 0;                 // total produits révélés (toutes sections)
+  static const int _anonSectionSize  = 500;  // produits max par section (total 2500)
+  static const int _anonBatchSize    = 16;   // produits chargés par scroll
+  int _anonLoadedCount = 16;                  // total produits révélés — démarre à 16 pour afficher le 1er batch
 
   // ────────────────────────────────────────────────────────────────────────
   // Lifecycle
@@ -186,23 +186,28 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     });
   }
 
-  // ── Chargement progressif des 5 sections anonymes ────────────────────────
+  // ── Chargement progressif des 5 sections nommées ─────────────────────
   void _loadMoreAnonProducts() {
     const totalMax = _anonSectionCount * _anonSectionSize;
     if (_anonLoadedCount >= totalMax) return;
 
-    final marketProducts = ref.read(marketProductsProvider).valueOrNull ?? [];
+    final oliProducts = ref.read(featuredProductsProvider);
+    if (oliProducts.isEmpty) return;
 
-    // Guard : rien à montrer encore (provider pas chargé)
-    if (marketProducts.isEmpty) return;
+    // Nombre de produits disponibles pour les sections (hors Top Classement)
+    final availableForAnon = (oliProducts.length - _rankingLoadedCount).clamp(0, oliProducts.length);
 
-    // Déclencher loadMore sur l'API si on approche la fin des données
-    if (marketProducts.length - _anonLoadedCount < _anonBatchSize * 2) {
-      ref.read(marketProductsProvider.notifier).loadMore();
+    // Demander plus de produits au provider si on s'approche de la fin
+    final notifier = ref.read(featuredProductsProvider.notifier);
+    if (notifier.hasMore && availableForAnon - _anonLoadedCount < _anonBatchSize * 4) {
+      notifier.loadMore();
     }
 
+    // Ne pas dépasser les produits réellement disponibles
+    if (availableForAnon <= _anonLoadedCount) return;
+
     final newCount = (_anonLoadedCount + _anonBatchSize)
-        .clamp(0, totalMax.clamp(0, marketProducts.length));
+        .clamp(0, totalMax.clamp(0, availableForAnon));
     if (newCount > _anonLoadedCount) {
       setState(() => _anonLoadedCount = newCount);
     }
@@ -247,6 +252,99 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
           );
         },
         childCount: rows.length,
+      ),
+    );
+  }
+
+  /// Layout 6-2-3 : première ligne de 6 petits produits,
+  /// puis alternance lignes de 2 et 3 produits
+  Widget _buildSection6x2x3Sliver(List<Product> products, double screenWidth) {
+    if (products.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+    const hPad = 12.0;
+    const gap = 4.0;
+
+    // ── Ligne 1 : 6 petits produits ──
+    final firstRowProducts = products.take(6).toList();
+    final remainingProducts = products.skip(6).toList();
+
+    // ── Lignes suivantes : alternance 2-3 ──
+    final rows = <List<Product>>[];
+    int i = 0;
+    bool twoCol = true;
+    while (i < remainingProducts.length) {
+      final count = twoCol ? 2 : 3;
+      rows.add(remainingProducts.sublist(
+          i, (i + count).clamp(0, remainingProducts.length)));
+      i += count;
+      twoCol = !twoCol;
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, idx) {
+          // Index 0 = première ligne de 6 petits produits
+          if (idx == 0) {
+            final colCount = firstRowProducts.length.toDouble();
+            final cardWidth =
+                (screenWidth - hPad - gap * (colCount - 1)) / colCount;
+            final rowHeight = cardWidth / 0.55; // Plus compact pour 6 colonnes
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(6, 2, 6, 2),
+              child: SizedBox(
+                height: rowHeight,
+                child: Row(
+                  children: firstRowProducts
+                      .map((p) => Expanded(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 1),
+                              child: GestureDetector(
+                                onTap: () => _navigateToProduct(p),
+                                child: MarketProductCard(
+                                  product: p,
+                                  isCompact: true,
+                                ),
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+            );
+          }
+
+          // Index 1+ = lignes alternées 2-3
+          final rowIdx = idx - 1;
+          if (rowIdx >= rows.length) return const SizedBox.shrink();
+
+          final rowProducts = rows[rowIdx];
+          final colCount = rowProducts.length.toDouble();
+          final cardWidth =
+              (screenWidth - hPad - gap * (colCount - 1)) / colCount;
+          final rowHeight = cardWidth / 0.62;
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(6, 2, 6, 2),
+            child: SizedBox(
+              height: rowHeight,
+              child: Row(
+                children: rowProducts
+                    .map((p) => Expanded(
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 2),
+                            child: GestureDetector(
+                              onTap: () => _navigateToProduct(p),
+                              child: MarketProductCard(product: p),
+                            ),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
+          );
+        },
+        childCount: 1 + rows.length, // 1 ligne de 6 + N lignes 2-3
       ),
     );
   }
@@ -346,9 +444,10 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     final hasMoreRanking =
         fullRankingList.length > _rankingLoadedCount && _rankingLoadedCount < _rankingMaxCount;
 
-    // Produits OLI restants (non encore affichés dans Top Classement)
+    // Produits OLI restants (non affichés dans Top Classement)
+    // → alimentent directement les 5 sections nommées
     final shownIds = effectiveRankingList.map((p) => p.id).toSet();
-    final remainingOliProducts =
+    final anonOliProducts =
         allProducts.where((p) => !shownIds.contains(p.id)).toList();
 
     return Scaffold(
@@ -363,6 +462,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   .fetchFeaturedProducts();
               setState(() {
                 _rankingLoadedCount = _rankingBatchSize;
+                _anonLoadedCount = _anonBatchSize;
                 resetDistribution();
               });
             },
@@ -468,84 +568,31 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                 ...RankingSectionHelper.buildSlivers(
                     effectiveRankingList, textColor),
 
-                // 10. Produits OLI restants (après Top Classement)
-                if (remainingOliProducts.isNotEmpty) ...[              
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    sliver: SliverToBoxAdapter(
-                      child: Text(
-                        'Tous les produits',
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Grille alternée : ligne de 3, puis ligne de 2, ainsi de suite
-                  Builder(builder: (context) {
-                    // Pré-calculer les lignes alternées (3, 2, 3, 2 ...)
-                    final rows = <List<Product>>[];
-                    int i = 0;
-                    bool threeCol = true;
-                    while (i < remainingOliProducts.length) {
-                      final count = threeCol ? 3 : 2;
-                      rows.add(remainingOliProducts.sublist(
-                          i, (i + count).clamp(0, remainingOliProducts.length)));
-                      i += count;
-                      threeCol = !threeCol;
-                    }
-
-                    final screenWidth = MediaQuery.of(context).size.width;
-                    const hPad = 12.0; // 6px de chaque côté
-                    const gap = 4.0;   // espacement entre cartes
-
-                    return SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, idx) {
-                          final rowProducts = rows[idx];
-                          final colCount = rowProducts.length.toDouble();
-                          final cardWidth = (screenWidth - hPad - gap * (colCount - 1)) / colCount;
-                          final rowHeight = cardWidth / 0.62;
-
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(6, 2, 6, 2),
-                            child: SizedBox(
-                              height: rowHeight,
-                              child: Row(
-                                children: rowProducts.map((product) => Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                                    child: GestureDetector(
-                                      onTap: () => _navigateToProduct(product),
-                                      child: MarketProductCard(
-                                        product: product,
-                                        hideSellerOverlay: true,
-                                      ),
-                                    ),
-                                  ),
-                                )).toList(),
-                              ),
-                            ),
-                          );
-                        },
-                        childCount: rows.length,
-                      ),
-                    );
-                  }),
-                ],
-
                 const SliverPadding(padding: EdgeInsets.only(bottom: 16)),
 
-                // ── 5 sections anonymes (sans titre) chargées au scroll ───
+                // ── 5 sections nommées avec layout 6-2-3 ───
                 ...List.generate(_anonSectionCount, (s) {
+                  const sectionTitles = [
+                    'Meilleures choix pour vous',
+                    'Tendances du moment',
+                    'Récemment ajoutés',
+                    'Les mieux notés',
+                    'À ne pas manquer',
+                  ];
+                  const sectionIcons = [
+                    Icons.star_rounded,
+                    Icons.trending_up_rounded,
+                    Icons.schedule_rounded,
+                    Icons.thumb_up_rounded,
+                    Icons.local_fire_department_rounded,
+                  ];
+
                   final start = s * _anonSectionSize;
                   if (_anonLoadedCount <= start) return const <Widget>[];
 
                   final countForSection =
                       (_anonLoadedCount - start).clamp(0, _anonSectionSize);
-                  final sectionProducts = allProductsForSearch
+                  final sectionProducts = anonOliProducts
                       .skip(start)
                       .take(countForSection)
                       .toList();
@@ -553,7 +600,28 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
 
                   final sw = MediaQuery.of(context).size.width;
                   return [
-                    _buildAlternatingSliver(sectionProducts, sw),
+                    // Titre de la section
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      sliver: SliverToBoxAdapter(
+                        child: Row(
+                          children: [
+                            Icon(sectionIcons[s], color: textColor, size: 22),
+                            const SizedBox(width: 8),
+                            Text(
+                              sectionTitles[s],
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Grille 6-2-3
+                    _buildSection6x2x3Sliver(sectionProducts, sw),
                     const SliverPadding(padding: EdgeInsets.only(bottom: 4)),
                   ];
                 }).expand((x) => x),

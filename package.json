@@ -6,7 +6,12 @@
     "scripts": {
         "start": "node src/server.js",
         "dev": "nodemon src/server.js",
-        "migrate": "node src/run_migration.js"
+        "migrate": "node src/run_migration.js",
+        "test": "jest --forceExit --detectOpenHandles"
+    },
+    "jest": {
+        "testEnvironment": "node",
+        "testTimeout": 10000
     },
     "dependencies": {
         "@aws-sdk/client-s3": "^3.971.0",
@@ -26,7 +31,9 @@
         "socket.io": "^4.7.5"
     },
     "devDependencies": {
-        "nodemon": "^3.1.0"
+        "jest": "^30.2.0",
+        "nodemon": "^3.1.0",
+        "supertest": "^7.2.2"
     },
     "engines": {
         "node": ">=18.0.0"
