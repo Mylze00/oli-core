@@ -17,6 +17,7 @@ class ProductRepository {
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE u.phone = $1
               AND p.status = 'active'
+              AND COALESCE(p.is_verified, FALSE) = TRUE
             ORDER BY p.created_at DESC
             LIMIT $2 OFFSET $3
         `;

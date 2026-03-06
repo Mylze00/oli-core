@@ -71,11 +71,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   late Animation<Offset> _categorySlideAnimation;
   late Animation<double> _categoryFadeAnimation;
 
-  // ── Lazy loading Top Classement ──────────────────────────────────────────
-  static const int _rankingBatchSize = 8;
   static const int _rankingMaxCount  = 64;
-  int _rankingLoadedCount = _rankingBatchSize;
-  bool _isLoadingMore = false;
 
   // ── Lazy loading 5 sections anonymes ───────────────────────────────
   static const int _anonSectionCount = 5;
@@ -140,7 +136,6 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   }
 
   void _onScroll() {
-    if (_isLoadingMore) return;
     final offset = _scrollController.position.pixels;
     final maxScroll = _scrollController.position.maxScrollExtent;
 
@@ -148,42 +143,10 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     if (nowScrolled != _isScrolled) {
       setState(() => _isScrolled = nowScrolled);
     }
-    // Infinite scroll : charger plus produits ranking + sections anonymes
+    // Infinite scroll : charger plus produits pour les sections anonymes (le Top Classement est déjà contraint)
     if (offset >= maxScroll - 400) {
-      _loadMoreRankingProducts();
       _loadMoreAnonProducts();
     }
-  }
-
-  void _loadMoreRankingProducts() {
-    if (_rankingLoadedCount >= _rankingMaxCount) return;
-
-    final currentList = ref.read(featuredProductsProvider);
-    final fullList = currentList.isNotEmpty ? currentList : cachedSuperOffers;
-
-    // ← Guard clé : si tout est déjà affiché, on stoppe (évite boucle infinie)
-    if (fullList.length <= _rankingLoadedCount) return;
-
-    _isLoadingMore = true;
-
-    // Afficher le prochain batch, clampé à _rankingMaxCount max
-    setState(() => _rankingLoadedCount = (_rankingLoadedCount + _rankingBatchSize).clamp(0, _rankingMaxCount));
-
-    Future.delayed(const Duration(milliseconds: 400), () {
-      if (!mounted) return;
-      setState(() => _isLoadingMore = false);
-      // Re-trigger uniquement s'il reste encore des produits à afficher
-      if (_scrollController.hasClients && _rankingLoadedCount < _rankingMaxCount) {
-        final updatedList = ref.read(featuredProductsProvider);
-        final updatedFull = updatedList.isNotEmpty ? updatedList : cachedSuperOffers;
-        if (updatedFull.length > _rankingLoadedCount) {
-          final pos = _scrollController.position;
-          if (pos.pixels >= pos.maxScrollExtent - 400) {
-            _loadMoreRankingProducts();
-          }
-        }
-      }
-    });
   }
 
   // ── Chargement progressif des 5 sections nommées ─────────────────────
@@ -194,8 +157,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     final oliProducts = ref.read(featuredProductsProvider);
     if (oliProducts.isEmpty) return;
 
-    // Nombre de produits disponibles pour les sections (hors Top Classement)
-    final availableForAnon = (oliProducts.length - _rankingLoadedCount).clamp(0, oliProducts.length);
+    // Nombre de produits disponibles pour les sections (hors Top Classement contraint à _rankingMaxCount)
+    final topRankingReserved = oliProducts.length.clamp(0, _rankingMaxCount);
+    final availableForAnon = (oliProducts.length - topRankingReserved).clamp(0, oliProducts.length);
 
     // Demander plus de produits au provider si on s'approche de la fin
     final notifier = ref.read(featuredProductsProvider.notifier);
@@ -429,21 +393,17 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       computeProductDistribution(allProducts);
     }
 
-    // Top Classement (limité à _rankingMaxCount maximum)
+    // Top Classement (statiquement limité à _rankingMaxCount pour éviter le glitch d'entrelacement au défilement)
     final fullRankingList =
         cachedRankingList.isNotEmpty ? cachedRankingList : cachedSuperOffers;
     
-    // effectiveRankingList prend _rankingLoadedCount mais ne dépasse pas _rankingMaxCount
-    final effectiveRankingListLength = _rankingLoadedCount.clamp(0, _rankingMaxCount);
+    // effectiveRankingList prend directement le max pour profiter du virtual scroll natif de SliverGrid
+    final effectiveRankingListLength = fullRankingList.length.clamp(0, _rankingMaxCount);
     final effectiveRankingList =
         fullRankingList.take(effectiveRankingListLength).toList();
         
     final featuredNotifier = ref.read(featuredProductsProvider.notifier);
     
-    // hasMoreRanking : vrai seulement si la liste locale a encore des produits à afficher ET qu'on est sous la limite
-    final hasMoreRanking =
-        fullRankingList.length > _rankingLoadedCount && _rankingLoadedCount < _rankingMaxCount;
-
     // Produits OLI restants (non affichés dans Top Classement)
     // → alimentent directement les 5 sections nommées
     final shownIds = effectiveRankingList.map((p) => p.id).toSet();
@@ -461,7 +421,6 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   .read(featuredProductsProvider.notifier)
                   .fetchFeaturedProducts();
               setState(() {
-                _rankingLoadedCount = _rankingBatchSize;
                 _anonLoadedCount = _anonBatchSize;
                 resetDistribution();
               });
