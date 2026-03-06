@@ -95,9 +95,11 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         request.fields['product_id'] = _selectedProductId!;
       }
 
-      request.files.add(await http.MultipartFile.fromPath(
+      final videoBytes = await _videoFile!.readAsBytes();
+      request.files.add(http.MultipartFile.fromBytes(
         'video',
-        _videoFile!.path,
+        videoBytes,
+        filename: _videoFile!.name,
       ));
 
       // Simulons une progression puisque http.MultipartRequest ne le supporte pas nativement facilement
