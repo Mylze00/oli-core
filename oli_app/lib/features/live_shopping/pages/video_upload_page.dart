@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../../../core/router/network/dio_provider.dart';
+import '../../../config/api_config.dart';
+import '../../../core/storage/secure_storage_service.dart';
 
 /// Page d'upload de vidéo de vente
 class VideoUploadPage extends ConsumerStatefulWidget {
@@ -39,7 +43,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
     setState(() => _loadingProducts = true);
     try {
       final dio = ref.read(dioProvider);
-      final response = await dio.get('/api/seller/products');
+      final response = await dio.get('/products/user/my-products');
       if (response.data is List) {
         _myProducts = (response.data as List).cast<Map<String, dynamic>>();
       } else if (response.data['products'] is List) {
@@ -71,35 +75,40 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
     });
 
     try {
-      final dio = ref.read(dioProvider);
+      final storage = ref.read(secureStorageProvider);
+      final token = await storage.getToken();
+      
+      final uri = Uri.parse('${ApiConfig.baseUrl}/api/videos');
+      var request = http.MultipartRequest('POST', uri);
+      
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
 
-      final formData = FormData.fromMap({
-        'video': await MultipartFile.fromFile(
-          _videoFile!.path,
-          filename: _videoFile!.name,
-        ),
-        if (_titleController.text.isNotEmpty) 'title': _titleController.text,
-        if (_descController.text.isNotEmpty) 'description': _descController.text,
-        if (_selectedProductId != null) 'product_id': _selectedProductId,
-      });
+      if (_titleController.text.isNotEmpty) {
+        request.fields['title'] = _titleController.text;
+      }
+      if (_descController.text.isNotEmpty) {
+        request.fields['description'] = _descController.text;
+      }
+      if (_selectedProductId != null) {
+        request.fields['product_id'] = _selectedProductId!;
+      }
 
-      await dio.post(
-        '/api/videos',
-        data: formData,
-        options: Options(
-          // Ne PAS spécifier Content-Type: Dio l'ajoute automatiquement
-          // avec le boundary correct pour multipart/form-data
-          sendTimeout: const Duration(seconds: 120),
-          receiveTimeout: const Duration(seconds: 120),
-        ),
-        onSendProgress: (sent, total) {
-          if (total > 0 && mounted) {
-            setState(() => _uploadProgress = sent / total);
-          }
-        },
-      );
+      request.files.add(await http.MultipartFile.fromPath(
+        'video',
+        _videoFile!.path,
+      ));
 
-      if (mounted) {
+      // Simulons une progression puisque http.MultipartRequest ne le supporte pas nativement facilement
+      setState(() => _uploadProgress = 0.5);
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      
+      setState(() => _uploadProgress = 1.0);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('🎬 Vidéo publiée avec succès !'),
@@ -109,11 +118,16 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         );
         Navigator.pop(context, true); // true = refresh feed
       }
+      } else {
+        throw Exception(response.body);
+      }
     } catch (e) {
       String message = 'Erreur lors de l\'upload';
-      if (e is DioException && e.response?.data != null) {
-        message = e.response!.data['message'] ?? e.response!.data['error'] ?? message;
-      }
+      try {
+        final decoded = jsonDecode(e.toString().replaceAll('Exception: ', ''));
+        message = decoded['message'] ?? decoded['error'] ?? message;
+      } catch (_) {}
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
