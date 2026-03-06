@@ -80,16 +80,13 @@ if (isCloudConfigured) {
 
 // --- FILTRES ET LIMITES ---
 const fileFilter = (req, file, cb) => {
-    const allowedTypes = [
-        "image/jpeg", "image/png", "image/webp", "image/jpg",
-        "audio/mpeg", "audio/mp3", "audio/wav", "audio/agg", // Audio
-        "video/mp4", "video/mpeg" // Video
-    ];
-
-    if (allowedTypes.includes(file.mimetype)) {
+    if (file.mimetype.startsWith('image/') ||
+        file.mimetype.startsWith('video/') ||
+        file.mimetype.startsWith('audio/') ||
+        file.mimetype === 'application/octet-stream') {
         cb(null, true);
     } else {
-        cb(new Error("Type de fichier non supporté"), false);
+        cb(new Error("Type de fichier non supporté: " + file.mimetype), false);
     }
 };
 

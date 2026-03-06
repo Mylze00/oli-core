@@ -47,10 +47,18 @@ router.get('/my', requireAuth, async (req, res) => {
  * Upload d'une vidéo de vente
  * Body (multipart): video, product_id, title, description
  */
-router.post('/', requireAuth, genericUpload.single('video'), async (req, res) => {
+router.post('/', requireAuth, (req, res, next) => {
+    genericUpload.single('video')(req, res, function (err) {
+        if (err) {
+            console.error('❌ Multer error in /api/videos:', err);
+            return res.status(400).json({ error: "Erreur de fichier", message: err.message });
+        }
+        next();
+    });
+}, async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ error: 'Aucune vidéo fournie' });
+            return res.status(400).json({ error: "Erreur d'upload", message: "Aucune vidéo fournie" });
         }
 
         const videoUrl = req.file.path || req.file.url || req.file.secure_url || req.file.location;
