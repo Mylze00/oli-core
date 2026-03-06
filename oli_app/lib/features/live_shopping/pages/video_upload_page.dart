@@ -117,7 +117,6 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
           ),
         );
         Navigator.pop(context, true); // true = refresh feed
-      }
       } else {
         throw Exception(response.body);
       }
