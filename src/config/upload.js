@@ -50,7 +50,7 @@ if (isCloudConfigured) {
     console.log("- API_SECRET:", process.env.CLOUDINARY_API_SECRET ? "Défini" : "MANQUANT");
 
     // Créer les dossiers locaux si nécessaire
-    const uploadDirs = ['uploads', 'uploads/products', 'uploads/avatars', 'uploads/chat'];
+    const uploadDirs = ['uploads', 'uploads/products', 'uploads/avatars', 'uploads/chat', 'uploads/videos'];
     uploadDirs.forEach(dir => {
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
@@ -63,6 +63,7 @@ if (isCloudConfigured) {
             if (file.fieldname === "images" || file.fieldname === "image") folder += "products/";
             else if (file.fieldname === "avatar") folder += "avatars/";
             else if (file.fieldname === "chat_file") folder += "chat/";
+            else if (file.fieldname === "video") folder += "videos/";
 
             // Si le dossier spécifique n'existe pas, on le crée
             if (!fs.existsSync(folder)) {
