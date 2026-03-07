@@ -151,6 +151,10 @@ class ProductRepository {
             query += ` AND p.seller_id = $${paramIndex++}`;
             params.push(filters.seller_id);
         }
+        if (filters.subcategory) {
+            query += ` AND p.subcategory = $${paramIndex++}`;
+            params.push(filters.subcategory);
+        }
 
         // Filtrage par type (new, popular, promotions)
         if (filters.filterType) {
