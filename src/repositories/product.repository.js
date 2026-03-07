@@ -194,9 +194,11 @@ class ProductRepository {
             if (!filters.search) {
                 query += ` AND (u.is_admin IS NULL OR u.is_admin = FALSE)`;
             }
-            // ── Marché = vendeurs personnels uniquement ──
-            // Les entreprises et boutiques certifiées sont visibles dans "Grands Magasins"
-            query += ` AND u.account_type NOT IN ('entreprise', 'certifie', 'certified', 'premium')`;
+            // ── Marché général = vendeurs personnels uniquement ──
+            // Uniquement quand PAS de filtre catégorie (pages catégorie montrent tous les vendeurs)
+            if (!filters.category) {
+                query += ` AND u.account_type NOT IN ('entreprise', 'certifie', 'certified', 'premium')`;
+            }
         }
 
         // Tri selon le type de filtre
