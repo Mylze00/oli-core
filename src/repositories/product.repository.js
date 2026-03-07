@@ -215,8 +215,9 @@ class ProductRepository {
                 query += ` AND (u.is_admin IS NULL OR u.is_admin = FALSE)`;
             }
             // ── Marché général = vendeurs personnels uniquement ──
-            // Uniquement quand PAS de filtre catégorie (pages catégorie montrent tous les vendeurs)
-            if (!filters.category) {
+            // Uniquement quand PAS de filtre catégorie ET PAS de recherche
+            // (pages catégorie et recherche montrent tous les vendeurs, y compris OLI admin)
+            if (!filters.category && !filters.search) {
                 query += ` AND u.account_type NOT IN ('entreprise', 'certifie', 'certified', 'premium')`;
             }
         }
