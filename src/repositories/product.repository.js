@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const fuzzySearchService = require('../services/fuzzy_search.service');
 
 class ProductRepository {
     async findFeatured(adminPhone, limit, offset = 0) {
@@ -139,9 +140,24 @@ class ProductRepository {
             params.push(`%${filters.location}%`);
         }
         if (filters.search) {
-            query += ` AND (p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex})`;
-            params.push(`%${filters.search}%`);
-            paramIndex++;
+            try {
+                // Recherche floue : tolérante aux fautes de frappe (pg_trgm + synonymes)
+                const fuzzy = fuzzySearchService.getFuzzySearchConditionSimple(
+                    filters.search,
+                    paramIndex
+                );
+                query += ` AND ${fuzzy.condition}`;
+                params.push(...fuzzy.params);
+                paramIndex = fuzzy.nextIndex;
+                // Stocker les infos fuzzy pour les remonter dans la réponse
+                filters._fuzzyResult = fuzzy;
+            } catch (e) {
+                // Fallback sur ILIKE classique si pg_trgm non dispo
+                console.warn('⚠️ Fuzzy search fallback to ILIKE:', e.message);
+                query += ` AND (p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex} OR p.category ILIKE $${paramIndex})`;
+                params.push(`%${filters.search}%`);
+                paramIndex++;
+            }
         }
         if (filters.shopId) {
             query += ` AND p.shop_id = $${paramIndex++}`;
@@ -405,6 +421,7 @@ class ProductRepository {
 
         keywords.forEach(keyword => {
             const pattern = `%${keyword.toLowerCase()}%`;
+            // Correspondance exacte
             conditions.push(`(
                 LOWER(p.name) LIKE $${paramIndex}
                 OR LOWER(p.description) LIKE $${paramIndex}
@@ -413,6 +430,10 @@ class ProductRepository {
                 OR LOWER(p.brand) LIKE $${paramIndex}
             )`);
             values.push(pattern);
+            paramIndex++;
+            // Similarité trigram pg_trgm
+            conditions.push(`similarity(LOWER(p.name), $${paramIndex}) > 0.25`);
+            values.push(keyword.toLowerCase());
             paramIndex++;
         });
 

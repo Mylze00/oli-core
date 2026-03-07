@@ -44,20 +44,30 @@ exports.getAll = async (req, res) => {
             search: req.query.search,
             shopId: req.query.shopId,
             seller_id: req.query.seller_id,
+            subcategory: req.query.subcategory,
             filterType: req.query.filterType // new, popular, promotions
         };
-        // Limite raisonnable : 100 produits par page (réduit de 200 pour optimiser data)
         const limit = parseInt(req.query.limit) || 100;
         const offset = parseInt(req.query.offset) || 0;
 
         const products = await productService.getAllProducts(filters, limit, offset);
 
-        // Retourner avec métadonnées pour pagination
+        // Infos sur la correction orthographique (fuzzy search)
+        const fuzzyResult = filters._fuzzyResult;
+        const fuzzyUsed = fuzzyResult?.fuzzyUsed && fuzzyResult.expandedTerms?.length > 1;
+
         res.json({
             products,
             hasMore: products.length === limit,
             limit,
-            offset
+            offset,
+            // Métadonnées fuzzy search pour afficher "Résultats pour : [terme corrigé]"
+            ...(fuzzyUsed && {
+                fuzzy_used: true,
+                expanded_terms: fuzzyResult.expandedTerms,
+                // Premier synonyme = terme "corrigé" le plus probable
+                suggested_term: fuzzyResult.expandedTerms[1] || fuzzyResult.expandedTerms[0],
+            }),
         });
     } catch (err) {
         console.error("Erreur GET /products:", err);
