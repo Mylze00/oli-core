@@ -353,11 +353,17 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     } else {
       setState(() => _showCategories = true);
       _categoryAnimController.forward();
-      _hideCategoriesTimer?.cancel();
-      _hideCategoriesTimer = Timer(const Duration(seconds: 6), () {
-        if (mounted && _showCategories) _categoryAnimController.reverse();
-      });
+      _resetCategoryTimer();
     }
+  }
+
+  /// Réinitialise le timer d'auto-masquage des icônes de catégorie (7 secondes).
+  /// Appelé à chaque sélection de catégorie pour garder le panneau visible.
+  void _resetCategoryTimer() {
+    _hideCategoriesTimer?.cancel();
+    _hideCategoriesTimer = Timer(const Duration(seconds: 7), () {
+      if (mounted && _showCategories) _categoryAnimController.reverse();
+    });
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -638,8 +644,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                         child: CategoryGlassSection(
                           selectedCategory: 'Tout',
                           onCategorySelected: (label) {
+                            // Garder les icônes visibles et réinitialiser le timer
+                            _resetCategoryTimer();
                             _onCategorySelected(label);
-                            _categoryAnimController.reverse();
                           },
                           categories: _categories,
                         ),
