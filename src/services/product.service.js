@@ -4,6 +4,7 @@ const shopRepository = require('../repositories/shop.repository');
 const userRepo = require('../repositories/user.repository');
 const productRepository = require('../repositories/product.repository');
 const imageService = require('./image.service');
+const { categorizeByName } = require('./product_categorizer.service');
 
 class ProductService {
     // ... (méthodes existantes: _formatImages, _formatProduct, getFeaturedProducts, getTopSellers, getVerifiedShopsProducts)
@@ -30,6 +31,7 @@ class ProductService {
             description: p.description,
             price: parseFloat(p.price).toFixed(2),
             category: p.category,
+            subcategory: p.subcategory || null,
             condition: p.condition,
             quantity: p.quantity,
             color: p.color,
@@ -148,13 +150,40 @@ class ProductService {
             }
         }
 
+        // ── Auto-catégorisation ──────────────────────────────────────────────
+        // Si la catégorie n'est pas fournie, est 'other' ou manquante → analyser le nom
+        let resolvedCategory = data.category;
+        let resolvedSubcategory = data.subcategory || null;
+
+        const needsClassification = !resolvedCategory
+            || resolvedCategory === 'other'
+            || resolvedCategory === 'autres'
+            || resolvedCategory === 'Autres';
+
+        if (needsClassification || !resolvedSubcategory) {
+            try {
+                const classified = categorizeByName(data.name, data.description || '');
+                if (needsClassification && classified.confidence >= 30) {
+                    resolvedCategory = classified.category;
+                }
+                if (!resolvedSubcategory) {
+                    resolvedSubcategory = classified.subcategory;
+                }
+                console.log(`🏷️ Auto-classification: "${data.name}" → ${classified.category}/${classified.subcategory} (${classified.confidence}%)`);
+            } catch (classErr) {
+                console.warn('⚠️ Auto-classification échouée:', classErr.message);
+            }
+        }
+        // ────────────────────────────────────────────────────────────────────
+
         const productData = {
             seller_id: userId,
             shop_id: (shopId && !isNaN(shopId)) ? shopId : null,
             name: data.name,
             description: data.description,
             price: parseFloat(price) || 0, // Use aliased price
-            category: data.category,
+            category: resolvedCategory || 'other',
+            subcategory: resolvedSubcategory,
             images,
             delivery_price: parseFloat(data.delivery_price || 0),
             delivery_time: data.delivery_time,
@@ -243,6 +272,28 @@ class ProductService {
         if (!isOwner) {
             throw new Error('Non autorisé');
         }
+
+        // ── Auto-reclassification si le nom change ou si demandé ──────────
+        if (updates.name || updates.force_reclassify) {
+            try {
+                const classified = categorizeByName(
+                    updates.name || '',
+                    updates.description || ''
+                );
+                if (classified.confidence >= 30) {
+                    // Ne forcer la catégorie que si non fournie ou 'other'
+                    if (!updates.category || updates.category === 'other') {
+                        updates.category = classified.category;
+                    }
+                    // Toujours mettre à jour la sous-catégorie
+                    updates.subcategory = classified.subcategory;
+                    console.log(`🏷️ Reclassification update: "${updates.name}" → ${classified.category}/${classified.subcategory} (${classified.confidence}%)`);
+                }
+            } catch (classErr) {
+                console.warn('⚠️ Reclassification update échouée:', classErr.message);
+            }
+        }
+        // ────────────────────────────────────────────────────────────────────
 
         const updated = await productRepository.update(productId, updates);
         if (!updated) {

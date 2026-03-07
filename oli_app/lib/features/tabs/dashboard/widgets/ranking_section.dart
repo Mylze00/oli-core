@@ -14,7 +14,7 @@ class RankingSectionHelper {
   // ── Bannières promotionnelles ────────────────────────────────────────────
   static const List<Map<String, dynamic>> promoMessages = [
     {
-      'title': 'Guérite Oli 🏪',
+      'title': 'Guérite Oli ',
       'text':
           'Achetez et récupérez vos commandes dans le guérite Oli de votre supermarché',
       'gradient1': Color(0xFF4A0E8F),
@@ -24,16 +24,17 @@ class RankingSectionHelper {
       'textSize': 13.0,
     },
     {
-      'title': 'Meilleurs Prix 💰',
-      'text': 'Achetez au meilleur prix avec Oli, livraison rapide garantie',
-      'gradient1': Color(0xFF0D7377),
-      'gradient2': Color(0xFF14463A),
-      'paddingV': 12.0,
-      'titleSize': 14.0,
-      'textSize': 11.0,
+      'title': 'Vendez sur Oli',
+      'text': 'dès maintenant\net gratuitement',
+      'bg_color': Color(0xFF4A78D6), // Bleu plus doux similaire à l'image
+      'paddingV': 24.0, // Plus d'espace
+      'titleSize': 26.0,
+      'textSize': 20.0,
+      'isCentered': true, // Nouveau flag pour centrer
+      'hasBorder': true, // Nouveau flag pour la bordure blanche
     },
     {
-      'title': 'Vendez sur Oli 🚀',
+      'title': 'Vendez sur Oli ',
       'text': 'Profitez des avantages en vendant sur Oli, commencez gratuitement',
       'gradient1': Color(0xFFD84315),
       'gradient2': Color(0xFF8F2B00),
@@ -127,24 +128,33 @@ class RankingSectionHelper {
 
       // ── Bannière promotionnelle après chaque cycle de 8 produits ──
       final promo = promoMessages[promoIndex % promoMessages.length];
-      final Color grad1 = promo['gradient1'] as Color;
-      final Color grad2 = promo['gradient2'] as Color;
+      final Color? bgCol = promo.containsKey('bg_color') ? promo['bg_color'] as Color : null;
+      final Color grad1 = promo.containsKey('gradient1') ? promo['gradient1'] as Color : (bgCol ?? Colors.blue);
+      final Color grad2 = promo.containsKey('gradient2') ? promo['gradient2'] as Color : (bgCol ?? Colors.blue);
       final double padV = promo['paddingV'] as double;
       final double tSize = promo['titleSize'] as double;
       final double dSize = promo['textSize'] as double;
+      final bool isCentered = promo.containsKey('isCentered') ? promo['isCentered'] as bool : false;
+      final bool hasBorder = promo.containsKey('hasBorder') ? promo['hasBorder'] as bool : false;
       promoIndex++;
 
       slivers.add(SliverToBoxAdapter(
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 12),
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV * 2),
+          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16), // Marge externe sur les côtés
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [grad1, grad2],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.zero,
+            color: bgCol, // Si bg_color est défini, on utilise la couleur unie
+            gradient: bgCol == null 
+                ? LinearGradient(
+                    colors: [grad1, grad2],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null, // Pas de dégradé si on a une couleur unie
+            borderRadius: BorderRadius.circular(8), // Bords légèrement arrondis
+            border: hasBorder 
+                ? Border.all(color: Colors.white, width: 1.5) // Bordure blanche
+                : null,
             boxShadow: [
               BoxShadow(
                 color: grad1.withOpacity(0.3),
@@ -154,23 +164,26 @@ class RankingSectionHelper {
             ],
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: isCentered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
             children: [
               Text(
                 promo['title'] as String,
+                textAlign: isCentered ? TextAlign.center : TextAlign.left,
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: tSize,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w800, // Plus gras comme sur l'image
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
                 promo['text'] as String,
+                textAlign: isCentered ? TextAlign.center : TextAlign.left,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.85),
+                  color: Colors.white,
                   fontSize: dSize,
-                  height: 1.4,
+                  height: 1.3,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ],

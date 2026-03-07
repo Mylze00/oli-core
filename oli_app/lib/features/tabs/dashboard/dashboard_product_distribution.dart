@@ -64,9 +64,8 @@ mixin DashboardProductDistribution {
     // ── 3. Super Offres (donnée intermédiaire pour fallback) ──
     cachedSuperOffers = allProducts.take(10).toList();
 
-    // ── 4. Section "Top Classement" : TOUS les produits admin, triés par nom ──
-    cachedRankingList = List<Product>.from(allProducts)
-      ..sort((a, b) => a.name.compareTo(b.name));
+    // ── 4. Section "Top Classement" : TOUS les produits admin, mélangés aléatoirement ──
+    cachedRankingList = List<Product>.from(allProducts)..shuffle();
 
     distributionComputed = true;
   }

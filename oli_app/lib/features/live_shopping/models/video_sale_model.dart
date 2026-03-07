@@ -1,4 +1,6 @@
 /// Modèle pour une vidéo de vente (Live Shopping)
+import '../../../config/api_config.dart';
+
 class VideoSale {
   final String id;
   final String videoUrl;
@@ -53,10 +55,15 @@ class VideoSale {
       }
     }
 
+    String? formatUrl(String? url) {
+      if (url == null || url.isEmpty) return null;
+      return url.startsWith('http') ? url : '${ApiConfig.baseUrl}/$url';
+    }
+
     return VideoSale(
       id: json['id']?.toString() ?? '',
-      videoUrl: json['video_url'] ?? '',
-      thumbnailUrl: json['thumbnail_url'],
+      videoUrl: formatUrl(json['video_url']) ?? '',
+      thumbnailUrl: formatUrl(json['thumbnail_url']),
       title: json['title'],
       description: json['description'],
       durationSeconds: json['duration_seconds'],
@@ -72,7 +79,7 @@ class VideoSale {
       productImages: images,
       sellerId: json['seller_id'] ?? '',
       sellerName: json['seller_name'] ?? 'Vendeur',
-      sellerAvatar: json['seller_avatar'],
+      sellerAvatar: formatUrl(json['seller_avatar']),
       sellerCertified: json['seller_certified'] == true,
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
     );

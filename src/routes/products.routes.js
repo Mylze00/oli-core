@@ -43,6 +43,32 @@ router.get('/top-sellers', productController.getTopSellers);
 router.get('/verified-shops', productController.getVerifiedShops);
 
 /**
+ * POST /products/analyze-name
+ * Analyse un nom de produit et retourne catégorie + sous-catégorie suggérées.
+ * Utile pour l'aperçu en temps réel côté vendeur ou le debug admin.
+ * Corps attendu : { name: string, description?: string }
+ */
+router.post('/analyze-name', (req, res) => {
+    try {
+        const { categorizeByName } = require('../services/product_categorizer.service');
+        const { name, description = '' } = req.body;
+        if (!name) {
+            return res.status(400).json({ error: 'Le champ "name" est requis' });
+        }
+        const result = categorizeByName(name, description);
+        res.json({
+            category: result.category,
+            subcategory: result.subcategory,
+            confidence: result.confidence,
+            keywords_matched: result.matched,
+        });
+    } catch (err) {
+        console.error('Erreur POST /products/analyze-name:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
  * GET /products
  * Liste tous les produits actifs (avec filtres)
  */

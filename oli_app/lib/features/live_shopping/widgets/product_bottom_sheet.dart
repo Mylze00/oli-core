@@ -1,14 +1,71 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../../config/api_config.dart';
+import '../../../models/product_model.dart';
 import '../models/video_sale_model.dart';
+import '../../marketplace/presentation/pages/product_details_page.dart';
 
 /// Bottom sheet affichant les détails du produit lié à la vidéo
-class ProductBottomSheet extends StatelessWidget {
+class ProductBottomSheet extends StatefulWidget {
   final VideoSale video;
 
   const ProductBottomSheet({super.key, required this.video});
 
   @override
+  State<ProductBottomSheet> createState() => _ProductBottomSheetState();
+}
+
+class _ProductBottomSheetState extends State<ProductBottomSheet> {
+  bool _isLoadingProduct = false;
+
+  Future<void> _fetchAndNavigate(BuildContext context) async {
+    final productId = widget.video.productId;
+    if (productId == null) return;
+
+    setState(() => _isLoadingProduct = true);
+
+    try {
+      final uri = Uri.parse('${ApiConfig.products}/$productId');
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // data peut être { product: {...} } ou juste {...}
+        final productJson = data['product'] ?? data;
+        final product = Product.fromJson(productJson);
+
+        if (mounted) {
+          Navigator.pop(context); // Fermer le bottom sheet
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProductDetailsPage(product: product),
+            ),
+          );
+        }
+      } else {
+        throw Exception('Produit introuvable');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Impossible de charger les détails du produit'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingProduct = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final video = widget.video;
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.55,
@@ -134,15 +191,11 @@ class ProductBottomSheet extends StatelessWidget {
                     // Voir le produit
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          // TODO: Naviguer vers la page produit
-                          // Navigator.push(context, MaterialPageRoute(
-                          //   builder: (_) => ProductDetailsPage(productId: video.productId!),
-                          // ));
-                        },
-                        icon: const Icon(Icons.visibility_outlined, size: 18),
-                        label: const Text('Voir le produit'),
+                        onPressed: _isLoadingProduct ? null : () => _fetchAndNavigate(context),
+                        icon: _isLoadingProduct 
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.visibility_outlined, size: 18),
+                        label: Text(_isLoadingProduct ? 'Chargement...' : 'Voir le produit'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: const BorderSide(color: Colors.white24),

@@ -38,6 +38,7 @@ class Product {
   final bool sellerHasCertifiedShop;
   final String condition;
   final String? category; // Product category (industry, home, vehicles, fashion, electronics, beauty, kids)
+  final String? subcategory; // Sous-catégorie auto-détectée (smartphones, tv, robes, meubles...)
   final String description;
   final String color;
   final String deliveryTime;
@@ -78,6 +79,7 @@ class Product {
     this.sellerHasCertifiedShop = false,
     required this.condition,
     this.category,
+    this.subcategory,
     required this.description,
     required this.color,
     required this.deliveryPrice,
@@ -135,7 +137,8 @@ class Product {
       sellerAccountType: json['sellerAccountType'] ?? json['seller_account_type'] ?? 'ordinaire',
       sellerHasCertifiedShop: json['sellerHasCertifiedShop'] ?? json['seller_has_certified_shop'] ?? false,
       condition: json['condition'] ?? 'Inconnu',
-      category: json['category'], // Nullable - peut être null pour anciens produits
+      category: json['category'],
+      subcategory: json['subcategory'],
       description: json['description'] ?? '',
       color: json['color'] ?? '',
       // Support camelCase ET snake_case

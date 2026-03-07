@@ -11,7 +11,8 @@ class ProductRepository {
                    u.account_type as seller_account_type,
                    u.has_certified_shop as seller_has_certified_shop,
                    s.name as shop_name, 
-                   s.is_verified as shop_verified
+                   s.is_verified as shop_verified,
+                   p.subcategory
             FROM products p 
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
@@ -110,7 +111,8 @@ class ProductRepository {
                    u.account_type as seller_account_type,
                    u.has_certified_shop as seller_has_certified_shop,
                    s.name as shop_name, 
-                   s.is_verified as shop_verified
+                   s.is_verified as shop_verified,
+                   p.subcategory
             FROM products p 
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
@@ -192,6 +194,9 @@ class ProductRepository {
             if (!filters.search) {
                 query += ` AND (u.is_admin IS NULL OR u.is_admin = FALSE)`;
             }
+            // ── Marché = vendeurs personnels uniquement ──
+            // Les entreprises et boutiques certifiées sont visibles dans "Grands Magasins"
+            query += ` AND u.account_type NOT IN ('entreprise', 'certifie', 'certified', 'premium')`;
         }
 
         // Tri selon le type de filtre
@@ -230,7 +235,8 @@ class ProductRepository {
                    s.name as shop_name, 
                    s.is_verified as shop_verified,
                    p.express_delivery_price,
-                   p.shipping_options
+                   p.shipping_options,
+                   p.subcategory
             FROM products p 
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
@@ -246,7 +252,7 @@ class ProductRepository {
 
     async create(product) {
         const {
-            seller_id, shop_id, name, description, price, category, images,
+            seller_id, shop_id, name, description, price, category, subcategory, images,
             delivery_price, delivery_time, condition, quantity, color, location,
             is_negotiable, b2b_pricing, unit, brand, weight,
             discount_price, discount_start_date, discount_end_date,
@@ -255,7 +261,7 @@ class ProductRepository {
 
         const query = `
             INSERT INTO products (
-                seller_id, shop_id, name, description, price, category, images,
+                seller_id, shop_id, name, description, price, category, subcategory, images,
                 delivery_price, delivery_time, condition, quantity, color, location,
                 is_negotiable, b2b_pricing, unit, brand, weight,
                 discount_price, discount_start_date, discount_end_date,
@@ -263,18 +269,18 @@ class ProductRepository {
                 status, created_at, updated_at
             )
             VALUES (
-                $1, $2, $3, $4, $5, $6, $7, 
-                $8, $9, $10, $11, $12, $13, 
-                $14, $15, $16, $17, $18,
-                $19, $20, $21,
-                $22, $23,
+                $1, $2, $3, $4, $5, $6, $7, $8, 
+                $9, $10, $11, $12, $13, $14, 
+                $15, $16, $17, $18, $19,
+                $20, $21, $22,
+                $23, $24,
                 'active', NOW(), NOW()
             )
             RETURNING *
         `;
 
         const values = [
-            seller_id, shop_id, name, description, price, category, images,
+            seller_id, shop_id, name, description, price, category, subcategory || null, images,
             delivery_price, delivery_time, condition, quantity, color, location,
             is_negotiable, JSON.stringify(b2b_pricing || []), unit || 'Pièce', brand || '', weight || '',
             discount_price || null, discount_start_date || null, discount_end_date || null,
@@ -303,7 +309,7 @@ class ProductRepository {
     }
 
     async update(id, updates) {
-        const fields = ['name', 'description', 'price', 'category', 'condition',
+        const fields = ['name', 'description', 'price', 'category', 'subcategory', 'condition',
             'quantity', 'color', 'location', 'status', 'delivery_price', 'delivery_time',
             'is_good_deal', 'unit', 'brand', 'weight', 'b2b_pricing',
             'discount_price', 'discount_start_date', 'discount_end_date', 'shipping_options'];

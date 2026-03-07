@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:dropdown_search/dropdown_search.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../../../config/api_config.dart';
 import '../../../core/storage/secure_storage_service.dart';
@@ -269,7 +270,6 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
             const Text('Lier un produit', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1A2E),
                 borderRadius: BorderRadius.circular(12),
@@ -279,29 +279,71 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                       padding: EdgeInsets.all(16),
                       child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white24)),
                     )
-                  : DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedProductId,
-                        hint: const Text('Choisir un produit (optionnel)', style: TextStyle(color: Colors.white30)),
-                        dropdownColor: const Color(0xFF1A1A2E),
-                        isExpanded: true,
-                        icon: const Icon(Icons.arrow_drop_down, color: Colors.white30),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('Aucun produit', style: TextStyle(color: Colors.white54)),
+                  : Theme(
+                      data: Theme.of(context).copyWith(
+                        textTheme: const TextTheme(
+                          titleMedium: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      child: DropdownSearch<Map<String, dynamic>>(
+                        items: _myProducts,
+                        compareFn: (i, s) => i['id'] == s['id'],
+                        itemAsString: (Map<String, dynamic> u) => u['name']?.toString() ?? 'Produit',
+                        onChanged: (Map<String, dynamic>? data) {
+                          setState(() {
+                            _selectedProductId = data?['id']?.toString();
+                          });
+                        },
+                        selectedItem: _selectedProductId != null 
+                            ? _myProducts.firstWhere(
+                                (p) => p['id']?.toString() == _selectedProductId, 
+                                orElse: () => {'id': _selectedProductId, 'name': 'Produit sélectionné'}
+                              )
+                            : null,
+                        popupProps: PopupProps.menu(
+                          showSearchBox: true,
+                          searchFieldProps: TextFieldProps(
+                            style: const TextStyle(color: Colors.black87),
+                            decoration: InputDecoration(
+                              hintText: 'Rechercher un produit...',
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            ),
                           ),
-                          ..._myProducts.map((p) => DropdownMenuItem<String>(
-                                value: p['id']?.toString(),
-                                child: Text(
-                                  p['name'] ?? 'Produit',
-                                  style: const TextStyle(color: Colors.white),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                          menuProps: const MenuProps(
+                            backgroundColor: Colors.white,
+                          ),
+                          itemBuilder: (context, item, isSelected) {
+                            return ListTile(
+                              title: Text(
+                                item['name']?.toString() ?? 'Produit',
+                                style: TextStyle(
+                                  color: isSelected ? const Color(0xFFFF6D00) : Colors.black87,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                 ),
-                              )),
-                        ],
-                        onChanged: (val) => setState(() => _selectedProductId = val),
+                              ),
+                              selected: isSelected,
+                              selectedTileColor: const Color(0xFFFF6D00).withOpacity(0.1),
+                            );
+                          },
+                        ),
+                        dropdownDecoratorProps: DropDownDecoratorProps(
+                          dropdownSearchDecoration: InputDecoration(
+                            hintText: 'Choisir un produit (optionnel)',
+                            hintStyle: const TextStyle(color: Colors.white30),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          ),
+                          baseStyle: const TextStyle(color: Colors.white),
+                        ),
                       ),
                     ),
             ),

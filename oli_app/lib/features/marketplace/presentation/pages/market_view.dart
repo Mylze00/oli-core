@@ -109,6 +109,10 @@ class _MarketViewState extends ConsumerState<MarketView> {
       }
     }
 
+    // EXIGENCES MÉTIER: Le marché ordinaire exclut les entreprises
+    // (Les produits d'entreprises sont visibles dans "Grands Magasins")
+    filtered = filtered.where((p) => p.sellerAccountType != 'entreprise').toList();
+
     // Shuffle + diversification (UNE SEULE FOIS, puis mis en cache)
     final result = _diversify(filtered);
     _cachedFiltered = result;
@@ -378,7 +382,7 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
                 // ── 8. SECONDE MAIN ── après le 9e produit (3 + 6)
                 SliverToBoxAdapter(
-                  child: MarketSecondhandCarousel(products: allProducts),
+                  child: MarketSecondhandCarousel(products: filtered),
                 ),
 
                 // ── 6c. GRILLE (reste) ──
