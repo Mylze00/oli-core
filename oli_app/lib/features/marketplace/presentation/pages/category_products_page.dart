@@ -14,12 +14,15 @@ class CategoryProductsPage extends ConsumerStatefulWidget {
   final String categoryKey;   // 'electronics', 'fashion', etc.
   final String categoryLabel; // 'Électronique', 'Mode', etc.
   final IconData? categoryIcon;
+  /// Produits OLI admin pré-filtrés par catégorie (optionnel)
+  final List<Product> oliProducts;
 
   const CategoryProductsPage({
     super.key,
     required this.categoryKey,
     required this.categoryLabel,
     this.categoryIcon,
+    this.oliProducts = const [],
   });
 
   @override
@@ -188,26 +191,30 @@ class _CategoryProductsPageState extends ConsumerState<CategoryProductsPage> {
       ),
       body: _isLoading && _products.isEmpty
           ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
-          : _products.isEmpty
+          : _products.isEmpty && widget.oliProducts.isEmpty
               ? _buildEmptyState()
               : Column(
                   children: [
-                    // Compteur de résultats
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      color: const Color(0xFF161B22),
-                      child: Text(
-                        '${_products.length} produit${_products.length > 1 ? 's' : ''}',
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                    // ── Section OLI admin (si des produits OLI sont disponibles) ──
+                    if (widget.oliProducts.isNotEmpty) _buildOliSection(),
+                    // Compteur de résultats marketplace
+                    if (_products.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        color: const Color(0xFF161B22),
+                        child: Text(
+                          '${_products.length} produit${_products.length > 1 ? 's' : ''} sur le marché',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                    // Grille de produits
-                    Expanded(
+                    // Grille de produits marketplace
+                    if (_products.isNotEmpty)
+                      Expanded(
                       child: GridView.builder(
                         controller: _scrollController,
                         padding: const EdgeInsets.all(12),
@@ -360,6 +367,164 @@ class _CategoryProductsPageState extends ConsumerState<CategoryProductsPage> {
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ── Section horizontale Produits OLI ────────────────────────────────────
+  Widget _buildOliSection() {
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+    return Container(
+      color: const Color(0xFF0D1117),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // En-tête section
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF6B00), Color(0xFFFFAA00)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.verified, size: 13, color: Colors.white),
+                      SizedBox(width: 4),
+                      Text(
+                        'Sélection OLI',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${widget.oliProducts.length} article${widget.oliProducts.length > 1 ? 's' : ''}',
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          // Carousel horizontal
+          SizedBox(
+            height: 210,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: widget.oliProducts.length,
+              itemBuilder: (context, index) {
+                final product = widget.oliProducts[index];
+                final priceUsd = double.tryParse(product.price) ?? 0.0;
+                final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
+                return GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProductDetailsPage(product: product),
+                    ),
+                  ),
+                  child: Container(
+                    width: 140,
+                    margin: const EdgeInsets.only(right: 10, bottom: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF161B22),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFFF6B00).withOpacity(0.3),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Image
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                          child: SizedBox(
+                            height: 110,
+                            width: double.infinity,
+                            child: product.images.isNotEmpty
+                                ? Image.network(
+                                    CloudinaryHelper.thumbnail(product.images.first),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: const Color(0xFF21262D),
+                                      child: const Icon(Icons.image, color: Colors.white24, size: 32),
+                                    ),
+                                  )
+                                : Container(
+                                    color: const Color(0xFF21262D),
+                                    child: const Icon(Icons.image, color: Colors.white24, size: 32),
+                                  ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.3,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  formattedPrice,
+                                  style: const TextStyle(
+                                    color: Color(0xFFFF6B00),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (product.subcategory != null) ...[
+                                  const SizedBox(height: 3),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.07),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      product.subcategory!.replaceAll('_', ' '),
+                                      style: const TextStyle(
+                                        color: Colors.white38,
+                                        fontSize: 9,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          // Séparateur
+          Divider(color: Colors.white.withOpacity(0.08), height: 1),
         ],
       ),
     );

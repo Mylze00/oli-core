@@ -337,11 +337,21 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       'Bébé': Icons.child_friendly, 'Alimentation': Icons.restaurant,
       'Sécurité': Icons.security, 'Autres': Icons.category,
     };
+
+    // ── Filtrer les produits OLI admin par catégorie sélectionnée ──
+    final categoryKey = _categories[label] ?? '';
+    final oliFiltered = categoryKey.isEmpty
+        ? <Product>[]
+        : ref.read(featuredProductsProvider).where((p) {
+            return (p.category ?? '') == categoryKey;
+          }).toList();
+
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => CategoryProductsPage(
-        categoryKey: _categories[label] ?? '',
+        categoryKey: categoryKey,
         categoryLabel: label,
         categoryIcon: categoryIcons[label],
+        oliProducts: oliFiltered,
       ),
     ));
   }
