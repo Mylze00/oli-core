@@ -225,35 +225,46 @@ class ProductService {
         const createdProduct = await productRepository.create(productData);
         const productId = createdProduct.id;
 
-        // ── Insert product variants (colors & sizes) ──
+        // ── Insert product variants ──
+        // Supporte deux formats :
+        // 1. Ancien format : data.colors + data.sizes (arrays JSON séparés)
+        // 2. Nouveau format Seller Center : data.variants (array unifié [{variant_type, variant_value}])
         try {
+            const toInsert = []; // {type, value}
+
+            // Format 1 : colors + sizes séparés
             const colorsArr = data.colors ? JSON.parse(data.colors) : [];
             const sizesArr = data.sizes ? JSON.parse(data.sizes) : [];
+            for (const c of colorsArr) if (c?.trim()) toInsert.push({ type: 'color', value: c.trim() });
+            for (const s of sizesArr) if (s?.trim()) toInsert.push({ type: 'size', value: s.trim() });
 
-            for (const color of colorsArr) {
-                if (color && color.trim()) {
-                    await pool.query(
-                        `INSERT INTO product_variants (product_id, variant_type, variant_value, stock_quantity, is_active)
-                         VALUES ($1, 'color', $2, $3, true)
-                         ON CONFLICT (product_id, variant_type, variant_value) DO NOTHING`,
-                        [productId, color.trim(), parseInt(data.quantity || 1) || 1]
-                    );
+            // Format 2 : variants unifié [{variant_type, variant_value}]
+            if (data.variants) {
+                const unified = JSON.parse(data.variants);
+                for (const v of unified) {
+                    if (v.variant_type && v.variant_value?.trim()) {
+                        // Éviter les doublons avec le format 1
+                        const already = toInsert.some(x => x.type === v.variant_type && x.value === v.variant_value.trim());
+                        if (!already) toInsert.push({ type: v.variant_type, value: v.variant_value.trim() });
+                    }
                 }
             }
 
-            for (const size of sizesArr) {
-                if (size && size.trim()) {
-                    await pool.query(
-                        `INSERT INTO product_variants (product_id, variant_type, variant_value, stock_quantity, is_active)
-                         VALUES ($1, 'size', $2, $3, true)
-                         ON CONFLICT (product_id, variant_type, variant_value) DO NOTHING`,
-                        [productId, size.trim(), parseInt(data.quantity || 1) || 1]
-                    );
-                }
+            // Insertion en DB
+            const qty = parseInt(data.quantity || 1) || 1;
+            for (const v of toInsert) {
+                await pool.query(
+                    `INSERT INTO product_variants (product_id, variant_type, variant_value, stock_quantity, is_active)
+                     VALUES ($1, $2, $3, $4, true)
+                     ON CONFLICT (product_id, variant_type, variant_value) DO NOTHING`,
+                    [productId, v.type, v.value, qty]
+                );
             }
 
-            if (colorsArr.length > 0 || sizesArr.length > 0) {
-                console.log(`🎨 Variantes créées pour produit ${productId}: ${colorsArr.length} couleur(s), ${sizesArr.length} taille(s)`);
+            if (toInsert.length > 0) {
+                const byType = {};
+                for (const v of toInsert) byType[v.type] = (byType[v.type] || 0) + 1;
+                console.log(`🎨 Variantes créées pour produit ${productId}:`, byType);
             }
         } catch (variantErr) {
             console.warn(`⚠️ Erreur insertion variantes pour produit ${productId}:`, variantErr.message);
