@@ -41,7 +41,16 @@ class VerifiedShopsCarousel extends ConsumerWidget {
               GestureDetector(
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const AllShopsPage()),
+                  PageRouteBuilder(
+                    opaque: false,
+                    barrierDismissible: false,
+                    transitionDuration: const Duration(milliseconds: 350),
+                    pageBuilder: (_, __, ___) => const AllShopsPage(),
+                    transitionsBuilder: (_, anim, __, child) => FadeTransition(
+                      opacity: anim,
+                      child: child,
+                    ),
+                  ),
                 ),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

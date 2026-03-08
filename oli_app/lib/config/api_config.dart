@@ -17,6 +17,7 @@ class ApiConfig {
   static const String productsTopSellers = '$baseUrl/products/top-sellers';
   static const String productsVerifiedShops = '$baseUrl/products/verified-shops';
   static const String productsGoodDeals = '$baseUrl/products/good-deals';
+  static const String productsBranded = '$baseUrl/products/branded';
   static const String ads = '$baseUrl/ads';
   
   // --- Orders ---

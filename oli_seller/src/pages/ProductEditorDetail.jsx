@@ -39,13 +39,31 @@ const CATEGORIES = [
 ];
 
 const AVAILABLE_METHODS = [
-    { id: 'oli_express', label: 'Oli Express', time: '1-2h', description: 'Livraison rapide gérée par Oli' },
-    { id: 'oli_standard', label: 'Oli Standard', time: '2-5 jours', description: 'Livraison standard gérée par Oli' },
-    { id: 'partner', label: 'Livreur Partenaire', time: 'Variable', description: 'Prix calculé automatiquement selon la distance' },
-    { id: 'hand_delivery', label: 'Remise en Main Propre', time: 'À convenir', description: 'Le vendeur et l\'acheteur s\'arrangent' },
-    { id: 'pick_go', label: 'Pick & Go', time: 'Retrait immédiat', description: 'L\'acheteur récupère au guérite du magasin' },
-    { id: 'free', label: 'Livraison Gratuite', time: '3-7 jours', description: 'Offerte par le vendeur' },
+    { id: 'oli_express', label: 'Oli Express', time: '1-2h', description: 'Livraison rapide gérée par Oli', icon: '⚡' },
+    { id: 'oli_standard', label: 'Oli Standard', time: '2-5 jours', description: 'Livraison standard gérée par Oli', icon: '📦' },
+    { id: 'partner', label: 'Livreur Partenaire', time: 'Variable', description: 'Prix calculé automatiquement selon la distance', icon: '🏍️' },
+    { id: 'hand_delivery', label: 'Remise en Main Propre', time: 'À convenir', description: 'Le vendeur et l\'acheteur s\'arrangent', icon: '🤝' },
+    { id: 'pick_go', label: 'Pick & Go', time: 'Retrait immédiat', description: 'L\'acheteur récupère au guérite du magasin', icon: '🏪' },
+    { id: 'free', label: 'Livraison Gratuite', time: '3-7 jours', description: 'Offerte par le vendeur', icon: '🎁' },
+    { id: 'moto', label: 'Livraison Moto', time: 'Calculé/distance', description: 'Prix calculé selon la distance parcourue', icon: '🏍️', isDistanceBased: true },
+    { id: 'maritime', label: 'Livraison Maritime', time: '60 jours', description: 'Transport par voie maritime pour grandes distances', icon: '🚢' },
 ];
+
+// ── Variantes ─────────────────────────────────────────────────────────────────
+const COLORS = [
+    { name: 'Rouge', hex: '#ef4444' }, { name: 'Bleu', hex: '#3b82f6' },
+    { name: 'Vert', hex: '#22c55e' }, { name: 'Jaune', hex: '#eab308' },
+    { name: 'Orange', hex: '#f97316' }, { name: 'Violet', hex: '#a855f7' },
+    { name: 'Rose', hex: '#ec4899' }, { name: 'Noir', hex: '#1f2937' },
+    { name: 'Blanc', hex: '#f3f4f6' }, { name: 'Gris', hex: '#9ca3af' },
+    { name: 'Marron', hex: '#92400e' }, { name: 'Beige', hex: '#d4a47a' },
+    { name: 'Gold', hex: '#f59e0b' }, { name: 'Argent', hex: '#cbd5e1' },
+];
+const SIZES = [
+    'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL',
+    '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46',
+];
+const MATERIALS = ['Coton', 'Polyester', 'Cuir', 'Soie', 'Lin', 'Laine', 'Nylon', 'Velours', 'Denim', 'Plastique', 'Métal', 'Bois', 'Céramique', 'Caoutchouc'];
 
 const RETURN_POLICIES = [
     'Garantie Oli (7 jours)',
@@ -73,10 +91,23 @@ export default function ProductEditorDetail() {
     const [quantity, setQuantity] = useState('');
     const [color, setColor] = useState('');
     const [location, setLocation] = useState('');
-    const [images, setImages] = useState([]); // File objects
-    const [imagePreviews, setImagePreviews] = useState([]); // URLs for previews
+    const [images, setImages] = useState([]);
+    const [imagePreviews, setImagePreviews] = useState([]);
     const [returnPolicy, setReturnPolicy] = useState('Garantie Oli (7 jours)');
     const [certifyAuthenticity, setCertifyAuthenticity] = useState(false);
+
+    // Badge Original (Brand Certified)
+    const [brandCertified, setBrandCertified] = useState(false);
+    const [brandDisplayName, setBrandDisplayName] = useState('');
+
+    // Variantes
+    const [selectedColors, setSelectedColors] = useState([]);
+    const [selectedSizes, setSelectedSizes] = useState([]);
+    const [selectedMaterials, setSelectedMaterials] = useState([]);
+
+    const toggleVariant = (list, setList, value) => {
+        setList(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+    };
 
     // Shipping options
     const [shippingOptions, setShippingOptions] = useState([
@@ -234,11 +265,27 @@ export default function ProductEditorDetail() {
             formData.append('location', location.trim() || 'Non spécifiée');
             formData.append('is_negotiable', 'false');
 
-            // Shipping options (JSON string, comme le mobile)
+            // Shipping options
             const defaultOption = shippingOptions[0];
             formData.append('delivery_price', defaultOption.cost || 0);
             formData.append('delivery_time', defaultOption.time || '');
             formData.append('shipping_options', JSON.stringify(shippingOptions));
+
+            // Badge Original
+            formData.append('brand_certified', brandCertified ? 'true' : 'false');
+            if (brandCertified && brandDisplayName.trim()) {
+                formData.append('brand_display_name', brandDisplayName.trim());
+            }
+
+            // Variantes
+            const variants = [
+                ...selectedColors.map(v => ({ variant_type: 'color', variant_value: v })),
+                ...selectedSizes.map(v => ({ variant_type: 'size', variant_value: v })),
+                ...selectedMaterials.map(v => ({ variant_type: 'material', variant_value: v })),
+            ];
+            if (variants.length > 0) {
+                formData.append('variants', JSON.stringify(variants));
+            }
 
             // Images
             images.forEach(image => {
@@ -480,7 +527,7 @@ export default function ProductEditorDetail() {
                     <div className="space-y-3">
                         {shippingOptions.map((option, index) => {
                             const method = AVAILABLE_METHODS.find(m => m.id === option.methodId);
-                            const isCostDisabled = option.methodId === 'free' || option.methodId === 'hand_delivery' || option.methodId === 'partner';
+                            const isCostDisabled = option.methodId === 'free' || option.methodId === 'hand_delivery' || option.methodId === 'partner' || option.methodId === 'moto';
 
                             return (
                                 <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-100 relative">
@@ -611,6 +658,116 @@ export default function ProductEditorDetail() {
                             value={location}
                             onChange={e => setLocation(e.target.value)}
                         />
+                    </div>
+                </div>
+
+                {/* ═══ BADGE ORIGINAL ═══ */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-amber-100">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-9 h-9 bg-amber-50 rounded-full flex items-center justify-center">
+                            <span className="text-amber-500 text-lg">⭐</span>
+                        </div>
+                        <div>
+                            <h2 className="font-bold text-gray-900">Badge Original</h2>
+                            <p className="text-xs text-gray-400">Réservé aux produits de marque authentique — soumis à vérification admin</p>
+                        </div>
+                    </div>
+
+                    <label className="flex items-center justify-between cursor-pointer mb-4">
+                        <div>
+                            <p className="text-sm font-medium text-gray-700">Ce produit est un article de marque authentique</p>
+                            <p className="text-xs text-gray-400 mt-0.5">En activant ceci, vous déclarez que ce produit est un original certifié</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setBrandCertified(v => !v)}
+                            className={`w-12 h-6 rounded-full transition-colors flex-shrink-0 ml-4 ${brandCertified ? 'bg-amber-500' : 'bg-gray-200'}`}
+                        >
+                            <div className={`w-4 h-4 bg-white rounded-full shadow m-1 transition-transform ${brandCertified ? 'translate-x-6' : 'translate-x-0'}`} />
+                        </button>
+                    </label>
+
+                    {brandCertified && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nom de la marque (affiché sur le badge)</label>
+                            <input
+                                type="text"
+                                className="w-full border border-amber-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-400 outline-none bg-amber-50/30"
+                                placeholder="ex: Nike, Samsung, Adidas..."
+                                value={brandDisplayName}
+                                onChange={e => setBrandDisplayName(e.target.value)}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* ═══ VARIANTES ═══ */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                    <h2 className="font-bold text-gray-900 flex items-center gap-2 mb-4">
+                        <span>🎨</span> Variantes du produit
+                        <span className="text-xs font-normal text-gray-400 ml-1">(facultatif)</span>
+                    </h2>
+
+                    {/* Couleurs */}
+                    <div className="mb-4">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Couleurs disponibles</p>
+                        <div className="flex flex-wrap gap-2">
+                            {COLORS.map(c => {
+                                const active = selectedColors.includes(c.name);
+                                return (
+                                    <button key={c.name} type="button"
+                                        onClick={() => toggleVariant(selectedColors, setSelectedColors, c.name)}
+                                        title={c.name}
+                                        className={`relative w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${active ? 'border-blue-500 scale-110 shadow-md' : 'border-gray-200'}`}
+                                        style={{ backgroundColor: c.hex }}>
+                                        {active && <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold drop-shadow">✓</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {selectedColors.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                                {selectedColors.map(v => (
+                                    <span key={v} className="text-xs bg-gray-100 px-2 py-0.5 rounded-full text-gray-600">{v}</span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Tailles */}
+                    <div className="mb-4">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Tailles disponibles</p>
+                        <div className="flex flex-wrap gap-2">
+                            {SIZES.map(s => {
+                                const active = selectedSizes.includes(s);
+                                return (
+                                    <button key={s} type="button"
+                                        onClick={() => toggleVariant(selectedSizes, setSelectedSizes, s)}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition
+                                            ${active ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'}`}>
+                                        {s}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Matières */}
+                    <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Matières</p>
+                        <div className="flex flex-wrap gap-2">
+                            {MATERIALS.map(m => {
+                                const active = selectedMaterials.includes(m);
+                                return (
+                                    <button key={m} type="button"
+                                        onClick={() => toggleVariant(selectedMaterials, setSelectedMaterials, m)}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition
+                                            ${active ? 'bg-purple-600 text-white border-purple-600 shadow-sm' : 'text-gray-600 border-gray-200 hover:border-purple-300 hover:text-purple-600'}`}>
+                                        {m}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 

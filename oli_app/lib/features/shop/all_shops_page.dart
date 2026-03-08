@@ -5,224 +5,251 @@ import '../../../models/shop_model.dart';
 import '../tabs/dashboard/providers/shops_provider.dart';
 import 'shop_details_page.dart';
 
-class AllShopsPage extends ConsumerWidget {
+class AllShopsPage extends ConsumerStatefulWidget {
   const AllShopsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final shopsAsync = ref.watch(verifiedShopsProvider);
+  ConsumerState<AllShopsPage> createState() => _AllShopsPageState();
+}
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withOpacity(0.2)),
-                        ),
-                        child: const Icon(Icons.arrow_back, color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    const Text(
-                      "Toutes les Boutiques",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+class _AllShopsPageState extends ConsumerState<AllShopsPage> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
 
-              // Shops Grid
-              Expanded(
-                child: shopsAsync.when(
-                  data: (shops) => _buildShopsGrid(context, shops),
-                  loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                  error: (e, _) => Center(child: Text("Erreur: $e", style: const TextStyle(color: Colors.white))),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
-  Widget _buildShopsGrid(BuildContext context, List<Shop> shops) {
-    if (shops.isEmpty) {
-      return Center(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              padding: const EdgeInsets.all(30),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.2)),
-              ),
-              child: const Text(
-                "Aucune boutique disponible",
-                style: TextStyle(color: Colors.white, fontSize: 16),
+  @override
+  Widget build(BuildContext context) {
+    final shopsAsync = ref.watch(verifiedShopsProvider);
+
+    // ── Fond : verre dépoli iOS sur l'écran entier ──────────────────────
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // ── Couche de flou sur tout ce qui est derrière ──────────────
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+              child: Container(
+                color: Colors.black.withOpacity(0.50),
               ),
             ),
           ),
-        ),
-      );
-    }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.85,
+          // ── Contenu ──────────────────────────────────────────────────
+          SafeArea(
+            child: Column(
+              children: [
+                // ── Header ─────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white.withOpacity(0.22)),
+                              ),
+                              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                                  color: Colors.white, size: 16),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      const Text(
+                        'Toutes les Boutiques',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 21,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Barre de recherche ────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.13),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white.withOpacity(0.22)),
+                        ),
+                        child: TextField(
+                          controller: _searchCtrl,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+                          decoration: InputDecoration(
+                            hintText: 'Rechercher une boutique...',
+                            hintStyle: TextStyle(
+                                color: Colors.white.withOpacity(0.45), fontSize: 14),
+                            prefixIcon: Icon(Icons.search_rounded,
+                                color: Colors.white.withOpacity(0.55), size: 20),
+                            suffixIcon: _query.isNotEmpty
+                                ? GestureDetector(
+                                    onTap: () => setState(() {
+                                      _query = '';
+                                      _searchCtrl.clear();
+                                    }),
+                                    child: Icon(Icons.close_rounded,
+                                        color: Colors.white.withOpacity(0.55), size: 18),
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Grille ────────────────────────────────────────────
+                Expanded(
+                  child: shopsAsync.when(
+                    data: (shops) {
+                      final filtered = _query.isEmpty
+                          ? shops
+                          : shops
+                              .where((s) =>
+                                  s.name.toLowerCase().contains(_query))
+                              .toList();
+
+                      if (filtered.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.storefront_rounded,
+                                  size: 52,
+                                  color: Colors.white.withOpacity(0.3)),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Aucune boutique trouvée',
+                                style: TextStyle(
+                                    color: Colors.white.withOpacity(0.5),
+                                    fontSize: 15),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 14, 20, 30),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 22,
+                          childAspectRatio: 0.80,
+                        ),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) =>
+                            _buildCircleItem(context, filtered[index]),
+                      );
+                    },
+                    loading: () => const Center(
+                        child: CircularProgressIndicator(color: Colors.white)),
+                    error: (e, _) => Center(
+                      child: Text('Erreur: $e',
+                          style: const TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      itemCount: shops.length,
-      itemBuilder: (context, index) {
-        final shop = shops[index];
-        return _buildGlassShopCard(context, shop);
-      },
     );
   }
 
-  Widget _buildGlassShopCard(BuildContext context, Shop shop) {
+  Widget _buildCircleItem(BuildContext context, Shop shop) {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => ShopDetailsPage(shop: shop)),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 32,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Shop Logo
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border: Border.all(color: Colors.white, width: 3),
-                    image: shop.logoUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(shop.logoUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: shop.logoUrl == null
-                      ? Center(
-                          child: Text(
-                            shop.name[0].toUpperCase(),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 28,
-                              color: Color(0xFF667eea),
-                            ),
-                          ),
-                        )
-                      : null,
-                ),
-                const SizedBox(height: 12),
-
-                // Shop Name
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    shop.name,
-                    maxLines: 2,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Cercle logo ─────────────────────────────────────────────
+          ClipOval(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.15),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.30),
+                    width: 1.5,
                   ),
                 ),
-                const SizedBox(height: 6),
-
-                // Badge
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _getBadgeColor(shop),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _getBadgeText(shop),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+                child: shop.logoUrl != null
+                    ? ClipOval(
+                        child: Image.network(
+                          shop.logoUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _initial(shop),
+                        ),
+                      )
+                    : _initial(shop),
+              ),
             ),
           ),
-        ),
+
+          const SizedBox(height: 9),
+
+          // ── Nom ──────────────────────────────────────────────────────
+          Text(
+            shop.name,
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              height: 1.3,
+              shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Color _getBadgeColor(Shop shop) {
-    if (shop.accountType == 'entreprise') return const Color(0xFFD4A500);
-    if (shop.hasCertifiedShop) return const Color(0xFFD4A500);
-    return const Color(0xFF1DA1F2);
-  }
-
-  String _getBadgeText(Shop shop) {
-    if (shop.accountType == 'entreprise') return "ENTREPRISE";
-    if (shop.hasCertifiedShop) return "CERTIFIÉE";
-    return "VÉRIFIÉE";
-  }
+  Widget _initial(Shop shop) => Center(
+        child: Text(
+          shop.name.isNotEmpty ? shop.name[0].toUpperCase() : '?',
+          style: const TextStyle(
+              color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold),
+        ),
+      );
 }

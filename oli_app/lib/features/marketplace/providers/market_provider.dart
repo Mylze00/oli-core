@@ -272,7 +272,7 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
     _error = null;
 
     try {
-      final verifiedUrl = '${ApiConfig.productsVerifiedShops}?limit=30';
+      final verifiedUrl = '${ApiConfig.productsVerifiedShops}?limit=50';
       final uri = Uri.parse(verifiedUrl);
       final response = await http.get(uri);
       
@@ -329,11 +329,42 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
 /// Provider pour les produits featured (page Accueil uniquement)
 final featuredProductsProvider = StateNotifierProvider<FeaturedProductsNotifier, List<Product>>((ref) => FeaturedProductsNotifier());
 
-/// Provider pour les meilleurs vendeurs
+/// Provider pour les produits meilleurs vendeurs
 final topSellersProvider = StateNotifierProvider<TopSellersNotifier, List<Product>>((ref) => TopSellersNotifier());
 
 /// Provider pour les produits des grands magasins vérifiés
 final verifiedShopsProductsProvider = StateNotifierProvider<VerifiedShopsProductsNotifier, List<Product>>((ref) => VerifiedShopsProductsNotifier());
+
+/// Notifier pour les produits brandCertified (badge "Original")
+class BrandedProductsNotifier extends StateNotifier<List<Product>> {
+  BrandedProductsNotifier() : super([]) {
+    fetchBrandedProducts();
+  }
+
+  Future<void> fetchBrandedProducts() async {
+    try {
+      final uri = Uri.parse('${ApiConfig.productsBranded}?limit=50');
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final products = <Product>[];
+        for (final item in data) {
+          try {
+            products.add(Product.fromJson(item as Map<String, dynamic>));
+          } catch (e) {
+            debugPrint('⚠️ Branded product skipped: $e');
+          }
+        }
+        state = products;
+        debugPrint('✅ brandedProductsProvider: ${state.length} produits Original chargés');
+      }
+    } catch (e) {
+      debugPrint('Erreur brandedProductsProvider: $e');
+    }
+  }
+}
+
+final brandedProductsProvider = StateNotifierProvider<BrandedProductsNotifier, List<Product>>((ref) => BrandedProductsNotifier());
 
 
 /// ✨ Notifier pour les publicités (Ads Carousel)

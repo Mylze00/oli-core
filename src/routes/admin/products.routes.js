@@ -279,7 +279,8 @@ router.get('/unverified', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 10;
         const offset = parseInt(req.query.offset) || 0;
-        const seller = (req.query.seller || '').trim(); // filtre par nom/téléphone vendeur
+        const seller = (req.query.seller || '').trim();
+        const name = (req.query.name || '').trim(); // filtre par nom de produit
 
         // Migration inline idempotente
         try {
@@ -288,7 +289,7 @@ router.get('/unverified', async (req, res) => {
             await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS verified_by INT`);
         } catch (me) { /* already exists */ }
 
-        // Produits non vérifiés (actifs), avec filtre vendeur optionnel
+        // Produits non vérifiés (actifs), avec filtres vendeur et nom optionnels
         const result = await pool.query(
             `SELECT p.id, p.name, p.price, p.images, p.category, p.description, p.status,
                     COALESCE(p.is_verified, FALSE) as is_verified, p.created_at, p.quantity,
@@ -298,9 +299,10 @@ router.get('/unverified', async (req, res) => {
              WHERE COALESCE(p.is_verified, FALSE) = FALSE AND p.status = 'active'
                AND ($3 = '' OR LOWER(COALESCE(u.name,'')) LIKE LOWER('%' || $3 || '%')
                             OR COALESCE(u.phone,'') LIKE '%' || $3 || '%')
+               AND ($4 = '' OR LOWER(p.name) LIKE LOWER('%' || $4 || '%'))
              ORDER BY p.created_at ASC
              LIMIT $1 OFFSET $2`,
-            [limit, offset, seller]
+            [limit, offset, seller, name]
         );
 
         // Stats par catégorie — prix safe via regexp (ignore non-numériques)

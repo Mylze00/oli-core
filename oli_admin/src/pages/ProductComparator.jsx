@@ -327,6 +327,7 @@ export default function ProductComparator() {
     const [variantsLoading, setVL] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [sellerFilter, setSellerFilter] = useState('');
+    const [nameFilter, setNameFilter] = useState('');
     const [selectedImageIdx, setSelectedImageIdx] = useState(0);
 
     const [form, setForm] = useState({ name: '', description: '', price: '', category: '', brand_certified: false, brand_display_name: '' });
@@ -344,11 +345,12 @@ export default function ProductComparator() {
     const img = active?.images?.[0] ? getImageUrl(active.images[0]) : null;
 
     // ── Charger la file ───────────────────────────────────────────────────────
-    const loadQueue = useCallback(async (offset = 0, startIdx = 0, seller = '') => {
+    const loadQueue = useCallback(async (offset = 0, startIdx = 0, seller = '', name = '') => {
         setLoading(true); setError(null);
         try {
             const sellerParam = seller ? `&seller=${encodeURIComponent(seller)}` : '';
-            const { data } = await api.get(`/admin/products/unverified?limit=20&offset=${offset}${sellerParam}`);
+            const nameParam = name ? `&name=${encodeURIComponent(name)}` : '';
+            const { data } = await api.get(`/admin/products/unverified?limit=20&offset=${offset}${sellerParam}${nameParam}`);
             if (!data || data.error) throw new Error(data?.error || 'Erreur API');
             const products = data.products || [];
             setQueue(products);
@@ -371,14 +373,14 @@ export default function ProductComparator() {
         setSelectedImageIdx(0);
     };
 
-    // Chargement initial + debounce filtre vendeur
+    // Chargement initial + debounce filtres vendeur et nom
     useEffect(() => {
         const timer = setTimeout(() => {
             setPageOffset(0);
-            loadQueue(0, 0, sellerFilter);
-        }, sellerFilter ? 500 : 0);
+            loadQueue(0, 0, sellerFilter, nameFilter);
+        }, (sellerFilter || nameFilter) ? 500 : 0);
         return () => clearTimeout(timer);
-    }, [loadQueue, sellerFilter]);
+    }, [loadQueue, sellerFilter, nameFilter]);
     useEffect(() => { if (queue[queueIdx]) applyProduct(queue[queueIdx]); }, [queueIdx, queue]);
 
     // Charger variantes
@@ -537,6 +539,24 @@ export default function ProductComparator() {
                         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">File</span>
                         <span className="text-xs bg-blue-100 text-blue-600 font-semibold px-2 py-0.5 rounded-full">{totalUnverified}</span>
                     </div>
+
+                    {/* 🔎 Recherche par nom de produit */}
+                    <div className="relative mb-1.5">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-300 text-xs">📦</span>
+                        <input
+                            type="text"
+                            placeholder="Rechercher un produit..."
+                            className="w-full pl-7 pr-6 py-1.5 text-xs border border-blue-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-blue-50 placeholder-blue-300"
+                            value={nameFilter}
+                            onChange={e => setNameFilter(e.target.value)}
+                        />
+                        {nameFilter && (
+                            <button onClick={() => setNameFilter('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-300 hover:text-blue-500 text-xs">✕</button>
+                        )}
+                    </div>
+
+                    {/* 🔍 Filtre par vendeur */}
                     <div className="relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300 text-xs">🔍</span>
                         <input

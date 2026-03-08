@@ -228,9 +228,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     const hPad = 12.0;
     const gap = 4.0;
 
-    // ── Ligne 1 : 6 petits produits ──
-    final firstRowProducts = products.take(6).toList();
-    final remainingProducts = products.skip(6).toList();
+    // ── Ligne 1 : 4 petits produits ──
+    final firstRowProducts = products.take(4).toList();
+    final remainingProducts = products.skip(4).toList();
 
     // ── Lignes suivantes : alternance 2-3 ──
     final rows = <List<Product>>[];
@@ -268,6 +268,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                                 child: MarketProductCard(
                                   product: p,
                                   isCompact: true,
+                                  hideSellerOverlay: true,
                                 ),
                               ),
                             ),
@@ -299,7 +300,10 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                                 const EdgeInsets.symmetric(horizontal: 2),
                             child: GestureDetector(
                               onTap: () => _navigateToProduct(p),
-                              child: MarketProductCard(product: p),
+                              child: MarketProductCard(
+                                product: p,
+                                hideSellerOverlay: true,
+                              ),
                             ),
                           ),
                         ))
@@ -393,6 +397,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     final topSellers = ref.watch(topSellersProvider);
     final verifiedShopsProducts = ref.watch(verifiedShopsProductsProvider);
     final verifiedShops = ref.watch(verifiedShopsProvider).valueOrNull ?? [];
+    final brandedProducts = ref.watch(brandedProductsProvider);      // produits Original (brand_certified)
 
     // Déclencher la distribution avec setState quand les produits arrivent
     // ref.listen garantit un rebuild propre après l'appel asynchrone du provider
@@ -425,6 +430,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     final shownIds = effectiveRankingList.map((p) => p.id).toSet();
     final anonOliProducts =
         allProducts.where((p) => !shownIds.contains(p.id)).toList();
+
+    // Produits pour la section circulaire "À la une" — endpoint dédié /products/branded
+    final brandedSliceFiltered = brandedProducts.take(12).toList();
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -527,7 +535,13 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                       VerifiedShopProductsSection(products: verifiedShopsProducts),
                 ),
 
-                // 9. Top Classement (tous les produits admin)
+                // 9. Section "À la une" — produits Original (brandCertified)
+                if (brandedSliceFiltered.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: BrandedCircleSection(products: brandedSliceFiltered),
+                  ),
+
+                // 10. Top Classement (tous les produits admin)
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 10),
