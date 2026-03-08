@@ -232,7 +232,7 @@ class ProductRepository {
             }
         }
 
-        // Exclure les produits des utilisateurs masqués (sauf si on filtre par seller_id - dashboard vendeur)
+        // Exclure les produits des utilisateurs masqués (sauf si on filtre par seller_id ou shopId - page boutique)
         if (!filters.seller_id) {
             query += ` AND (u.is_hidden IS NULL OR u.is_hidden = FALSE)`;
             // Exclure les produits admin du marché, mais les garder visibles en recherche
@@ -240,9 +240,8 @@ class ProductRepository {
                 query += ` AND (u.is_admin IS NULL OR u.is_admin = FALSE)`;
             }
             // ── Marché général = vendeurs personnels uniquement ──
-            // Uniquement quand PAS de filtre catégorie ET PAS de recherche
-            // (pages catégorie et recherche montrent tous les vendeurs, y compris OLI admin)
-            if (!filters.category && !filters.search) {
+            // Bypass si shopId fourni (page boutique spécifique → montrer tous ses produits)
+            if (!filters.category && !filters.search && !filters.shopId) {
                 query += ` AND u.account_type NOT IN ('entreprise', 'certifie', 'certified', 'premium')`;
             }
         }
