@@ -128,18 +128,19 @@ class RankingSectionHelper {
         }
       }
 
-      // ── Slot circulaire (remplace bannière bleue au cycle 1) ou bannière classique ──
-      final bool showCircleSlot = (promoIndex % promoMessages.length) == 1
-          && brandedProducts.isNotEmpty;
+      // ── Slot : BrandedCircleSection remplace TOUTE bannière bleue (bg_color) ──
+      // La section brandée n'est affichée qu'une seule fois (brandedShown guard).
+      final promo = promoMessages[promoIndex % promoMessages.length];
+      final bool isBlueBanner = promo.containsKey('bg_color');
+      final bool showCircleSlot = isBlueBanner && brandedProducts.isNotEmpty;
 
       if (showCircleSlot) {
-        // Widget "À la une" — produits circulaires brandés
+        // Widget "À la une" — produits circulaires brandés (1 seule fois)
         slivers.add(SliverToBoxAdapter(
           child: BrandedCircleSection(products: brandedProducts),
         ));
         promoIndex++;
       } else {
-      final promo = promoMessages[promoIndex % promoMessages.length];
       final Color? bgCol = promo.containsKey('bg_color') ? promo['bg_color'] as Color : null;
       final Color grad1 = promo.containsKey('gradient1') ? promo['gradient1'] as Color : (bgCol ?? Colors.blue);
       final Color grad2 = promo.containsKey('gradient2') ? promo['gradient2'] as Color : (bgCol ?? Colors.blue);
@@ -147,12 +148,11 @@ class RankingSectionHelper {
       final double tSize = promo['titleSize'] as double;
       final double dSize = promo['textSize'] as double;
       final bool isCentered = promo.containsKey('isCentered') ? promo['isCentered'] as bool : false;
-      final bool hasBorder = promo.containsKey('hasBorder') ? promo['hasBorder'] as bool : false;
       promoIndex++;
 
       slivers.add(SliverToBoxAdapter(
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 12), // Pleine largeur
+          margin: const EdgeInsets.symmetric(vertical: 12),
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV),
           decoration: BoxDecoration(
             color: bgCol,
@@ -163,7 +163,6 @@ class RankingSectionHelper {
                     end: Alignment.bottomRight,
                   )
                 : null,
-            // Pas de coins arrondis ni de contour
             boxShadow: [
               BoxShadow(
                 color: grad1.withOpacity(0.3),
