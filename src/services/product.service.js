@@ -72,6 +72,12 @@ class ProductService {
         });
     }
 
+    async getBrandedProducts(limit = 50) {
+        const ADMIN_PHONE = '+243827088682';
+        const products = await productRepository.findBranded(ADMIN_PHONE, limit);
+        return products.map(p => this._formatProduct(p));
+    }
+
     async getTopSellers(limit = 50) {
         const products = await productRepository.findTopSellers(limit);
         return products.map(p => this._formatProduct(p));

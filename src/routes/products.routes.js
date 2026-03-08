@@ -31,6 +31,12 @@ router.get('/good-deals', async (req, res) => {
 router.get('/featured', productController.getFeatured);
 
 /**
+ * GET /products/branded
+ * Produits OLI admin avec badge "Original" (brand_certified = true)
+ */
+router.get('/branded', productController.getBranded);
+
+/**
  * GET /products/top-sellers
  * Meilleurs vendeurs du marketplace
  */

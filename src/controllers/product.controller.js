@@ -34,6 +34,17 @@ exports.getVerifiedShops = async (req, res) => {
     }
 };
 
+exports.getBranded = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const products = await productService.getBrandedProducts(limit);
+        res.json(products);
+    } catch (err) {
+        console.error("Erreur GET /products/branded:", err);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+};
+
 exports.getAll = async (req, res) => {
     try {
         const filters = {

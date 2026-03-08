@@ -27,6 +27,31 @@ class ProductRepository {
         return result.rows;
     }
 
+    async findBranded(adminPhone, limit = 50) {
+        const query = `
+            SELECT p.*, 
+                   u.name as seller_name, 
+                   u.avatar_url as seller_avatar, 
+                   u.id_oli as seller_oli_id,
+                   u.is_verified as seller_is_verified,
+                   u.account_type as seller_account_type,
+                   u.has_certified_shop as seller_has_certified_shop,
+                   s.name as shop_name, 
+                   s.is_verified as shop_verified,
+                   p.subcategory
+            FROM products p 
+            JOIN users u ON p.seller_id = u.id
+            LEFT JOIN shops s ON p.shop_id = s.id
+            WHERE u.phone = $1
+              AND p.status = 'active'
+              AND COALESCE(p.brand_certified, FALSE) = TRUE
+            ORDER BY RANDOM()
+            LIMIT $2
+        `;
+        const result = await pool.query(query, [adminPhone, limit]);
+        return result.rows;
+    }
+
     async findTopSellers(limit) {
         // Widget "Super Offres" : uniquement les produits publiés par l'admin Oli, en aléatoire
         const query = `
