@@ -324,14 +324,14 @@ class MarketProductCard extends ConsumerWidget {
                            children: [
                              Text(
                                formattedDiscount,
-                               style: const TextStyle(color: Color(0xFFFF9500), fontWeight: FontWeight.bold, fontSize: 13)
+                               style: const TextStyle(color: Color(0xFFFF9500), fontWeight: FontWeight.bold, fontSize: 15)
                              ),
                              const SizedBox(width: 4),
                              Text(
                                formattedPrice,
                                style: const TextStyle(
                                  color: Colors.grey,
-                                 fontSize: 11,
+                                 fontSize: 12,
                                  decoration: TextDecoration.lineThrough
                                )
                              ),
@@ -341,7 +341,7 @@ class MarketProductCard extends ConsumerWidget {
                       
                       return Text(
                         formattedPrice,
-                        style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13)
+                        style: const TextStyle(color: Color(0xFF7CADFF), fontWeight: FontWeight.bold, fontSize: 15)
                       );
                     },
                   ),

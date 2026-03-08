@@ -84,6 +84,10 @@ class SearchResultCard extends ConsumerWidget {
                     : Image.network(
                         product.images[0],
                         fit: BoxFit.cover,
+                        // Décoder à 180px max (≈60% résolution) pour économiser la data
+                        // 180 = 1.5× la taille affichée (120px), net sur écrans Retina @2x
+                        cacheWidth: 180,
+                        cacheHeight: 180,
                         errorBuilder: (ctx, err, stack) => Container(
                           color: Colors.grey[200],
                           child: const Icon(Icons.broken_image, size: 30, color: Colors.grey),

@@ -29,6 +29,9 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
   List<Product> _filteredProducts = [];
   List<Product> _allSearchResults = [];
   bool _isLoading = false;
+  // Fuzzy search : correction orthographique
+  bool _fuzzyUsed = false;
+  String? _suggestedTerm;
 
   @override
   void initState() {
@@ -93,13 +96,26 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
         }
 
         _allSearchResults = products;
+
+        // Récupérer les métadonnées fuzzy search
+        if (decoded is Map<String, dynamic>) {
+          _fuzzyUsed = decoded['fuzzy_used'] == true;
+          _suggestedTerm = decoded['suggested_term'] as String?;
+        } else {
+          _fuzzyUsed = false;
+          _suggestedTerm = null;
+        }
       } else {
         debugPrint('❌ Search API error: ${response.statusCode}');
         _allSearchResults = [];
+        _fuzzyUsed = false;
+        _suggestedTerm = null;
       }
     } catch (e) {
       debugPrint('❌ Search error: $e');
       _allSearchResults = [];
+      _fuzzyUsed = false;
+      _suggestedTerm = null;
     }
 
     // Tri par pertinence côté client
@@ -317,6 +333,52 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
       ),
       body: Column(
         children: [
+          // ── Bannière fuzzy search ──────────────────────────────────────
+          if (_fuzzyUsed && _suggestedTerm != null && !_isLoading)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: const Color(0xFF1E7DBA).withOpacity(0.1),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_fix_high, size: 16, color: Color(0xFF1E7DBA)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF1E7DBA)),
+                        children: [
+                          const TextSpan(text: 'Résultats pour : '),
+                          TextSpan(
+                            text: _suggestedTerm,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Lien pour chercher le terme exact original
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _fuzzyUsed = false;
+                        _suggestedTerm = null;
+                      });
+                      // Recherche exacte désactivée = on laisse l'utilisateur voir le terme
+                    },
+                    child: const Text(
+                      'Ignorer',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF1E7DBA),
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          // ──────────────────────────────────────────────────────────────
           // Filtres actifs chips
           if (filters.hasActiveFilters)
             Container(

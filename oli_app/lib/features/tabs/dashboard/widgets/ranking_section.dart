@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../models/product_model.dart';
-import 'product_sections.dart'; // TopRankingGrid
+import 'product_sections.dart'; // TopRankingGrid + BrandedCircleSection
 
 /// Helper pour construire la section "Top Classement" de la page d'accueil.
 ///
@@ -54,12 +54,14 @@ class RankingSectionHelper {
 
   /// Retourne la liste de Slivers formant le Top Classement.
   ///
-  /// [allProducts] : tous les produits à afficher (déjà triés/limités).
-  /// [textColor]   : couleur du texte selon le thème (dark/light).
+  /// [allProducts]     : tous les produits à afficher (déjà triés/limités).
+  /// [textColor]       : couleur du texte selon le thème (dark/light).
+  /// [brandedProducts] : produits brandCertified pour la section circulaire.
   static List<Widget> buildSlivers(
     List<Product> allProducts,
-    Color textColor,
-  ) {
+    Color textColor, {
+    List<Product> brandedProducts = const [],
+  }) {
     final List<Widget> slivers = [];
     int index = 0;
     int promoIndex = 0;
@@ -126,7 +128,17 @@ class RankingSectionHelper {
         }
       }
 
-      // ── Bannière promotionnelle après chaque cycle de 8 produits ──
+      // ── Slot circulaire (remplace bannière bleue au cycle 1) ou bannière classique ──
+      final bool showCircleSlot = (promoIndex % promoMessages.length) == 1
+          && brandedProducts.isNotEmpty;
+
+      if (showCircleSlot) {
+        // Widget "À la une" — produits circulaires brandés
+        slivers.add(SliverToBoxAdapter(
+          child: BrandedCircleSection(products: brandedProducts),
+        ));
+        promoIndex++;
+      } else {
       final promo = promoMessages[promoIndex % promoMessages.length];
       final Color? bgCol = promo.containsKey('bg_color') ? promo['bg_color'] as Color : null;
       final Color grad1 = promo.containsKey('gradient1') ? promo['gradient1'] as Color : (bgCol ?? Colors.blue);
@@ -140,21 +152,18 @@ class RankingSectionHelper {
 
       slivers.add(SliverToBoxAdapter(
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16), // Marge externe sur les côtés
+          margin: const EdgeInsets.symmetric(vertical: 12), // Pleine largeur
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV),
           decoration: BoxDecoration(
-            color: bgCol, // Si bg_color est défini, on utilise la couleur unie
-            gradient: bgCol == null 
+            color: bgCol,
+            gradient: bgCol == null
                 ? LinearGradient(
                     colors: [grad1, grad2],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   )
-                : null, // Pas de dégradé si on a une couleur unie
-            borderRadius: BorderRadius.circular(8), // Bords légèrement arrondis
-            border: hasBorder 
-                ? Border.all(color: Colors.white, width: 1.5) // Bordure blanche
                 : null,
+            // Pas de coins arrondis ni de contour
             boxShadow: [
               BoxShadow(
                 color: grad1.withOpacity(0.3),
@@ -172,7 +181,7 @@ class RankingSectionHelper {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: tSize,
-                  fontWeight: FontWeight.w800, // Plus gras comme sur l'image
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 4),
@@ -190,6 +199,7 @@ class RankingSectionHelper {
           ),
         ),
       ));
+      } // fin else bannière classique
     }
 
     return slivers;
