@@ -37,8 +37,8 @@ class BrandedCircleSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Titre ──────────────────────────────────────────────────────────
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
           child: Row(
             children: [
               const Icon(Icons.verified_rounded, color: Color(0xFFFF8C00), size: 18),
