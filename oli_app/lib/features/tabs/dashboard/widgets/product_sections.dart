@@ -18,8 +18,13 @@ const List<Color> _circleBorderColors = [
 /// Widget "À la une" — produits circulaires avec Branding (brandCertified)
 class BrandedCircleSection extends ConsumerWidget {
   final List<Product> products;
+  final String title;
 
-  const BrandedCircleSection({super.key, required this.products});
+  const BrandedCircleSection({
+    super.key,
+    required this.products,
+    this.title = 'À la une',
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,11 +41,11 @@ class BrandedCircleSection extends ConsumerWidget {
           padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
           child: Row(
             children: [
-              Icon(Icons.verified_rounded, color: Color(0xFFFF8C00), size: 18),
-              SizedBox(width: 8),
+              const Icon(Icons.verified_rounded, color: Color(0xFFFF8C00), size: 18),
+              const SizedBox(width: 8),
               Text(
-                'À la une',
-                style: TextStyle(
+                title,
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                   fontSize: 17,

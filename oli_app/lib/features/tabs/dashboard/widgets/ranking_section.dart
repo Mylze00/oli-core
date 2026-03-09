@@ -65,6 +65,11 @@ class RankingSectionHelper {
     final List<Widget> slivers = [];
     int index = 0;
     int promoIndex = 0;
+    int brandedSlotCount = 0; // Compteur pour rotation titre + tranche produits
+
+    // Titres rotatifs pour les sections brandées
+    const brandedTitles = ['À la une', 'Branding Original', 'Produit Original'];
+    const brandedSliceSize = 6; // produits par slot
 
     while (index < allProducts.length) {
       // ── Bloc 3 colonnes (6 produits) ──
@@ -135,10 +140,18 @@ class RankingSectionHelper {
       final bool showCircleSlot = isBlueBanner && brandedProducts.isNotEmpty;
 
       if (showCircleSlot) {
-        // Widget "À la une" — produits circulaires brandés (1 seule fois)
+        // Tranche de produits pour ce slot (6 produits chacun, décalés)
+        final sliceStart = (brandedSlotCount * brandedSliceSize) % (brandedProducts.length == 0 ? 1 : brandedProducts.length);
+        final slice = brandedProducts.length <= brandedSliceSize
+            ? brandedProducts
+            : brandedProducts.skip(sliceStart).take(brandedSliceSize).toList();
+
+        final title = brandedTitles[brandedSlotCount % brandedTitles.length];
+
         slivers.add(SliverToBoxAdapter(
-          child: BrandedCircleSection(products: brandedProducts),
+          child: BrandedCircleSection(products: slice, title: title),
         ));
+        brandedSlotCount++;
         promoIndex++;
       } else {
       final Color? bgCol = promo.containsKey('bg_color') ? promo['bg_color'] as Color : null;
