@@ -555,7 +555,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                 ),
 
                 ...RankingSectionHelper.buildSlivers(
-                    effectiveRankingList, textColor),
+                    effectiveRankingList, textColor,
+                    brandedProducts: brandedSliceFiltered),
 
                 const SliverPadding(padding: EdgeInsets.only(bottom: 16)),
 
