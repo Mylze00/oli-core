@@ -414,25 +414,47 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       computeProductDistribution(allProducts);
     }
 
-    // Top Classement (statiquement limité à _rankingMaxCount pour éviter le glitch d'entrelacement au défilement)
+    // ── LOGIQUE DE DÉDOUBLONNAGE GLOBAL ──
+    final Set<int> displayedIds = {};
+
+    List<Product> removeDuplicatesAndTrack(List<Product> source, [int? limit]) {
+      final result = <Product>[];
+      for (final p in source) {
+        if (limit != null && result.length >= limit) break;
+        if (displayedIds.add(p.id)) {
+          result.add(p);
+        }
+      }
+      return result;
+    }
+
+    // Ordre d'affichage sur l'écran pour garder les meilleures pièces en haut :
+    
+    // 1. Super Offres
+    final deduplicatedTopSellers = removeDuplicatesAndTrack(topSellers, 10);
+    
+    // 2. Sélection
+    final deduplicatedSelection = removeDuplicatesAndTrack(cachedSelectionProducts);
+    
+    // 3. Découverte
+    final deduplicatedDiscovery = removeDuplicatesAndTrack(cachedDiscoveryList, 5);
+    
+    // 4. Grands Magasins
+    final deduplicatedVerifiedShopsProducts = removeDuplicatesAndTrack(verifiedShopsProducts);
+    
+    // 5. Branded Products ("À la une" / "Branding Original")
+    // On prend jusqu'à 18 produits (3 slots de 6)
+    final deduplicatedBranded = removeDuplicatesAndTrack(brandedProducts, 18);
+    
+    // 6. Top Classement
     final fullRankingList =
         cachedRankingList.isNotEmpty ? cachedRankingList : cachedSuperOffers;
+    final deduplicatedRanking = removeDuplicatesAndTrack(fullRankingList, _rankingMaxCount);
     
-    // effectiveRankingList prend directement le max pour profiter du virtual scroll natif de SliverGrid
-    final effectiveRankingListLength = fullRankingList.length.clamp(0, _rankingMaxCount);
-    final effectiveRankingList =
-        fullRankingList.take(effectiveRankingListLength).toList();
-        
-    final featuredNotifier = ref.read(featuredProductsProvider.notifier);
-    
-    // Produits OLI restants (non affichés dans Top Classement)
-    // → alimentent directement les 5 sections nommées
-    final shownIds = effectiveRankingList.map((p) => p.id).toSet();
-    final anonOliProducts =
-        allProducts.where((p) => !shownIds.contains(p.id)).toList();
+    // 7. Produits restants (5 sections en bas)
+    final deduplicatedAnonProducts = removeDuplicatesAndTrack(allProducts);
 
-    // Produits pour la section circulaire "À la une" — endpoint dédié /products/branded
-    final brandedSliceFiltered = brandedProducts.take(12).toList();
+    final featuredNotifier = ref.read(featuredProductsProvider.notifier);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -479,7 +501,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                 // 4. Super Offres (top sellers)
                 SliverToBoxAdapter(
                   child: SuperOffersSection(
-                      products: topSellers.take(10).toList()),
+                      products: deduplicatedTopSellers),
                 ),
 
                 // 5. Publicités
@@ -500,7 +522,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                       child: HorizontalProductSection(
                         title: 'Sélection : $cachedSelectionKeyword',
                         subtitle: 'Inspiration pour vous',
-                        products: cachedSelectionProducts,
+                        products: deduplicatedSelection,
                         badgeText: 'NEW',
                         badgeColor: Colors.tealAccent.shade700,
                         searchKeyword: cachedSelectionKeyword,
@@ -524,7 +546,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   ),
                   SliverToBoxAdapter(
                     child: DiscoveryCarousel(
-                        products: cachedDiscoveryList,
+                        products: deduplicatedDiscovery,
                         onTap: _navigateToProduct),
                   ),
                 ],
@@ -532,14 +554,10 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                 // 8. Grands Magasins (boutiques certifiées)
                 SliverToBoxAdapter(
                   child:
-                      VerifiedShopProductsSection(products: verifiedShopsProducts),
+                      VerifiedShopProductsSection(products: deduplicatedVerifiedShopsProducts),
                 ),
 
-                // 9. Section "À la une" — produits Original (brandCertified)
-                if (brandedSliceFiltered.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: BrandedCircleSection(products: brandedSliceFiltered),
-                  ),
+
 
                 // 10. Top Classement (tous les produits admin)
                 SliverPadding(
@@ -555,8 +573,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                 ),
 
                 ...RankingSectionHelper.buildSlivers(
-                    effectiveRankingList, textColor,
-                    brandedProducts: brandedSliceFiltered),
+                    deduplicatedRanking, textColor,
+                    brandedProducts: deduplicatedBranded),
 
                 const SliverPadding(padding: EdgeInsets.only(bottom: 16)),
 
@@ -582,7 +600,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
 
                   final countForSection =
                       (_anonLoadedCount - start).clamp(0, _anonSectionSize);
-                  final sectionProducts = anonOliProducts
+                  final sectionProducts = deduplicatedAnonProducts
                       .skip(start)
                       .take(countForSection)
                       .toList();
