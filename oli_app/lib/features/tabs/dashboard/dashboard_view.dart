@@ -415,7 +415,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     }
 
     // ── LOGIQUE DE DÉDOUBLONNAGE GLOBAL ──
-    final Set<int> displayedIds = {};
+    final Set<String> displayedIds = {};
 
     List<Product> removeDuplicatesAndTrack(List<Product> source, [int? limit]) {
       final result = <Product>[];

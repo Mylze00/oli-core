@@ -164,6 +164,19 @@ class ProductRepository {
             query += ` AND p.location ILIKE $${paramIndex++}`;
             params.push(`%${filters.location}%`);
         }
+        // Filtrage géographique par rayon (Haversine) — carte à faible data
+        if (filters.latitude && filters.longitude && filters.radius) {
+            query += ` AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+                AND (
+                    6371 * acos(
+                        LEAST(1.0, cos(radians($${paramIndex})) * cos(radians(p.latitude))
+                        * cos(radians(p.longitude) - radians($${paramIndex + 1}))
+                        + sin(radians($${paramIndex})) * sin(radians(p.latitude)))
+                    )
+                ) <= $${paramIndex + 2}`;
+            params.push(parseFloat(filters.latitude), parseFloat(filters.longitude), parseFloat(filters.radius));
+            paramIndex += 3;
+        }
         if (filters.search) {
             try {
                 // Recherche floue : tolérante aux fautes de frappe (pg_trgm + synonymes)
@@ -303,7 +316,8 @@ class ProductRepository {
             delivery_price, delivery_time, condition, quantity, color, location,
             is_negotiable, b2b_pricing, unit, brand, weight,
             discount_price, discount_start_date, discount_end_date,
-            express_delivery_price, shipping_options
+            express_delivery_price, shipping_options,
+            latitude, longitude
         } = product;
 
         const query = `
@@ -313,6 +327,7 @@ class ProductRepository {
                 is_negotiable, b2b_pricing, unit, brand, weight,
                 discount_price, discount_start_date, discount_end_date,
                 express_delivery_price, shipping_options,
+                latitude, longitude,
                 status, created_at, updated_at
             )
             VALUES (
@@ -321,6 +336,7 @@ class ProductRepository {
                 $15, $16, $17, $18, $19,
                 $20, $21, $22,
                 $23, $24,
+                $25, $26,
                 'active', NOW(), NOW()
             )
             RETURNING *
@@ -332,7 +348,8 @@ class ProductRepository {
             is_negotiable, JSON.stringify(b2b_pricing || []), unit || 'Pièce', brand || '', weight || '',
             discount_price || null, discount_start_date || null, discount_end_date || null,
             express_delivery_price || null,
-            JSON.stringify(shipping_options || [])
+            JSON.stringify(shipping_options || []),
+            latitude || null, longitude || null
         ];
 
         const { rows } = await pool.query(query, values);
@@ -359,7 +376,8 @@ class ProductRepository {
         const fields = ['name', 'description', 'price', 'category', 'subcategory', 'condition',
             'quantity', 'color', 'location', 'status', 'delivery_price', 'delivery_time',
             'is_good_deal', 'unit', 'brand', 'weight', 'b2b_pricing',
-            'discount_price', 'discount_start_date', 'discount_end_date', 'shipping_options'];
+            'discount_price', 'discount_start_date', 'discount_end_date', 'shipping_options',
+            'latitude', 'longitude'];
         const setClauses = [];
         const values = [];
         let i = 1;

@@ -219,7 +219,9 @@ class ProductService {
             weight: data.weight || '',
             discount_price: (data.discount_price && !isNaN(data.discount_price)) ? parseFloat(data.discount_price) : null,
             discount_start_date: data.discount_start_date || null,
-            discount_end_date: data.discount_end_date || null
+            discount_end_date: data.discount_end_date || null,
+            latitude: (data.latitude && !isNaN(data.latitude)) ? parseFloat(data.latitude) : null,
+            longitude: (data.longitude && !isNaN(data.longitude)) ? parseFloat(data.longitude) : null
         };
 
         const createdProduct = await productRepository.create(productData);

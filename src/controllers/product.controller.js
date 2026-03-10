@@ -56,7 +56,11 @@ exports.getAll = async (req, res) => {
             shopId: req.query.shopId,
             seller_id: req.query.seller_id,
             subcategory: req.query.subcategory,
-            filterType: req.query.filterType // new, popular, promotions
+            filterType: req.query.filterType, // new, popular, promotions
+            // Filtrage géographique (carte low-data)
+            latitude: req.query.latitude,
+            longitude: req.query.longitude,
+            radius: req.query.radius // en km
         };
         const limit = parseInt(req.query.limit) || 100;
         const offset = parseInt(req.query.offset) || 0;

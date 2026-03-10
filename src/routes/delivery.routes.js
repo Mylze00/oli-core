@@ -61,6 +61,19 @@ router.post('/:id/status', requireAuth, requireDeliverer, async (req, res) => {
     const { status, lat, lng } = req.body;
     try {
         const delivery = await deliveryService.updateStatus(req.user, req.params.id, status, lat, lng);
+
+        // 📡 Émettre la position GPS en temps réel au client (carte low-data)
+        const io = req.app.get('io');
+        if (io && delivery?.order_id && lat && lng) {
+            io.to(`order_${delivery.order_id}`).emit('delivery_position', {
+                deliveryId: delivery.id,
+                lat: parseFloat(lat),
+                lng: parseFloat(lng),
+                status,
+                timestamp: new Date().toISOString()
+            });
+        }
+
         res.json({ success: true, delivery });
     } catch (err) {
         res.status(400).json({ error: err.message });

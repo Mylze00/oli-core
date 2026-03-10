@@ -34,7 +34,7 @@ exports.uploadFile = (req, res) => {
  * Envoyer un premier message (démarre conversation)
  */
 exports.sendInitialMessage = async (req, res) => {
-    const { recipientId, content, type = 'text', productId, metadata, conversationId: existingConvId } = req.body;
+    const { recipientId, content, type = 'text', productId, metadata, conversationId: existingConvId, latitude, longitude } = req.body;
     const senderId = req.user.id;
 
     try {
@@ -76,10 +76,17 @@ exports.sendInitialMessage = async (req, res) => {
             }
         }
 
+        // Enrichir metadata avec les coordonnées GPS si c'est un message location
+        let msgMetadata = metadata || {};
+        if (type === 'location' && latitude && longitude) {
+            msgMetadata = { ...msgMetadata, latitude, longitude };
+        }
+        const msgContent = content || (type === 'location' ? '📍 Position partagée' : content);
+
         const msgResult = await pool.query(
-            `INSERT INTO messages (conversation_id, sender_id, content, type, metadata) 
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [conversationId, senderId, content, type, metadata ? JSON.stringify(metadata) : null]
+            `INSERT INTO messages (conversation_id, sender_id, content, type, metadata, latitude, longitude) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [conversationId, senderId, msgContent, type, JSON.stringify(msgMetadata), latitude || null, longitude || null]
         );
 
         const newMessage = msgResult.rows[0];
@@ -102,7 +109,7 @@ exports.sendInitialMessage = async (req, res) => {
  * Envoyer un message dans une conversation existante
  */
 exports.sendMessage = async (req, res) => {
-    const { conversationId, type, amount, replyToId, mediaUrl, mediaType } = req.body;
+    const { conversationId, type, amount, replyToId, mediaUrl, mediaType, latitude, longitude } = req.body;
     let { content, recipientId, metadata } = req.body;
     const senderId = req.user.id;
 
@@ -112,7 +119,9 @@ exports.sendMessage = async (req, res) => {
     }
 
     // Si c'est un message média sans texte, on met un texte par défaut
-    if (!content && mediaUrl) {
+    if (!content && type === 'location' && latitude && longitude) {
+        content = '📍 Position partagée';
+    } else if (!content && mediaUrl) {
         content = mediaType === 'image' ? '📷 Image' : '📎 Fichier';
     }
 
@@ -120,6 +129,12 @@ exports.sendMessage = async (req, res) => {
     let messageMetadata = metadata || {};
     if (typeof messageMetadata === 'string') {
         try { messageMetadata = JSON.parse(messageMetadata); } catch (e) { }
+    }
+
+    // Coordonnées GPS pour les messages location
+    if (type === 'location' && latitude && longitude) {
+        messageMetadata.latitude = parseFloat(latitude);
+        messageMetadata.longitude = parseFloat(longitude);
     }
 
     if (mediaUrl) {
@@ -137,8 +152,8 @@ exports.sendMessage = async (req, res) => {
         }
 
         const msgResult = await pool.query(
-            `INSERT INTO messages (conversation_id, sender_id, content, type, amount, reply_to_id, metadata) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            `INSERT INTO messages (conversation_id, sender_id, content, type, amount, reply_to_id, metadata, latitude, longitude) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
             [
                 conversationId,
                 senderId,
@@ -146,7 +161,9 @@ exports.sendMessage = async (req, res) => {
                 type || (mediaUrl ? 'media' : 'text'),
                 amount,
                 replyToId,
-                JSON.stringify(messageMetadata)
+                JSON.stringify(messageMetadata),
+                (type === 'location' && latitude) ? parseFloat(latitude) : null,
+                (type === 'location' && longitude) ? parseFloat(longitude) : null
             ]
         );
 
