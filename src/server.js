@@ -279,6 +279,25 @@ if (process.env.NODE_ENV !== 'test') {
     (async () => {
         try {
             const pool = require('./config/db');
+
+            // Créer la table notifications si elle n'existe pas
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id SERIAL PRIMARY KEY,
+                    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    type VARCHAR(50) NOT NULL CHECK (type IN ('message', 'order', 'offer', 'announcement', 'system')),
+                    title VARCHAR(255) NOT NULL,
+                    body TEXT NOT NULL,
+                    data JSONB,
+                    is_read BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            `);
+            await pool.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)`);
+            await pool.query(`CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read)`);
+            console.log('✅ [MIGRATION] Table notifications vérifiée.');
+
             await pool.query(`
                 ALTER TABLE products
                 ADD COLUMN IF NOT EXISTS is_good_deal BOOLEAN DEFAULT FALSE,

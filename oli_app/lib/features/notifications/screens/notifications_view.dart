@@ -11,6 +11,7 @@ class NotificationsView extends ConsumerWidget {
     final notificationState = ref.watch(notificationProvider);
     final notifications = notificationState.notifications;
     final isLoading = notificationState.isLoading;
+    final error = notificationState.error;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -59,25 +60,90 @@ class NotificationsView extends ConsumerWidget {
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : notifications.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    await ref.read(notificationProvider.notifier).fetchNotifications();
-                  },
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(8),
-                    itemCount: notifications.length,
-                    separatorBuilder: (context, index) => const Divider(
-                      color: Colors.white12,
-                      height: 1,
+          : error != null && notifications.isEmpty
+              ? _buildErrorState(context, ref, error)
+              : notifications.isEmpty
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      onRefresh: () async {
+                        await ref.read(notificationProvider.notifier).fetchNotifications();
+                      },
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(8),
+                        itemCount: notifications.length,
+                        separatorBuilder: (context, index) => const Divider(
+                          color: Colors.white12,
+                          height: 1,
+                        ),
+                        itemBuilder: (context, index) {
+                          final notification = notifications[index];
+                          return _buildNotificationTile(context, ref, notification);
+                        },
+                      ),
                     ),
-                    itemBuilder: (context, index) {
-                      final notification = notifications[index];
-                      return _buildNotificationTile(context, ref, notification);
-                    },
-                  ),
+    );
+  }
+
+  /// État d'erreur (API inaccessible, table absente, etc.)
+  Widget _buildErrorState(BuildContext context, WidgetRef ref, String error) {
+    // Détecter si c'est une erreur de connexion vs une erreur serveur
+    final isNetworkError = error.toLowerCase().contains('connection') ||
+        error.toLowerCase().contains('timeout') ||
+        error.toLowerCase().contains('socketexception');
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isNetworkError ? Icons.wifi_off_rounded : Icons.error_outline_rounded,
+              size: 72,
+              color: Colors.redAccent.withOpacity(0.7),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              isNetworkError
+                  ? 'Impossible de charger les notifications'
+                  : 'Une erreur est survenue',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isNetworkError
+                  ? 'Vérifiez votre connexion internet'
+                  : 'Le serveur a rencontré un problème',
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 13,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
+            ElevatedButton.icon(
+              onPressed: () {
+                ref.read(notificationProvider.notifier).fetchNotifications();
+              },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Réessayer'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
