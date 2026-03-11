@@ -45,13 +45,13 @@ class OrderService {
         if (paymentMethod === 'wallet') {
             try {
                 await walletService.payOrder(userId, totalAmount);
-                paymentStatus = 'paid';
+                paymentStatus = 'completed'; // 'completed' = valeur valide du CHECK DB
                 orderStatus = 'paid';
             } catch (err) {
                 throw new Error(err.message || "Echec du paiement Wallet");
             }
         } else if (paymentMethod === 'mobile_money') {
-            paymentStatus = 'paid';
+            paymentStatus = 'completed'; // 'completed' = valeur valide du CHECK DB
             orderStatus = 'paid';
         }
 
@@ -66,8 +66,8 @@ class OrderService {
         );
 
         // Si paiement instantané réussi → MAJ statut + notifications + delivery + codes
-        if (paymentStatus === 'paid') {
-            await orderRepository.updatePaymentStatus(order.id, 'paid');
+        if (paymentStatus === 'completed') {
+            await orderRepository.updatePaymentStatus(order.id, 'completed');
             await orderRepository.updateOrderStatus(order.id, 'paid');
             order.status = 'paid';
             order.paymentStatus = 'paid';
