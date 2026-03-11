@@ -19,16 +19,20 @@ class WalletRepository {
         try {
             await client.query('BEGIN');
 
+            // Lock user row to prevent concurrent balance race condition
+            const userRes = await client.query(
+                "SELECT wallet FROM users WHERE id = $1 FOR UPDATE",
+                [userId]
+            );
+            const currentBalance = parseFloat(userRes.rows[0]?.wallet || 0);
+            const newBalance = currentBalance + parseFloat(amount);
+
             const txRes = await client.query(`
                 INSERT INTO wallet_transactions 
                 (user_id, type, amount, balance_after, provider, reference, status, description)
-                VALUES ($1, 'deposit', $2, 
-                    (SELECT COALESCE(wallet, 0) + $2 FROM users WHERE id = $1), 
-                    $3, $4, $5, $6)
+                VALUES ($1, 'deposit', $2, $3, $4, $5, 'completed', $6)
                 RETURNING id, balance_after
-            `, [userId, amount, provider, reference, 'completed', description]);
-
-            const newBalance = txRes.rows[0].balance_after;
+            `, [userId, amount, newBalance, provider, reference, description]);
 
             await client.query("UPDATE users SET wallet = $1 WHERE id = $2", [newBalance, userId]);
 

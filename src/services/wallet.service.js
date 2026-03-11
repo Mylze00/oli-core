@@ -65,9 +65,13 @@ class WalletService {
 
     // PAIEMENT DE COMMANDE VIA WALLET
     async payOrder(userId, amount) {
+        const parsedAmount = parseFloat(amount);
+        if (!parsedAmount || parsedAmount <= 0) {
+            throw new Error("Montant invalide");
+        }
         // 1. Vérification du solde
         const currentBalance = await walletRepository.getBalance(userId);
-        if (currentBalance < amount) {
+        if (currentBalance < parsedAmount) {
             throw new Error("Solde insuffisant");
         }
 
@@ -76,7 +80,7 @@ class WalletService {
 
         const result = await walletRepository.performWithdrawal(
             userId,
-            amount,
+            parsedAmount,
             'WALLET_PAYMENT',
             transactionId,
             'Paiement de commande OLI'
@@ -166,13 +170,17 @@ class WalletService {
      */
     async transferToUser(senderId, receiverId, amount, currency = 'USD') {
         // Convertir FC en USD si nécessaire (taux fixe simplifié)
-        let amountUSD = amount;
+        let amountUSD = parseFloat(amount);
         if (currency === 'FC') {
-            amountUSD = amount / 2800;
+            amountUSD = amountUSD / 2800;
         }
 
-        if (amountUSD <= 0) throw new Error("Montant invalide");
-        if (senderId === receiverId) throw new Error("Impossible de s'envoyer de l'argent à soi-même");
+        const senderIdInt = parseInt(senderId);
+        const receiverIdInt = parseInt(receiverId);
+
+        if (!amountUSD || amountUSD <= 0) throw new Error("Montant invalide");
+        if (senderIdInt === receiverIdInt) throw new Error("Impossible de s'envoyer de l'argent à soi-même");
+        if (!receiverIdInt) throw new Error("Destinataire invalide");
 
         // Vérifier solde expéditeur
         const balance = await walletRepository.getBalance(senderId);
