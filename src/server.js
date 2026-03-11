@@ -30,6 +30,7 @@ const userRoutes = require("./routes/user.routes");
 const adminRoutes = require("./routes/admin.routes"); // ✨ Routes admin
 const sellerRoutes = require("./routes/seller.routes"); // ✨ Routes vendeur
 const paymentRoutes = require("./routes/payment.routes"); // 💳 Routes Paiement (Simulé)
+const webhookRoutes = require("./routes/webhook.routes"); // 🔔 Webhooks (Onafriq)
 const { requireAuth, optionalAuth } = require("./middlewares/auth.middleware");
 
 const app = express();
@@ -157,6 +158,7 @@ if (config.NODE_ENV !== 'production') {
 }
 
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use("/webhooks", webhookRoutes); // 🔔 Webhooks Onafriq (public, sans auth)
 app.use("/api/payment", require('./routes/stripe-webhook.routes')); // 🔔 Stripe Webhook (simulation mode)
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));

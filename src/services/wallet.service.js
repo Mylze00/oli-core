@@ -12,7 +12,7 @@
  *  8. Récompense points (rewardUser)
  */
 const walletRepository = require('../repositories/wallet.repository');
-const mmService = require('./mobile-money.service');
+const onafriqService = require('./onafriq.service');
 const pool = require('../config/db');
 
 // Taux FC→USD fixe (à externaliser dans exchange_rates si nécessaire)
@@ -42,17 +42,29 @@ class WalletService {
         if (!provider) throw new Error('Opérateur Mobile Money requis');
         if (!phoneNumber) throw new Error('Numéro de téléphone requis');
 
-        // Appel API Mobile Money
-        const mmRes = await mmService.initiatePayment(provider, phoneNumber, amount);
-        if (!mmRes.success || mmRes.status === 'failed') {
-            throw new Error(mmRes.message || 'Échec du paiement Mobile Money');
+        // Préparation de l'ID de Transaction pour faire le lien avec le Webhook
+        const reference = `DEP_${userId}_${Date.now()}`;
+
+        // Appel API Onafriq Collections - Mobile Money
+        const onafriqRes = await onafriqService.collectPayment({
+            amount,
+            currency: 'USD',
+            paymentType: 'MOBILE_MONEY',
+            phoneNumber,
+            reference
+        });
+
+        if (!onafriqRes.success || onafriqRes.status === 'failed') {
+            throw new Error(onafriqRes.message || 'Échec de l\'initiation du dépôt');
         }
 
-        return await walletRepository.performDeposit(userId, amount, {
-            type: 'deposit',
-            provider,
-            reference: mmRes.transaction_id,
-            description: `Recharge via ${provider}`,
+        // Nous enregistrons la demande dans l'historique mais le solde n'augmente PAS.
+        // C'est le webhook d'Onafriq (POST /webhooks/onafriq/collections) qui fera le performDeposit().
+        return await walletRepository.performDeposit(userId, 0, { // Montant 0 pour l'instant
+            type: 'deposit_pending',
+            provider: 'ONAFRIQ',
+            reference: onafriqRes.transaction_id || reference,
+            description: `Recharge initiée via ${provider}. En attente de validation PIN.`,
         });
     }
 
@@ -66,18 +78,29 @@ class WalletService {
         this._validateCard(cardInfo);
 
         const cardNumber = cardInfo.cardNumber.replace(/\s/g, '');
-        // Simulation sandbox : refuse les cartes commençant par 4000
-        if (cardNumber.startsWith('4000')) {
-            throw new Error('Carte refusée (simulation)');
+        const reference = `CARD_${userId}_${Date.now()}`;
+
+        // Appel API Onafriq Collections - Carte Bancaire
+        const onafriqRes = await onafriqService.collectPayment({
+            amount,
+            currency: 'USD',
+            paymentType: 'CARD', 
+            // Pour la carte, le numéro de téléphone n'est pas utilisé directement 
+            // mais l'API Collections en a souvent besoin pour la facturation :
+            phoneNumber: '+243000000000', 
+            reference
+        });
+
+        if (!onafriqRes.success) {
+            throw new Error(onafriqRes.message || 'Échec de l\'initiation du paiement carte');
         }
 
-        const reference = `CARD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        return await walletRepository.performDeposit(userId, amount, {
-            type: 'deposit',
-            provider: 'CARD',
-            reference,
-            description: `Recharge carte ****${cardNumber.slice(-4)}`,
+        // Là aussi, le fond est en attente du webhook (ou retour 3DS)
+        return await walletRepository.performDeposit(userId, 0, {
+            type: 'deposit_pending',
+            provider: 'ONAFRIQ',
+            reference: onafriqRes.transaction_id || reference,
+            description: `Recharge carte ****${cardNumber.slice(-4)} en attente`,
         });
     }
 
@@ -91,21 +114,44 @@ class WalletService {
         if (!provider) throw new Error('Opérateur requis');
         if (!phoneNumber) throw new Error('Numéro de téléphone requis');
 
-        // Vérification solde (double vérif — le repository vérifie aussi atomiquement)
+        // Vérification solde OLI
         const balance = await walletRepository.getBalance(userId);
         if (balance < amount) {
             throw new Error(`Solde insuffisant (${balance.toFixed(2)} USD disponible)`);
         }
 
-        // Appel API Mobile Money
-        const mmRes = await mmService.sendMoney(provider, phoneNumber, amount);
+        const reference = `WD_${userId}_${Date.now()}`;
 
-        return await walletRepository.performWithdrawal(userId, amount, {
-            type: 'withdrawal',
-            provider,
-            reference: mmRes.transaction_id,
-            description: `Retrait vers ${provider} (${phoneNumber})`,
+        // IMPORTANT : Débit immédiat du Wallet OLI pour empêcher le double retrait
+        const withdrawResult = await walletRepository.performWithdrawal(userId, amount, {
+            type: 'withdrawal_pending',
+            provider: 'ONAFRIQ',
+            reference,
+            description: `Retrait vers ${provider} (${phoneNumber}) initié`,
         });
+
+        // Appel API Onafriq Disbursements (Décaissements)
+        const onafriqRes = await onafriqService.disburse({
+            amount,
+            currency: 'USD',
+            phoneNumber,
+            reference
+        });
+
+        if (!onafriqRes.success || onafriqRes.status === 'failed') {
+             // Si l'API échoue *immédiatement*, on rembourse le wallet
+             await walletRepository.performDeposit(userId, amount, {
+                type: 'refund',
+                provider: 'ONAFRIQ',
+                reference: `${reference}_REFUND`,
+                description: `Échec du retrait Onafriq - Remboursé`,
+             });
+             throw new Error(onafriqRes.message || "Impossible d'initier le décaissement externe");
+        }
+
+        // Succès d'initiation : l'utilisateur recevra un SMS d'Onafriq quand l'argent sera sur son tel.
+        // Le Webhook /webhooks/onafriq/disbursements sera appelé plus tard.
+        return withdrawResult;
     }
 
     // ─────────────────────────────────────────────────────────────
