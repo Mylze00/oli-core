@@ -44,15 +44,19 @@ class OrderService {
 
         if (paymentMethod === 'wallet') {
             try {
-                await walletService.payOrder(userId, totalAmount);
-                paymentStatus = 'completed'; // 'completed' = valeur valide du CHECK DB
+                // Débiter le wallet avant de créer la commande en base
+                await walletService.payOrder(userId, totalAmount, null); // orderId connu après création
+                paymentStatus = 'completed';
                 orderStatus = 'paid';
             } catch (err) {
-                throw new Error(err.message || "Echec du paiement Wallet");
+                // Relancer l'erreur avec message clair (ex: Solde insuffisant)
+                throw new Error(err.message || 'Échec du paiement Wallet');
             }
         } else if (paymentMethod === 'mobile_money') {
-            paymentStatus = 'completed'; // 'completed' = valeur valide du CHECK DB
-            orderStatus = 'paid';
+            // Mobile Money = flux asynchrone : on crée la commande en 'pending'
+            // et on attend la confirmation de l'API Mobile Money
+            paymentStatus = 'pending';
+            orderStatus = 'pending';
         }
 
         // Créer la commande en base
@@ -64,6 +68,24 @@ class OrderService {
             parseFloat(deliveryFee) || 0,
             deliveryMethodId || null
         );
+
+        // Pour Wallet : mettre à jour la référence de transaction avec l'ID commande réel
+        if (paymentMethod === 'wallet' && paymentStatus === 'completed') {
+            // Mettons à jour la description de la transaction wallet avec le vrai order.id
+            // (non-bloquant, best-effort)
+            const pool = require('../config/db');
+            pool.query(
+                `UPDATE wallet_transactions SET reference = $1, order_id = $2, description = $3
+                 WHERE user_id = $4 AND reference = $5 AND type = 'payment'`,
+                [
+                    `ORDER_${order.id}`,
+                    order.id,
+                    `Paiement commande #${order.id}`,
+                    userId,
+                    `ORDER_null`
+                ]
+            ).catch(e => console.warn('⚠️ Mise à jour référence wallet tx (non-bloquant):', e.message));
+        }
 
         // Si paiement instantané réussi → MAJ statut + notifications + delivery + codes
         if (paymentStatus === 'completed') {

@@ -1,64 +1,34 @@
 /**
- * Routes Wallet et Paiements
+ * Routes Wallet OLI
  */
 const express = require('express');
 const router = express.Router();
 const walletController = require('../controllers/wallet.controller');
 
-/**
- * GET /wallet/balance
- * Solde actuel
- */
+/** GET /wallet/balance — Solde actuel */
 router.get('/balance', walletController.getBalance);
 
-/**
- * GET /wallet/transactions
- * Historique
- */
+/** GET /wallet/transactions — Historique (query: ?limit=30) */
 router.get('/transactions', walletController.getHistory);
 
-/**
- * POST /wallet/deposit
- * Dépôt via Mobile Money
+/** POST /wallet/deposit — Recharge via Mobile Money
+ *  Body: { amount, provider, phoneNumber }
  */
 router.post('/deposit', walletController.deposit);
 
-/**
- * POST /wallet/withdraw
- * Retrait vers Mobile Money
- */
-router.post('/withdraw', walletController.withdraw);
-
-/**
- * POST /wallet/deposit-card
- * Dépôt via Carte Bancaire
+/** POST /wallet/deposit-card — Recharge via Carte
+ *  Body: { amount, cardNumber, expiryDate, cvv, cardholderName? }
  */
 router.post('/deposit-card', walletController.depositCard);
 
-/**
- * POST /wallet/transfer
- * Transfert P2P (envoi cash via chat)
+/** POST /wallet/withdraw — Retrait vers Mobile Money
+ *  Body: { amount, provider, phoneNumber }
  */
-const walletService = require('../services/wallet.service');
+router.post('/withdraw', walletController.withdraw);
 
-router.post('/transfer', async (req, res) => {
-    const { receiverId, amount, currency } = req.body;
-
-    if (!receiverId || !amount || amount <= 0) {
-        return res.status(400).json({ error: "Données invalides (receiverId, amount requis)" });
-    }
-
-    try {
-        const result = await walletService.transferToUser(
-            req.user.id,
-            parseInt(receiverId),
-            parseFloat(amount),
-            currency || 'USD'
-        );
-        res.json(result);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
-    }
-});
+/** POST /wallet/transfer — Transfert P2P
+ *  Body: { receiverId, amount, currency? ('USD'|'FC') }
+ */
+router.post('/transfer', walletController.transfer);
 
 module.exports = router;

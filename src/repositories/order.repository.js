@@ -161,14 +161,24 @@ async function updateOrderStatus(orderId, status) {
  * Mettre à jour le statut de paiement
  */
 async function updatePaymentStatus(orderId, paymentStatus) {
+  // Requête 1 : mettre à jour payment_status
+  // (séparé pour éviter l'ambiguïté de type PostgreSQL 42P08
+  //  quand $2 est utilisé à la fois comme valeur CHECK et dans CASE WHEN)
   const result = await pool.query(`
     UPDATE orders 
-    SET payment_status = $2, 
-        status = CASE WHEN $2::text = 'completed' THEN 'paid' ELSE status END,
-        updated_at = NOW()
+    SET payment_status = $2, updated_at = NOW()
     WHERE id = $1
     RETURNING *
   `, [orderId, paymentStatus]);
+
+  // Requête 2 : si paiement confirmé → passer la commande en 'paid'
+  if (paymentStatus === 'completed' && result.rows[0]) {
+    await pool.query(
+      `UPDATE orders SET status = 'paid', updated_at = NOW() WHERE id = $1`,
+      [orderId]
+    );
+    result.rows[0].status = 'paid';
+  }
 
   return result.rows[0];
 }
