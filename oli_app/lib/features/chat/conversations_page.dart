@@ -428,7 +428,9 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                             // Badge for duplicate conversations
                             extraBadge: (() {
                               final otherId = conv['other_id']?.toString() ?? '';
-                              final count = grouped[otherId]?.length ?? 1;
+                              final list = grouped[otherId] ?? [];
+                              final uniquePIds = list.map((c) => c['product_id']?.toString() ?? 'private').toSet();
+                              final count = uniquePIds.length;
                               return count > 1 ? count : null;
                             })(),
                             onTap: () {
@@ -489,6 +491,14 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
     List<Map<String, dynamic>> convList,
     String myUserId,
   ) {
+    // Dédupliquer par product_id pour éviter de voir N fois le même produit
+    final Map<String, Map<String, dynamic>> deduped = {};
+    for (var c in convList) {
+      final pKey = c['product_id']?.toString() ?? 'private';
+      if (!deduped.containsKey(pKey)) deduped[pKey] = c;
+    }
+    final uniqueConvs = deduped.values.toList();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -521,7 +531,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
               ),
             ),
             const Divider(height: 1),
-            ...convList.map((conv) {
+            ...uniqueConvs.map((conv) {
               final product = conv['product_name'];
               final lastMsg = conv['last_message'] ?? '';
               return ListTile(

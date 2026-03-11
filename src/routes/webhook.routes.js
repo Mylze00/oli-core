@@ -1,19 +1,19 @@
 const express = require('express');
-const onafriqWebhookController = require('../controllers/onafriq.controller');
+const unipesaWebhookController = require('../controllers/unipesa.controller');
 
 const router = express.Router();
 
 /**
- * Routes de Webhooks
- * Attention: Ces endpoints doivent être publics pour qu'Onafriq puisse les appeler.
- * Il ne faut PAS y mettre de middleware d'authentification utilisateur type `auth()`.
- * La sécurité doit se faire via vérification de signature ou IP whitelist (si Onafriq le permet).
+ * Routes de Webhooks Unipesa
+ * Ces endpoints doivent rester PUBLICS (aucun middleware auth).
+ * La sécurité est assurée via la vérification de la signature HMAC-SHA512.
  */
 
-// Callback pour les dépôts (Collections)
-router.post('/onafriq/collections', onafriqWebhookController.handleCollection);
+// Callback pour les dépôts C2B (client → OLI Wallet)
+router.post('/unipesa/deposit', unipesaWebhookController.handleDeposit);
 
-// Callback pour les retraits (Disbursements)
-router.post('/onafriq/disbursements', onafriqWebhookController.handleDisbursement);
+// Callback pour les retraits B2C (OLI Wallet → client)
+router.post('/unipesa/withdrawal', unipesaWebhookController.handleWithdrawal);
+
 
 module.exports = router;

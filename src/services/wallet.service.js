@@ -12,8 +12,9 @@
  *  8. Récompense points (rewardUser)
  */
 const walletRepository = require('../repositories/wallet.repository');
-const onafriqService = require('./onafriq.service');
+const unipesaService = require('./unipesa.service');
 const pool = require('../config/db');
+
 
 // Taux FC→USD fixe (à externaliser dans exchange_rates si nécessaire)
 const FC_TO_USD = 2800;
@@ -42,28 +43,27 @@ class WalletService {
         if (!provider) throw new Error('Opérateur Mobile Money requis');
         if (!phoneNumber) throw new Error('Numéro de téléphone requis');
 
-        // Préparation de l'ID de Transaction pour faire le lien avec le Webhook
+        // Résoudre l'ID fournisseur Unipesa à partir du nom de l'opérateur
         const reference = `DEP_${userId}_${Date.now()}`;
 
-        // Appel API Onafriq Collections - Mobile Money
-        const onafriqRes = await onafriqService.collectPayment({
+        // Appel API Unipesa C2B - Mobile Money
+        const unipesaRes = await unipesaService.depositC2B({
             amount,
             currency: 'USD',
-            paymentType: 'MOBILE_MONEY',
+            provider,
             phoneNumber,
             reference
         });
 
-        if (!onafriqRes.success || onafriqRes.status === 'failed') {
-            throw new Error(onafriqRes.message || 'Échec de l\'initiation du dépôt');
+        if (!unipesaRes.success || unipesaRes.status === 'failed') {
+            throw new Error(unipesaRes.message || 'Échec de l\'initiation du dépôt');
         }
 
-        // Nous enregistrons la demande dans l'historique mais le solde n'augmente PAS.
-        // C'est le webhook d'Onafriq (POST /webhooks/onafriq/collections) qui fera le performDeposit().
-        return await walletRepository.performDeposit(userId, 0, { // Montant 0 pour l'instant
+        // Enregistrement en attente — le solde sera crédité par le webhook /webhooks/unipesa/deposit
+        return await walletRepository.performDeposit(userId, 0, {
             type: 'deposit_pending',
-            provider: 'ONAFRIQ',
-            reference: onafriqRes.transaction_id || reference,
+            provider: 'UNIPESA',
+            reference: unipesaRes.transaction_id || reference,
             description: `Recharge initiée via ${provider}. En attente de validation PIN.`,
         });
     }
@@ -77,29 +77,26 @@ class WalletService {
         if (!amount || amount <= 0) throw new Error('Montant invalide');
         this._validateCard(cardInfo);
 
-        const cardNumber = cardInfo.cardNumber.replace(/\s/g, '');
         const reference = `CARD_${userId}_${Date.now()}`;
 
-        // Appel API Onafriq Collections - Carte Bancaire
-        const onafriqRes = await onafriqService.collectPayment({
+        // Appel API Unipesa C2B - Carte Bancaire (provider = equity ou ecobank selon la carte)
+        const unipesaRes = await unipesaService.depositC2B({
             amount,
             currency: 'USD',
-            paymentType: 'CARD', 
-            // Pour la carte, le numéro de téléphone n'est pas utilisé directement 
-            // mais l'API Collections en a souvent besoin pour la facturation :
-            phoneNumber: '+243000000000', 
+            provider: 'card', // mappage vers equity (ID 20) par défaut
+            phoneNumber: '+243000000000',
             reference
         });
 
-        if (!onafriqRes.success) {
-            throw new Error(onafriqRes.message || 'Échec de l\'initiation du paiement carte');
+        if (!unipesaRes.success) {
+            throw new Error(unipesaRes.message || 'Échec de l\'initiation du paiement carte');
         }
 
-        // Là aussi, le fond est en attente du webhook (ou retour 3DS)
+        // Solde en attente — sera crédité par le webhook /webhooks/unipesa/deposit
         return await walletRepository.performDeposit(userId, 0, {
             type: 'deposit_pending',
-            provider: 'ONAFRIQ',
-            reference: onafriqRes.transaction_id || reference,
+            provider: 'UNIPESA',
+            reference: unipesaRes.transaction_id || reference,
             description: `Recharge carte ****${cardNumber.slice(-4)} en attente`,
         });
     }
@@ -125,32 +122,32 @@ class WalletService {
         // IMPORTANT : Débit immédiat du Wallet OLI pour empêcher le double retrait
         const withdrawResult = await walletRepository.performWithdrawal(userId, amount, {
             type: 'withdrawal_pending',
-            provider: 'ONAFRIQ',
+            provider: 'UNIPESA',
             reference,
             description: `Retrait vers ${provider} (${phoneNumber}) initié`,
         });
 
-        // Appel API Onafriq Disbursements (Décaissements)
-        const onafriqRes = await onafriqService.disburse({
+        // Appel API Unipesa B2C (Décaissements)
+        const unipesaRes = await unipesaService.withdrawB2C({
             amount,
             currency: 'USD',
+            provider,
             phoneNumber,
             reference
         });
 
-        if (!onafriqRes.success || onafriqRes.status === 'failed') {
+        if (!unipesaRes.success || unipesaRes.status === 'failed') {
              // Si l'API échoue *immédiatement*, on rembourse le wallet
              await walletRepository.performDeposit(userId, amount, {
                 type: 'refund',
-                provider: 'ONAFRIQ',
+                provider: 'UNIPESA',
                 reference: `${reference}_REFUND`,
-                description: `Échec du retrait Onafriq - Remboursé`,
+                description: `Échec du retrait Unipesa - Remboursé`,
              });
-             throw new Error(onafriqRes.message || "Impossible d'initier le décaissement externe");
+             throw new Error(unipesaRes.message || "Impossible d'initier le décaissement externe");
         }
 
-        // Succès d'initiation : l'utilisateur recevra un SMS d'Onafriq quand l'argent sera sur son tel.
-        // Le Webhook /webhooks/onafriq/disbursements sera appelé plus tard.
+        // Succès d'initiation : le webhook /webhooks/unipesa/withdrawal confirmera ou remboursera.
         return withdrawResult;
     }
 
