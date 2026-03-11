@@ -263,6 +263,8 @@ class ChatController extends StateNotifier<ChatState> {
     double? productPrice,
     Map<String, dynamic>? customMetadata,
     String? replyToId,
+    double? latitude,
+    double? longitude,
   }) async {
     // Si pas de contenu, pas de média, et pas de metadata custom, on n'envoie rien
     if ((content.trim().isEmpty && mediaUrl == null && customMetadata == null) || myId == null) return;
@@ -313,6 +315,8 @@ class ChatController extends StateNotifier<ChatState> {
           'mediaType': mediaType,
           'productId': productId != null ? int.parse(productId) : null,
           'metadata': metadata,
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude,
         };
       } else {
         url = '${ApiConfig.baseUrl}/chat/messages';
@@ -325,6 +329,8 @@ class ChatController extends StateNotifier<ChatState> {
           'mediaType': mediaType,
           'metadata': metadata,
           if (replyToId != null) 'replyToId': int.tryParse(replyToId),
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude,
         };
       }
 

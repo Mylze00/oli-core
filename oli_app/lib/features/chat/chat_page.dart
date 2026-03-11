@@ -346,7 +346,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Géolocalisation en cours...')));
       
-      Position position = await Geolocator.getCurrentPosition();
+      // LocationSettings requis pour Flutter Web (sinon erreur "listening for position updates")
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium, // Précision moyenne = moins de data
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
       final String mapsUrl = "https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}";
       
       if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -355,6 +361,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       controller.sendMessage(
         content: "", // Content empty for location bubble
         type: 'location',
+        latitude: position.latitude,
+        longitude: position.longitude,
         customMetadata: {
           'lat': position.latitude,
           'lng': position.longitude,
@@ -366,7 +374,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       );
     } catch (e) {
       debugPrint("Erreur shareLocation: $e");
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur récupération position')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur récupération position: ${e.toString().split(":").last.trim()}')));
+      }
     }
   }
 

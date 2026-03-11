@@ -24,12 +24,29 @@ async function createOrder(userId, items, deliveryAddress, paymentMethod, delive
       }
     }
 
+    // ── Résoudre delivery_method_id (ID ou label texte) ──────────────────
+    // Flutter peut envoyer un label ('Livraison maritime') ou un ID ('maritime')
+    let resolvedDeliveryMethodId = null;
+    if (deliveryMethodId) {
+      const dmResult = await client.query(
+        `SELECT id FROM delivery_methods
+         WHERE id = $1 OR LOWER(label) = LOWER($1)
+         LIMIT 1`,
+        [String(deliveryMethodId)]
+      );
+      resolvedDeliveryMethodId = dmResult.rows.length > 0 ? dmResult.rows[0].id : null;
+      if (!resolvedDeliveryMethodId) {
+        console.warn(`⚠️ delivery_method_id inconnu: "${deliveryMethodId}" → NULL`);
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     // Créer la commande
     const orderResult = await client.query(`
       INSERT INTO orders (user_id, total_amount, delivery_address, delivery_fee, payment_method, delivery_method_id, seller_id, status, payment_status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', 'pending')
       RETURNING *
-    `, [userId, totalAmount, deliveryAddress, deliveryFee, paymentMethod, deliveryMethodId, sellerId]);
+    `, [userId, totalAmount, deliveryAddress, deliveryFee, paymentMethod, resolvedDeliveryMethodId, sellerId]);
 
     const order = orderResult.rows[0];
 

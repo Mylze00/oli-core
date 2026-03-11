@@ -24,14 +24,7 @@ class CheckoutPage extends ConsumerStatefulWidget {
 class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   String _paymentMethod = 'wallet';
   bool _isLoading = false;
-  double _deliveryFee = 5.00;
-  String _selectedDeliveryMethod = 'oli_standard';
-
-  /// Méthodes de livraison simplifiées (choix fait dans le panier)
-  static const List<Map<String, dynamic>> _deliveryMethods = [
-    {'id': 'pick_go', 'label': 'Pick & Go', 'icon': Icons.store_rounded, 'time': 'Retrait en boutique', 'cost': 0.0, 'color': Colors.green},
-    {'id': 'paid_delivery', 'label': 'Livraison Payante', 'icon': Icons.delivery_dining_rounded, 'time': '2-5 jours', 'cost': 5.0, 'color': Colors.blue},
-  ];
+  double _deliveryFee = 0.0;
 
   /// Retourne les items à checkout (achat direct ou panier)
   List<CartItem> get _checkoutItems {
@@ -49,9 +42,17 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   @override
   void initState() {
     super.initState();
-    // Si achat direct, utiliser le frais de livraison du produit
+    // Initialiser la livraison depuis l'item sélectionné (achat direct ou premier item du panier)
     if (widget.directPurchaseItem != null) {
       _deliveryFee = widget.directPurchaseItem!.deliveryPrice;
+    } else {
+      // Pour le panier, sommer les frais de livraison de chaque item
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final items = ref.read(cartProvider).where((i) => i.isSelected).toList();
+        if (items.isNotEmpty) {
+          setState(() => _deliveryFee = items.fold(0.0, (sum, i) => sum + i.deliveryPrice));
+        }
+      });
     }
     // Charger les adresses de l'utilisateur
     Future.microtask(() => ref.read(addressProvider.notifier).loadAddresses());
@@ -63,7 +64,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   Widget build(BuildContext context) {
     final cartItems = _checkoutItems;
     final subtotal = _subtotal;
-    final total = subtotal + (widget.directPurchaseItem == null ? _deliveryFee : 0); // Livraison déjà incluse dans directPurchaseItem
+    final total = subtotal + _deliveryFee;
     ref.watch(exchangeRateProvider);
     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
@@ -135,9 +136,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
             const SizedBox(height: 24),
 
-            // --- MODE DE LIVRAISON ---
+            // --- MODE DE LIVRAISON (read-only — choisi sur la fiche produit) ---
             _buildSectionTitle('Mode de livraison'),
-            ..._deliveryMethods.map((method) => _buildDeliveryMethodOption(method)),
+            _buildDeliveryReadOnly(),
 
             const SizedBox(height: 24),
 
@@ -292,51 +293,64 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  Widget _buildDeliveryMethodOption(Map<String, dynamic> method) {
-    final isSelected = _selectedDeliveryMethod == method['id'];
-    final Color color = method['color'];
-    return GestureDetector(
-      onTap: () => setState(() {
-        _selectedDeliveryMethod = method['id'];
-        _deliveryFee = (method['cost'] as num).toDouble();
-      }),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(12),
-          border: isSelected ? Border.all(color: color, width: 2) : null,
-        ),
-        child: Row(
-          children: [
-            Icon(method['icon'], color: color, size: 22),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(method['label'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                  Text(method['time'], style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-                ],
+  /// Affiche en lecture seule la méthode de livraison choisie sur la fiche produit
+  Widget _buildDeliveryReadOnly() {
+    // Collecter les méthodes uniques choisies
+    final items = _checkoutItems;
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    // Regrouper par méthode
+    final Map<String, double> methodMap = {};
+    for (final item in items) {
+      methodMap[item.deliveryMethod] = (methodMap[item.deliveryMethod] ?? 0) + item.deliveryPrice;
+    }
+
+    return Column(
+      children: methodMap.entries.map((e) {
+        final isPickGo = e.key.toLowerCase().contains('pick') || e.value == 0;
+        final icon = isPickGo ? Icons.store_rounded : Icons.local_shipping_rounded;
+        final color = isPickGo ? Colors.green : Colors.blue;
+        final priceLabel = e.value == 0
+            ? 'Gratuit'
+            : ref.read(exchangeRateProvider.notifier).formatProductPrice(e.value);
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color, width: 2),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(e.key, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                    Text('Méthode sélectionnée', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              method['cost'] == 0.0 ? 'Gratuit' : ref.read(exchangeRateProvider.notifier).formatProductPrice((method['cost'] as num).toDouble()),
-              style: TextStyle(color: method['cost'] == 0.0 ? Colors.green : Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-            const SizedBox(width: 8),
-            if (isSelected) Icon(Icons.check_circle, color: color, size: 20),
-          ],
-        ),
-      ),
+              Text(priceLabel, style: TextStyle(color: e.value == 0 ? Colors.green : Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(width: 8),
+              Icon(Icons.check_circle, color: color, size: 20),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
   Future<void> _confirmOrder(double total) async {
     final defaultAddr = ref.read(defaultAddressProvider);
-    final needsAddress = _selectedDeliveryMethod != 'hand_delivery' && _selectedDeliveryMethod != 'pick_go';
-    if (needsAddress && defaultAddr == null) {
+    // Déterminer si un retrait en boutique est sélectionné
+    final deliveryMethod = widget.directPurchaseItem?.deliveryMethod
+        ?? (_checkoutItems.isNotEmpty ? _checkoutItems.first.deliveryMethod : 'Standard');
+    final isPickup = deliveryMethod.toLowerCase().contains('pick');
+    if (!isPickup && defaultAddr == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Veuillez ajouter une adresse de livraison'), backgroundColor: Colors.red),
       );
@@ -407,7 +421,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         deliveryAddress: deliveryAddress,
         paymentMethod: _paymentMethod,
         deliveryFee: _deliveryFee,
-        deliveryMethodId: _selectedDeliveryMethod,
+        deliveryMethodId: widget.directPurchaseItem?.deliveryMethod
+            ?? (_checkoutItems.isNotEmpty ? _checkoutItems.first.deliveryMethod : 'Standard'),
       );
 
       if (order != null) {
