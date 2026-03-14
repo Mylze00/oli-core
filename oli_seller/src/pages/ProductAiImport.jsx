@@ -70,8 +70,8 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
 {
   "name": "Traduis le nom du produit en français. Sois très commercial (ex: Sneakers Homme Respirantes). Max 10 mots.",
   "description": "Description de vente PERCUTANTE en français. 1) Accroche. 2) Caractéristiques avec puces. Minimum 3 phrases.",
-  "price_cny": montant_numerique (prix affiché en ¥ ou CNY, sans devise. Prends le plus bas si fourchette. null si introuvable),
-  "weight_kg": poids_numerique (Estime le poids volumétrique réaliste du produit nu en kg avec emballage. Ex: smartphone=0.4, chaussures=1.2. Toujours un nombre, 0.5 par défaut si impossible),
+  "price_cny": montant_numerique (Juste le chiffre, ex: 3.91. Prends le plus bas si fourchette),
+  "weight_kg": poids_numerique (Poids volumétrique réaliste en kg. SOIS TRES PRECIS pour les petits objets : écouteurs/bijoux/câbles = 0.05, t-shirt = 0.15, smartphone = 0.3, chaussures = 0.8. Juste le chiffre, ex: 0.05),
   "category": "Choisis EXACTEMENT UNE clé: industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, other",
   "colors": ["Noir", "Blanc"] (Couleurs visibles traduites en français, ou [] si introuvable),
   "sizes": ["M", "L"] (Tailles ou pointures, ou [] si introuvable),
@@ -119,7 +119,7 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
             };
 
             const priceCny = parseFloat(extractedData.price_cny) || 0;
-            const weightKg = parseFloat(extractedData.weight_kg) || 0.5;
+            const weightKg = parseFloat(extractedData.weight_kg) || 0.1;
 
             // 1. Conversion CNY vers USD
             const priceUsdSource = priceCny * freightConfig.CNY_to_USD;
@@ -137,23 +137,23 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                 deliveryTime = freightConfig.maritime.delai_jours;
                 freightMethodId = 'maritime';
             } else {
-                // Aérien
-                const effectiveWeight = Math.max(weightKg, 0.1);
+                // Aérien (on autorise le poids réel très bas, ex: 0.05kg * 25 = 1.25$)
+                const effectiveWeight = Math.max(weightKg, 0.02);
                 freightCostUsd = effectiveWeight * freightConfig.aerien.prix_par_kg;
                 deliveryTime = freightConfig.aerien.delai_jours;
-                freightMethodId = 'oli_express'; // ou oli_standard selon votre choix commercial
+                freightMethodId = 'oli_express';
             }
 
-            // 3. Prix final = (Source USD + Fret) + Marge 30%
-            const basePrice = priceUsdSource + freightCostUsd;
-            const finalPriceUsd = basePrice * (1 + freightConfig.marge);
+            // 3. Prix final du produit = Source USD * (1 + Marge 43%)
+            // Le coût du fret n'est PLUS inclus dans ce prix de vente.
+            const finalPriceUsd = priceUsdSource * (1 + freightConfig.marge);
 
             // Injection des données transformées pour le formulaire Vendeur
             const enrichedProductData = {
                 ...extractedData,
-                price: Math.round(finalPriceUsd),                       // Le prix final arrondi à l'entier
+                price: Math.ceil(finalPriceUsd),                        // Le prix final arrondi à l'entier SUPÉRIEUR
                 originalPriceCny: priceCny,                             // Optionnel, pour info
-                freightCostUsd: Math.round(freightCostUsd),             // Le fret arrondi à l'entier
+                freightCostUsd: Math.ceil(freightCostUsd),              // Le fret arrondi à l'entier SUPÉRIEUR pour info
                 deliveryTime: deliveryTime,
                 freightMethodId: freightMethodId,
                 description: extractedData.description
