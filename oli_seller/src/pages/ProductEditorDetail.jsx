@@ -381,7 +381,6 @@ export default function ProductEditorDetail() {
         } catch (err) {
             console.error('Erreur publication:', err);
             setError(err.response?.data?.detail || err.response?.data?.error || 'Erreur lors de la publication. Réessayez.');
-        } finally {
             setSaving(false);
         }
     };
@@ -393,7 +392,7 @@ export default function ProductEditorDetail() {
     const selectedCategory = CATEGORIES.find(c => c.key === category);
 
     return (
-        <div className="p-8 max-w-3xl mx-auto">
+        <div className="p-8 max-w-3xl mx-auto" translate="no">
             {/* Back */}
             <button onClick={() => navigate('/products/new')} className="text-gray-500 flex items-center gap-2 mb-4 hover:text-gray-900 transition-colors">
                 <ArrowLeft size={16} /> Retour au choix du mode

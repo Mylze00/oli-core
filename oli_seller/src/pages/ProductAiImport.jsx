@@ -176,7 +176,7 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
     };
 
     return (
-        <div className="p-8 max-w-4xl mx-auto">
+        <div className="p-8 max-w-4xl mx-auto" translate="no">
             <button
                 onClick={() => navigate('/products/new')}
                 className="text-gray-500 flex items-center gap-2 mb-6 hover:text-gray-900 transition-colors"
