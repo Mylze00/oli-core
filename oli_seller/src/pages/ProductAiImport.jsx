@@ -156,7 +156,7 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                 freightCostUsd: parseFloat(freightCostUsd.toFixed(2)),
                 deliveryTime: deliveryTime,
                 freightMethodId: freightMethodId,
-                description: extractedData.description + `\n\n*(Import : Poids estimé ${weightKg}kg / Prix source ¥${priceCny})*`
+                description: extractedData.description
             };
 
             // Navigation au succès (attention à ne pas changer le state juste après car le composant se démonte)
