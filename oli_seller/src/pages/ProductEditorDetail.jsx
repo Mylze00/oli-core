@@ -162,15 +162,38 @@ export default function ProductEditorDetail() {
         }
     }, [routerLocation.state?.aiProductData]);
 
+    // Helper to run base64 to File
+    const base64ToFile = (base64String, mimeType) => {
+        try {
+            const byteCharacters = atob(base64String.split(',')[1]);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
+            }
+            const blob = new Blob(byteArrays, { type: mimeType });
+            return new File([blob], "ai-screenshot.jpg", { type: mimeType });
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
+    };
+
     // Prefill the image file
     useEffect(() => {
-        if (routerLocation.state?.aiImageFile && routerLocation.state?.aiImagePreview) {
-            setImages([routerLocation.state.aiImageFile]);
-            setImagePreviews([routerLocation.state.aiImagePreview]);
-            // Clear location state to avoid bugs on refresh
-            window.history.replaceState({}, document.title);
+        if (routerLocation.state?.aiImageBase64) {
+            const restoredFile = base64ToFile(routerLocation.state.aiImageBase64, routerLocation.state.aiImageMimeType || 'image/jpeg');
+            if (restoredFile) {
+                setImages([restoredFile]);
+                setImagePreviews([routerLocation.state.aiImageBase64]);
+            }
         }
-    }, [routerLocation.state?.aiImageFile, routerLocation.state?.aiImagePreview]);
+    }, [routerLocation.state?.aiImageBase64]);
 
     // ── Help dialogs ──
     const [showConditionHelp, setShowConditionHelp] = useState(false);

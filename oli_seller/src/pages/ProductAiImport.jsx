@@ -163,8 +163,8 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
             navigate('/products/new/detail', { 
                 state: { 
                     aiProductData: enrichedProductData, 
-                    aiImageFile: file, 
-                    aiImagePreview: previewUrl 
+                    aiImageBase64: base64Image,
+                    aiImageMimeType: file.type 
                 } 
             });
         } catch (err) {
