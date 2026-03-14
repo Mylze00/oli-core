@@ -159,7 +159,7 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                 description: extractedData.description + `\n\n*(Import : Poids estimé ${weightKg}kg / Prix source ¥${priceCny})*`
             };
 
-            // Navigate to the detail mode form and pass the extracted data
+            // Navigation au succès (attention à ne pas changer le state juste après car le composant se démonte)
             navigate('/products/new/detail', { 
                 state: { 
                     aiProductData: enrichedProductData, 
@@ -167,11 +167,11 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                     aiImageMimeType: file.type 
                 } 
             });
+            // PAS D'ACTION SUR LE STATE ICI
         } catch (err) {
             console.error('Analysis error:', err);
             setError(err.message || "Une erreur s'est produite lors de la connexion à l'IA.");
-        } finally {
-            setIsAnalyzing(false);
+            setIsAnalyzing(false); // On rétablit l'état uniquement en cas d'erreur
         }
     };
 
