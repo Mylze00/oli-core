@@ -221,7 +221,9 @@ class ProductService {
             discount_start_date: data.discount_start_date || null,
             discount_end_date: data.discount_end_date || null,
             latitude: (data.latitude && !isNaN(data.latitude)) ? parseFloat(data.latitude) : null,
-            longitude: (data.longitude && !isNaN(data.longitude)) ? parseFloat(data.longitude) : null
+            longitude: (data.longitude && !isNaN(data.longitude)) ? parseFloat(data.longitude) : null,
+            brand_certified: data.brand_certified === 'true' || data.brand_certified === true,
+            brand_display_name: data.brand_display_name || null
         };
 
         const createdProduct = await productRepository.create(productData);

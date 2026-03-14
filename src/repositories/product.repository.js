@@ -317,7 +317,7 @@ class ProductRepository {
             is_negotiable, b2b_pricing, unit, brand, weight,
             discount_price, discount_start_date, discount_end_date,
             express_delivery_price, shipping_options,
-            latitude, longitude
+            latitude, longitude, brand_certified, brand_display_name
         } = product;
 
         const query = `
@@ -327,7 +327,7 @@ class ProductRepository {
                 is_negotiable, b2b_pricing, unit, brand, weight,
                 discount_price, discount_start_date, discount_end_date,
                 express_delivery_price, shipping_options,
-                latitude, longitude,
+                latitude, longitude, brand_certified, brand_display_name,
                 status, created_at, updated_at
             )
             VALUES (
@@ -336,7 +336,7 @@ class ProductRepository {
                 $15, $16, $17, $18, $19,
                 $20, $21, $22,
                 $23, $24,
-                $25, $26,
+                $25, $26, $27, $28,
                 'active', NOW(), NOW()
             )
             RETURNING *
@@ -349,7 +349,8 @@ class ProductRepository {
             discount_price || null, discount_start_date || null, discount_end_date || null,
             express_delivery_price || null,
             JSON.stringify(shipping_options || []),
-            latitude || null, longitude || null
+            latitude || null, longitude || null,
+            brand_certified || false, brand_display_name || null
         ];
 
         const { rows } = await pool.query(query, values);

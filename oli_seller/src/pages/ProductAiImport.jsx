@@ -151,9 +151,9 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
             // Injection des données transformées pour le formulaire Vendeur
             const enrichedProductData = {
                 ...extractedData,
-                price: parseFloat(finalPriceUsd.toFixed(2)),            // Le prix final calculé
+                price: Math.round(finalPriceUsd),                       // Le prix final arrondi à l'entier
                 originalPriceCny: priceCny,                             // Optionnel, pour info
-                freightCostUsd: parseFloat(freightCostUsd.toFixed(2)),
+                freightCostUsd: Math.round(freightCostUsd),             // Le fret arrondi à l'entier
                 deliveryTime: deliveryTime,
                 freightMethodId: freightMethodId,
                 description: extractedData.description
