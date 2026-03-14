@@ -40,6 +40,15 @@ export default function ProductAiImport() {
         }
     };
 
+    const fileToBase64 = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+    };
+
     const handleAnalyze = async () => {
         if (!file) return;
         
@@ -47,17 +56,120 @@ export default function ProductAiImport() {
             setIsAnalyzing(true);
             setError(null);
 
-            const result = await productAPI.analyzeScreenshot(file);
-
-            if (result.success && result.data) {
-                // Navigate to the detail mode form and pass the extracted data
-                navigate('/products/new/detail', { state: { aiProductData: result.data, aiImageFile: file, aiImagePreview: previewUrl } });
-            } else {
-                setError("L'analyse a échoué. Veuillez réessayer.");
+            const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+            if (!apiKey) {
+                setError("Clé API OpenRouter manquante dans l'environnement Frontend.");
+                return;
             }
+
+            const base64Image = await fileToBase64(file);
+
+            const systemPrompt = `Tu es un expert mondial en e-commerce, spécialiste du sourcing depuis la Chine (Taobao, 1688, Alibaba) vers l'Afrique. 
+Analyse attentivement cette capture d'écran de produit.
+Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, avec la structure suivante :
+{
+  "name": "Traduis le nom du produit en français. Sois très commercial (ex: Sneakers Homme Respirantes). Max 10 mots.",
+  "description": "Description de vente PERCUTANTE en français. 1) Accroche. 2) Caractéristiques avec puces. Minimum 3 phrases.",
+  "price_cny": montant_numerique (prix affiché en ¥ ou CNY, sans devise. Prends le plus bas si fourchette. null si introuvable),
+  "weight_kg": poids_numerique (Estime le poids volumétrique réaliste du produit nu en kg avec emballage. Ex: smartphone=0.4, chaussures=1.2. Toujours un nombre, 0.5 par défaut si impossible),
+  "category": "Choisis EXACTEMENT UNE clé: industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, other",
+  "colors": ["Noir", "Blanc"] (Couleurs visibles traduites en français, ou [] si introuvable),
+  "sizes": ["M", "L"] (Tailles ou pointures, ou [] si introuvable),
+  "brand": "Marque si visible au format string, sinon null",
+  "condition": "new"
+}`;
+
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${apiKey}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    response_format: { type: "json_object" },
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        {
+                            role: "user",
+                            content: [
+                                { type: "text", text: "Analyse cette annonce/produit et fournis les informations en JSON." },
+                                { type: "image_url", image_url: { url: base64Image } }
+                            ]
+                        }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error?.message || "Erreur lors de l'appel à OpenRouter");
+            }
+
+            const result = await response.json();
+            const extractedData = JSON.parse(result.choices[0].message.content);
+
+            // --- Logique de Calcul des prix et du fret ---
+            const freightConfig = {
+                aerien: { prix_par_kg: 25, delai_jours: '10 jours (fret aérien)' },
+                maritime: { prix_par_m3: 780, delai_jours: '60 jours (fret maritime)' },
+                CNY_to_USD: 0.138,
+                marge: 0.43,
+                seuil_maritime_kg: 10
+            };
+
+            const priceCny = parseFloat(extractedData.price_cny) || 0;
+            const weightKg = parseFloat(extractedData.weight_kg) || 0.5;
+
+            // 1. Conversion CNY vers USD
+            const priceUsdSource = priceCny * freightConfig.CNY_to_USD;
+
+            // 2. Calcul du Fret
+            const isMaritime = weightKg >= freightConfig.seuil_maritime_kg;
+            let freightCostUsd = 0;
+            let deliveryTime = '';
+            let freightMethodId = 'oli_standard';
+
+            if (isMaritime) {
+                // Maritime: densité approx 200kg/m3
+                const volumeM3 = Math.max(weightKg / 200, 0.01);
+                freightCostUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
+                deliveryTime = freightConfig.maritime.delai_jours;
+                freightMethodId = 'maritime';
+            } else {
+                // Aérien
+                const effectiveWeight = Math.max(weightKg, 0.1);
+                freightCostUsd = effectiveWeight * freightConfig.aerien.prix_par_kg;
+                deliveryTime = freightConfig.aerien.delai_jours;
+                freightMethodId = 'oli_express'; // ou oli_standard selon votre choix commercial
+            }
+
+            // 3. Prix final = (Source USD + Fret) + Marge 30%
+            const basePrice = priceUsdSource + freightCostUsd;
+            const finalPriceUsd = basePrice * (1 + freightConfig.marge);
+
+            // Injection des données transformées pour le formulaire Vendeur
+            const enrichedProductData = {
+                ...extractedData,
+                price: parseFloat(finalPriceUsd.toFixed(2)),            // Le prix final calculé
+                originalPriceCny: priceCny,                             // Optionnel, pour info
+                freightCostUsd: parseFloat(freightCostUsd.toFixed(2)),
+                deliveryTime: deliveryTime,
+                freightMethodId: freightMethodId,
+                description: extractedData.description + `\n\n*(Import : Poids estimé ${weightKg}kg / Prix source ¥${priceCny})*`
+            };
+
+            // Navigate to the detail mode form and pass the extracted data
+            navigate('/products/new/detail', { 
+                state: { 
+                    aiProductData: enrichedProductData, 
+                    aiImageFile: file, 
+                    aiImagePreview: previewUrl 
+                } 
+            });
         } catch (err) {
             console.error('Analysis error:', err);
-            setError(err.response?.data?.error || "Une erreur s'est produite lors de la connexion à l'IA.");
+            setError(err.message || "Une erreur s'est produite lors de la connexion à l'IA.");
         } finally {
             setIsAnalyzing(false);
         }

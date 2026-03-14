@@ -123,7 +123,32 @@ export default function ProductEditorDetail() {
             if (data.price !== undefined && data.price !== null) setPrice(data.price.toString());
             if (data.description) setDescription(data.description);
             if (data.condition) setCondition(data.condition === 'used' ? 'Occasion' : 'Neuf');
-            if (data.weight_kg) setDescription(prev => prev + `\n\nPoids estimé: ${data.weight_kg}kg`);
+            
+            // Variants & Brand
+            if (data.colors && Array.isArray(data.colors)) {
+                // Tente de matcher avec les couleurs définies
+                const matchedColors = data.colors.filter(c => COLORS.some(definedColor => definedColor.name.toLowerCase() === c.toLowerCase()));
+                if (matchedColors.length > 0) setSelectedColors(matchedColors);
+                setColor(data.colors.join(', '));
+            }
+            if (data.sizes && Array.isArray(data.sizes)) {
+                setSelectedSizes(Array.from(new Set(data.sizes.map(s => String(s).toUpperCase()))));
+            }
+            if (data.brand) {
+                setBrandCertified(true);
+                setBrandDisplayName(data.brand);
+            }
+
+            // Shipping prefill based on freight calculation
+            if (data.freightMethodId && data.freightCostUsd !== undefined) {
+                setShippingOptions([
+                    {
+                        methodId: data.freightMethodId,
+                        cost: data.freightCostUsd,
+                        time: data.deliveryTime || '2-5 jours'
+                    }
+                ]);
+            }
 
             // Check if any category roughly matches
             if (data.category) {
