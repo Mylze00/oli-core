@@ -4,7 +4,9 @@ import '../../core/config/api_config.dart';
 import '../../core/providers/dio_provider.dart';
 
 class DelivererWalletPage extends ConsumerStatefulWidget {
-  const DelivererWalletPage({super.key});
+  final bool isActive;
+  
+  const DelivererWalletPage({super.key, this.isActive = true});
 
   @override
   ConsumerState<DelivererWalletPage> createState() => _DelivererWalletPageState();
@@ -18,7 +20,18 @@ class _DelivererWalletPageState extends ConsumerState<DelivererWalletPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.isActive) _loadData();
+    });
+  }
+
+  @override
+  void didUpdateWidget(DelivererWalletPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Refresh data when the tab becomes active
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadData();
+    }
   }
 
   Future<void> _loadData() async {

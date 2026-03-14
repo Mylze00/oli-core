@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Smartphone, Package, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Smartphone, Package, ChevronRight, Wand2 } from 'lucide-react';
 
 export default function ProductModeSelector() {
     const navigate = useNavigate();
@@ -34,6 +34,16 @@ export default function ProductModeSelector() {
             tags: ['Prix dégressifs', 'B2B', 'Promotions', 'Unités'],
             color: 'emerald',
             route: '/products/new/wholesale'
+        },
+        {
+            id: 'ai-import',
+            icon: <Wand2 size={36} className="text-purple-500" />,
+            title: 'Import IA (Capture)',
+            subtitle: 'Rapide et Magique',
+            description: 'Importez rapidement un article en téléchargeant la capture d\'écran de son annonce ou fiche technique. L\'IA s\'occupe du reste !',
+            tags: ['Bêta', 'Automatique', 'Analyse Vision'],
+            color: 'purple',
+            route: '/products/new/ai-import'
         }
     ];
 
@@ -55,7 +65,7 @@ export default function ProductModeSelector() {
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {modes.map((mode) => (
                     <button
                         key={mode.id}

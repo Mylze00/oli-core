@@ -6,6 +6,7 @@ import ProductBatchEditor from './pages/ProductBatchEditor';
 import ProductModeSelector from './pages/ProductModeSelector';
 import ProductEditorDetail from './pages/ProductEditorDetail';
 import ProductList from './pages/ProductList';
+import ProductAiImport from './pages/ProductAiImport';
 import Login from './pages/Login';
 import SubscriptionPage from './pages/SubscriptionPage';
 import ImportExportPage from './pages/ImportExportPage';
@@ -181,6 +182,12 @@ function App() {
                 <Route path="/products/new/detail" element={
                     <ProtectedRoute>
                         <SellerLayout><ProductEditorDetail /></SellerLayout>
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/products/new/ai-import" element={
+                    <ProtectedRoute>
+                        <SellerLayout><ProductAiImport /></SellerLayout>
                     </ProtectedRoute>
                 } />
 

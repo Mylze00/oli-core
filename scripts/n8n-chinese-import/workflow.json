@@ -1,0 +1,288 @@
+{
+  "name": "Import Produits Chinois → Oli",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1 }]
+        }
+      },
+      "id": "trigger-cron",
+      "name": "⏰ Déclencheur Horaire",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execSync } = require('child_process');\nconst folderPath = '/home/paolice-mylze/capture pindou/1';\n\ntry {\n  const stdout = execSync(\n    `find \"${folderPath}\" -maxdepth 1 -type f \\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \\) | grep -i 'capture' | grep -v '/traites/' | sort`,\n    { encoding: 'utf8', timeout: 10000 }\n  ).trim();\n  return [{ json: { stdout, stderr: '', code: 0 } }];\n} catch (err) {\n  // execSync throws if command returns non-zero (e.g. grep finds nothing)\n  const stdout = (err.stdout || '').trim();\n  return [{ json: { stdout, stderr: err.stderr || '', code: err.status || 1 } }];\n}"
+      },
+      "id": "list-screenshots",
+      "name": "📂 Lister Screenshots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "notes": "Liste tous les fichiers 'capture*' dans le dossier source. Ces fichiers sont les screenshots de sites chinois à analyser."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convertir la liste de fichiers en items n8n\nconst output = $input.first().json.stdout || '';\nconst files = output.split('\\n').filter(f => f.trim() !== '');\n\nif (files.length === 0) {\n  console.log('Aucun screenshot à traiter.');\n  return [];\n}\n\nconsole.log(`📋 ${files.length} screenshot(s) trouvé(s)`);\n\nreturn files.map(filePath => ({\n  json: {\n    screenshot_path: filePath.trim(),\n    screenshot_name: filePath.trim().split('/').pop(),\n    // Préfixe pour retrouver les images propres (ex: 'capture' → chercher 'IMG_*' dans le même dossier)\n    folder: filePath.trim().split('/').slice(0, -1).join('/')\n  }\n}));"
+      },
+      "id": "parse-files",
+      "name": "🔍 Parser Liste Fichiers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "🔄 Traiter un par un",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "={{ $json.screenshot_path }}"
+      },
+      "id": "read-screenshot",
+      "name": "📷 Lire Screenshot",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "HTTP-Referer", "value": "https://oli-marketplace.com" },
+            { "name": "X-Title", "value": "Oli Import Tool" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "openai/gpt-4o-mini",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Tu es un expert en e-commerce et sourcing depuis la Chine. Analyse cette capture d'écran d'un produit sur un site chinois (1688, Taobao, Alibaba ou similaire).\n\nRetourne UNIQUEMENT un objet JSON valide (sans markdown, sans ```), avec exactement ces champs :\n{\n  \"name_fr\": \"nom du produit traduit en français (concis, 3-8 mots)\",\n  \"price_cny\": 0.00,\n  \"description_fr\": \"description commerciale en français (2-3 phrases, mettant en valeur les points forts)\",\n  \"weight_kg\": 0.5,\n  \"category_fr\": \"une seule catégorie parmi: telephonie, mode, maison, electronique, beaute, sport, jouets, alimentation, autres\",\n  \"color\": \"couleur principale si visible, sinon null\",\n  \"quantity\": 1,\n  \"brand\": \"marque si visible, sinon null\"\n}\n\nSi tu ne peux pas lire le prix, mets null.\nSi le poids n'est pas visible, estime-le selon le type de produit.\nRéponds UNIQUEMENT avec le JSON."
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {
+                    "url": "={{ 'data:image/jpeg;base64,' + $binary.data.toString('base64') }}"
+                  }
+                }
+              ]
+            }
+          ],
+          "max_tokens": 500,
+          "temperature": 0.1
+        }
+      },
+      "id": "ai-vision",
+      "name": "🤖 IA Vision - Extraction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 300],
+      "notes": "Envoie le screenshot à GPT-4o-mini via OpenRouter pour extraction des données produit"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parser la réponse JSON de l'IA\nconst aiResponse = $input.first().json;\nconst content = aiResponse.choices?.[0]?.message?.content || '{}';\n\nlet productData;\ntry {\n  // Nettoyer la réponse (parfois l'IA ajoute des backticks)\n  const cleaned = content.replace(/```json?\\n?/g, '').replace(/```/g, '').trim();\n  productData = JSON.parse(cleaned);\n} catch (e) {\n  console.error('Erreur parsing JSON IA:', e.message);\n  console.error('Contenu IA brut:', content);\n  productData = {\n    name_fr: 'Produit importé',\n    price_cny: null,\n    description_fr: 'Description à compléter',\n    weight_kg: 0.5,\n    category_fr: 'autres',\n    color: null,\n    quantity: 1,\n    brand: null,\n    _parse_error: e.message\n  };\n}\n\n// Récupérer les données du screenshot\nconst screenshotData = $('🔍 Parser Liste Fichiers').item.json;\n\nreturn [{\n  json: {\n    ...productData,\n    screenshot_path: screenshotData.screenshot_path,\n    screenshot_name: screenshotData.screenshot_name,\n    folder: screenshotData.folder,\n    ai_raw_response: content\n  }\n}];"
+      },
+      "id": "parse-ai",
+      "name": "📊 Parser Données IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Charger la config fret depuis le fichier JSON\n// (valeurs encodées ici pour éviter la dépendance fichier dans n8n)\nconst freightConfig = {\n  aerien: { prix_par_kg: 25, delai_jours: 10 },\n  maritime: { prix_par_m3: 750, delai_jours: 60 },\n  CNY_to_USD: 0.138,\n  marge: 0.30,\n  seuil_maritime_kg: 10\n};\n\nconst item = $input.first().json;\nconst priceCny = parseFloat(item.price_cny) || 0;\nconst weightKg = parseFloat(item.weight_kg) || 0.5;\n\n// 1. Conversion CNY → USD\nconst priceUsd = priceCny * freightConfig.CNY_to_USD;\n\n// 2. Choix mode fret\nconst freightMode = weightKg >= freightConfig.seuil_maritime_kg ? 'maritime' : 'aerien';\n\nlet freightCost = 0;\nlet deliveryTime = '';\n\nif (freightMode === 'aerien') {\n  const effectiveWeight = Math.max(weightKg, 0.1);\n  freightCost = effectiveWeight * freightConfig.aerien.prix_par_kg;\n  deliveryTime = `${freightConfig.aerien.delai_jours} jours (fret aérien)`;\n} else {\n  // Maritime : convertir kg en m³ (densité moyenne colis = 200kg/m³)\n  const volumeM3 = Math.max(weightKg / 200, 0.01);\n  freightCost = volumeM3 * freightConfig.maritime.prix_par_m3;\n  deliveryTime = `${freightConfig.maritime.delai_jours} jours (fret maritime)`;\n}\n\n// 3. Prix final avec marge\nconst basePrice = priceUsd + freightCost;\nconst finalPrice = basePrice * (1 + freightConfig.marge);\n\nconsole.log(`💰 Calcul fret: CNY${priceCny} → $${priceUsd.toFixed(2)} + fret $${freightCost.toFixed(2)} + marge = $${finalPrice.toFixed(2)}`);\n\nreturn [{\n  json: {\n    ...item,\n    freight_mode: freightMode,\n    freight_cost_usd: parseFloat(freightCost.toFixed(2)),\n    price_source_usd: parseFloat(priceUsd.toFixed(2)),\n    price_final_usd: parseFloat(finalPrice.toFixed(2)),\n    delivery_time: deliveryTime,\n    calculation_detail: {\n      cny: priceCny,\n      usd_source: parseFloat(priceUsd.toFixed(2)),\n      freight: parseFloat(freightCost.toFixed(2)),\n      marge_30pct: parseFloat((basePrice * 0.30).toFixed(2)),\n      total: parseFloat(finalPrice.toFixed(2))\n    }\n  }\n}];"
+      },
+      "id": "calc-freight",
+      "name": "🚢 Calcul Frais Fret",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execSync } = require('child_process');\nconst folder = $input.first().json.folder || '';\n\ntry {\n  const stdout = execSync(\n    `find \"${folder}\" -maxdepth 1 -type f \\( -iname 'IMG_*.jpg' -o -iname 'IMG_*.jpeg' -o -iname 'IMG_*.png' -o -iname 'IMG_*.JPG' -o -iname 'IMG_*.JPEG' \\) | grep -v '/traites/' | sort | head -8`,\n    { encoding: 'utf8', timeout: 10000 }\n  ).trim();\n  return [{ json: { stdout, stderr: '', code: 0 } }];\n} catch (err) {\n  const stdout = (err.stdout || '').trim();\n  return [{ json: { stdout, stderr: err.stderr || '', code: err.status || 1 } }];\n}"
+      },
+      "id": "find-product-images",
+      "name": "🖼️ Trouver Images Propres",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300],
+      "notes": "Cherche les fichiers IMG_*.jpg dans le même dossier = photos propres du produit à publier"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convertir liste d'images en tableau\nconst output = $input.first().json.stdout || '';\nconst imagePaths = output.split('\\n').filter(f => f.trim() !== '');\n\nif (imagePaths.length === 0) {\n  // Si aucune image propre trouvée, utiliser le screenshot lui-même\n  const screenshotPath = $('📊 Parser Données IA').item.json.screenshot_path;\n  console.warn('⚠️ Aucune image propre trouvée, utilisation du screenshot:', screenshotPath);\n  return [{\n    json: {\n      ...$('🚢 Calcul Frais Fret').item.json,\n      image_paths: [screenshotPath],\n      images_count: 1,\n      images_source: 'screenshot_fallback'\n    }\n  }];\n}\n\nconsole.log(`🖼️ ${imagePaths.length} image(s) propre(s) trouvée(s)`);\n\nreturn [{\n  json: {\n    ...$('🚢 Calcul Frais Fret').item.json,\n    image_paths: imagePaths.map(p => p.trim()),\n    images_count: imagePaths.length,\n    images_source: 'product_photos'\n  }\n}];"
+      },
+      "id": "parse-images",
+      "name": "📋 Parser Images",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Upload chaque image vers Cloudinary et collecter les URLs\n// Note: Cette étape utilise l'API Cloudinary directement\n// Prérequis: credentials Cloudinary configurés dans n8n\n\nconst item = $input.first().json;\nconst imagePaths = item.image_paths || [];\n\n// Pour l'upload on va passer les chemins à une boucle\n// Dans n8n, on retourne les chemins pour le node HTTP suivant\nreturn [{\n  json: {\n    ...item,\n    images_to_upload: imagePaths,\n    cloudinary_cloud_name: 'dbfpnxjmm',\n    cloudinary_upload_preset: 'oli_app'\n  }\n}];"
+      },
+      "id": "prepare-upload",
+      "name": "☁️ Préparer Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Upload des images vers Cloudinary via API REST\n// On simule l'upload en lisant les fichiers et les envoyant\n// Cette version construit les URLs d'upload pour chaque image\n\nconst item = $input.first().json;\nconst fs = require('fs');\nconst https = require('https');\nconst FormData = require('form-data');\nconst path = require('path');\n\nconst cloudName = item.cloudinary_cloud_name;\nconst uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;\n\nconst uploadedUrls = [];\n\nfor (const imagePath of item.images_to_upload) {\n  try {\n    // Lire le fichier en base64\n    const imageBuffer = fs.readFileSync(imagePath);\n    const base64Image = imageBuffer.toString('base64');\n    const mimeType = imagePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';\n    const dataUri = `data:${mimeType};base64,${base64Image}`;\n    \n    // Upload via fetch (disponible dans Node 18+)\n    const response = await fetch(uploadUrl, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        file: dataUri,\n        upload_preset: 'oli_n8n_import',\n        folder: 'oli_app',\n        tags: ['n8n_import', 'chinese_sourcing']\n      })\n    });\n    \n    const result = await response.json();\n    if (result.secure_url) {\n      uploadedUrls.push(result.secure_url);\n      console.log(`✅ Image uploadée: ${result.secure_url}`);\n    } else {\n      console.warn(`⚠️ Erreur upload Cloudinary:`, JSON.stringify(result));\n    }\n  } catch (err) {\n    console.error(`❌ Erreur upload image ${imagePath}:`, err.message);\n  }\n}\n\nif (uploadedUrls.length === 0) {\n  throw new Error('Aucune image uploadée avec succès vers Cloudinary');\n}\n\nreturn [{\n  json: {\n    ...item,\n    cloudinary_urls: uploadedUrls,\n    images_uploaded: uploadedUrls.length\n  }\n}];"
+      },
+      "id": "upload-cloudinary",
+      "name": "☁️ Upload Cloudinary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 300],
+      "notes": "Upload les images propres vers Cloudinary. Nécessite un upload preset 'oli_n8n_import' non signé (ou signed avec API key)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/n8n/import-product",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-n8n-secret",
+              "value": "oli_n8n_secret_2024"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "name": "={{ $json.name_fr || 'Produit importé' }}",
+          "description": "={{ $json.description_fr || '' }}",
+          "price": "={{ $json.price_final_usd }}",
+          "delivery_price": "={{ $json.freight_cost_usd }}",
+          "delivery_time": "={{ $json.delivery_time }}",
+          "category": "={{ $json.category_fr || 'autres' }}",
+          "images": "={{ $json.cloudinary_urls }}",
+          "condition": "new",
+          "quantity": "={{ $json.quantity || 1 }}",
+          "color": "={{ $json.color || '' }}",
+          "location": "Kinshasa",
+          "source_file": "={{ $json.screenshot_name }}",
+          "original_price_cny": "={{ $json.price_cny }}",
+          "weight_kg": "={{ $json.weight_kg }}",
+          "freight_mode": "={{ $json.freight_mode }}"
+        }
+      },
+      "id": "publish-oli",
+      "name": "📡 Publier sur Oli",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 300],
+      "notes": "Envoie le produit extrait + images uploadées vers l'API Oli pour publication immédiate"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execSync } = require('child_process');\nconst screenshotPath = $('📋 Parser Images').item.json.screenshot_path || '';\nconst destFolder = '/home/paolice-mylze/capture pindou/1/traites';\n\nif (!screenshotPath) {\n  throw new Error('Chemin screenshot introuvable pour archivage');\n}\n\ntry {\n  execSync(`mkdir -p \"${destFolder}\"`, { encoding: 'utf8' });\n  execSync(`mv \"${screenshotPath}\" \"${destFolder}/\"`, { encoding: 'utf8' });\n  console.log(`✅ Screenshot archivé: ${screenshotPath} → ${destFolder}/`);\n  return [{ json: { moved: true, source: screenshotPath, destination: destFolder } }];\n} catch (err) {\n  console.error('❌ Erreur archivage screenshot:', err.message);\n  // Ne pas bloquer le workflow si le déplacement échoue\n  return [{ json: { moved: false, error: err.message, source: screenshotPath } }];\n}"
+      },
+      "id": "mark-processed",
+      "name": "✅ Marquer Traité",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 300],
+      "notes": "Déplace le screenshot dans /traites/ pour ne pas le retraiter au prochain cycle"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rapport de succès pour ce produit\nconst oliResponse = $('📡 Publier sur Oli').item.json;\nconst calcData = $('🚢 Calcul Frais Fret').item.json;\n\nconsole.log('\\n✅ ═══════════════════════════════════════');\nconsole.log(`✅ PRODUIT PUBLIÉ: \"${oliResponse.name}\"`);\nconsole.log(`   🆔 ID Oli: ${oliResponse.productId}`);\nconsole.log(`   💰 Prix: $${oliResponse.price} (source: ¥${calcData.price_cny} CNY)`);\nconsole.log(`   🚚 Fret ${oliResponse.freight_mode}: $${oliResponse.delivery_price}`);\nconsole.log(`   🖼️ Images: ${oliResponse.images_count}`);\nconsole.log(`   📁 Source: ${oliResponse.source_file}`);\nconsole.log('✅ ═══════════════════════════════════════\\n');\n\nreturn [{\n  json: {\n    status: 'success',\n    product_id: oliResponse.productId,\n    product_name: oliResponse.name,\n    price_usd: oliResponse.price,\n    price_cny: calcData.price_cny,\n    freight_usd: oliResponse.delivery_price,\n    freight_mode: oliResponse.freight_mode,\n    images_count: oliResponse.images_count,\n    source_file: oliResponse.source_file,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "log-success",
+      "name": "📋 Log Succès",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3320, 300]
+    }
+  ],
+  "connections": {
+    "⏰ Déclencheur Horaire": {
+      "main": [[{ "node": "📂 Lister Screenshots", "type": "main", "index": 0 }]]
+    },
+    "📂 Lister Screenshots": {
+      "main": [[{ "node": "🔍 Parser Liste Fichiers", "type": "main", "index": 0 }]]
+    },
+    "🔍 Parser Liste Fichiers": {
+      "main": [[{ "node": "🔄 Traiter un par un", "type": "main", "index": 0 }]]
+    },
+    "🔄 Traiter un par un": {
+      "main": [[{ "node": "📷 Lire Screenshot", "type": "main", "index": 0 }]]
+    },
+    "📷 Lire Screenshot": {
+      "main": [[{ "node": "🤖 IA Vision - Extraction", "type": "main", "index": 0 }]]
+    },
+    "🤖 IA Vision - Extraction": {
+      "main": [[{ "node": "📊 Parser Données IA", "type": "main", "index": 0 }]]
+    },
+    "📊 Parser Données IA": {
+      "main": [[{ "node": "🚢 Calcul Frais Fret", "type": "main", "index": 0 }]]
+    },
+    "🚢 Calcul Frais Fret": {
+      "main": [[{ "node": "🖼️ Trouver Images Propres", "type": "main", "index": 0 }]]
+    },
+    "🖼️ Trouver Images Propres": {
+      "main": [[{ "node": "📋 Parser Images", "type": "main", "index": 0 }]]
+    },
+    "📋 Parser Images": {
+      "main": [[{ "node": "☁️ Préparer Upload", "type": "main", "index": 0 }]]
+    },
+    "☁️ Préparer Upload": {
+      "main": [[{ "node": "☁️ Upload Cloudinary", "type": "main", "index": 0 }]]
+    },
+    "☁️ Upload Cloudinary": {
+      "main": [[{ "node": "📡 Publier sur Oli", "type": "main", "index": 0 }]]
+    },
+    "📡 Publier sur Oli": {
+      "main": [[{ "node": "✅ Marquer Traité", "type": "main", "index": 0 }]]
+    },
+    "✅ Marquer Traité": {
+      "main": [[{ "node": "📋 Log Succès", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    { "createdAt": "2026-03-14T00:00:00.000Z", "updatedAt": "2026-03-14T00:00:00.000Z", "id": "1", "name": "import" },
+    { "createdAt": "2026-03-14T00:00:00.000Z", "updatedAt": "2026-03-14T00:00:00.000Z", "id": "2", "name": "sourcing-chine" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-03-14T13:35:00.000Z",
+  "versionId": "1"
+}

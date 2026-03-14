@@ -115,14 +115,15 @@ class UnipesaService {
         try {
             const providerId = this._resolveProviderId(data.provider);
             const payload = {
-                merchant_id:  config.MERCHANT_ID,
-                customer_id:  data.phoneNumber,
-                order_id:     data.reference,
-                amount:       parseFloat(data.amount).toFixed(2),
-                currency:     data.currency || 'USD',
-                country:      'CD',
-                callback_url: data.callbackUrl || `${process.env.APP_URL}/webhooks/unipesa/deposit`,
-                provider_id:  providerId,
+                merchant_id:      config.MERCHANT_ID,
+                customer_id:      data.phoneNumber,
+                customer_user_id: data.customer_user_id || `user_${Date.now()}`,
+                order_id:         data.reference,
+                amount:           parseFloat(data.amount).toFixed(2),
+                currency:         data.currency || 'USD',
+                country:          'CD',
+                callback_url:     data.callbackUrl || `${process.env.APP_URL}/webhooks/unipesa/deposit`,
+                provider_id:      providerId,
             };
             payload.signature = this._calculateSignature(payload);
 
@@ -205,14 +206,15 @@ class UnipesaService {
         try {
             const providerId = this._resolveProviderId(data.provider);
             const payload = {
-                merchant_id:  config.MERCHANT_ID,
-                customer_id:  data.phoneNumber,
-                order_id:     data.reference,
-                amount:       parseFloat(data.amount).toFixed(2),
-                currency:     data.currency || 'USD',
-                country:      'CD',
-                callback_url: data.callbackUrl || `${process.env.APP_URL}/webhooks/unipesa/withdrawal`,
-                provider_id:  providerId,
+                merchant_id:      config.MERCHANT_ID,
+                customer_id:      data.phoneNumber,
+                customer_user_id: data.customer_user_id || `user_${Date.now()}`,
+                order_id:         data.reference,
+                amount:           parseFloat(data.amount).toFixed(2),
+                currency:         data.currency || 'USD',
+                country:          'CD',
+                callback_url:     data.callbackUrl || `${process.env.APP_URL}/webhooks/unipesa/withdrawal`,
+                provider_id:      providerId,
             };
             payload.signature = this._calculateSignature(payload);
 

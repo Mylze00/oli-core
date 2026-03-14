@@ -229,6 +229,9 @@ app.use("/setup", require("./routes/setup.routes")); // Utility route for migrat
 app.use("/services", require("./routes/services.routes")); // ✨ Services dynamiques (Public)
 app.use("/support", requireAuth, require("./routes/support.routes")); // 🎫 Support tickets utilisateur
 app.use("/api/debug", require("./routes/debug.routes")); // 🐞 Debug DB Schema (Temporary)
+app.use("/api/ai", require("./routes/ai.routes")); // 🧠 Import IA (Analyse vision)
+app.use("/api/n8n", require("./routes/n8n.routes")); // 🤖 n8n Import Automatique Produits Chinois
+
 
 // 🏷️ Catégories produits (source unique de vérité)
 app.get("/api/categories", (req, res) => {

@@ -52,7 +52,8 @@ class WalletService {
             currency: 'USD',
             provider,
             phoneNumber,
-            reference
+            reference,
+            customer_user_id: String(userId)
         });
 
         if (!unipesaRes.success || unipesaRes.status === 'failed') {
@@ -85,7 +86,8 @@ class WalletService {
             currency: 'USD',
             provider: 'card', // mappage vers equity (ID 20) par défaut
             phoneNumber: '+243000000000',
-            reference
+            reference,
+            customer_user_id: String(userId)
         });
 
         if (!unipesaRes.success) {
@@ -133,7 +135,8 @@ class WalletService {
             currency: 'USD',
             provider,
             phoneNumber,
-            reference
+            reference,
+            customer_user_id: String(userId)
         });
 
         if (!unipesaRes.success || unipesaRes.status === 'failed') {

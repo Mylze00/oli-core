@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Trash, Save, Loader2, X, HelpCircle, ShieldCheck, Camera, Tag, Palette, MapPin, Package, ChevronDown } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 
 // ══════════════════════════════════════════════════════════
@@ -78,6 +78,7 @@ const RETURN_POLICIES = [
 
 export default function ProductEditorDetail() {
     const navigate = useNavigate();
+    const routerLocation = useLocation();
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [showCategoryOverlay, setShowCategoryOverlay] = useState(false);
@@ -113,6 +114,38 @@ export default function ProductEditorDetail() {
     const [shippingOptions, setShippingOptions] = useState([
         { methodId: 'oli_standard', cost: '', time: '2-5 jours' }
     ]);
+
+    // ── Pre-fill with AI Import Data ──
+    useEffect(() => {
+        if (routerLocation.state?.aiProductData) {
+            const data = routerLocation.state.aiProductData;
+            if (data.name) setName(data.name);
+            if (data.price !== undefined && data.price !== null) setPrice(data.price.toString());
+            if (data.description) setDescription(data.description);
+            if (data.condition) setCondition(data.condition === 'used' ? 'Occasion' : 'Neuf');
+            if (data.weight_kg) setDescription(prev => prev + `\n\nPoids estimé: ${data.weight_kg}kg`);
+
+            // Check if any category roughly matches
+            if (data.category) {
+                const match = CATEGORIES.find(c => 
+                    c.label.toLowerCase().includes(data.category.toLowerCase()) || 
+                    data.category.toLowerCase().includes(c.label.toLowerCase()) ||
+                    data.category.toLowerCase().includes(c.key.toLowerCase())
+                );
+                if (match) setCategory(match.key);
+            }
+        }
+    }, [routerLocation.state?.aiProductData]);
+
+    // Prefill the image file
+    useEffect(() => {
+        if (routerLocation.state?.aiImageFile && routerLocation.state?.aiImagePreview) {
+            setImages([routerLocation.state.aiImageFile]);
+            setImagePreviews([routerLocation.state.aiImagePreview]);
+            // Clear location state to avoid bugs on refresh
+            window.history.replaceState({}, document.title);
+        }
+    }, [routerLocation.state?.aiImageFile, routerLocation.state?.aiImagePreview]);
 
     // ── Help dialogs ──
     const [showConditionHelp, setShowConditionHelp] = useState(false);

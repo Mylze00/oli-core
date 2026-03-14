@@ -24,8 +24,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   final _pages = const [
     DashboardPage(),
     MyTasksPage(),
-    DelivererWalletPage(),
-    ProfilePage(),
+    ProfilePage(), // Placeholder, swapped out in build
   ];
 
   @override
@@ -69,7 +68,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       ),
       body: IndexedStack(
         index: _currentIndex,
-        children: _pages,
+        children: [
+          _pages[0],
+          _pages[1],
+          DelivererWalletPage(isActive: _currentIndex == 2),
+          _pages[2],
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
