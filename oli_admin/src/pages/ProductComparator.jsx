@@ -530,7 +530,7 @@ export default function ProductComparator() {
     );
 
     return (
-        <div className="flex gap-4 h-[calc(100vh-72px)] p-4 bg-gray-50 overflow-hidden">
+        <div className="flex gap-4 h-[calc(100vh-72px)] p-4 bg-gray-50 overflow-hidden" translate="no">
 
             {/* ── File gauche ── */}
             <div className="w-52 flex-shrink-0 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
