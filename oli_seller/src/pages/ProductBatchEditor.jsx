@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, X, HelpCircle, Camera, Tag, Package, ChevronDown, CheckCircle, AlertCircle, Layers, Palette, Ruler } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, X, Camera, Tag, Package, ChevronDown, CheckCircle, AlertCircle, Layers, Palette, Ruler } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 // ══════════════════════════════════════════════════════════
-//  CONSTANTES (identiques à ProductEditorDetail)
+//  CONSTANTES
 // ══════════════════════════════════════════════════════════
 
 const CATEGORIES = [
@@ -37,6 +37,7 @@ const AVAILABLE_METHODS = [
     { id: 'hand_delivery', label: 'Remise en Main Propre', time: 'À convenir' },
     { id: 'pick_go', label: 'Pick & Go', time: 'Retrait immédiat' },
     { id: 'free', label: 'Livraison Gratuite', time: '3-7 jours' },
+    { id: 'maritime', label: 'Fret Maritime', time: '60 jours' },
 ];
 
 const PRESET_COLORS = [
@@ -71,7 +72,7 @@ const createEmptyProduct = () => ({
     location: '',
     images: [],
     imagePreviews: [],
-    shippingOptions: [{ methodId: '', cost: '', time: '' }],
+    shippingOptions: [{ methodId: '', cost: '', time: '', costDisplay: null }],
     certifyAuthenticity: false,
 });
 
@@ -90,7 +91,7 @@ export default function ProductBatchEditor() {
     const [activeTab, setActiveTab] = useState(0);
     const [showCategoryOverlay, setShowCategoryOverlay] = useState(false);
 
-    // Helper to run base64 to File
+    // Helper to convert base64 to File
     const base64ToFile = (base64String, mimeType, index = 0) => {
         try {
             const byteCharacters = atob(base64String.split(',')[1]);
@@ -132,12 +133,13 @@ export default function ProductBatchEditor() {
                 emptyProd.colors = Array.isArray(aiData.colors) ? aiData.colors : [];
                 emptyProd.sizes = Array.isArray(aiData.sizes) ? aiData.sizes : [];
                 
-                // Map all shipping options (Aérien + Maritime)
+                // Map all shipping options with costDisplay support
                 if (aiData.shippingOptions && aiData.shippingOptions.length > 0) {
                     emptyProd.shippingOptions = aiData.shippingOptions.map(opt => ({
                         methodId: opt.methodId,
-                        cost: opt.cost.toString(),
-                        time: opt.time
+                        cost: opt.cost === 'agent_evaluation' ? '' : (opt.cost ? opt.cost.toString() : ''),
+                        time: opt.time || '',
+                        costDisplay: opt.costDisplay || null
                     }));
                 }
                 
@@ -171,7 +173,7 @@ export default function ProductBatchEditor() {
     // ── Shipping helpers ──
     const addShippingOption = (productIndex) => {
         const p = products[productIndex];
-        updateProduct(productIndex, 'shippingOptions', [...p.shippingOptions, { methodId: '', cost: '', time: '' }]);
+        updateProduct(productIndex, 'shippingOptions', [...p.shippingOptions, { methodId: '', cost: '', time: '', costDisplay: null }]);
     };
 
     const updateShippingOption = (productIndex, optionIndex, field, value) => {
@@ -191,16 +193,15 @@ export default function ProductBatchEditor() {
 
     // --- Publishing state ---
     const [publishing, setPublishing] = useState(false);
-    const [publishProgress, setPublishProgress] = useState(0);  // index courant
+    const [publishProgress, setPublishProgress] = useState(0);
     const [publishTotal, setPublishTotal] = useState(0);
-    const [publishResults, setPublishResults] = useState(null); // { success: number, errors: string[] }
+    const [publishResults, setPublishResults] = useState(null);
     const [error, setError] = useState(null);
 
     // Ref pour scroll tabs
     const tabsRef = useRef(null);
 
     // ── Helpers ──
-
     const updateProduct = (index, field, value) => {
         setProducts(prev => {
             const updated = [...prev];
@@ -213,7 +214,6 @@ export default function ProductBatchEditor() {
         if (products.length >= MAX_PRODUCTS) return;
         setProducts(prev => [...prev, createEmptyProduct()]);
         setActiveTab(products.length);
-        // Scroll tabs right
         setTimeout(() => {
             tabsRef.current?.scrollTo({ left: tabsRef.current.scrollWidth, behavior: 'smooth' });
         }, 50);
@@ -221,7 +221,6 @@ export default function ProductBatchEditor() {
 
     const removeProduct = (index) => {
         if (products.length <= 1) return;
-        // Cleanup image previews
         products[index].imagePreviews.forEach(url => URL.revokeObjectURL(url));
         setProducts(prev => prev.filter((_, i) => i !== index));
         if (activeTab >= index && activeTab > 0) {
@@ -232,7 +231,6 @@ export default function ProductBatchEditor() {
     const duplicateProduct = (index) => {
         if (products.length >= MAX_PRODUCTS) return;
         const source = products[index];
-        // Deep copy without images (can't duplicate File objects meaningfully)
         const dup = {
             ...source,
             name: source.name ? `${source.name} (copie)` : '',
@@ -247,7 +245,6 @@ export default function ProductBatchEditor() {
     };
 
     // ── Color/Size helpers ──
-
     const addColor = (productIndex, colorName) => {
         const p = products[productIndex];
         const trimmed = colorName.trim();
@@ -273,7 +270,6 @@ export default function ProductBatchEditor() {
     };
 
     // ── Image handling ──
-
     const handleAddImages = (productIndex) => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -306,7 +302,6 @@ export default function ProductBatchEditor() {
         };
     }, []);
 
-
     // ── Validation ──
     const getProductErrors = (p) => {
         const errors = [];
@@ -323,7 +318,6 @@ export default function ProductBatchEditor() {
     const handleBatchSubmit = async () => {
         setError(null);
 
-        // Validate all
         const invalidIndexes = [];
         products.forEach((p, i) => {
             if (!isProductValid(p)) invalidIndexes.push(i);
@@ -360,7 +354,7 @@ export default function ProductBatchEditor() {
                 formData.append('location', p.location.trim() || 'Non spécifiée');
                 formData.append('is_negotiable', 'false');
 
-                const shippingOptions = p.shippingOptions.filter(o => o.methodId);
+                const shippingOptions = p.shippingOptions.filter(o => o.methodId && o.cost);
                 const defaultOpt = shippingOptions[0] || {};
                 formData.append('delivery_price', defaultOpt.cost || 0);
                 formData.append('delivery_time', defaultOpt.time || '');
@@ -387,7 +381,6 @@ export default function ProductBatchEditor() {
         setPublishing(false);
 
         if (errors.length === 0) {
-            // All succeeded → redirect after short delay
             setTimeout(() => navigate('/products'), 1500);
         }
     };
@@ -498,19 +491,13 @@ export default function ProductBatchEditor() {
                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                                         }`}
                                 >
-                                    {/* Status dot */}
-                                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isValid ? 'bg-green-400' : (p.name || p.images.length > 0 ? 'bg-amber-400' : 'bg-gray-300')
-                                        }`} />
-
+                                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isValid ? 'bg-green-400' : (p.name || p.images.length > 0 ? 'bg-amber-400' : 'bg-gray-300')}`} />
                                     <span>Produit {i + 1}</span>
-
                                     {p.name && (
                                         <span className="text-xs text-gray-400 max-w-[80px] truncate">
                                             {p.name}
                                         </span>
                                     )}
-
-                                    {/* Remove button */}
                                     {products.length > 1 && (
                                         <span
                                             onClick={(e) => { e.stopPropagation(); removeProduct(i); }}
@@ -524,7 +511,6 @@ export default function ProductBatchEditor() {
                         })}
                     </div>
 
-                    {/* Add button */}
                     <button
                         onClick={addProduct}
                         disabled={products.length >= MAX_PRODUCTS}
@@ -535,7 +521,6 @@ export default function ProductBatchEditor() {
                     </button>
                 </div>
 
-                {/* Products count */}
                 <div className="px-4 py-2 bg-gray-50/50 flex items-center justify-between text-xs text-gray-400">
                     <span>{products.length}/{MAX_PRODUCTS} produit(s)</span>
                     <div className="flex items-center gap-3">
@@ -600,7 +585,6 @@ export default function ProductBatchEditor() {
                         <Tag size={18} className="text-amber-500" /> Informations
                     </h2>
 
-                    {/* Nom + Marque (2 cols) */}
                     <div className="grid grid-cols-3 gap-4">
                         <div className="col-span-2">
                             <label className="block text-sm font-medium text-gray-700 mb-1">Nom du produit *</label>
@@ -613,10 +597,12 @@ export default function ProductBatchEditor() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Marque</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Marque {current.brand && <span className="text-green-600">✓</span>}
+                            </label>
                             <input
                                 type="text"
-                                className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                                className={`w-full border p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none ${current.brand ? 'border-green-300 bg-green-50' : 'border-gray-200'}`}
                                 placeholder="ex: Apple, Nike..."
                                 value={current.brand}
                                 onChange={e => updateProduct(activeTab, 'brand', e.target.value)}
@@ -624,7 +610,6 @@ export default function ProductBatchEditor() {
                         </div>
                     </div>
 
-                    {/* Prix + Quantité (2 cols) */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Prix ($) *</label>
@@ -650,7 +635,6 @@ export default function ProductBatchEditor() {
                         </div>
                     </div>
 
-                    {/* Catégorie */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie *</label>
                         <button
@@ -666,7 +650,6 @@ export default function ProductBatchEditor() {
                         </button>
                     </div>
 
-                    {/* État */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">État *</label>
                         <select
@@ -681,13 +664,11 @@ export default function ProductBatchEditor() {
 
                 {/* ── Couleurs & Tailles ── */}
                 <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-5">
-                    {/* Couleurs */}
                     <div>
                         <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                             <Palette size={16} className="text-amber-500" /> Couleurs disponibles
                         </label>
 
-                        {/* Selected colors */}
                         {current.colors.length > 0 && (
                             <div className="flex flex-wrap gap-2 mb-3">
                                 {current.colors.map((c, i) => {
@@ -717,7 +698,6 @@ export default function ProductBatchEditor() {
                             </div>
                         )}
 
-                        {/* Preset color swatches */}
                         <div className="flex flex-wrap gap-2 mb-3">
                             {PRESET_COLORS.map(pc => {
                                 const isSelected = current.colors.includes(pc.name);
@@ -730,7 +710,6 @@ export default function ProductBatchEditor() {
                                             ? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm'
                                             : 'border-gray-200 hover:border-gray-300 text-gray-600 hover:bg-gray-50'
                                             }`}
-                                        title={pc.name}
                                     >
                                         <span
                                             className={`w-3.5 h-3.5 rounded-full border flex-shrink-0 ${isSelected ? 'border-amber-400' : 'border-gray-300'}`}
@@ -742,7 +721,6 @@ export default function ProductBatchEditor() {
                             })}
                         </div>
 
-                        {/* Custom color input */}
                         <input
                             type="text"
                             className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
@@ -759,13 +737,11 @@ export default function ProductBatchEditor() {
 
                     <hr className="border-gray-100" />
 
-                    {/* Tailles */}
                     <div>
                         <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                             <Ruler size={16} className="text-amber-500" /> Tailles disponibles
                         </label>
 
-                        {/* Selected sizes */}
                         {current.sizes.length > 0 && (
                             <div className="flex flex-wrap gap-2 mb-3">
                                 {current.sizes.map((s, i) => (
@@ -786,7 +762,6 @@ export default function ProductBatchEditor() {
                             </div>
                         )}
 
-                        {/* Preset size chips */}
                         <div className="flex flex-wrap gap-2 mb-3">
                             {PRESET_SIZES.map(size => {
                                 const isSelected = current.sizes.includes(size);
@@ -806,7 +781,6 @@ export default function ProductBatchEditor() {
                             })}
                         </div>
 
-                        {/* Custom size input */}
                         <input
                             type="text"
                             className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
@@ -821,7 +795,6 @@ export default function ProductBatchEditor() {
                         />
                     </div>
 
-                    {/* Localisation */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Localisation</label>
                         <input
@@ -852,6 +825,7 @@ export default function ProductBatchEditor() {
                     <div className="space-y-3">
                         {(current.shippingOptions || []).map((option, optIdx) => {
                             const isCostDisabled = option.methodId === 'free' || option.methodId === 'hand_delivery';
+                            const isAgentEvaluation = option.costDisplay && option.costDisplay.includes('évaluer');
                             return (
                                 <div key={optIdx} className="bg-gray-50 p-3 rounded-lg border border-gray-100 relative">
                                     <div className="flex items-center justify-between mb-2">
@@ -891,17 +865,38 @@ export default function ProductBatchEditor() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs text-gray-500 mb-1">Coût ($)</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                className={`w-full border border-gray-200 p-2 rounded-lg text-sm ${isCostDisabled ? 'bg-gray-100 text-gray-400' : ''}`}
-                                                placeholder="0.00"
-                                                value={option.cost}
-                                                onChange={e => updateShippingOption(activeTab, optIdx, 'cost', e.target.value)}
-                                                disabled={isCostDisabled}
-                                            />
+                                            <label className="block text-xs text-gray-500 mb-1">
+                                                Coût ($) {isAgentEvaluation && <span className="text-amber-600 font-semibold">⚠️</span>}
+                                            </label>
+                                            {isAgentEvaluation ? (
+                                                <div className="space-y-1">
+                                                    <div className="w-full border border-amber-300 bg-amber-50 p-2 rounded-lg text-xs text-center">
+                                                        <span className="text-amber-700 font-medium">
+                                                            {option.costDisplay}
+                                                        </span>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        className="w-full border border-amber-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
+                                                        placeholder="Saisir le coût..."
+                                                        value={option.cost}
+                                                        onChange={e => updateShippingOption(activeTab, optIdx, 'cost', e.target.value)}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    className={`w-full border border-gray-200 p-2 rounded-lg text-sm ${isCostDisabled ? 'bg-gray-100 text-gray-400' : ''}`}
+                                                    placeholder="0.00"
+                                                    value={option.cost}
+                                                    onChange={e => updateShippingOption(activeTab, optIdx, 'cost', e.target.value)}
+                                                    disabled={isCostDisabled}
+                                                />
+                                            )}
                                         </div>
                                     </div>
                                 </div>

@@ -86,11 +86,22 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
       "category": "Choisis EXACTEMENT UNE clé: industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, other",
       "colors": ["Noir", "Blanc"],
       "sizes": ["M", "L"],
-      "brand": "Marque visible sur l'image, sinon null",
-      "condition": "new"
+      "brand": "Marque visible sur l'image (OBLIGATOIRE si présente visible, sinon null)",
+      "condition": "new",
+      "product_type": "Identifie le type PRÉCIS: 'clothing' (vêtements/t-shirts/pantalons/robes), 'shoes' (chaussures/sandales/bottes/baskets), 'accessories' (sacs/ceintures/bijoux), 'electronics', 'furniture', 'other'"
     }
   ]
 }
+
+RÈGLES CRITIQUES POUR LES TAILLES/SIZES:
+- Pour les CHAUSSURES/SANDALES/BOTTES (product_type: "shoes"): Utilise UNIQUEMENT des pointures numériques ["36", "37", "38", "39", "40", "41", "42", "43", "44", "45"]
+- Pour les VÊTEMENTS (product_type: "clothing"): Utilise UNIQUEMENT les tailles ["XS", "S", "M", "L", "XL", "XXL"]
+- Pour les ACCESSOIRES/ÉLECTRONIQUE: Utilise ["Unique"] ou tailles spécifiques visibles (ex: "128GB", "256GB")
+- NE MÉLANGE JAMAIS les tailles de vêtements (M, L, XL) avec des chaussures
+- VÉRIFIE que product_type et sizes sont cohérents
+
+IMPORTANT MARQUE: Si une marque est clairement visible sur le produit ou l'emballage, tu DOIS la renseigner. C'est essentiel pour la confiance client.
+
 IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT CORRESPONDRE au nombre d'images fournies. L'index 0 = première image, l'index 1 = deuxième image, etc.`;
 
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -127,7 +138,7 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
             // --- Logique de Calcul des prix et du fret pour chaque produit ---
             const freightConfig = {
                 aerien: { prix_par_kg: 25, delai_jours: '10 jours (fret aérien)', methodId: 'oli_express' },
-                maritime: { prix_par_m3: 750, delai_jours: '60 jours (fret maritime)', methodId: 'maritime' },
+                maritime: { delai_jours: '60 jours (fret maritime)', methodId: 'maritime' },
                 CNY_to_USD: 0.138,
                 marge: 0.43
             };
@@ -139,15 +150,13 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                 // 1. Conversion CNY vers USD
                 const priceUsdSource = priceCny * freightConfig.CNY_to_USD;
 
-                // 2. Calcul du Fret (Aérien ET Maritime)
+                // 2. Calcul du Fret Aérien
                 const effectiveWeightAir = Math.max(weightKg, 0.02);
                 let freightCostAirUsd = effectiveWeightAir * freightConfig.aerien.prix_par_kg;
-                if (freightCostAirUsd < 5) freightCostAirUsd += 2; 
+                // Ajouter 2$ de frais si le fret est inférieur à 5$
+                if (freightCostAirUsd < 5) freightCostAirUsd += 2;
                 
-                const volumeM3 = Math.max(weightKg / 200, 0.01);
-                let freightCostSeaUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
-                if (freightCostSeaUsd < 5) freightCostSeaUsd += 2; 
-                
+                // 3. Fret Maritime: afficher texte pour évaluation agent
                 const shippingOptions = [
                     {
                         methodId: freightConfig.aerien.methodId,
@@ -156,13 +165,34 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                     },
                     {
                         methodId: freightConfig.maritime.methodId,
-                        cost: parseFloat(freightCostSeaUsd.toFixed(2)),
+                        cost: 'agent_evaluation', // Indique que c'est à évaluer
+                        costDisplay: 'À évaluer par l\'agent',
                         time: freightConfig.maritime.delai_jours
                     }
                 ];
 
-                // 3. Prix final du produit
+                // 4. Prix final du produit
                 const finalPriceUsd = priceUsdSource * (1 + freightConfig.marge);
+
+                // 5. Validation des tailles selon product_type
+                let validatedSizes = prod.sizes || [];
+                const productType = prod.product_type || 'other';
+                
+                if (productType === 'shoes') {
+                    // Pour chaussures: garder uniquement les pointures numériques
+                    validatedSizes = validatedSizes.filter(size => /^\d+$/.test(size));
+                    // Si vide, mettre des tailles par défaut
+                    if (validatedSizes.length === 0) {
+                        validatedSizes = ['39', '40', '41', '42', '43'];
+                    }
+                } else if (productType === 'clothing') {
+                    // Pour vêtements: garder uniquement XS, S, M, L, XL, XXL
+                    const clothingSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+                    validatedSizes = validatedSizes.filter(size => clothingSizes.includes(size.toUpperCase()));
+                    if (validatedSizes.length === 0) {
+                        validatedSizes = ['M', 'L', 'XL'];
+                    }
+                }
 
                 return {
                     ...prod,
@@ -172,6 +202,8 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                     specifications: prod.specifications || '',
                     shippingOptions: shippingOptions,
                     description: prod.description,
+                    sizes: validatedSizes,
+                    product_type: productType,
                     aiImageIndex: index
                 };
             });
