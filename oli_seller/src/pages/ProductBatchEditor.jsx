@@ -61,17 +61,17 @@ const createEmptyProduct = () => ({
     name: '',
     price: '',
     description: '',
+    specifications: '',
+    brand: '',
     category: 'electronics',
     condition: 'Neuf',
     quantity: '1',
-    colors: [],          // string[]
-    sizes: [],           // string[]
+    colors: [],
+    sizes: [],
     location: '',
-    images: [],          // File[]
-    imagePreviews: [],   // string[] (object URLs)
-    shippingMethod: '',
-    shippingCost: '',
-    shippingTime: '',
+    images: [],
+    imagePreviews: [],
+    shippingOptions: [{ methodId: '', cost: '', time: '' }],
     certifyAuthenticity: false,
 });
 
@@ -125,17 +125,20 @@ export default function ProductBatchEditor() {
                 emptyProd.name = aiData.name || '';
                 emptyProd.price = aiData.price ? aiData.price.toString() : '';
                 emptyProd.description = aiData.description || '';
+                emptyProd.specifications = aiData.specifications || '';
+                emptyProd.brand = aiData.brand || '';
                 emptyProd.category = aiData.category || 'other';
                 emptyProd.condition = aiData.condition === 'used' ? 'Occasion' : 'Neuf';
                 emptyProd.colors = Array.isArray(aiData.colors) ? aiData.colors : [];
                 emptyProd.sizes = Array.isArray(aiData.sizes) ? aiData.sizes : [];
                 
-                // Map shipping
+                // Map all shipping options (Aérien + Maritime)
                 if (aiData.shippingOptions && aiData.shippingOptions.length > 0) {
-                    const defaultShipping = aiData.shippingOptions[0]; // take the first (usually explicit air)
-                    emptyProd.shippingMethod = defaultShipping.methodId;
-                    emptyProd.shippingCost = defaultShipping.cost.toString();
-                    emptyProd.shippingTime = defaultShipping.time;
+                    emptyProd.shippingOptions = aiData.shippingOptions.map(opt => ({
+                        methodId: opt.methodId,
+                        cost: opt.cost.toString(),
+                        time: opt.time
+                    }));
                 }
                 
                 // Map Image based on aiImageIndex
@@ -153,19 +156,38 @@ export default function ProductBatchEditor() {
                     }
                 }
                 
-                // Certification (require user to manually check it, so false by default)
                 emptyProd.certifyAuthenticity = false;
                 
                 return emptyProd;
             });
             
             if (newMappedProducts.length > 0) {
-                // Limit to MAX_PRODUCTS just in case
                 setProducts(newMappedProducts.slice(0, MAX_PRODUCTS));
                 setActiveTab(0);
             }
         }
     }, [routerLocation.state?.aiBatchProducts, routerLocation.state?.aiImages]);
+
+    // ── Shipping helpers ──
+    const addShippingOption = (productIndex) => {
+        const p = products[productIndex];
+        updateProduct(productIndex, 'shippingOptions', [...p.shippingOptions, { methodId: '', cost: '', time: '' }]);
+    };
+
+    const updateShippingOption = (productIndex, optionIndex, field, value) => {
+        const p = products[productIndex];
+        const updated = [...p.shippingOptions];
+        updated[optionIndex] = { ...updated[optionIndex], [field]: value };
+        const isFree = updated[optionIndex].methodId === 'free' || updated[optionIndex].methodId === 'hand_delivery';
+        if (field === 'methodId' && isFree) updated[optionIndex].cost = '0';
+        updateProduct(productIndex, 'shippingOptions', updated);
+    };
+
+    const removeShippingOption = (productIndex, optionIndex) => {
+        const p = products[productIndex];
+        if (p.shippingOptions.length <= 1) return;
+        updateProduct(productIndex, 'shippingOptions', p.shippingOptions.filter((_, i) => i !== optionIndex));
+    };
 
     // --- Publishing state ---
     const [publishing, setPublishing] = useState(false);
@@ -284,19 +306,6 @@ export default function ProductBatchEditor() {
         };
     }, []);
 
-    // ── Shipping update ──
-    const updateShipping = (productIndex, methodId) => {
-        const isFree = methodId === 'free' || methodId === 'hand_delivery';
-        setProducts(prev => {
-            const updated = [...prev];
-            updated[productIndex] = {
-                ...updated[productIndex],
-                shippingMethod: methodId,
-                shippingCost: isFree ? '0' : updated[productIndex].shippingCost,
-            };
-            return updated;
-        });
-    };
 
     // ── Validation ──
     const getProductErrors = (p) => {
@@ -351,14 +360,13 @@ export default function ProductBatchEditor() {
                 formData.append('location', p.location.trim() || 'Non spécifiée');
                 formData.append('is_negotiable', 'false');
 
-                const shippingOptions = [{
-                    methodId: p.shippingMethod,
-                    cost: p.shippingCost || 0,
-                    time: p.shippingTime,
-                }];
-                formData.append('delivery_price', p.shippingCost || 0);
-                formData.append('delivery_time', p.shippingTime || '');
+                const shippingOptions = p.shippingOptions.filter(o => o.methodId);
+                const defaultOpt = shippingOptions[0] || {};
+                formData.append('delivery_price', defaultOpt.cost || 0);
+                formData.append('delivery_time', defaultOpt.time || '');
                 formData.append('shipping_options', JSON.stringify(shippingOptions));
+                if (p.brand) formData.append('brand', p.brand);
+                if (p.specifications) formData.append('specifications', p.specifications);
 
                 p.images.forEach(image => {
                     formData.append('images', image);
@@ -592,16 +600,28 @@ export default function ProductBatchEditor() {
                         <Tag size={18} className="text-amber-500" /> Informations
                     </h2>
 
-                    {/* Nom */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nom du produit *</label>
-                        <input
-                            type="text"
-                            className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
-                            placeholder="ex: iPhone 14 Pro Max 256GB"
-                            value={current.name}
-                            onChange={e => updateProduct(activeTab, 'name', e.target.value)}
-                        />
+                    {/* Nom + Marque (2 cols) */}
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nom du produit *</label>
+                            <input
+                                type="text"
+                                className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                                placeholder="ex: iPhone 14 Pro Max 256GB"
+                                value={current.name}
+                                onChange={e => updateProduct(activeTab, 'name', e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Marque</label>
+                            <input
+                                type="text"
+                                className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                                placeholder="ex: Apple, Nike..."
+                                value={current.brand}
+                                onChange={e => updateProduct(activeTab, 'brand', e.target.value)}
+                            />
+                        </div>
                     </div>
 
                     {/* Prix + Quantité (2 cols) */}
@@ -815,63 +835,105 @@ export default function ProductBatchEditor() {
                 </div>
 
                 {/* ── Livraison ── */}
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-3">
-                    <h2 className="font-bold text-gray-900 flex items-center gap-2">
-                        <Package size={18} className="text-amber-500" /> Livraison
-                    </h2>
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                            <Package size={18} className="text-amber-500" /> Options de Livraison
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={() => addShippingOption(activeTab)}
+                            className="text-xs bg-amber-50 text-amber-600 px-3 py-1.5 rounded-full hover:bg-amber-100 flex items-center gap-1 font-medium transition-colors"
+                        >
+                            <Plus size={12} /> Ajouter
+                        </button>
+                    </div>
 
-                    <div className="grid grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-xs text-gray-500 mb-1">Mode de livraison *</label>
-                            <select
-                                className="w-full border border-gray-200 p-2.5 rounded-lg text-sm bg-white"
-                                value={current.shippingMethod}
-                                onChange={e => updateShipping(activeTab, e.target.value)}
-                            >
-                                <option value="">Choisir...</option>
-                                {AVAILABLE_METHODS.map(m => (
-                                    <option key={m.id} value={m.id}>{m.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs text-gray-500 mb-1">Délai (jours) *</label>
-                            <input
-                                type="number"
-                                min="1"
-                                className="w-full border border-gray-200 p-2.5 rounded-lg text-sm"
-                                placeholder="ex: 3"
-                                value={current.shippingTime}
-                                onChange={e => updateProduct(activeTab, 'shippingTime', e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs text-gray-500 mb-1">Coût ($)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className={`w-full border border-gray-200 p-2.5 rounded-lg text-sm ${['free', 'hand_delivery', 'partner'].includes(current.shippingMethod) ? 'bg-gray-100 text-gray-400' : ''
-                                    }`}
-                                placeholder={current.shippingMethod === 'partner' ? 'Auto' : '0.00'}
-                                value={current.shippingCost}
-                                onChange={e => updateProduct(activeTab, 'shippingCost', e.target.value)}
-                                disabled={['free', 'hand_delivery', 'partner'].includes(current.shippingMethod)}
-                            />
-                        </div>
+                    <div className="space-y-3">
+                        {(current.shippingOptions || []).map((option, optIdx) => {
+                            const isCostDisabled = option.methodId === 'free' || option.methodId === 'hand_delivery';
+                            return (
+                                <div key={optIdx} className="bg-gray-50 p-3 rounded-lg border border-gray-100 relative">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs text-amber-500 font-medium">Option #{optIdx + 1}</span>
+                                        {(current.shippingOptions || []).length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeShippingOption(activeTab, optIdx)}
+                                                className="text-red-400 hover:text-red-600 transition-colors"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Mode *</label>
+                                            <select
+                                                className="w-full border border-gray-200 p-2 rounded-lg text-sm bg-white"
+                                                value={option.methodId}
+                                                onChange={e => updateShippingOption(activeTab, optIdx, 'methodId', e.target.value)}
+                                            >
+                                                <option value="">Choisir...</option>
+                                                {AVAILABLE_METHODS.map(m => (
+                                                    <option key={m.id} value={m.id}>{m.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Délai</label>
+                                            <input
+                                                type="text"
+                                                className="w-full border border-gray-200 p-2 rounded-lg text-sm"
+                                                placeholder="ex: 10 jours"
+                                                value={option.time || ''}
+                                                onChange={e => updateShippingOption(activeTab, optIdx, 'time', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Coût ($)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                className={`w-full border border-gray-200 p-2 rounded-lg text-sm ${isCostDisabled ? 'bg-gray-100 text-gray-400' : ''}`}
+                                                placeholder="0.00"
+                                                value={option.cost}
+                                                onChange={e => updateShippingOption(activeTab, optIdx, 'cost', e.target.value)}
+                                                disabled={isCostDisabled}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
                 {/* ── Description ── */}
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                    <h2 className="font-bold text-gray-900 mb-3">📝 Description</h2>
-                    <textarea
-                        className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none resize-y leading-relaxed text-sm"
-                        rows={4}
-                        placeholder="Décrivez votre produit..."
-                        value={current.description}
-                        onChange={e => updateProduct(activeTab, 'description', e.target.value)}
-                    />
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-4">
+                    <div>
+                        <h2 className="font-bold text-gray-900 mb-3">📝 Description</h2>
+                        <textarea
+                            className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none resize-y leading-relaxed text-sm"
+                            rows={4}
+                            placeholder="Décrivez votre produit..."
+                            value={current.description}
+                            onChange={e => updateProduct(activeTab, 'description', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <h2 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                            📋 Spécifications Techniques
+                        </h2>
+                        <textarea
+                            className="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none resize-y leading-relaxed text-sm font-mono"
+                            rows={5}
+                            placeholder={"• Matériau : Acier inoxydable\n• Dimensions : 20 x 10 x 5 cm\n• Poids : 350g\n• Tension : 110-220V"}
+                            value={current.specifications}
+                            onChange={e => updateProduct(activeTab, 'specifications', e.target.value)}
+                        />
+                    </div>
                 </div>
 
                 {/* ── Certification ── */}

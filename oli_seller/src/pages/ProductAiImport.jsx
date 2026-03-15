@@ -78,19 +78,20 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
 {
   "products": [
     {
-      "name": "Traduis le nom du produit en français. Sois très commercial (ex: Sneakers Homme Respirantes). Max 10 mots.",
-      "description": "Description de vente PERCUTANTE en français. Minimum 3 phrases avec caractéristiques.",
-      "price_cny": montant_numerique (Juste le chiffre, ex: 3.91),
-      "weight_kg": poids_numerique (Poids volumétrique réaliste en kg. SOIS TRES PRECIS: écouteurs/bijoux=0.05, t-shirt=0.15, chaussures=0.8),
+      "name": "Traduis le nom du produit en français très commercial. Max 10 mots.",
+      "description": "Description de vente PERCUTANTE en français avec accroche et liste de caractéristiques. Minimum 3 phrases.",
+      "specifications": "Bloc de SPECIFICATIONS TECHNIQUES OBLIGATOIRES en français. Liste de 4 à 8 lignes, une par ligne, format '• Clé : Valeur'. Exemple : '• Matière : Coton 100%\\n• Dimensions : 25 x 15 x 10 cm\\n• Poids : 200g\\n• Couleur principale : Bleu'. Si une info n'est pas visible, estime-la de façon réaliste.",
+      "price_cny": montant_numerique,
+      "weight_kg": poids_numerique,
       "category": "Choisis EXACTEMENT UNE clé: industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, other",
       "colors": ["Noir", "Blanc"],
       "sizes": ["M", "L"],
-      "brand": "Marque si visible, sinon null",
+      "brand": "Marque visible sur l'image, sinon null",
       "condition": "new"
     }
   ]
 }
-IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT CORRESPONDRE au nombre d'images fournies. Le produit à l'index 0 correspond à la première image, l'index 1 à la deuxième, etc.`;
+IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT CORRESPONDRE au nombre d'images fournies. L'index 0 = première image, l'index 1 = deuxième image, etc.`;
 
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
@@ -167,9 +168,11 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                     ...prod,
                     price: parseFloat(finalPriceUsd.toFixed(2)),
                     originalPriceCny: priceCny,
+                    brand: prod.brand || null,
+                    specifications: prod.specifications || '',
                     shippingOptions: shippingOptions,
                     description: prod.description,
-                    aiImageIndex: index // Keep track of which image goes to which product
+                    aiImageIndex: index
                 };
             });
 
