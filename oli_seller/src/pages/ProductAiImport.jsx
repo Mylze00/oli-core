@@ -177,7 +177,7 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
             setProgress(100);
 
             // Navigation vers Publication en Lot (Batch)
-            navigate('/products/batch', {
+            navigate('/products/new/batch', {
                 state: {
                     aiBatchProducts: enrichedBatchProducts,
                     aiImages: base64Images
