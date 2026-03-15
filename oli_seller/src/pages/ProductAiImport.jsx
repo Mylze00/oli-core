@@ -80,7 +80,7 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
     {
       "name": "Traduis le nom du produit en français très commercial. Max 10 mots.",
       "description": "Description de vente PERCUTANTE en français avec accroche et liste de caractéristiques. Minimum 3 phrases.",
-      "specifications": "Bloc de SPECIFICATIONS TECHNIQUES OBLIGATOIRES en français. Liste de 4 à 8 lignes, une par ligne, format '• Clé : Valeur'. Exemple : '• Matière : Coton 100%\\n• Dimensions : 25 x 15 x 10 cm\\n• Poids : 200g\\n• Couleur principale : Bleu'. Si une info n'est pas visible, estime-la de façon réaliste.",
+      "specifications": "SPECIFICATIONS TECHNIQUES FONCTIONNELLES OBLIGATOIRES en français. Format : 4 à 8 lignes, une par ligne, '• Clé : Valeur'. Concentre-toi UNIQUEMENT sur les caractéristiques techniques fonctionnelles : processeur, RAM, stockage, connectivité (WiFi/Bluetooth), résolution, capacité batterie, tension/ampérage, protocoles supportés, matière du boîtier, compatibilité système, certifications (CE/RoHS). INTERDIT d'inclure : poids, dimensions physiques, couleur ou variantes de taille (ces infos sont déjà dans d'autres champs). Exemple pour écouteurs : '• Codec audio : AAC, SBC\\n• Autonomie : 6h + 24h boîtier\\n• Bluetooth : 5.3\\n• Réduction de bruit : Oui (ANC)\\n• Résistance : IPX4'. Adapte les critères selon le type d'article.",
       "price_cny": montant_numerique,
       "weight_kg": poids_numerique,
       "category": "Choisis EXACTEMENT UNE clé: industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, other",
