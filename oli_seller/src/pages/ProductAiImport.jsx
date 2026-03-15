@@ -73,19 +73,24 @@ export default function ProductAiImport() {
             const imageMessages = base64Images.map(b64 => ({ type: "image_url", image_url: { url: b64 } }));
 
             const systemPrompt = `Tu es un expert mondial en e-commerce, spécialiste du sourcing depuis la Chine (Taobao, 1688, Alibaba) vers l'Afrique. 
-Analyse attentivement cette capture d'écran de produit.
+Analyse attentivement ces captures d'écran. Chaque image représente potentiellement un produit différent.
 Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, avec la structure suivante :
 {
-  "name": "Traduis le nom du produit en français. Sois très commercial (ex: Sneakers Homme Respirantes). Max 10 mots.",
-  "description": "Description de vente PERCUTANTE en français. 1) Accroche. 2) Caractéristiques avec puces. Minimum 3 phrases.",
-  "price_cny": montant_numerique (Juste le chiffre, ex: 3.91. Prends le plus bas si fourchette),
-  "weight_kg": poids_numerique (Poids volumétrique réaliste en kg. SOIS TRES PRECIS pour les petits objets : écouteurs/bijoux/câbles = 0.05, t-shirt = 0.15, smartphone = 0.3, chaussures = 0.8. Juste le chiffre, ex: 0.05),
-  "category": "Choisis EXACTEMENT UNE clé: industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, other",
-  "colors": ["Noir", "Blanc"] (Couleurs visibles traduites en français, ou [] si introuvable),
-  "sizes": ["M", "L"] (Tailles ou pointures, ou [] si introuvable),
-  "brand": "Marque si visible au format string, sinon null",
-  "condition": "new"
-}`;
+  "products": [
+    {
+      "name": "Traduis le nom du produit en français. Sois très commercial (ex: Sneakers Homme Respirantes). Max 10 mots.",
+      "description": "Description de vente PERCUTANTE en français. Minimum 3 phrases avec caractéristiques.",
+      "price_cny": montant_numerique (Juste le chiffre, ex: 3.91),
+      "weight_kg": poids_numerique (Poids volumétrique réaliste en kg. SOIS TRES PRECIS: écouteurs/bijoux=0.05, t-shirt=0.15, chaussures=0.8),
+      "category": "Choisis EXACTEMENT UNE clé: industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, other",
+      "colors": ["Noir", "Blanc"],
+      "sizes": ["M", "L"],
+      "brand": "Marque si visible, sinon null",
+      "condition": "new"
+    }
+  ]
+}
+IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT CORRESPONDRE au nombre d'images fournies. Le produit à l'index 0 correspond à la première image, l'index 1 à la deuxième, etc.`;
 
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
@@ -116,8 +121,9 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
 
             const result = await response.json();
             const extractedData = JSON.parse(result.choices[0].message.content);
+            const aiProducts = extractedData.products || [];
 
-            // --- Logique de Calcul des prix et du fret ---
+            // --- Logique de Calcul des prix et du fret pour chaque produit ---
             const freightConfig = {
                 aerien: { prix_par_kg: 25, delai_jours: '10 jours (fret aérien)', methodId: 'oli_express' },
                 maritime: { prix_par_m3: 750, delai_jours: '60 jours (fret maritime)', methodId: 'maritime' },
@@ -125,56 +131,55 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                 marge: 0.43
             };
 
-            const priceCny = parseFloat(extractedData.price_cny) || 0;
-            const weightKg = parseFloat(extractedData.weight_kg) || 0.1;
+            const enrichedBatchProducts = aiProducts.map((prod, index) => {
+                const priceCny = parseFloat(prod.price_cny) || 0;
+                const weightKg = parseFloat(prod.weight_kg) || 0.1;
 
-            // 1. Conversion CNY vers USD
-            const priceUsdSource = priceCny * freightConfig.CNY_to_USD;
+                // 1. Conversion CNY vers USD
+                const priceUsdSource = priceCny * freightConfig.CNY_to_USD;
 
-            // 2. Calcul du Fret (Aérien ET Maritime)
-            // Aérien (on autorise le poids réel très bas, ex: 0.05kg * 25 = 1.25$)
-            const effectiveWeightAir = Math.max(weightKg, 0.02);
-            let freightCostAirUsd = effectiveWeightAir * freightConfig.aerien.prix_par_kg;
-            if (freightCostAirUsd < 5) freightCostAirUsd += 2; // Règle: minimum 5$ sinon +2$ charge
-            
-            // Maritime (densité approx 200kg/m3)
-            const volumeM3 = Math.max(weightKg / 200, 0.01);
-            let freightCostSeaUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
-            if (freightCostSeaUsd < 5) freightCostSeaUsd += 2; // Règle: minimum 5$ sinon +2$ charge
-            
-            const shippingOptions = [
-                {
-                    methodId: freightConfig.aerien.methodId,
-                    cost: parseFloat(freightCostAirUsd.toFixed(2)),
-                    time: freightConfig.aerien.delai_jours
-                },
-                {
-                    methodId: freightConfig.maritime.methodId,
-                    cost: parseFloat(freightCostSeaUsd.toFixed(2)),
-                    time: freightConfig.maritime.delai_jours
-                }
-            ];
+                // 2. Calcul du Fret (Aérien ET Maritime)
+                const effectiveWeightAir = Math.max(weightKg, 0.02);
+                let freightCostAirUsd = effectiveWeightAir * freightConfig.aerien.prix_par_kg;
+                if (freightCostAirUsd < 5) freightCostAirUsd += 2; 
+                
+                const volumeM3 = Math.max(weightKg / 200, 0.01);
+                let freightCostSeaUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
+                if (freightCostSeaUsd < 5) freightCostSeaUsd += 2; 
+                
+                const shippingOptions = [
+                    {
+                        methodId: freightConfig.aerien.methodId,
+                        cost: parseFloat(freightCostAirUsd.toFixed(2)),
+                        time: freightConfig.aerien.delai_jours
+                    },
+                    {
+                        methodId: freightConfig.maritime.methodId,
+                        cost: parseFloat(freightCostSeaUsd.toFixed(2)),
+                        time: freightConfig.maritime.delai_jours
+                    }
+                ];
 
-            // 3. Prix final du produit = Source USD * (1 + Marge 43%)
-            // Le coût du fret n'est PLUS inclus dans ce prix de vente.
-            const finalPriceUsd = priceUsdSource * (1 + freightConfig.marge);
+                // 3. Prix final du produit
+                const finalPriceUsd = priceUsdSource * (1 + freightConfig.marge);
 
-            // Injection des données transformées pour le formulaire Vendeur
-            const enrichedProductData = {
-                ...extractedData,
-                price: parseFloat(finalPriceUsd.toFixed(2)),            // Le prix final avec décimales 
-                originalPriceCny: priceCny,                             // Optionnel, pour info
-                shippingOptions: shippingOptions,                       // Tableau des options de livraison calculées
-                description: extractedData.description
-            };
+                return {
+                    ...prod,
+                    price: parseFloat(finalPriceUsd.toFixed(2)),
+                    originalPriceCny: priceCny,
+                    shippingOptions: shippingOptions,
+                    description: prod.description,
+                    aiImageIndex: index // Keep track of which image goes to which product
+                };
+            });
 
             clearInterval(progressInterval);
             setProgress(100);
 
-            // Navigation au succès (attention à ne pas changer le state juste après car le composant se démonte)
-            navigate('/products/new/detail', {
+            // Navigation vers Publication en Lot (Batch)
+            navigate('/products/batch', {
                 state: {
-                    aiProductData: enrichedProductData,
+                    aiBatchProducts: enrichedBatchProducts,
                     aiImages: base64Images
                 }
             });

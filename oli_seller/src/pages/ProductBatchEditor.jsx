@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Plus, Trash2, Save, Loader2, X, HelpCircle, Camera, Tag, Package, ChevronDown, CheckCircle, AlertCircle, Layers, Palette, Ruler } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 // ══════════════════════════════════════════════════════════
@@ -83,11 +83,89 @@ const MAX_PRODUCTS = 20;
 
 export default function ProductBatchEditor() {
     const navigate = useNavigate();
+    const routerLocation = useLocation();
 
     // --- State ---
     const [products, setProducts] = useState([createEmptyProduct()]);
     const [activeTab, setActiveTab] = useState(0);
     const [showCategoryOverlay, setShowCategoryOverlay] = useState(false);
+
+    // Helper to run base64 to File
+    const base64ToFile = (base64String, mimeType, index = 0) => {
+        try {
+            const byteCharacters = atob(base64String.split(',')[1]);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
+            }
+            const blob = new Blob(byteArrays, { type: mimeType });
+            return new File([blob], `ai-screenshot-${index + 1}.jpg`, { type: mimeType });
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
+    };
+
+    // --- Pre-fill from AI Import ---
+    useEffect(() => {
+        if (routerLocation.state?.aiBatchProducts && Array.isArray(routerLocation.state.aiBatchProducts)) {
+            const aiProducts = routerLocation.state.aiBatchProducts;
+            const aiImagesList = routerLocation.state.aiImages || [];
+            
+            const newMappedProducts = aiProducts.map((aiData, index) => {
+                const emptyProd = createEmptyProduct();
+                
+                // Map basic fields
+                emptyProd.name = aiData.name || '';
+                emptyProd.price = aiData.price ? aiData.price.toString() : '';
+                emptyProd.description = aiData.description || '';
+                emptyProd.category = aiData.category || 'other';
+                emptyProd.condition = aiData.condition === 'used' ? 'Occasion' : 'Neuf';
+                emptyProd.colors = Array.isArray(aiData.colors) ? aiData.colors : [];
+                emptyProd.sizes = Array.isArray(aiData.sizes) ? aiData.sizes : [];
+                
+                // Map shipping
+                if (aiData.shippingOptions && aiData.shippingOptions.length > 0) {
+                    const defaultShipping = aiData.shippingOptions[0]; // take the first (usually explicit air)
+                    emptyProd.shippingMethod = defaultShipping.methodId;
+                    emptyProd.shippingCost = defaultShipping.cost.toString();
+                    emptyProd.shippingTime = defaultShipping.time;
+                }
+                
+                // Map Image based on aiImageIndex
+                const imgIndex = typeof aiData.aiImageIndex === 'number' ? aiData.aiImageIndex : index;
+                if (aiImagesList[imgIndex]) {
+                    const b64 = aiImagesList[imgIndex];
+                    let mimeType = 'image/jpeg';
+                    if (b64.startsWith('data:')) {
+                        mimeType = b64.split(';')[0].split(':')[1];
+                    }
+                    const restoredFile = base64ToFile(b64, mimeType, imgIndex);
+                    if (restoredFile) {
+                        emptyProd.images = [restoredFile];
+                        emptyProd.imagePreviews = [b64];
+                    }
+                }
+                
+                // Certification (require user to manually check it, so false by default)
+                emptyProd.certifyAuthenticity = false;
+                
+                return emptyProd;
+            });
+            
+            if (newMappedProducts.length > 0) {
+                // Limit to MAX_PRODUCTS just in case
+                setProducts(newMappedProducts.slice(0, MAX_PRODUCTS));
+                setActiveTab(0);
+            }
+        }
+    }, [routerLocation.state?.aiBatchProducts, routerLocation.state?.aiImages]);
 
     // --- Publishing state ---
     const [publishing, setPublishing] = useState(false);
