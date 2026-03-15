@@ -7,7 +7,7 @@ export default function ProductModeSelector() {
     const modes = [
         {
             id: 'detail',
-            icon: <Smartphone size={36} className="text-blue-400" />,
+            icon: <Smartphone size={64} className="text-blue-400" />,
             title: 'Mode Détail',
             subtitle: 'Comme sur l\'app mobile',
             description: 'Publie ton article avec tous les détails : photos guidées, état du produit, conditions de vente, badge Oli Trust.',
@@ -17,7 +17,7 @@ export default function ProductModeSelector() {
         },
         {
             id: 'batch',
-            icon: <Package size={36} className="text-amber-500" />,
+            icon: <Package size={64} className="text-amber-500" />,
             title: 'Mode Lot',
             subtitle: 'Jusqu\'à 20 produits d\'un coup',
             description: 'Ajoutez plusieurs produits en une seule session. Idéal pour publier rapidement un stock de produits avec photos, prix et catégorie.',
@@ -27,7 +27,7 @@ export default function ProductModeSelector() {
         },
         {
             id: 'wholesale',
-            icon: <Package size={36} className="text-emerald-400" />,
+            icon: <Package size={64} className="text-emerald-400" />,
             title: 'Mode Grossiste',
             subtitle: 'Pour les professionnels B2B',
             description: 'Formulaire optimisé pour la vente en gros : prix dégressifs, unités de vente, MOQ, promotions avec dates.',
@@ -37,7 +37,7 @@ export default function ProductModeSelector() {
         },
         {
             id: 'ai-import',
-            icon: <Wand2 size={36} className="text-purple-500" />,
+            icon: <Wand2 size={64} className="text-purple-500" />,
             title: 'Import IA (Capture)',
             subtitle: 'Rapide et Magique',
             description: 'Importez rapidement un article en téléchargeant la capture d\'écran de son annonce ou fiche technique. L\'IA s\'occupe du reste !',
@@ -73,7 +73,7 @@ export default function ProductModeSelector() {
                         className={`group relative bg-white rounded-2xl border-2 border-gray-200 hover:border-${mode.color}-400 p-8 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1`}
                     >
                         {/* Icon */}
-                        <div className={`w-16 h-16 rounded-xl bg-${mode.color}-50 flex items-center justify-center mb-5`}>
+                        <div className={`w-28 h-28 mx-auto rounded-2xl bg-${mode.color}-50 flex items-center justify-center mb-6 shadow-sm`}>
                             {mode.icon}
                         </div>
 

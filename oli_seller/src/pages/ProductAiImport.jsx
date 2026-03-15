@@ -9,6 +9,7 @@ export default function ProductAiImport() {
     const [file, setFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [progress, setProgress] = useState(0);
     const [error, setError] = useState(null);
 
     const handleFileChange = (e) => {
@@ -51,10 +52,16 @@ export default function ProductAiImport() {
 
     const handleAnalyze = async () => {
         if (!file) return;
-        
+
         try {
             setIsAnalyzing(true);
+            setProgress(0);
             setError(null);
+
+            // Simulation de progression UX
+            const progressInterval = setInterval(() => {
+                setProgress(p => (p < 90 ? p + Math.floor(Math.random() * 10) + 5 : p));
+            }, 500);
 
             const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
             if (!apiKey) {
@@ -111,11 +118,10 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
 
             // --- Logique de Calcul des prix et du fret ---
             const freightConfig = {
-                aerien: { prix_par_kg: 25, delai_jours: '10 jours (fret aérien)' },
-                maritime: { prix_par_m3: 780, delai_jours: '60 jours (fret maritime)' },
+                aerien: { prix_par_kg: 25, delai_jours: '10 jours (fret aérien)', methodId: 'oli_express' },
+                maritime: { prix_par_m3: 750, delai_jours: '60 jours (fret maritime)', methodId: 'maritime' },
                 CNY_to_USD: 0.138,
-                marge: 0.43,
-                seuil_maritime_kg: 10
+                marge: 0.43
             };
 
             const priceCny = parseFloat(extractedData.price_cny) || 0;
@@ -124,25 +130,27 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
             // 1. Conversion CNY vers USD
             const priceUsdSource = priceCny * freightConfig.CNY_to_USD;
 
-            // 2. Calcul du Fret
-            const isMaritime = weightKg >= freightConfig.seuil_maritime_kg;
-            let freightCostUsd = 0;
-            let deliveryTime = '';
-            let freightMethodId = 'oli_standard';
-
-            if (isMaritime) {
-                // Maritime: densité approx 200kg/m3
-                const volumeM3 = Math.max(weightKg / 200, 0.01);
-                freightCostUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
-                deliveryTime = freightConfig.maritime.delai_jours;
-                freightMethodId = 'maritime';
-            } else {
-                // Aérien (on autorise le poids réel très bas, ex: 0.05kg * 25 = 1.25$)
-                const effectiveWeight = Math.max(weightKg, 0.02);
-                freightCostUsd = effectiveWeight * freightConfig.aerien.prix_par_kg;
-                deliveryTime = freightConfig.aerien.delai_jours;
-                freightMethodId = 'oli_express';
-            }
+            // 2. Calcul du Fret (Aérien ET Maritime)
+            // Aérien (on autorise le poids réel très bas, ex: 0.05kg * 25 = 1.25$)
+            const effectiveWeightAir = Math.max(weightKg, 0.02);
+            const freightCostAirUsd = effectiveWeightAir * freightConfig.aerien.prix_par_kg;
+            
+            // Maritime (densité approx 200kg/m3)
+            const volumeM3 = Math.max(weightKg / 200, 0.01);
+            const freightCostSeaUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
+            
+            const shippingOptions = [
+                {
+                    methodId: freightConfig.aerien.methodId,
+                    cost: parseFloat(freightCostAirUsd.toFixed(2)),
+                    time: freightConfig.aerien.delai_jours
+                },
+                {
+                    methodId: freightConfig.maritime.methodId,
+                    cost: parseFloat(freightCostSeaUsd.toFixed(2)),
+                    time: freightConfig.maritime.delai_jours
+                }
+            ];
 
             // 3. Prix final du produit = Source USD * (1 + Marge 43%)
             // Le coût du fret n'est PLUS inclus dans ce prix de vente.
@@ -151,27 +159,29 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
             // Injection des données transformées pour le formulaire Vendeur
             const enrichedProductData = {
                 ...extractedData,
-                price: Math.ceil(finalPriceUsd),                        // Le prix final arrondi à l'entier SUPÉRIEUR
+                price: parseFloat(finalPriceUsd.toFixed(2)),            // Le prix final avec décimales 
                 originalPriceCny: priceCny,                             // Optionnel, pour info
-                freightCostUsd: Math.ceil(freightCostUsd),              // Le fret arrondi à l'entier SUPÉRIEUR pour info
-                deliveryTime: deliveryTime,
-                freightMethodId: freightMethodId,
+                shippingOptions: shippingOptions,                       // Tableau des options de livraison calculées
                 description: extractedData.description
             };
 
+            clearInterval(progressInterval);
+            setProgress(100);
+
             // Navigation au succès (attention à ne pas changer le state juste après car le composant se démonte)
-            navigate('/products/new/detail', { 
-                state: { 
-                    aiProductData: enrichedProductData, 
+            navigate('/products/new/detail', {
+                state: {
+                    aiProductData: enrichedProductData,
                     aiImageBase64: base64Image,
-                    aiImageMimeType: file.type 
-                } 
+                    aiImageMimeType: file.type
+                }
             });
             // PAS D'ACTION SUR LE STATE ICI
         } catch (err) {
             console.error('Analysis error:', err);
             setError(err.message || "Une erreur s'est produite lors de la connexion à l'IA.");
             setIsAnalyzing(false); // On rétablit l'état uniquement en cas d'erreur
+            setProgress(0);
         }
     };
 
@@ -205,25 +215,25 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                     </div>
                 )}
 
-                <div 
+                <div
                     className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${previewUrl ? 'border-purple-300 bg-purple-50' : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'}`}
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onClick={() => !isAnalyzing && fileInputRef.current?.click()}
                 >
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        className="hidden" 
-                        accept="image/*" 
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept="image/*"
                         onChange={handleFileChange}
                     />
 
                     {previewUrl ? (
                         <div className="flex flex-col items-center">
-                            <img 
-                                src={previewUrl} 
-                                alt="Aperçu" 
+                            <img
+                                src={previewUrl}
+                                alt="Aperçu"
                                 className="max-h-64 rounded-lg shadow-sm mb-4 object-contain"
                             />
                             <p className="text-sm text-gray-500">Cliquez ou glissez une autre image pour remplacer</p>
@@ -248,23 +258,31 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                     <button
                         onClick={handleAnalyze}
                         disabled={!file || isAnalyzing}
-                        className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${(!file || isAnalyzing) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'}`}
+                        className={`px-8 py-3 rounded-xl font-bold flex flex-col items-center gap-2 transition-all w-full md:w-auto ${(!file || isAnalyzing) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'}`}
                     >
                         {isAnalyzing ? (
-                            <>
-                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                Analyse en cours...
-                            </>
+                            <div className="flex flex-col items-center w-full min-w-[220px]">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-5 h-5 border-2 border-purple-400 border-t-purple-600 rounded-full animate-spin" />
+                                    <span>Analyse en cours... {progress}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div 
+                                        className="bg-purple-600 h-1.5 rounded-full transition-all duration-300" 
+                                        style={{ width: `${progress}%` }}
+                                    ></div>
+                                </div>
+                            </div>
                         ) : (
-                            <>
+                            <div className="flex items-center gap-2">
                                 <Wand2 size={20} />
                                 Analyser et Pré-remplir
-                            </>
+                            </div>
                         )}
                     </button>
                 </div>
             </div>
-            
+
             <div className="mt-6 flex items-start gap-4 p-4 bg-gray-50 rounded-xl">
                 <CheckCircle2 className="text-emerald-500 shrink-0 mt-1" size={24} />
                 <div>

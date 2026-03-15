@@ -140,7 +140,9 @@ export default function ProductEditorDetail() {
             }
 
             // Shipping prefill based on freight calculation
-            if (data.freightMethodId && data.freightCostUsd !== undefined) {
+            if (data.shippingOptions && data.shippingOptions.length > 0) {
+                setShippingOptions(data.shippingOptions);
+            } else if (data.freightMethodId && data.freightCostUsd !== undefined) {
                 setShippingOptions([
                     {
                         methodId: data.freightMethodId,
@@ -545,6 +547,7 @@ export default function ProductEditorDetail() {
                             onChange={e => setPrice(e.target.value)}
                             required
                             min="0"
+                            step="0.01"
                         />
                     </div>
 
