@@ -6,20 +6,20 @@ import { productAPI } from '../services/api';
 export default function ProductAiImport() {
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
-    const [file, setFile] = useState(null);
-    const [previewUrl, setPreviewUrl] = useState(null);
+    const [files, setFiles] = useState([]);
+    const [previewUrls, setPreviewUrls] = useState([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState(null);
 
     const handleFileChange = (e) => {
-        const selectedFile = e.target.files[0];
-        if (selectedFile && selectedFile.type.startsWith('image/')) {
-            setFile(selectedFile);
-            setPreviewUrl(URL.createObjectURL(selectedFile));
+        const selectedFiles = Array.from(e.target.files).filter(f => f.type.startsWith('image/')).slice(0, 5);
+        if (selectedFiles.length > 0) {
+            setFiles(selectedFiles);
+            setPreviewUrls(selectedFiles.map(f => URL.createObjectURL(f)));
             setError(null);
         } else {
-            setError("Veuillez sélectionner une image valide.");
+            setError("Veuillez sélectionner au moins une image valide (max 5).");
         }
     };
 
@@ -31,13 +31,13 @@ export default function ProductAiImport() {
     const handleDrop = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const droppedFile = e.dataTransfer.files[0];
-        if (droppedFile && droppedFile.type.startsWith('image/')) {
-            setFile(droppedFile);
-            setPreviewUrl(URL.createObjectURL(droppedFile));
+        const droppedFiles = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')).slice(0, 5);
+        if (droppedFiles.length > 0) {
+            setFiles(droppedFiles);
+            setPreviewUrls(droppedFiles.map(f => URL.createObjectURL(f)));
             setError(null);
         } else {
-            setError("Veuillez déposer une image valide.");
+            setError("Veuillez déposer des images valides (max 5).");
         }
     };
 
@@ -51,7 +51,7 @@ export default function ProductAiImport() {
     };
 
     const handleAnalyze = async () => {
-        if (!file) return;
+        if (files.length === 0) return;
 
         try {
             setIsAnalyzing(true);
@@ -69,7 +69,8 @@ export default function ProductAiImport() {
                 return;
             }
 
-            const base64Image = await fileToBase64(file);
+            const base64Images = await Promise.all(files.map(f => fileToBase64(f)));
+            const imageMessages = base64Images.map(b64 => ({ type: "image_url", image_url: { url: b64 } }));
 
             const systemPrompt = `Tu es un expert mondial en e-commerce, spécialiste du sourcing depuis la Chine (Taobao, 1688, Alibaba) vers l'Afrique. 
 Analyse attentivement cette capture d'écran de produit.
@@ -100,8 +101,8 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                         {
                             role: "user",
                             content: [
-                                { type: "text", text: "Analyse cette annonce/produit et fournis les informations en JSON." },
-                                { type: "image_url", image_url: { url: base64Image } }
+                                { type: "text", text: "Analyse ces images de produit et fournis les informations globales en JSON." },
+                                ...imageMessages
                             ]
                         }
                     ]
@@ -133,11 +134,13 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
             // 2. Calcul du Fret (Aérien ET Maritime)
             // Aérien (on autorise le poids réel très bas, ex: 0.05kg * 25 = 1.25$)
             const effectiveWeightAir = Math.max(weightKg, 0.02);
-            const freightCostAirUsd = effectiveWeightAir * freightConfig.aerien.prix_par_kg;
+            let freightCostAirUsd = effectiveWeightAir * freightConfig.aerien.prix_par_kg;
+            if (freightCostAirUsd < 5) freightCostAirUsd += 2; // Règle: minimum 5$ sinon +2$ charge
             
             // Maritime (densité approx 200kg/m3)
             const volumeM3 = Math.max(weightKg / 200, 0.01);
-            const freightCostSeaUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
+            let freightCostSeaUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
+            if (freightCostSeaUsd < 5) freightCostSeaUsd += 2; // Règle: minimum 5$ sinon +2$ charge
             
             const shippingOptions = [
                 {
@@ -172,8 +175,7 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
             navigate('/products/new/detail', {
                 state: {
                     aiProductData: enrichedProductData,
-                    aiImageBase64: base64Image,
-                    aiImageMimeType: file.type
+                    aiImages: base64Images
                 }
             });
             // PAS D'ACTION SUR LE STATE ICI
@@ -216,7 +218,7 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                 )}
 
                 <div
-                    className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${previewUrl ? 'border-purple-300 bg-purple-50' : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'}`}
+                    className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${previewUrls.length > 0 ? 'border-purple-300 bg-purple-50' : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'}`}
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onClick={() => !isAnalyzing && fileInputRef.current?.click()}
@@ -226,23 +228,29 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                         ref={fileInputRef}
                         className="hidden"
                         accept="image/*"
+                        multiple
                         onChange={handleFileChange}
                     />
 
-                    {previewUrl ? (
+                    {previewUrls.length > 0 ? (
                         <div className="flex flex-col items-center">
-                            <img
-                                src={previewUrl}
-                                alt="Aperçu"
-                                className="max-h-64 rounded-lg shadow-sm mb-4 object-contain"
-                            />
-                            <p className="text-sm text-gray-500">Cliquez ou glissez une autre image pour remplacer</p>
+                            <div className="flex flex-wrap justify-center gap-4 mb-4">
+                                {previewUrls.map((url, idx) => (
+                                    <img
+                                        key={idx}
+                                        src={url}
+                                        alt={`Aperçu ${idx + 1}`}
+                                        className="h-32 w-auto rounded-lg shadow-sm object-cover border border-purple-200"
+                                    />
+                                ))}
+                            </div>
+                            <p className="text-sm text-gray-500">Cliquez ou glissez pour remplacer les images ({previewUrls.length}/5)</p>
                         </div>
                     ) : (
                         <div className="flex flex-col items-center py-8">
                             <UploadCloud size={48} className="text-purple-400 mb-4" />
                             <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                                Déposez votre capture ici
+                                Déposez vos captures ici (Max 5)
                             </h3>
                             <p className="text-gray-500 text-sm mb-4">
                                 PNG, JPG ou WEBP (Max. 5 MB)
@@ -257,8 +265,8 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
                 <div className="mt-8 flex justify-end">
                     <button
                         onClick={handleAnalyze}
-                        disabled={!file || isAnalyzing}
-                        className={`px-8 py-3 rounded-xl font-bold flex flex-col items-center gap-2 transition-all w-full md:w-auto ${(!file || isAnalyzing) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'}`}
+                        disabled={files.length === 0 || isAnalyzing}
+                        className={`px-8 py-3 rounded-xl font-bold flex flex-col items-center gap-2 transition-all w-full md:w-auto ${(files.length === 0 || isAnalyzing) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'}`}
                     >
                         {isAnalyzing ? (
                             <div className="flex flex-col items-center w-full min-w-[220px]">

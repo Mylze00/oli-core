@@ -165,7 +165,7 @@ export default function ProductEditorDetail() {
     }, [routerLocation.state?.aiProductData]);
 
     // Helper to run base64 to File
-    const base64ToFile = (base64String, mimeType) => {
+    const base64ToFile = (base64String, mimeType, index = 0) => {
         try {
             const byteCharacters = atob(base64String.split(',')[1]);
             const byteArrays = [];
@@ -179,23 +179,37 @@ export default function ProductEditorDetail() {
                 byteArrays.push(byteArray);
             }
             const blob = new Blob(byteArrays, { type: mimeType });
-            return new File([blob], "ai-screenshot.jpg", { type: mimeType });
+            return new File([blob], `ai-screenshot-${index + 1}.jpg`, { type: mimeType });
         } catch (e) {
             console.error(e);
             return null;
         }
     };
 
-    // Prefill the image file
+    // Prefill the image files
     useEffect(() => {
-        if (routerLocation.state?.aiImageBase64) {
-            const restoredFile = base64ToFile(routerLocation.state.aiImageBase64, routerLocation.state.aiImageMimeType || 'image/jpeg');
-            if (restoredFile) {
-                setImages([restoredFile]);
-                setImagePreviews([routerLocation.state.aiImageBase64]);
+        if (routerLocation.state?.aiImages && Array.isArray(routerLocation.state.aiImages)) {
+            const newFiles = [];
+            const newPreviews = [];
+            
+            routerLocation.state.aiImages.forEach((b64, index) => {
+                let mimeType = 'image/jpeg';
+                if (b64.startsWith('data:')) {
+                    mimeType = b64.split(';')[0].split(':')[1];
+                }
+                const restoredFile = base64ToFile(b64, mimeType, index);
+                if (restoredFile) {
+                    newFiles.push(restoredFile);
+                    newPreviews.push(b64);
+                }
+            });
+            
+            if (newFiles.length > 0) {
+                setImages(newFiles);
+                setImagePreviews(newPreviews);
             }
         }
-    }, [routerLocation.state?.aiImageBase64]);
+    }, [routerLocation.state?.aiImages]);
 
     // ── Help dialogs ──
     const [showConditionHelp, setShowConditionHelp] = useState(false);
