@@ -30,8 +30,7 @@ import '../widgets/product_details/product_provenance_table.dart';
 import '../widgets/product_details/product_variant_selector.dart';
 import '../../../../models/product_variant_model.dart';
 import '../../../shop/screens/edit_product_page.dart';
-
-
+import '../widgets/market_product_card.dart'; // Import pour les produits similaires
 class ProductDetailsPage extends ConsumerStatefulWidget {
   final Product product;
   const ProductDetailsPage({super.key, required this.product});
@@ -392,9 +391,6 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                   },
                 ),
                 
-                Text("Etat : ${p.condition}", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
-                const SizedBox(height: 16),
-                
                 ProductActionButtons(
                   onBuyNow: _buyNow,
                   onAddToCart: _addToCart,
@@ -413,7 +409,38 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                 
                 const SizedBox(height: 12),
                 
-                // Description du produit affichée directement
+                // DESCRIPTION ET SPECIFICATIONS TECHNIQUES
+                Text(
+                  "Spécifications Techniques",
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white10 : Colors.black.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildSpecRow("Catégorie", p.category ?? "Non spécifié", isDark),
+                      const SizedBox(height: 8),
+                      _buildSpecRow("Etat", p.condition, isDark),
+                      const SizedBox(height: 8),
+                      _buildSpecRow("Couleur", p.color.isNotEmpty ? p.color : "Standard", isDark),
+                      const SizedBox(height: 8),
+                      _buildSpecRow("Quantité Disponible", "${p.quantity}", isDark),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 20),
+
                 Text(
                   "Description",
                   style: TextStyle(
@@ -430,14 +457,92 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                     "Aucune description disponible.",
                     style: TextStyle(color: isDark ? Colors.white38 : Colors.black38, fontSize: 14, fontStyle: FontStyle.italic),
                   ),
-                const SizedBox(height: 8),
-                Text("Quantité Disponible : ${p.quantity}", style: TextStyle(color: isDark ? Colors.white70 : Colors.black54)),
+
+                const SizedBox(height: 30),
+
+                // PRODUITS SIMILAIRES
+                Text(
+                  "Produits Similaires",
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final productsState = ref.watch(marketProductsProvider);
+                    return productsState.when(
+                      data: (allProducts) {
+                        debugPrint("🔍 [DEBUG] Vérification des ${allProducts.length} produits pour similarité avec la catégorie ${p.category} ou ${p.subcategory}");
+                        
+                        // Revenir à la logique de départ : même catégorie, peu importe le vendeur
+                        final similarProducts = allProducts.where((prod) => 
+                          prod.id != p.id && 
+                          (prod.category == p.category || prod.subcategory == p.subcategory)
+                        ).take(6).toList();
+
+                        debugPrint("🔍 [DEBUG] Produits similaires finaux trouvés : ${similarProducts.length}");
+
+                        if (similarProducts.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Center(
+                              child: Text(
+                                "Aucun produit similaire trouvé.",
+                                style: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
+                              ),
+                            ),
+                          );
+                        }
+
+                        return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 0.7, // Ratio 2 produits par ligne adaptés pour l'image
+                          ),
+                          itemCount: similarProducts.length,
+                          itemBuilder: (context, index) {
+                            return MarketProductCard(
+                              product: similarProducts[index],
+                              isCompact: false,
+                            );
+                          },
+                        );
+                      },
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (e, __) => Text("Erreur de chargement", style: TextStyle(color: Colors.red[300])),
+                    );
+                  },
+                ),
+                
                 const SizedBox(height: 40),
               ]
             ),
           ),
         ]),
       ),
+    );
+  }
+
+  Widget _buildSpecRow(String label, String value, bool isDark) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 13),
+        ),
+        Text(
+          value,
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 13, fontWeight: FontWeight.w500),
+        ),
+      ],
     );
   }
 

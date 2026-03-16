@@ -17,6 +17,7 @@ class RankingSectionHelper {
       'title': 'Guérite Oli ',
       'text':
           'Achetez et récupérez vos commandes dans le guérite Oli de votre supermarché',
+      'bg_image': 'assets/images/guerite_bg.png', // Utilisation de votre image
       'gradient1': Color(0xFF4A0E8F),
       'gradient2': Color(0xFF2D0A5E),
       'paddingV': 20.0,
@@ -36,11 +37,10 @@ class RankingSectionHelper {
     {
       'title': 'Vendez sur Oli ',
       'text': 'Profitez des avantages en vendant sur Oli, commencez gratuitement',
-      'gradient1': Color(0xFFD84315),
-      'gradient2': Color(0xFF8F2B00),
-      'paddingV': 32.0,
-      'titleSize': 22.0,
-      'textSize': 15.0,
+      'bg_color': Color(0xFFD84315), // Couleur de fond unie
+      'paddingV': 24.0,
+      'titleSize': 16.0, // Même taille
+      'textSize': 16.0,  // Même taille
     },
   ];
 
@@ -155,6 +155,7 @@ class RankingSectionHelper {
         promoIndex++;
       } else {
       final Color? bgCol = promo.containsKey('bg_color') ? promo['bg_color'] as Color : null;
+      final String? bgImg = promo.containsKey('bg_image') ? promo['bg_image'] as String : null;
       final Color grad1 = promo.containsKey('gradient1') ? promo['gradient1'] as Color : (bgCol ?? Colors.blue);
       final Color grad2 = promo.containsKey('gradient2') ? promo['gradient2'] as Color : (bgCol ?? Colors.blue);
       final double padV = promo['paddingV'] as double;
@@ -165,11 +166,18 @@ class RankingSectionHelper {
 
       slivers.add(SliverToBoxAdapter(
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 12),
+          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16), // horizontal: 16 réduit la largeur
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV),
           decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12), // Coins arrondis
             color: bgCol,
-            gradient: bgCol == null
+            image: bgImg != null
+                ? DecorationImage(
+                    image: AssetImage(bgImg),
+                    fit: BoxFit.cover,
+                  )
+                : null,
+            gradient: (bgCol == null && bgImg == null)
                 ? LinearGradient(
                     colors: [grad1, grad2],
                     begin: Alignment.topLeft,

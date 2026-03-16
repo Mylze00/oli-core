@@ -137,7 +137,7 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
 
             // --- Logique de Calcul des prix et du fret pour chaque produit ---
             const freightConfig = {
-                aerien: { prix_par_kg: 25, delai_jours: '10 jours (fret aérien)', methodId: 'oli_express' },
+                aerien: { prix_par_kg: 25, delai_jours: '10 jours (fret aérien)', methodId: 'oli_standard' },
                 maritime: { delai_jours: '60 jours (fret maritime)', methodId: 'maritime' },
                 CNY_to_USD: 0.138,
                 marge: 0.43
@@ -156,7 +156,10 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                 // Ajouter 2$ de frais si le fret est inférieur à 5$
                 if (freightCostAirUsd < 5) freightCostAirUsd += 2;
                 
-                // 3. Fret Maritime: afficher texte pour évaluation agent
+                // 3. Fret Maritime: calcul basé sur le volume (200kg/m³) => 800$/m³
+                const volumeM3 = Math.max(weightKg / 200, 0.005);
+                const freightCostSeaUsd = volumeM3 * 800;
+                
                 const shippingOptions = [
                     {
                         methodId: freightConfig.aerien.methodId,
@@ -165,8 +168,7 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                     },
                     {
                         methodId: freightConfig.maritime.methodId,
-                        cost: 'agent_evaluation', // Indique que c'est à évaluer
-                        costDisplay: 'À évaluer par l\'agent',
+                        cost: parseFloat(freightCostSeaUsd.toFixed(2)),
                         time: freightConfig.maritime.delai_jours
                     }
                 ];
@@ -198,7 +200,10 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                     ...prod,
                     price: parseFloat(finalPriceUsd.toFixed(2)),
                     originalPriceCny: priceCny,
+                    weight_kg: weightKg,
                     brand: prod.brand || null,
+                    brand_certified: !!prod.brand,
+                    brand_display_name: prod.brand || '',
                     specifications: prod.specifications || '',
                     shippingOptions: shippingOptions,
                     description: prod.description,

@@ -54,7 +54,7 @@ class MarketProductCard extends ConsumerWidget {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF2C2C2C),
+          color: const Color(0xFF1A1A1A), // ~90% noir solide, visible sur fond noir
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -221,7 +221,8 @@ class MarketProductCard extends ConsumerWidget {
                         ),
                       ),
                     
-                    // Badge NEW (Top Left, shifted down if promo exists)
+                    // Badge NEW (Masqué selon demande utilisateur)
+                    /*
                     if (product.createdAt != null && DateTime.now().difference(product.createdAt!).inDays < 7)
                       Positioned(
                         top: hasDiscount ? 28 : 4, left: 4,
@@ -237,6 +238,7 @@ class MarketProductCard extends ConsumerWidget {
                           ),
                         ),
                       ),
+                    */
                     
                     // Badge STOCK BAS masqué
                     // (désactivé — masquer l'info stock sur les cartes)
@@ -297,7 +299,42 @@ class MarketProductCard extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      const style = TextStyle(color: Colors.white, fontSize: 10, height: 1.2);
+                      final tp = TextPainter(
+                        text: TextSpan(text: product.name, style: style),
+                        maxLines: 2,
+                        textDirection: TextDirection.ltr,
+                      )..layout(maxWidth: constraints.maxWidth);
+                      
+                      final isOneLine = tp.height <= 15;
+
+                      return SizedBox(
+                        height: 28, // Hauteur fixe pour 2 lignes de texte
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              product.name,
+                              maxLines: isOneLine ? 1 : 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: style,
+                            ),
+                            if (isOneLine)
+                              const Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: SellerRatingBadge(
+                                    interval: Duration(seconds: 5),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 2),
                   // Formater le prix en fonction de la devise sÃ©lectionnÃ©e
                   Builder(
@@ -324,14 +361,14 @@ class MarketProductCard extends ConsumerWidget {
                            children: [
                              Text(
                                formattedDiscount,
-                               style: const TextStyle(color: Color(0xFFFF9500), fontWeight: FontWeight.bold, fontSize: 15)
+                               style: const TextStyle(color: Color(0xFFFF9500), fontWeight: FontWeight.bold, fontSize: 16.5) // Augmenté de 10% (15 -> 16.5)
                              ),
                              const SizedBox(width: 4),
                              Text(
                                formattedPrice,
                                style: const TextStyle(
                                  color: Colors.grey,
-                                 fontSize: 12,
+                                 fontSize: 13.2, // Augmenté de 10% (12 -> 13.2)
                                  decoration: TextDecoration.lineThrough
                                )
                              ),
@@ -341,7 +378,7 @@ class MarketProductCard extends ConsumerWidget {
                       
                       return Text(
                         formattedPrice,
-                        style: const TextStyle(color: Color(0xFF7CADFF), fontWeight: FontWeight.bold, fontSize: 15)
+                        style: const TextStyle(color: Color(0xFF7CADFF), fontWeight: FontWeight.bold, fontSize: 16.5) // Augmenté de 10% (15 -> 16.5)
                       );
                     },
                   ),

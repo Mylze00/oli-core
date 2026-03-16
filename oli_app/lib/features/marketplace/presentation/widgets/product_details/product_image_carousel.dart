@@ -43,7 +43,7 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: SizedBox(
-                  height: 390,
+                  height: 468, // Augmenté de 20% (390 -> 468)
                   child: Container(
                     color: const Color(0xFF1A1A1A),
                     width: double.infinity,
