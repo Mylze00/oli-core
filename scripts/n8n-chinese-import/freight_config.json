@@ -1,13 +1,13 @@
 {
   "fret": {
     "aerien": {
-      "prix_par_kg": 25,
+      "prix_par_kg": 24,
       "delai_jours": 10,
       "poids_minimum_kg": 0.1,
       "description": "Fret aérien Chine → Kinshasa"
     },
     "maritime": {
-      "prix_par_m3": 750,
+      "prix_par_m3": 700,
       "delai_jours": 60,
       "volume_minimum_m3": 0.1,
       "description": "Fret maritime Chine → Kinshasa (volume CBM)"

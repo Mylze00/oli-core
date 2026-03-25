@@ -120,7 +120,14 @@ Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, 
       "sizes": ["M", "L"],
       "brand": "Marque visible sur l'image (OBLIGATOIRE si présente visible, sinon null)",
       "condition": "new",
-      "product_type": "Identifie le type PRÉCIS: 'clothing' (vêtements/t-shirts/pantalons/robes), 'shoes' (chaussures/sandales/bottes/baskets), 'accessories' (sacs/ceintures/bijoux), 'electronics', 'furniture', 'other'"
+      "product_type": "Identifie le type PRÉCIS: 'clothing' (vêtements/t-shirts/pantalons/robes), 'shoes' (chaussures/sandales/bottes/baskets), 'accessories' (sacs/ceintures/bijoux), 'electronics', 'furniture', 'other'",
+      "variant_images": [
+        {
+          "label": "Nom court de la variante visible (ex: 'Noir mat', 'Rouge vif', 'Version Pro')",
+          "variant_type": "color ou model ou style",
+          "description": "Courte description de ce qui distingue visuellement cette variante"
+        }
+      ]
     }
   ]
 }
@@ -131,6 +138,12 @@ RÈGLES CRITIQUES POUR LES TAILLES/SIZES:
 - Pour les ACCESSOIRES/ÉLECTRONIQUE: Utilise ["Unique"] ou tailles spécifiques visibles (ex: "128GB", "256GB")
 - NE MÉLANGE JAMAIS les tailles de vêtements (M, L, XL) avec des chaussures
 - VÉRIFIE que product_type et sizes sont cohérents
+
+IMPORTANT VARIANTES VISUELLES (variant_images):
+- Regarde ATTENTIVEMENT la capture d'écran pour identifier les variantes visibles (couleurs, modèles, styles)
+- Chaque petite image/thumbnail de variante sur la page produit = 1 entrée dans variant_images
+- Si tu vois des pastilles de couleur ou des miniatures de variantes, liste-les TOUTES
+- Si aucune variante n'est visible, retourne un tableau vide []
 
 IMPORTANT MARQUE: Si une marque est clairement visible sur le produit ou l'emballage, tu DOIS la renseigner. C'est essentiel pour la confiance client.
 
@@ -169,8 +182,8 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
 
             // --- Logique de Calcul des prix et du fret pour chaque produit ---
             const freightConfig = {
-                aerien: { prix_par_kg: 25, delai_jours: '10 jours (fret aérien)', methodId: 'oli_standard' },
-                maritime: { delai_jours: '60 jours (fret maritime)', methodId: 'maritime' },
+                aerien: { prix_par_kg: 24, delai_jours: '10 jours (fret aérien)', methodId: 'oli_standard' },
+                maritime: { prix_par_m3: 700, delai_jours: '60 jours (fret maritime)', methodId: 'maritime' },
                 CNY_to_USD: 0.138,
                 marge: 0.43
             };
@@ -188,9 +201,9 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                 // Ajouter 2$ de frais si le fret est inférieur à 5$
                 if (freightCostAirUsd < 5) freightCostAirUsd += 2;
                 
-                // 3. Fret Maritime: calcul basé sur le volume (200kg/m³) => 800$/m³
-                const volumeM3 = Math.max(weightKg / 200, 0.005);
-                const freightCostSeaUsd = volumeM3 * 800;
+                // 3. Fret Maritime: calcul basé sur le volume → $700/m³
+                const volumeM3 = Math.max(weightKg / 167, 0.005);
+                const freightCostSeaUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
                 
                 const shippingOptions = [
                     {
@@ -241,6 +254,7 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                     description: prod.description,
                     sizes: validatedSizes,
                     product_type: productType,
+                    variant_images: prod.variant_images || [],
                     aiImageIndex: index
                 };
             });
