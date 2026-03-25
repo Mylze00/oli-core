@@ -54,6 +54,14 @@ const AVAILABLE_METHODS = [
     { id: 'maritime', label: 'Livraison Maritime', time: '60 jours', icon: '🚢' },
 ];
 
+const PHOTO_SLOTS = [
+    { label: 'Face', icon: '📸' },
+    { label: 'Dos / Côté', icon: '🔄' },
+    { label: 'Étiquette', icon: '🏷️' },
+    { label: 'Détail / Défaut', icon: '🔍' },
+    { label: 'Autre', icon: '📷' },
+];
+
 // ── Composant principal ─────────────────────────────────────
 
 export default function ProductBatchEditor() {
@@ -75,24 +83,68 @@ export default function ProductBatchEditor() {
             return;
         }
 
-        const enriched = state.aiBatchProducts.map(prod => ({
-            ...prod,
-            // Variantes sélectionnées par l'utilisateur
-            selectedColors: prod.colors || [],
-            selectedSizes: prod.sizes || [],
-            customColorInput: '',
-            customSizeInput: '',
-            // Variantes image (depuis l'IA)
-            selectedVariantImages: (prod.variant_images || []).map((_, i) => i), // all selected by default
-            // Shipping
-            shippingOptions: prod.shippingOptions || [
-                { methodId: 'oli_standard', cost: 0, time: '10 jours (fret aérien)' }
-            ],
-        }));
+        const enriched = state.aiBatchProducts.map((prod, i) => {
+            // Convertir l'image AI initiale en un vrai File/Preview
+            const aiB64 = state.aiImages[prod.aiImageIndex ?? i];
+            const initialFiles = [];
+            const initialPreviews = [];
+            if (aiB64) {
+                const f = base64ToFileUtil(aiB64, i);
+                if (f) {
+                    initialFiles.push(f);
+                    initialPreviews.push(URL.createObjectURL(f));
+                }
+            }
+
+            return {
+                ...prod,
+                selectedColors: prod.colors || [],
+                selectedSizes: prod.sizes || [],
+                customColorInput: '',
+                customSizeInput: '',
+                selectedVariantImages: (prod.variant_images || []).map((_, idx) => idx), // all selected by default
+                shippingOptions: prod.shippingOptions || [
+                    { methodId: 'oli_standard', cost: 0, time: '10 jours (fret aérien)' }
+                ],
+                // On ajoute les vrais fichiers à envoyer au lieu d'utiliser l'index
+                images: initialFiles,
+                imagePreviews: initialPreviews,
+            };
+        });
 
         setProducts(enriched);
         setAiImages(state.aiImages || []);
+
+        return () => {
+            // Nettoyer les blob URLs au démontage
+            enriched.forEach(p => p.imagePreviews.forEach(url => URL.revokeObjectURL(url)));
+        };
     }, [location.state]);
+
+    // Outil utilitaire pour l'initialisation (hoisted)
+    const base64ToFileUtil = (base64String, index = 0) => {
+        try {
+            let mimeType = 'image/jpeg';
+            if (base64String.startsWith('data:')) {
+                mimeType = base64String.split(';')[0].split(':')[1];
+            }
+            const byteCharacters = atob(base64String.split(',')[1]);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let j = 0; j < slice.length; j++) {
+                    byteNumbers[j] = slice.charCodeAt(j);
+                }
+                byteArrays.push(new Uint8Array(byteNumbers));
+            }
+            const blob = new Blob(byteArrays, { type: mimeType });
+            return new File([blob], `ai-product-${index + 1}.jpg`, { type: mimeType });
+        } catch (e) {
+            console.error('base64ToFile error:', e);
+            return null;
+        }
+    };
 
     // ── Mise à jour d'un produit ──
     const updateProduct = (index, field, value) => {
@@ -215,9 +267,79 @@ export default function ProductBatchEditor() {
         }
     };
 
+    // ── Gestion personnalisée des images prêtes à publier ──
+    const handleImageSlot = (prodIndex, slotIndex) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            setProducts(prev => prev.map((p, i) => {
+                if (i !== prodIndex) return p;
+                
+                const newImages = [...p.images];
+                const newPreviews = [...p.imagePreviews];
+
+                if (slotIndex < p.images.length) {
+                    URL.revokeObjectURL(newPreviews[slotIndex]);
+                    newImages[slotIndex] = file;
+                    newPreviews[slotIndex] = URL.createObjectURL(file);
+                } else {
+                    newImages.push(file);
+                    newPreviews.push(URL.createObjectURL(file));
+                }
+
+                return { ...p, images: newImages, imagePreviews: newPreviews };
+            }));
+        };
+        input.click();
+    };
+
+    const handleMultipleImages = (prodIndex) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.onchange = (e) => {
+            const files = Array.from(e.target.files);
+            
+            setProducts(prev => prev.map((p, i) => {
+                if (i !== prodIndex) return p;
+                
+                const remaining = 8 - p.images.length;
+                if (remaining <= 0) return p; // full
+
+                const toAdd = files.slice(0, remaining);
+                return {
+                    ...p,
+                    images: [...p.images, ...toAdd],
+                    imagePreviews: [...p.imagePreviews, ...toAdd.map(f => URL.createObjectURL(f))]
+                };
+            }));
+        };
+        input.click();
+    };
+
+    const removeImage = (prodIndex, imgIndex) => {
+        setProducts(prev => prev.map((p, i) => {
+            if (i !== prodIndex) return p;
+
+            URL.revokeObjectURL(p.imagePreviews[imgIndex]);
+
+            return {
+                ...p,
+                images: p.images.filter((_, idx) => idx !== imgIndex),
+                imagePreviews: p.imagePreviews.filter((_, idx) => idx !== imgIndex)
+            };
+        }));
+    };
+
     // ── Validation ──
     const validateProduct = (prod, index) => {
         const issues = [];
+        if (!prod.images || prod.images.length === 0) issues.push('Ajoutez au moins une photo');
         if (!prod.name || !prod.name.trim()) issues.push('Nom du produit requis');
         if (!prod.price || prod.price <= 0) issues.push('Prix invalide');
         if (prod.selectedColors.length === 0 && prod.selectedSizes.length === 0) {
@@ -274,11 +396,11 @@ export default function ProductBatchEditor() {
                 formData.append('variants', JSON.stringify(variants));
             }
 
-            // Image associée (depuis la capture AI)
-            const imgIndex = prod.aiImageIndex ?? index;
-            if (aiImages[imgIndex]) {
-                const file = base64ToFile(aiImages[imgIndex], index);
-                if (file) formData.append('images', file);
+            // Images validées (modifiées, rajoutées ou originales par le vendeur)
+            if (prod.images && prod.images.length > 0) {
+                prod.images.forEach(img => {
+                    formData.append('images', img);
+                });
             }
 
             await api.post('/products/upload', formData, {
@@ -430,10 +552,10 @@ export default function ProductBatchEditor() {
                                 className="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
                                 onClick={() => setExpandedIndex(isExpanded ? -1 : index)}
                             >
-                                {/* Thumbnail */}
-                                {aiImages[prod.aiImageIndex ?? index] && (
+                                {/* Thumbnail (la première image disponible) */}
+                                {prod.imagePreviews && prod.imagePreviews.length > 0 && (
                                     <img
-                                        src={aiImages[prod.aiImageIndex ?? index]}
+                                        src={prod.imagePreviews[0]}
                                         alt={prod.name}
                                         className="w-14 h-14 rounded-lg object-cover border border-gray-200 flex-shrink-0"
                                     />
@@ -490,8 +612,80 @@ export default function ProductBatchEditor() {
                             {/* Expanded Content */}
                             {isExpanded && !isPublished && (
                                 <div className="border-t border-gray-100 p-5 space-y-5">
+                                    
+                                    {/* ═══ Grille Photos du Produit (5+ Slots) ═══ */}
+                                    <div className="bg-white rounded-xl">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                                                <ImageIcon size={16} className="text-blue-500" />
+                                                Photos du produit <span className="text-red-500">*</span>
+                                            </h3>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs text-gray-400">{(prod.images || []).length}/8</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleMultipleImages(index)}
+                                                    className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-100 flex items-center gap-1.5 font-medium transition-colors"
+                                                >
+                                                    <Plus size={12} /> Charger photos
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2">
+                                            {PHOTO_SLOTS.map((slot, si) => {
+                                                const hasImage = si < (prod.images || []).length;
+                                                return (
+                                                    <div
+                                                        key={si}
+                                                        onClick={() => handleImageSlot(index, si)}
+                                                        className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 ${hasImage
+                                                            ? 'border-green-300 bg-green-50'
+                                                            : 'border-dashed border-blue-200 bg-blue-50/30 hover:bg-blue-50'
+                                                        } flex items-center justify-center cursor-pointer transition-all group overflow-hidden`}
+                                                    >
+                                                        {hasImage ? (
+                                                            <>
+                                                                <img src={prod.imagePreviews[si]} alt={slot.label} className="w-full h-full object-cover" />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => { e.stopPropagation(); removeImage(index, si); }}
+                                                                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                                                                >
+                                                                    <X size={12} />
+                                                                </button>
+                                                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[9px] text-center py-0.5 truncate px-1">
+                                                                    {slot.label}
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <div className="text-center">
+                                                                <span className="text-lg">{slot.icon}</span>
+                                                                <p className="text-[9px] text-gray-400 mt-1">{slot.label}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* Extra images beyond 5 */}
+                                            {(prod.images || []).length > 5 && (prod.images || []).slice(5).map((_, extraI) => (
+                                                <div key={extraI + 5} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-green-300 bg-green-50 flex items-center justify-center cursor-pointer transition-all group overflow-hidden">
+                                                    <img src={prod.imagePreviews[extraI + 5]} className="w-full h-full object-cover" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.stopPropagation(); removeImage(index, extraI + 5); }}
+                                                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
                                     {/* ═══ Infos de base ═══ */}
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-5 mt-5">
                                         <div className="col-span-2">
                                             <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Nom du produit</label>
                                             <input
