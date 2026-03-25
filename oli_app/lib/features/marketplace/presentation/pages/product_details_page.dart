@@ -435,6 +435,36 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                       _buildSpecRow("Couleur", p.color.isNotEmpty ? p.color : "Standard", isDark),
                       const SizedBox(height: 8),
                       _buildSpecRow("Quantité Disponible", "${p.quantity}", isDark),
+                      if (p.specifications != null && p.specifications!.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          child: Divider(),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            "Détails Importés",
+                            style: TextStyle(
+                              color: isDark ? Colors.white54 : Colors.black54,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            p.specifications!,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -477,13 +507,22 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                       data: (allProducts) {
                         debugPrint("🔍 [DEBUG] Vérification des ${allProducts.length} produits pour similarité avec la catégorie ${p.category} ou ${p.subcategory}");
                         
-                        // Revenir à la logique de départ : même catégorie, peu importe le vendeur
-                        final similarProducts = allProducts.where((prod) => 
-                          prod.id != p.id && 
-                          (prod.category == p.category || prod.subcategory == p.subcategory)
+                        // ── Produits du MÊME VENDEUR en priorité ──
+                        final sellerProducts = allProducts.where((prod) =>
+                          prod.id != p.id &&
+                          prod.sellerId == p.sellerId
                         ).take(6).toList();
 
-                        debugPrint("🔍 [DEBUG] Produits similaires finaux trouvés : ${similarProducts.length}");
+                        // Fallback : si le vendeur n'a pas d'autres produits → même catégorie
+                        final similarProducts = sellerProducts.length >= 2
+                            ? sellerProducts
+                            : allProducts.where((prod) =>
+                                prod.id != p.id &&
+                                prod.sellerId != p.sellerId &&
+                                (prod.category == p.category || prod.subcategory == p.subcategory)
+                              ).take(6).toList();
+
+                        debugPrint("🔍 [DEBUG] Produits du même vendeur : ${sellerProducts.length} → affichés : ${similarProducts.length}");
 
                         if (similarProducts.isEmpty) {
                           return Padding(

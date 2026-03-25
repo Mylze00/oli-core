@@ -65,6 +65,7 @@ class Product {
   final List<ShippingOption> shippingOptions;
   final bool brandCertified;
   final String? brandDisplayName;
+  final String? specifications; // Specs techniques issues de l'import IA
 
   Product({
     required this.id,
@@ -105,6 +106,7 @@ class Product {
     this.shippingOptions = const [],
     this.brandCertified = false,
     this.brandDisplayName,
+    this.specifications,
   });
 
   /// Factory pour parser la réponse API (supporte camelCase ET snake_case)
@@ -195,6 +197,7 @@ class Product {
       }(),
       brandCertified: json['brand_certified'] ?? json['brandCertified'] ?? false,
       brandDisplayName: json['brand_display_name'] ?? json['brandDisplayName'],
+      specifications: json['specifications'],
     );
   }
 
