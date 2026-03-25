@@ -251,9 +251,9 @@ export default function ProductBatchEditor() {
             formData.append('quantity', '1');
             formData.append('weight', prod.weight_kg || '');
 
-            // Brand
+            // Brand — toujours envoyé pour que le backend l'écrive correctement en DB
+            formData.append('brand_certified', prod.brand_certified ? 'true' : 'false');
             if (prod.brand) {
-                formData.append('brand_certified', 'true');
                 formData.append('brand_display_name', prod.brand);
             }
 
@@ -734,7 +734,8 @@ export default function ProductBatchEditor() {
                                         <div className="space-y-2">
                                             {prod.shippingOptions.map((opt, si) => {
                                                 const method = AVAILABLE_METHODS.find(m => m.id === opt.methodId);
-                                                const isCostDisabled = opt.methodId === 'free' || opt.methodId === 'hand_delivery' || opt.methodId === 'partner';
+                                                const isCostDisabled = opt.methodId === 'free' || opt.methodId === 'hand_delivery';
+                                                const isPartnerMode = opt.methodId === 'partner';
 
                                                 return (
                                                     <div key={si} className="flex items-center gap-2 bg-white p-2.5 rounded-lg border border-gray-100">
@@ -760,16 +761,20 @@ export default function ProductBatchEditor() {
                                                             />
                                                         </div>
                                                         <div className="w-20">
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                step="0.01"
-                                                                className={`w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs ${isCostDisabled ? 'bg-gray-100 text-gray-400' : ''}`}
-                                                                placeholder="$"
-                                                                value={opt.cost}
-                                                                onChange={e => updateShippingOption(index, si, 'cost', e.target.value)}
-                                                                disabled={isCostDisabled}
-                                                            />
+                                                            {isPartnerMode ? (
+                                                                <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1.5 rounded-lg border border-amber-200 block text-center font-medium">Auto/km</span>
+                                                            ) : (
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="0.01"
+                                                                    className={`w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs ${isCostDisabled ? 'bg-gray-100 text-gray-400' : ''}`}
+                                                                    placeholder="0.00"
+                                                                    value={opt.cost ?? ''}
+                                                                    onChange={e => updateShippingOption(index, si, 'cost', e.target.value)}
+                                                                    disabled={isCostDisabled}
+                                                                />
+                                                            )}
                                                         </div>
                                                         {prod.shippingOptions.length > 1 && (
                                                             <button

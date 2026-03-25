@@ -203,7 +203,9 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                 
                 // 3. Fret Maritime: calcul basé sur le volume → $700/m³
                 const volumeM3 = Math.max(weightKg / 167, 0.005);
-                const freightCostSeaUsd = volumeM3 * freightConfig.maritime.prix_par_m3;
+                const freightCostSeaUsdRaw = volumeM3 * freightConfig.maritime.prix_par_m3;
+                // Garantir un coût maritime minimum de $1 pour les petits articles
+                const freightCostSeaUsd = Math.max(freightCostSeaUsdRaw, 1.0);
                 
                 const shippingOptions = [
                     {
@@ -247,7 +249,7 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                     originalPriceCny: priceCny,
                     weight_kg: weightKg,
                     brand: prod.brand || null,
-                    brand_certified: !!prod.brand,
+                    brand_certified: !!prod.brand,         // toujours boolean (true si marque détectée)
                     brand_display_name: prod.brand || '',
                     specifications: prod.specifications || '',
                     shippingOptions: shippingOptions,
