@@ -32,146 +32,289 @@ function FilterPill({ label, count, active, onClick }) {
 }
 
 /* ═══════════════════════════════════
-   PRODUCT DETAIL MODAL
+   PRODUCT DETAIL / EDIT MODAL
    ═══════════════════════════════════ */
-function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onToggleGoodDeal, onDelete, onHide, onToggleVerify }) {
+function ProductModal({ product, onClose, getDisplayImage, onToggleFeatured, onToggleGoodDeal, onDelete, onHide, onToggleVerify, onSaveEdit }) {
     if (!product) return null;
 
-    const allImages = [];
-    if (product.image_url) allImages.push(product.image_url);
-    if (product.images) {
-        const imgs = Array.isArray(product.images) ? product.images : product.images.replace(/[{}"]/g, '').split(',');
-        imgs.forEach(img => {
-            if (img) {
-                const url = getImageUrl(img);
-                if (url && !allImages.includes(url)) allImages.push(url);
-            }
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState({
+        name: product.name || '',
+        price: product.price || '',
+        description: product.description || '',
+        category: product.category || '',
+    });
+
+    const getRawImages = () => {
+        let raw = [];
+        if (product.images) {
+            raw = Array.isArray(product.images) ? product.images : product.images.replace(/[{}"]/g, '').split(',');
+        }
+        return raw.filter(Boolean);
+    };
+
+    const [existingImagesLine, setExistingImagesLine] = useState(getRawImages());
+    const [newFiles, setNewFiles] = useState([]);
+    const [previewNew, setPreviewNew] = useState([]);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Reset when product changes
+    useEffect(() => {
+        if (!isEditing) {
+            setEditForm({
+                name: product.name || '',
+                price: product.price || '',
+                description: product.description || '',
+                category: product.category || '',
+            });
+            setExistingImagesLine(getRawImages());
+            setNewFiles([]);
+            setPreviewNew(previewNew.map(p => { URL.revokeObjectURL(p); return null; }).filter(Boolean));
+        }
+    }, [product, isEditing]);
+
+    const handleFileChange = (e) => {
+        const files = Array.from(e.target.files);
+        setNewFiles(prev => [...prev, ...files]);
+        setPreviewNew(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+    };
+
+    const removeExistingImage = (idx) => {
+        setExistingImagesLine(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    const removeNewFile = (idx) => {
+        URL.revokeObjectURL(previewNew[idx]);
+        setNewFiles(prev => prev.filter((_, i) => i !== idx));
+        setPreviewNew(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        const fd = new FormData();
+        fd.append('name', editForm.name);
+        fd.append('price', editForm.price);
+        fd.append('description', editForm.description);
+        fd.append('category', editForm.category);
+        fd.append('existingImages', JSON.stringify(existingImagesLine));
+        newFiles.forEach(f => fd.append('images', f));
+
+        await onSaveEdit(product.id, fd);
+        setIsSaving(false);
+        setIsEditing(false);
+    };
+
+    // View mode images
+    const allViewImages = [];
+    if (!isEditing) {
+        if (product.image_url) allViewImages.push(product.image_url);
+        getRawImages().forEach(img => {
+            const url = getImageUrl(img);
+            if (url && !allViewImages.includes(url)) allViewImages.push(url);
         });
+        if (allViewImages.length === 0) allViewImages.push('https://via.placeholder.com/400?text=No+image');
     }
-    if (allImages.length === 0) allImages.push('https://via.placeholder.com/400?text=No+image');
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
             <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-gray-100">
-                    <h2 className="text-lg font-bold text-gray-900">Détails du produit</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
-                        <XMarkIcon className="h-5 w-5 text-gray-400" />
-                    </button>
-                </div>
-
-                {/* Images */}
-                <div className="p-5 border-b border-gray-100">
-                    <div className="flex gap-3 overflow-x-auto pb-2">
-                        {allImages.map((img, i) => (
-                            <img key={i} src={img} alt="" className="h-48 w-48 object-cover rounded-xl flex-shrink-0 border border-gray-100 bg-gray-50"
-                                onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/200?text=No+img'; }} />
-                        ))}
-                    </div>
-                </div>
-
-                {/* Info */}
-                <div className="p-5 space-y-4">
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-900">{product.name}</h3>
-                        <div className="flex items-center gap-3 mt-2">
-                            {product.category && (
-                                <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full flex items-center">
-                                    <TagIcon className="h-3 w-3 mr-1" />{product.category}
-                                </span>
-                            )}
-                            {product.status === 'active' ? (
-                                <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold">Actif</span>
-                            ) : product.status === 'hidden' ? (
-                                <span className="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">Masqué</span>
-                            ) : (
-                                <span className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">{product.status}</span>
-                            )}
-                            {product.is_featured && <span className="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-semibold flex items-center"><StarIcon className="h-3 w-3 mr-1" />Vedette</span>}
-                            {product.is_good_deal && <span className="text-xs bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-semibold flex items-center"><FireIcon className="h-3 w-3 mr-1" />Bon Deal</span>}
-                            {product.is_verified && <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold flex items-center"><CheckBadgeSolid className="h-3 w-3 mr-1" />Vérifié</span>}
-                        </div>
-                    </div>
-
-                    {/* Prix */}
-                    <div className="bg-gray-50 rounded-xl p-4">
-                        <div className="flex items-baseline gap-3">
-                            <span className="text-2xl font-bold text-gray-900">{product.price} $</span>
-                            {product.is_good_deal && product.promo_price && (
-                                <span className="text-lg font-bold text-rose-500">{product.promo_price} $ promo</span>
-                            )}
-                        </div>
-                        {product.view_count !== undefined && (
-                            <p className="text-xs text-gray-400 mt-1 flex items-center"><EyeIcon className="h-3 w-3 mr-1" />{product.view_count || 0} vues</p>
+                    <h2 className="text-lg font-bold text-gray-900">
+                        {isEditing ? 'Éditer le produit' : 'Détails du produit'}
+                    </h2>
+                    <div className="flex items-center gap-2">
+                        {!isEditing && (
+                            <button onClick={() => setIsEditing(true)} className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition">
+                                Modifier
+                            </button>
                         )}
-                    </div>
-
-                    {/* Description */}
-                    {product.description && (
-                        <div>
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Description</p>
-                            <p className="text-sm text-gray-600 leading-relaxed">{product.description}</p>
-                        </div>
-                    )}
-
-                    {/* Vendeur */}
-                    <div className="bg-gray-50 rounded-xl p-4">
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Vendeur</p>
-                        <Link to={`/users/${product.seller_id}`} onClick={onClose} className="flex items-center gap-3 hover:opacity-80 transition">
-                            <img
-                                src={getImageUrl(product.seller_avatar) || `https://ui-avatars.com/api/?name=${product.seller_name || 'V'}&background=0B1727&color=fff&size=64`}
-                                className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm"
-                                alt=""
-                                onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${product.seller_name || 'V'}&background=0B1727&color=fff`; }}
-                            />
-                            <div>
-                                <p className="font-semibold text-blue-600">{product.seller_name || 'Vendeur'}</p>
-                                <p className="text-sm text-gray-400">{product.seller_phone}</p>
-                            </div>
-                            <ChevronRightIcon className="h-5 w-5 text-gray-300 ml-auto" />
-                        </Link>
-                    </div>
-
-                    {/* Date */}
-                    <p className="text-xs text-gray-400 text-center">
-                        Créé le {product.created_at ? new Date(product.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}
-                        {product.updated_at && ` • Modifié le ${new Date(product.updated_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}`}
-                    </p>
-
-                    {/* Actions */}
-                    <div className="flex gap-2 pt-2 flex-wrap">
-                        <button onClick={() => { onToggleFeatured(product); }}
-                            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.is_featured ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            {product.is_featured ? <StarIcon className="h-4 w-4" /> : <StarOutline className="h-4 w-4" />}
-                            {product.is_featured ? 'Retirer vedette' : 'Mettre en avant'}
-                        </button>
-                        <button onClick={() => { onToggleGoodDeal(product); }}
-                            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.is_good_deal ? 'bg-rose-100 text-rose-700 hover:bg-rose-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            <FireIcon className="h-4 w-4" />
-                            {product.is_good_deal ? 'Retirer deal' : 'Bon Deal'}
-                        </button>
-                        <button onClick={() => { onHide(product); }}
-                            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.status === 'hidden' ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            <EyeSlashIcon className="h-4 w-4" />
-                            {product.status === 'hidden' ? 'Afficher' : 'Masquer'}
-                        </button>
-                        <button onClick={() => { onToggleVerify(product); }}
-                            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.is_verified ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            <CheckBadgeSolid className="h-4 w-4" />
-                            {product.is_verified ? '✓ Vérifié' : 'Vérifier'}
-                        </button>
-                        <button onClick={() => { onDelete(product.id); onClose(); }}
-                            className="py-2.5 px-4 rounded-xl text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition flex items-center gap-2"
-                        >
-                            <TrashIcon className="h-4 w-4" />Bannir
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                            <XMarkIcon className="h-5 w-5 text-gray-400" />
                         </button>
                     </div>
                 </div>
+
+                {isEditing ? (
+                    /* ═══ M O D E   E D I T I O N ═══ */
+                    <div className="p-5 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="col-span-2">
+                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Nom du produit</label>
+                                <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                                    className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Prix ($)</label>
+                                <input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({ ...editForm, price: e.target.value })}
+                                    className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Catégorie</label>
+                                <input type="text" value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                                    className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Description</label>
+                                <textarea rows={4} value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                                    className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
+                            </div>
+                        </div>
+
+                        {/* Edition Images */}
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Images du produit</label>
+                            <div className="flex flex-wrap gap-3">
+                                {existingImagesLine.map((img, i) => (
+                                    <div key={'ex_' + i} className="relative w-20 h-20 rounded-xl border border-gray-200 overflow-hidden group">
+                                        <img src={getImageUrl(img)} alt="" className="w-full h-full object-cover" />
+                                        <button onClick={() => removeExistingImage(i)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition">
+                                            <XMarkIcon className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                                {previewNew.map((url, i) => (
+                                    <div key={'new_' + i} className="relative w-20 h-20 rounded-xl border-2 border-green-400 overflow-hidden group">
+                                        <img src={url} alt="" className="w-full h-full object-cover" />
+                                        <button onClick={() => removeNewFile(i)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition">
+                                            <XMarkIcon className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                                {(existingImagesLine.length + newFiles.length) < 8 && (
+                                    <label className="w-20 h-20 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/50 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 transition text-blue-500">
+                                        <span className="text-xl">+</span>
+                                        <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
+                                    </label>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4 border-t border-gray-100">
+                            <button onClick={() => setIsEditing(false)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition">
+                                Annuler
+                            </button>
+                            <button onClick={handleSave} disabled={isSaving || !editForm.name || !editForm.price} className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-50">
+                                {isSaving ? 'Enregistrement...' : 'Sauvegarder les modifications'}
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    /* ═══ M O D E   V I E W ═══ */
+                    <>
+                        {/* Images */}
+                        <div className="p-5 border-b border-gray-100">
+                            <div className="flex gap-3 overflow-x-auto pb-2">
+                                {allViewImages.map((img, i) => (
+                                    <img key={i} src={img} alt="" className="h-48 w-48 object-cover rounded-xl flex-shrink-0 border border-gray-100 bg-gray-50"
+                                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/200?text=No+img'; }} />
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Info */}
+                        <div className="p-5 space-y-4">
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-900">{product.name}</h3>
+                                <div className="flex items-center gap-3 mt-2">
+                                    {product.category && (
+                                        <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full flex items-center">
+                                            <TagIcon className="h-3 w-3 mr-1" />{product.category}
+                                        </span>
+                                    )}
+                                    {product.status === 'active' ? (
+                                        <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold">Actif</span>
+                                    ) : product.status === 'hidden' ? (
+                                        <span className="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">Masqué</span>
+                                    ) : (
+                                        <span className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">{product.status}</span>
+                                    )}
+                                    {product.is_featured && <span className="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-semibold flex items-center"><StarIcon className="h-3 w-3 mr-1" />Vedette</span>}
+                                    {product.is_good_deal && <span className="text-xs bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-semibold flex items-center"><FireIcon className="h-3 w-3 mr-1" />Bon Deal</span>}
+                                    {product.is_verified && <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold flex items-center"><CheckBadgeSolid className="h-3 w-3 mr-1" />Vérifié</span>}
+                                </div>
+                            </div>
+
+                            {/* Prix */}
+                            <div className="bg-gray-50 rounded-xl p-4">
+                                <div className="flex items-baseline gap-3">
+                                    <span className="text-2xl font-bold text-gray-900">{product.price} $</span>
+                                    {product.is_good_deal && product.promo_price && (
+                                        <span className="text-lg font-bold text-rose-500">{product.promo_price} $ promo</span>
+                                    )}
+                                </div>
+                                {product.view_count !== undefined && (
+                                    <p className="text-xs text-gray-400 mt-1 flex items-center"><EyeIcon className="h-3 w-3 mr-1" />{product.view_count || 0} vues</p>
+                                )}
+                            </div>
+
+                            {/* Description */}
+                            {product.description && (
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Description</p>
+                                    <p className="text-sm text-gray-600 leading-relaxed">{product.description}</p>
+                                </div>
+                            )}
+
+                            {/* Vendeur */}
+                            <div className="bg-gray-50 rounded-xl p-4">
+                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Vendeur</p>
+                                <Link to={`/users/${product.seller_id}`} onClick={onClose} className="flex items-center gap-3 hover:opacity-80 transition">
+                                    <img
+                                        src={getImageUrl(product.seller_avatar) || `https://ui-avatars.com/api/?name=${product.seller_name || 'V'}&background=0B1727&color=fff&size=64`}
+                                        className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm"
+                                        alt=""
+                                        onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${product.seller_name || 'V'}&background=0B1727&color=fff`; }}
+                                    />
+                                    <div>
+                                        <p className="font-semibold text-blue-600">{product.seller_name || 'Vendeur'}</p>
+                                        <p className="text-sm text-gray-400">{product.seller_phone}</p>
+                                    </div>
+                                    <ChevronRightIcon className="h-5 w-5 text-gray-300 ml-auto" />
+                                </Link>
+                            </div>
+
+                            {/* Date */}
+                            <p className="text-xs text-gray-400 text-center">
+                                Créé le {product.created_at ? new Date(product.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}
+                                {product.updated_at && ` • Modifié le ${new Date(product.updated_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}`}
+                            </p>
+
+                            {/* Actions */}
+                            <div className="flex gap-2 pt-2 flex-wrap">
+                                <button onClick={() => { onToggleFeatured(product); }}
+                                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.is_featured ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                >
+                                    {product.is_featured ? <StarIcon className="h-4 w-4" /> : <StarOutline className="h-4 w-4" />}
+                                    {product.is_featured ? 'Retirer vedette' : 'Mettre en avant'}
+                                </button>
+                                <button onClick={() => { onToggleGoodDeal(product); }}
+                                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.is_good_deal ? 'bg-rose-100 text-rose-700 hover:bg-rose-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                >
+                                    <FireIcon className="h-4 w-4" />
+                                    {product.is_good_deal ? 'Retirer deal' : 'Bon Deal'}
+                                </button>
+                                <button onClick={() => { onHide(product); }}
+                                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.status === 'hidden' ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                >
+                                    <EyeSlashIcon className="h-4 w-4" />
+                                    {product.status === 'hidden' ? 'Afficher' : 'Masquer'}
+                                </button>
+                                <button onClick={() => { onToggleVerify(product); }}
+                                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2 ${product.is_verified ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                >
+                                    <CheckBadgeSolid className="h-4 w-4" />
+                                    {product.is_verified ? '✓ Vérifié' : 'Vérifier'}
+                                </button>
+                                <button onClick={() => { onDelete(product.id); onClose(); }}
+                                    className="py-2.5 px-4 rounded-xl text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition flex items-center gap-2"
+                                >
+                                    <TrashIcon className="h-4 w-4" />Bannir
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );
@@ -271,6 +414,30 @@ export default function Products() {
         } catch (error) { console.error("Erreur:", error); alert("Erreur"); }
     };
 
+    const handleSaveEdit = async (productId, formData) => {
+        try {
+            const { data } = await api.put(`/admin/products/${productId}`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            // Merge l'ancien avec les nouvelles data retournées
+            const updatedFields = data.product;
+            const updatedProducts = products.map(p => {
+                if (p.id === productId) {
+                    return { ...p, ...updatedFields };
+                }
+                return p;
+            });
+            setProducts(updatedProducts);
+            if (selectedProduct?.id === productId) {
+                setSelectedProduct(prev => ({ ...prev, ...updatedFields }));
+            }
+        } catch (err) {
+            console.error("Erreur save edit:", err);
+            alert("Erreur lors de la sauvegarde: " + (err.response?.data?.error || err.message));
+            throw err;
+        }
+    };
+
     const getDisplayImage = (product) => {
         if (product.image_url) return product.image_url;
         if (product.images) {
@@ -313,6 +480,7 @@ export default function Products() {
                     onToggleVerify={toggleVerify}
                     onDelete={handleDelete}
                     onHide={handleHide}
+                    onSaveEdit={handleSaveEdit}
                 />
             )}
 

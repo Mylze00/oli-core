@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
 const { BASE_URL } = require('../../config');
+const { productUpload } = require('../../config/upload');
 
 // ─── Migration auto au démarrage ───────────────────────────────────────────
 (async () => {
@@ -408,6 +409,57 @@ router.patch('/:id/quick-edit', async (req, res) => {
     } catch (err) {
         console.error('Erreur PATCH /admin/products/:id/quick-edit:', err.message);
         res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * PUT /admin/products/:id
+ * Édition complète d'un produit (incluant les nouvelles images)
+ */
+router.put('/:id', productUpload.array('images', 8), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            name, price, description, category,
+            existingImages, // Liste JSON des images déjà existantes conservées
+        } = req.body;
+
+        if (!name || !price) {
+            return res.status(400).json({ error: 'Le nom et le prix sont obligatoires' });
+        }
+
+        // --- Récupérer les images actuelles en BDD pour gèrer la fusion et suppression physique ---
+        const currentData = await pool.query('SELECT images FROM products WHERE id = $1', [id]);
+        if (currentData.rows.length === 0) {
+            return res.status(404).json({ error: 'Produit introuvable' });
+        }
+
+        let keptImages = [];
+        if (existingImages) {
+            try {
+                keptImages = JSON.parse(existingImages);
+            } catch (e) {
+                console.error("Erreur parse existingImages:", existingImages);
+            }
+        }
+
+        // Traiter les nouveaux fichiers uploadés
+        const newUploadedImages = req.files ? req.files.map(f => f.filename) : [];
+
+        // Les images finales pour le produit
+        const finalImages = [...keptImages, ...newUploadedImages];
+
+        const result = await pool.query(
+            `UPDATE products 
+             SET name = $1, price = $2, description = $3, category = $4, images = $5, updated_at = NOW() 
+             WHERE id = $6 RETURNING *`,
+            [name, parseFloat(price), description || null, category || null, JSON.stringify(finalImages).replace('[', '{').replace(']', '}'), id]
+        );
+
+        res.json({ message: 'Produit mis à jour avec succès', product: result.rows[0] });
+    } catch (err) {
+        console.error('Erreur PUT /admin/products/:id:', err.message);
+        res.status(500).json({ error: 'Erreur lors de la mise à jour' });
     }
 });
 
