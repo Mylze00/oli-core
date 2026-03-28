@@ -117,13 +117,21 @@ class ServiceGlassPanel extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.all(10.0),
-            child: Image.network(
-              service.logoUrl,
-              height: 50,
-              width: 50,
-              fit: BoxFit.contain,
-              errorBuilder: (ctx, err, stack) => const Icon(Icons.error_outline, color: Colors.white),
-            ),
+            child: service.logoUrl.startsWith('http')
+                ? Image.network(
+                    service.logoUrl,
+                    height: 50,
+                    width: 50,
+                    fit: BoxFit.contain,
+                    errorBuilder: (ctx, err, stack) => const Icon(Icons.error_outline, color: Colors.white),
+                  )
+                : Image.asset(
+                    service.logoUrl,
+                    height: 50,
+                    width: 50,
+                    fit: BoxFit.contain,
+                    errorBuilder: (ctx, err, stack) => const Icon(Icons.error_outline, color: Colors.white),
+                  ),
           ),
           const SizedBox(height: 5),
           Padding(
