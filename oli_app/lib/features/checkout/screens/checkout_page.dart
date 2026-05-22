@@ -7,6 +7,7 @@ import '../../user/models/address_model.dart';
 import '../../user/screens/address_management_page.dart';
 import 'stripe_payment_page.dart';
 import 'order_success_page.dart';
+import 'payment_pending_page.dart';
 import '../../../providers/exchange_rate_provider.dart';
 
 /// Page de Checkout / Validation de commande
@@ -445,7 +446,20 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
            return;
         }
 
-        // SINON (Wallet / Mobile Money) -> Redirection vers page de confirmation
+        if (_paymentMethod == 'mobile_money') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PaymentPendingPage(
+                order: order,
+                phoneNumber: _mobileMoneyPhone.isNotEmpty ? _mobileMoneyPhone : '+243 ---',
+                providerName: _mobileMoneyProvider,
+              ),
+            ),
+          );
+          return;
+        }
+        // WALLET -> Confirmation immediate
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => OrderSuccessPage(order: order)),

@@ -61,8 +61,9 @@ mixin DashboardProductDistribution {
     final shuffledForDiscovery = List<Product>.from(allProducts)..shuffle();
     cachedDiscoveryList = shuffledForDiscovery.take(5).toList();
 
-    // ── 3. Super Offres (donnée intermédiaire pour fallback) ──
-    cachedSuperOffers = allProducts.take(10).toList();
+    // ── 3. Super Offres (donnée intermédiaire pour fallback) : aléatoire ──
+    final shuffledForOffers = List<Product>.from(allProducts)..shuffle();
+    cachedSuperOffers = shuffledForOffers.take(10).toList();
 
     // ── 4. Section "Top Classement" : TOUS les produits admin, mélangés aléatoirement ──
     cachedRankingList = List<Product>.from(allProducts)..shuffle();

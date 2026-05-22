@@ -98,8 +98,13 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
           isLoading: false,
           error: 'Vous devez être vendeur pour accéder à cette section',
         );
+      } else if (e.response?.statusCode == 401) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Session expirée. Veuillez vous reconnecter.',
+        );
       } else {
-        state = state.copyWith(isLoading: false, error: e.message ?? 'Erreur réseau');
+        state = state.copyWith(isLoading: false, error: 'Erreur réseau');
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());

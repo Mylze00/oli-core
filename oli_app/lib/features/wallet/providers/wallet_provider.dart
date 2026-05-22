@@ -97,6 +97,18 @@ class WalletNotifier extends StateNotifier<WalletState> {
     });
   }
 
+  Future<bool> transfer({
+    required double amount,
+    required String recipientPhone,
+    String? note,
+  }) async {
+    return _performTransaction(ApiConfig.walletTransfer, {
+      'amount': amount,
+      'recipient_phone': recipientPhone,
+      if (note != null && note.isNotEmpty) 'note': note,
+    });
+  }
+
   Future<bool> depositByCard({
     required String cardNumber,
     required String expiryDate,

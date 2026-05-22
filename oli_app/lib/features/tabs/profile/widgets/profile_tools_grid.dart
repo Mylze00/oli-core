@@ -9,6 +9,8 @@ import '../../../settings/screens/about_page.dart';
 import '../../../settings/screens/contact_support_page.dart';
 import '../../../checkout/screens/payment_methods_page.dart';
 import '../../../user/screens/addresses_page.dart';
+import '../../../../app/theme/theme_provider.dart';
+import '../../../settings/screens/settings_page.dart';
 
 class ProfileToolsGrid extends ConsumerWidget {
   final Color cardColor;
@@ -18,65 +20,105 @@ class ProfileToolsGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 16, bottom: 12),
-            child: Text("Mes Outils", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
-          ),
-          Wrap(
-            spacing: 0,
-            runSpacing: 20,
-            children: [
-              _buildGridItem(context, Icons.favorite_border, "Favoris", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage()))),
-              _buildGridItem(context, Icons.add_circle_outline, "Vendre", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PublishArticlePage()))),
-              _buildGridItem(context, Icons.credit_card, "Cartes", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsPage()))),
-              _buildGridItem(context, Icons.location_on_outlined, "Adresses", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesPage()))), 
-              _buildGridItem(context, Icons.headset_mic, "Service Oli", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactSupportPage()))),
-              _buildGridItem(context, Icons.help_outline, "Aide", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPage()))),
-              _buildGridItem(context, Icons.info_outline, "À propos", textColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutPage()))),
-              _buildGridItem(context, Icons.logout, "Déconnexion", Colors.redAccent, () async {
-                await ref.read(authControllerProvider.notifier).logout();
-                if (context.mounted) Navigator.of(context).pushReplacementNamed('/login');
-              }),
+    final isDark = ref.watch(themeProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Titre
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "",
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.2,
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                // Accéder à tous les paramètres (Settings)
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
+              },
+              child: const Icon(Icons.menu, size: 20, color: Colors.black87),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Boîte Blanche avec les 4 icônes principales
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
-        ],
-      ),
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildToolIcon(
+                context, 
+                Icons.location_on_outlined, 
+                "Adresses", 
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesPage())),
+              ),
+              _buildToolIcon(
+                context, 
+                Icons.support_agent_outlined, 
+                "Service Client", 
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactSupportPage())),
+              ),
+              _buildToolIcon(
+                context, 
+                isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, 
+                "Mode Sombre", 
+                () => ref.read(themeProvider.notifier).toggleTheme(),
+              ),
+              _buildToolIcon(
+                context, 
+                Icons.language_outlined, 
+                "Langue/Devise", 
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildGridItem(BuildContext context, IconData icon, String label, Color color, VoidCallback onTap) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = MediaQuery.of(context).size.width / 4; // Removed -10 to use full width roughly
-        return GestureDetector(
-          onTap: onTap,
-          child: SizedBox(
-            width: width,
-            child: Column(
-              children: [
-                Icon(icon, size: 28, color: color),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: color),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+  Widget _buildToolIcon(BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 75,
+        child: Column(
+          children: [
+            Icon(icon, size: 28, color: Colors.black87),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 2,
             ),
-          ),
-        );
-      }
+          ],
+        ),
+      ),
     );
   }
 }

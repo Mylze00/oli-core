@@ -115,19 +115,37 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
   bool _hasMore = true;
   int _offset = 0;
   String? _error;
+  DateTime? _lastFetchTime; // ← Cache : heure du dernier chargement
 
   static const int _initialPageSize = 200;
   static const int _morePageSize = 100;
+  static const Duration _cacheDuration = Duration(hours: 24); // ← Durée du cache
 
   FeaturedProductsNotifier() : super([]) {
     fetchFeaturedProducts();
-    _refreshTimer = Timer.periodic(const Duration(minutes: 10), (_) => fetchFeaturedProducts());
+    // Vérification toutes les heures, mais ne recharge que si le cache est expiré
+    _refreshTimer = Timer.periodic(const Duration(hours: 1), (_) => _refreshIfStale());
   }
 
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
   String? get error => _error;
+
+  /// Vérifie si le cache est expiré avant de relancer le fetch automatique
+  void _refreshIfStale() {
+    if (_lastFetchTime == null) {
+      fetchFeaturedProducts();
+      return;
+    }
+    final age = DateTime.now().difference(_lastFetchTime!);
+    if (age >= _cacheDuration) {
+      debugPrint('🔄 [Featured] Cache expiré (${age.inHours}h) → rechargement');
+      fetchFeaturedProducts();
+    } else {
+      debugPrint('✅ [Featured] Cache valide encore ${(_cacheDuration - age).inMinutes} min');
+    }
+  }
 
   @override
   void dispose() {
@@ -157,11 +175,13 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
             debugPrint('⚠️ Featured product skipped (parse error): $e');
           }
         }
-        newProducts.shuffle();
+        newProducts.shuffle(); // Ordre complètement aléatoire
         _offset = newProducts.length;
         _hasMore = newProducts.length >= _initialPageSize;
+        _lastFetchTime = DateTime.now(); // ← Mémoriser l'heure du chargement
         state = newProducts;
         _error = null;
+        debugPrint('✅ [Featured] ${newProducts.length} produits chargés et mis en cache (24h)');
       } else {
         _error = 'Erreur serveur: ${response.statusCode}';
       }
@@ -191,9 +211,14 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
           }
         }
         if (moreProducts.isNotEmpty) {
-          moreProducts.shuffle();
+          moreProducts.shuffle(); // Aléatoire aussi pour la suite
+          // Déduplication : ne pas ajouter des produits déjà en cache
+          final existingIds = state.map((p) => p.id).toSet();
+          final uniqueMore = moreProducts.where((p) => !existingIds.contains(p.id)).toList();
           _offset += moreProducts.length;
-          state = [...state, ...moreProducts];
+          if (uniqueMore.isNotEmpty) {
+            state = [...state, ...uniqueMore];
+          }
         }
         _hasMore = moreProducts.length >= _morePageSize;
       }
@@ -210,14 +235,33 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
   Timer? _refreshTimer;
   bool _isLoading = false;
   String? _error;
+  DateTime? _lastFetchTime; // ← Cache : heure du dernier chargement
+
+  static const Duration _cacheDuration = Duration(hours: 24); // ← Durée du cache
 
   TopSellersNotifier() : super([]) {
-    fetchTopSellers();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 120), (_) => fetchTopSellers());
+    fetchTopSellers(shuffle: true);
+    // Vérification toutes les heures, ne recharge que si cache expiré
+    _refreshTimer = Timer.periodic(const Duration(hours: 1), (_) => _refreshIfStale());
   }
 
   bool get isLoading => _isLoading;
   String? get error => _error;
+
+  /// Vérifie si le cache est expiré avant de relancer le fetch automatique
+  void _refreshIfStale() {
+    if (_lastFetchTime == null) {
+      fetchTopSellers(shuffle: true);
+      return;
+    }
+    final age = DateTime.now().difference(_lastFetchTime!);
+    if (age >= _cacheDuration) {
+      debugPrint('🔄 [TopSellers] Cache expiré (${age.inHours}h) → rechargement');
+      fetchTopSellers(shuffle: true);
+    } else {
+      debugPrint('✅ [TopSellers] Cache valide encore ${(_cacheDuration - age).inMinutes} min');
+    }
+  }
 
   @override
   void dispose() {
@@ -233,17 +277,19 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
       final topSellersUrl = '${ApiConfig.productsTopSellers}?limit=30';
       final uri = Uri.parse(topSellersUrl);
       final response = await http.get(uri);
-      
+
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         final newProducts = data.map((item) => Product.fromJson(item)).toList();
-        
+
         if (shuffle) {
-          newProducts.shuffle();
+          newProducts.shuffle(); // Ordre complètement aléatoire
         }
 
+        _lastFetchTime = DateTime.now(); // ← Mémoriser l'heure du chargement
         state = newProducts;
         _error = null;
+        debugPrint('✅ [TopSellers] ${newProducts.length} produits chargés et mis en cache (24h)');
       } else {
         _error = "Erreur serveur: ${response.statusCode}";
       }

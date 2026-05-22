@@ -17,25 +17,38 @@ class ProfileHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Stack(
+    return Column(
       children: [
-        // Settings icon top-right
-        Positioned(
-          top: 0,
-          right: 0,
-          child: IconButton(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsPage()),
+        // Top Bar (Location Badge aligned to right)
+        Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(16),
             ),
-            icon: const Icon(Icons.settings, color: Colors.white70, size: 22),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.location_on, color: Colors.white, size: 14),
+                SizedBox(width: 4),
+                Text(
+                  "Kinshasa", 
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
           ),
         ),
+        
+        const SizedBox(height: 30), // Espace pour descendre l'avatar
+
         // Main content centered
         Column(
           children: [
             _buildAvatarSection(context, ref),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             _buildUserInfoSection(context, ref),
           ],
         ),
@@ -128,79 +141,66 @@ class ProfileHeader extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 6,
           children: [
-            Flexible(
-              child: Text(
-                user["name"] ?? "Utilisateur Oli",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-                overflow: TextOverflow.ellipsis,
+            Text(
+              (user["name"] ?? "Utilisateur Oli").toString().toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white, // Modifié pour être visible sur tous les fonds
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF0C2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.stars, size: 12, color: Color(0xFFD4A500)),
+                  SizedBox(width: 3),
+                  Text(
+                    "GOLD MEMBRE",
+                    style: TextStyle(
+                      color: Color(0xFFD4A500),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
-            // Badge de certification à côté du nom
-            if (VerificationBadge.fromUser(user) != null) ...[
-              const SizedBox(width: 6),
-              VerificationBadge(
-                type: VerificationBadge.fromUser(user)!,
-                size: 18,
-              ),
-            ],
             IconButton(
-              icon: const Icon(Icons.edit, color: Colors.white70, size: 16),
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => EditNameDialog(
-                  currentName: user["name"] ?? "Utilisateur Oli",
-                ),
+              icon: const Icon(Icons.settings, color: Colors.white70, size: 18),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsPage()),
               ),
-              padding: const EdgeInsets.all(4),
+              padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          user["phone"] ?? "Non renseigné",
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-        const SizedBox(height: 8),
-        _buildBadgesRow(),
         const SizedBox(height: 6),
+        Text(
+          "Bio: Entrepreneur passionné | Tech & Business",
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.8), // Modifié pour mode sombre
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
         _buildAddressDisplay(),
-        if (user['is_verified'] != true && user['account_type'] == 'ordinaire') ...[
-           const SizedBox(height: 12),
-           GestureDetector(
-             onTap: () => Navigator.push(
-               context, 
-               MaterialPageRoute(builder: (_) => const VerificationLandingPage()) 
-             ),
-             child: Container(
-               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-               decoration: BoxDecoration(
-                 color: Colors.white,
-                 borderRadius: BorderRadius.circular(20),
-                 border: Border.all(color: Colors.blue, width: 1.5),
-               ),
-               child: Row(
-                 mainAxisSize: MainAxisSize.min,
-                 children: const [
-                   Icon(Icons.verified, size: 14, color: Colors.blue),
-                   SizedBox(width: 6),
-                   Text("Obtenir la certification", style: TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.bold)),
-                 ],
-               ),
-             ),
-           ),
-        ]
       ],
     );
   }
@@ -244,8 +244,8 @@ class ProfileHeader extends ConsumerWidget {
           );
         }
         return const Text(
-          "Pas d'adresse enregistrée",
-          style: TextStyle(color: Colors.white38, fontSize: 11, fontStyle: FontStyle.italic),
+          "📍 Kinshasa, Gombe",
+          style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
           textAlign: TextAlign.center,
         );
       },

@@ -10,9 +10,8 @@ import '../../wallet/providers/wallet_provider.dart';
 // Widgets Refactorisés
 import 'widgets/profile_header.dart';
 import 'widgets/wallet_summary_card.dart';
-import 'widgets/order_status_bar.dart';
+import 'widgets/dashboard_section.dart';
 import 'widgets/profile_tools_grid.dart';
-import 'widgets/transaction_summary_card.dart';
 import '../../user/widgets/visited_products_section.dart';
 
 class ProfileAndWalletPage extends ConsumerWidget {
@@ -60,57 +59,75 @@ class ProfileAndWalletPage extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
-              // 1. HEADER (Blue Background + Avatar + Info)
-              Container(
-                padding: const EdgeInsets.only(top: 50, left: 20, right: 20, bottom: 30),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [oliBlue, const Color(0xFF0D3B5E), const Color(0xFF0A1A2A)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0.0, 0.6, 1.0],
+              // 1. HEADER (Background Image) & WALLET
+              Stack(
+                children: [
+                  // Image de fond
+                  Container(
+                    height: 280,
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      image: DecorationImage(
+                        image: AssetImage('assets/images/super_offers_bg.jpg'), // Placeholder en attendant kinshasa_skyline
+                        fit: BoxFit.cover,
+                      ),
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(24),
+                        bottomRight: Radius.circular(24),
+                      ),
+                    ),
                   ),
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(24),
-                    bottomRight: Radius.circular(24),
+                  // Dégradé sombre pour la lisibilité
+                  Container(
+                    height: 280,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.black.withOpacity(0.2), bgColor],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
                   ),
-                ),
-                child: Column(
-                  children: [
-                    ProfileHeader(user: user),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Wallet Card (Inserted here to overlap header slightly if needed, but keeping inside for now)
-                    const WalletSummaryCard(),
-                  ],
-                ),
+                  // Contenu principal (Header + Wallet)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 50, left: 16, right: 16, bottom: 10),
+                    child: Column(
+                      children: [
+                        ProfileHeader(user: user),
+                        const SizedBox(height: 24),
+                        const WalletSummaryCard(),
+                      ],
+                    ),
+                  ),
+                ],
               ),
 
-              // 2. MY ORDERS (Alibaba Row)
-              Transform.translate(
-                offset: const Offset(0, -20),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: OrderStatusBar(cardColor: cardColor, textColor: textColor),
-                ),
+              // 2. NOUVEAU DASHBOARD (Commandes & Suivi)
+              const SizedBox(height: 8),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: DashboardSection(),
               ),
 
-              // 2.5 TRANSACTION SUMMARY
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TransactionSummaryCard(cardColor: cardColor, textColor: textColor),
-              ),
-              const SizedBox(height: 16),
-
-              // 3. TOOLS GRID
+              // 3. OUTILS & PARAMÈTRES
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: ProfileToolsGrid(cardColor: cardColor, textColor: textColor),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              // 4. VISITED PRODUCTS (moved below tools)
+              // 4. RÉCEMMENT CONSULTÉS
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "RÉCEMMENT CONSULTÉS",
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               const VisitedProductsSection(),
               const SizedBox(height: 30),
             ],

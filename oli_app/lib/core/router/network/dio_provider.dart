@@ -26,6 +26,13 @@ final dioProvider = Provider<Dio>((ref) {
       }
       handler.next(options);
     },
+    onError: (DioException e, handler) async {
+      if (e.response?.statusCode == 401) {
+        // Token expiré ou invalide : le supprimer pour forcer la déconnexion
+        await storage.deleteAll();
+      }
+      handler.next(e);
+    },
   ));
 
   return dio;

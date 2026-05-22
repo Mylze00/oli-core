@@ -1,0 +1,176 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                   🚀 DÉMARRAGE APRÈS REDÉMARRAGE UBUNTU                      ║
+║                         Guide Express - 30 secondes                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ÉTAPE 1: Lancer WSL                                                          │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  PowerShell Windows:                                                         │
+│  wsl -d Ubuntu                                                               │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ÉTAPE 2: Aller au projet                                                     │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  $ cd ~/oli-core                                                             │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ÉTAPE 3: Lancer le script de démarrage AUTO                                  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  $ bash startup.sh                                                           │
+│                                                                              │
+│  Le script va:                                                               │
+│  ✓ Vérifier Node.js + npm                                                   │
+│  ✓ Vérifier .env.local                                                      │
+│  ✓ Tester Render Backend (oli-core.onrender.com)                           │
+│  ✓ Tester PostgreSQL Database                                               │
+│  ✓ Tester Vercel Apps                                                       │
+│  ✓ Installer dépendances (si besoin)                                        │
+│  ✓ Vérifier migrations DB                                                   │
+│  ✓ Proposer de démarrer backend                                             │
+│                                                                              │
+│  Temps: ~2-3 min (selon vitesse internet)                                    │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ÉTAPE 4: Accepter démarrage backend                                          │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Quand le script demande:                                                    │
+│  "Démarrer le backend maintenant? (y/n)"                                     │
+│                                                                              │
+│  Taper: y                                                                    │
+│                                                                              │
+│  Résultat attendu:                                                           │
+│  ✓ Server running on http://localhost:5000                                   │
+│  ✓ PostgreSQL connected                                                      │
+│  ✓ Socket.io initialized                                                     │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ÉTAPE 5 (OPTIONAL): Lancer oli_seller dans NOUVEAU terminal                  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  $ cd oli_seller                                                             │
+│  $ bash dev.sh                                                               │
+│                                                                              │
+│  OU manuellement:                                                            │
+│  $ npm run dev                                                               │
+│                                                                              │
+│  Résultat attendu:                                                           │
+│  ✓ http://localhost:5173                                                     │
+│  ✓ Vite app running                                                          │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ÉTAPE 6: Tester l'application                                                │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Browser:                                                                    │
+│  http://localhost:5173                                                       │
+│                                                                              │
+│  Backend Health Check:                                                       │
+│  $ curl http://localhost:5000/health                                         │
+│  → {"status":"ok"}                                                           │
+│                                                                              │
+│  IA Import (Test Feature):                                                   │
+│  1. Aller http://localhost:5173                                              │
+│  2. Cliquer "Ajouter Produit" → "Importation IA"                             │
+│  3. Upload image(s) de produit                                               │
+│  4. Cliquer "Analyser par IA"                                                │
+│  5. ✓ Produits auto-extraits                                                 │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                              ✅ VOILÀ!                                       ║
+║                       Vous êtes prêt à développer!                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📖 POUR EN SAVOIR PLUS:
+
+  • Guide complet (6 phases)      → GUIDE_STARTUP_UBUNTU.md
+  • Commandes rapides             → QUICK_COMMANDS.md
+  • Architecture globale          → ARCHITECTURE_DEPLOYMENT.md
+  • Index de tous les guides      → INDEX_GUIDES.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 PROBLÈME? 
+
+  Consulte:
+  $ grep -r "Problème" QUICK_COMMANDS.md
+  
+  OU:
+  $ grep -r "Troubleshooting" GUIDE_STARTUP_UBUNTU.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 CHECKLIST RAPIDE DÉMARRAGE:
+
+  ☐ wsl -d Ubuntu
+  ☐ cd ~/oli-core
+  ☐ bash startup.sh
+  ☐ y (pour démarrer backend)
+  ☐ (Nouveau terminal) cd oli_seller && bash dev.sh
+  ☐ Browser http://localhost:5173
+  ☐ ✓ PRÊT!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🌐 URLS IMPORTANTES:
+
+  Local Dev:
+    • Frontend: http://localhost:5173
+    • Backend: http://localhost:5000
+  
+  Production (Cloud):
+    • Backend Render: https://oli-core.onrender.com
+    • Seller Vercel: https://oli-seller.vercel.app
+    • Admin Vercel: https://oli-admin-smoky.vercel.app
+  
+  Dashboards:
+    • Render: https://dashboard.render.com
+    • Vercel: https://vercel.com/dashboard
+    • OpenRouter: https://openrouter.ai/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 CONFIGURATION ACTUELLEMENT EN PLACE:
+
+  ✅ Backend (.env.local)
+     • OPENROUTER_API_KEY = Configurée ✓
+     • DB_HOST = Render PostgreSQL ✓
+     • Autres variables = Templates ✓
+  
+  ✅ Frontend (oli_seller/.env.local)
+     • VITE_OPENROUTER_API_KEY = Configurée ✓
+     • VITE_API_URL = Configurée ✓
+  
+  ✅ Scripts d'Automatisation
+     • startup.sh = Créé ✓
+     • oli_seller/dev.sh = Créé ✓
+  
+  ✅ Documentation
+     • 4 guides complets = Créés ✓
+     • Architecture diagrams = Inclus ✓
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📅 Créé: 20 Mai 2026
+🎯 Objectif: Démarrage Express après redémarrage Ubuntu
+✨ Status: 100% Prêt!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

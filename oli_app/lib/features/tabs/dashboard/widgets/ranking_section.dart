@@ -14,13 +14,12 @@ class RankingSectionHelper {
   // ── Bannières promotionnelles ────────────────────────────────────────────
   static const List<Map<String, dynamic>> promoMessages = [
     {
-      'title': 'Guérite Oli ',
-      'text':
-          'Achetez et récupérez vos commandes dans le guérite Oli de votre supermarché',
-      'bg_image': 'assets/images/guerite_bg.png', // Utilisation de votre image
+      'title': '',
+      'text': '',
+      'bg_image': 'assets/images/bandes/pub service fintech.png', // Utilisation de votre image
       'gradient1': Color(0xFF4A0E8F),
       'gradient2': Color(0xFF2D0A5E),
-      'paddingV': 20.0,
+      'paddingV': 50.0,
       'titleSize': 17.0,
       'textSize': 13.0,
     },
@@ -156,69 +155,89 @@ class RankingSectionHelper {
       } else {
       final Color? bgCol = promo.containsKey('bg_color') ? promo['bg_color'] as Color : null;
       final String? bgImg = promo.containsKey('bg_image') ? promo['bg_image'] as String : null;
-      final Color grad1 = promo.containsKey('gradient1') ? promo['gradient1'] as Color : (bgCol ?? Colors.blue);
-      final Color grad2 = promo.containsKey('gradient2') ? promo['gradient2'] as Color : (bgCol ?? Colors.blue);
-      final double padV = promo['paddingV'] as double;
-      final double tSize = promo['titleSize'] as double;
-      final double dSize = promo['textSize'] as double;
-      final bool isCentered = promo.containsKey('isCentered') ? promo['isCentered'] as bool : false;
+      final String titleStr = promo['title'] as String;
+      final String textStr = promo['text'] as String;
+      final bool isEmptyContent = titleStr.isEmpty && textStr.isEmpty;
+
       promoIndex++;
 
-      slivers.add(SliverToBoxAdapter(
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16), // horizontal: 16 réduit la largeur
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12), // Coins arrondis
-            color: bgCol,
-            image: bgImg != null
-                ? DecorationImage(
-                    image: AssetImage(bgImg),
-                    fit: BoxFit.cover,
-                  )
-                : null,
-            gradient: (bgCol == null && bgImg == null)
-                ? LinearGradient(
-                    colors: [grad1, grad2],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            boxShadow: [
-              BoxShadow(
-                color: grad1.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+      if (isEmptyContent && bgImg != null) {
+        slivers.add(SliverToBoxAdapter(
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                bgImg,
+                fit: BoxFit.contain,
               ),
-            ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: isCentered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-            children: [
-              Text(
-                promo['title'] as String,
-                textAlign: isCentered ? TextAlign.center : TextAlign.left,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: tSize,
-                  fontWeight: FontWeight.w800,
+        ));
+      } else {
+        final Color grad1 = promo.containsKey('gradient1') ? promo['gradient1'] as Color : (bgCol ?? Colors.blue);
+        final Color grad2 = promo.containsKey('gradient2') ? promo['gradient2'] as Color : (bgCol ?? Colors.blue);
+        final double padV = promo['paddingV'] as double;
+        final double tSize = promo['titleSize'] as double;
+        final double dSize = promo['textSize'] as double;
+        final bool isCentered = promo.containsKey('isCentered') ? promo['isCentered'] as bool : false;
+
+        slivers.add(SliverToBoxAdapter(
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16), // horizontal: 16 réduit la largeur
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: padV),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12), // Coins arrondis
+              color: bgCol,
+              image: bgImg != null
+                  ? DecorationImage(
+                      image: AssetImage(bgImg),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+              gradient: (bgCol == null && bgImg == null)
+                  ? LinearGradient(
+                      colors: [grad1, grad2],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              boxShadow: [
+                BoxShadow(
+                  color: grad1.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                promo['text'] as String,
-                textAlign: isCentered ? TextAlign.center : TextAlign.left,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: dSize,
-                  height: 1.3,
-                  fontWeight: FontWeight.w400,
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: isCentered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titleStr,
+                  textAlign: isCentered ? TextAlign.center : TextAlign.left,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: tSize,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  textStr,
+                  textAlign: isCentered ? TextAlign.center : TextAlign.left,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: dSize,
+                    height: 1.3,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ));
+        ));
+      }
       } // fin else bannière classique
     }
 

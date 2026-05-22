@@ -502,27 +502,39 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                 const SizedBox(height: 12),
                 Consumer(
                   builder: (context, ref, _) {
-                    final productsState = ref.watch(marketProductsProvider);
-                    return productsState.when(
-                      data: (allProducts) {
-                        debugPrint("🔍 [DEBUG] Vérification des ${allProducts.length} produits pour similarité avec la catégorie ${p.category} ou ${p.subcategory}");
-                        
-                        // ── Produits du MÊME VENDEUR en priorité ──
-                        final sellerProducts = allProducts.where((prod) =>
+                    final marketState = ref.watch(marketProductsProvider);
+                    final featuredProducts = ref.watch(featuredProductsProvider);
+
+                    return marketState.when(
+                      data: (marketProducts) {
+                        // ── Choisir la bonne source selon le vendeur du produit ──
+                        // Si le produit vient d'OLI (présent dans featured), on cherche dans featured
+                        // Sinon on cherche dans le marketplace général
+                        final isOliProduct = featuredProducts.any((fp) => fp.id == p.id);
+                        final sourcePool = isOliProduct ? featuredProducts : marketProducts;
+
+                        debugPrint("🔍 [SimilarProducts] Source: ${isOliProduct ? 'OLI (featured)' : 'Marketplace'} — ${sourcePool.length} produits disponibles");
+
+                        // ── 1. Produits du MÊME VENDEUR en priorité ──
+                        final sellerProducts = sourcePool.where((prod) =>
                           prod.id != p.id &&
                           prod.sellerId == p.sellerId
-                        ).take(6).toList();
+                        ).toList()..shuffle();
 
-                        // Fallback : si le vendeur n'a pas d'autres produits → même catégorie
-                        final similarProducts = sellerProducts.length >= 2
-                            ? sellerProducts
-                            : allProducts.where((prod) =>
-                                prod.id != p.id &&
-                                prod.sellerId != p.sellerId &&
-                                (prod.category == p.category || prod.subcategory == p.subcategory)
-                              ).take(6).toList();
+                        final sellerProductsTrimmed = sellerProducts.take(6).toList();
 
-                        debugPrint("🔍 [DEBUG] Produits du même vendeur : ${sellerProducts.length} → affichés : ${similarProducts.length}");
+                        // ── 2. Fallback : même catégorie, tous vendeurs confondus ──
+                        final categoryFallback = sourcePool.where((prod) =>
+                          prod.id != p.id &&
+                          prod.sellerId != p.sellerId &&
+                          (prod.category == p.category || prod.subcategory == p.subcategory)
+                        ).toList()..shuffle();
+
+                        final similarProducts = sellerProductsTrimmed.length >= 2
+                            ? sellerProductsTrimmed
+                            : categoryFallback.take(6).toList();
+
+                        debugPrint("🔍 [SimilarProducts] Même vendeur: ${sellerProductsTrimmed.length} → affichés: ${similarProducts.length}");
 
                         if (similarProducts.isEmpty) {
                           return Padding(
@@ -543,7 +555,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                             crossAxisCount: 2,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
-                            childAspectRatio: 0.7, // Ratio 2 produits par ligne adaptés pour l'image
+                            childAspectRatio: 0.7,
                           ),
                           itemCount: similarProducts.length,
                           itemBuilder: (context, index) {
