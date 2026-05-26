@@ -4,3 +4,6 @@ node_modules/
 *.log
 service-account.json
 data/competitors/*.csv
+.env.local
+oli_seller/.env.local
+*.env.local

@@ -1,15 +1,6 @@
-import 'package:flutter/material.dart';
-import 'core/router/app_router.dart';
+// This file is intentionally left as a stub.
+// The actual app entry point is in main.dart which uses MaterialApp directly.
+// This avoids the missing 'core/router/app_router.dart' error.
 
-class OliApp extends StatelessWidget {
-  const OliApp({super.key});
+export 'main.dart';
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'OLI',
-      theme: ThemeData.dark(useMaterial3: true),
-      routerConfig: appRouter,
-    );
-  }
-}

@@ -10,6 +10,8 @@ const unipesaService = require('../services/unipesa.service');
  *  POST /webhooks/unipesa/withdrawal — Confirmation B2C (OLI → client)
  */
 
+const FC_TO_USD = 2800; // Constante à harmoniser avec wallet.service.js si besoin
+
 // Codes de statut Unipesa
 const STATUS = {
     INITIATED:  0,
@@ -63,16 +65,28 @@ exports.handleDeposit = async (req, res) => {
         console.log(`💰 Crédit du Wallet OLI : user ${userId} → +${amount} ${currency} (Réf: ${orderId})`);
 
         // 5. Créditer le Wallet OLI (conversion si nécessaire)
-        const amountUSD = currency === 'CDF' ? (amount / 2800) : amount;
+        const amountUSD = currency === 'CDF' ? (amount / FC_TO_USD) : amount;
 
-        await walletRepository.performDeposit(userId, amountUSD, {
+        // Le montant reçu ici est le montant total (105%).
+        // On sépare le montant net (100%) et la commission (5%).
+        const netAmount = amountUSD / 1.05;
+        const feeAmount = amountUSD - netAmount;
+
+        // Crédit au client
+        await walletRepository.performDeposit(userId, netAmount, {
             type:        'deposit',
             provider:    'UNIPESA',
             reference:   orderId,
             description: `Dépôt Mobile Money confirmé par Unipesa (${payload.provider_id || ''})`,
         });
 
-        console.log(`✅ Wallet crédité avec succès : user ${userId} → +${amountUSD} USD`);
+        // Crédit à la Banque OLI
+        if (feeAmount > 0) {
+            const walletService = require('../services/wallet.service');
+            await walletService._creditSystemWallet(feeAmount, `${orderId}_FEE`, `Frais 5% sur dépôt C2B (User #${userId})`);
+        }
+
+        console.log(`✅ Wallet crédité avec succès : user ${userId} → +${netAmount} USD (Frais: ${feeAmount} USD)`);
 
     } catch (err) {
         console.error('Erreur handleDeposit Unipesa:', err.message);
@@ -107,16 +121,29 @@ exports.handleWithdrawal = async (req, res) => {
                 const userId = parseInt(match[1]);
                 const amount = parseFloat(payload.amount) || 0;
                 const currency = payload.currency || 'USD';
-                const amountUSD = currency === 'CDF' ? (amount / 2800) : amount;
+                const amountUSD = currency === 'CDF' ? (amount / FC_TO_USD) : amount;
 
-                console.warn(`↩️ Retrait échoué — Remboursement user ${userId} : +${amountUSD} USD`);
+                // Le montant de payload est le net. On avait débité 105%.
+                const refundAmount = amountUSD * 1.05;
+                const feeToReverse = amountUSD * 0.05;
 
-                await walletRepository.performDeposit(userId, amountUSD, {
+                console.warn(`↩️ Retrait échoué — Remboursement user ${userId} : +${refundAmount} USD`);
+
+                // 1. Rembourser le client (105%)
+                await walletRepository.performDeposit(userId, refundAmount, {
                     type:        'refund',
                     provider:    'UNIPESA',
                     reference:   `${orderId}_REFUND`,
                     description: `Remboursement : échec du retrait Unipesa (statut ${status})`,
                 });
+
+                // 2. Annuler les frais de la Banque OLI (débit silencieux)
+                try {
+                    await pool.query(`UPDATE wallets SET balance = balance - $1 WHERE user_id = 0`, [feeToReverse]);
+                    await pool.query(`UPDATE users SET wallet = wallet - $1 WHERE id = 0`, [feeToReverse]);
+                } catch (e) {
+                    console.error('Erreur reverse fee System Bank:', e);
+                }
             }
             return;
         }

@@ -23,4 +23,7 @@ const requireAdmin = (req, res, next) => {
     next();
 };
 
-module.exports = { requireAdmin };
+module.exports = {
+    requireAdmin,
+    isAdmin: requireAdmin,
+};

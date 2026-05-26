@@ -70,4 +70,15 @@ class ApiConfig {
   static const String supportTickets = '$baseUrl/support/tickets';
   static String supportTicketDetail(int id) => '$baseUrl/support/tickets/$id';
   static String supportTicketReply(int id) => '$baseUrl/support/tickets/$id/reply';
+
+  // --- OLI Bank — Portail Cryptographique ---
+  static const String bankPortal      = '$baseUrl/bank/portal';
+  static const String bankLedger      = '$baseUrl/bank/ledger';
+  static const String bankAddress     = '$baseUrl/bank/address';
+  static const String bankInit        = '$baseUrl/bank/init';
+  static const String bankEscrow      = '$baseUrl/bank/escrow';
+  static const String bankStats       = '$baseUrl/bank/stats';
+  static String bankVerify(String txHash) => '$baseUrl/bank/verify/$txHash';
+  static String bankEscrowRelease(int orderId) => '$baseUrl/bank/escrow/$orderId/release';
+  static String bankEscrowRefund(int orderId)  => '$baseUrl/bank/escrow/$orderId/refund';
 }

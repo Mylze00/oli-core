@@ -48,7 +48,19 @@ async function createUser(phone) {
         RETURNING *
       `;
       const { rows } = await pool.query(query, [phone, idOli]);
-      return rows[0];
+      const newUser = rows[0];
+
+      // 🏦 Initialiser le portail OLI Bank (async non-bloquant)
+      setImmediate(async () => {
+        try {
+          const oliBank = require('../services/oli_bank.service');
+          await oliBank.initializeUserPortal(newUser.id);
+        } catch (e) {
+          console.warn(`⚠️ OLI Bank init échouée pour user #${newUser.id}:`, e.message);
+        }
+      });
+
+      return newUser;
     } catch (err) {
       if (err.code === '23505' && err.constraint === 'users_id_oli_key') { // Unique violation
         idOli = generateIdOli(phone);

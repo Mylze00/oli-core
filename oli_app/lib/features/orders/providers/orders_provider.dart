@@ -38,6 +38,8 @@ class OrderService {
     String paymentMethod = 'wallet',
     double deliveryFee = 0,
     String? deliveryMethodId,
+    String? mobileMoneyPhone,
+    String? mobileMoneyProvider,
   }) async {
     try {
       final response = await _dio.post(
@@ -48,6 +50,8 @@ class OrderService {
           'paymentMethod': paymentMethod,
           'deliveryFee': deliveryFee,
           if (deliveryMethodId != null) 'deliveryMethodId': deliveryMethodId,
+          if (mobileMoneyPhone != null && mobileMoneyPhone.isNotEmpty) 'mobileMoneyPhone': mobileMoneyPhone,
+          if (mobileMoneyProvider != null && mobileMoneyProvider.isNotEmpty) 'mobileMoneyProvider': mobileMoneyProvider,
         },
       );
       

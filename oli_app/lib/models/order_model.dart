@@ -13,6 +13,9 @@ class Order {
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<OrderItem> items;
+  /// Référence de commande Unipesa (ex: DEP_42_1748304000000)
+  /// Renseignée après l'initiation d'un paiement Mobile Money.
+  final String? unipesaOrderId;
 
   Order({
     required this.id,
@@ -28,6 +31,7 @@ class Order {
     required this.createdAt,
     required this.updatedAt,
     required this.items,
+    this.unipesaOrderId,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -46,6 +50,7 @@ class Order {
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       items: itemsJson.map((e) => OrderItem.fromJson(e)).toList(),
+      unipesaOrderId: json['unipesa_order_id'],
     );
   }
 

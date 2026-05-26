@@ -1,12 +1,17 @@
-﻿import 'dart:async';
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import '../../../models/order_model.dart';
 import '../../../providers/exchange_rate_provider.dart';
+import '../../../core/storage/secure_storage_service.dart';
 import 'payment_failed_page.dart';
 import 'order_success_page.dart';
 
-/// Page affichee pendant l'attente de validation USSD Mobile Money (Unipesa C2B)
+/// Page "En attente de paiement Mobile Money"
+/// Affichée après soumission d'un paiement C2B Unipesa.
+/// Le client doit valider sur son téléphone via USSD / notification Push.
 class PaymentPendingPage extends ConsumerStatefulWidget {
   final Order order;
   final String phoneNumber;
@@ -20,55 +25,118 @@ class PaymentPendingPage extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<PaymentPendingPage> createState() => _PaymentPendingPageState();
+  ConsumerState<PaymentPendingPage> createState() =>
+      _PaymentPendingPageState();
 }
 
 class _PaymentPendingPageState extends ConsumerState<PaymentPendingPage>
     with TickerProviderStateMixin {
-  late AnimationController _pulseCtrl;
-  late Animation<double> _pulse;
+  late AnimationController _pulseController;
+  late AnimationController _dotController;
+  late Animation<double> _pulseAnimation;
   Timer? _statusTimer;
   Timer? _timeoutTimer;
-  Timer? _dotTimer;
-  int _elapsed = 0;
+  int _secondsElapsed = 0;
+  static const int _maxWaitSeconds = 180;
   int _dotCount = 0;
-  static const int _maxSec = 180;
 
   @override
   void initState() {
     super.initState();
-    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))
-      ..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 0.92, end: 1.08).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 0.92, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    _dotTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      setState(() => _dotCount = (_dotCount + 1) % 4);
-    });
+
+    _dotController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          setState(() => _dotCount = (_dotCount + 1) % 4);
+          _dotController.reset();
+          _dotController.forward();
+        }
+      });
+    _dotController.forward();
+
     _statusTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _checkStatus();
-      setState(() => _elapsed += 5);
+      _checkPaymentStatus();
+      setState(() => _secondsElapsed += 5);
     });
-    _timeoutTimer = Timer(const Duration(seconds: _maxSec), () => _toFailed('timeout'));
+
+    _timeoutTimer = Timer(
+      const Duration(seconds: _maxWaitSeconds),
+      () => _navigateToFailed(reason: 'timeout'),
+    );
   }
 
   @override
   void dispose() {
-    _pulseCtrl.dispose();
-    _dotTimer?.cancel();
+    _pulseController.dispose();
+    _dotController.dispose();
     _statusTimer?.cancel();
     _timeoutTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _checkStatus() async {
-    // TODO: interroger le backend pour le statut du paiement
-    // final status = await ref.read(orderServiceProvider).checkPaymentStatus(widget.order.id);
-    // if (status == 'paid') _toSuccess();
-    // if (status == 'failed') _toFailed('rejected');
+  Future<void> _checkPaymentStatus() async {
+    try {
+      final apiBase = const String.fromEnvironment(
+        'API_BASE_URL',
+        defaultValue: 'https://oli-core.onrender.com',
+      );
+
+      // Récupérer l'oliOrderId stocké lors de l'initiation du paiement
+      final oliOrderId = widget.order.unipesaOrderId;
+      if (oliOrderId == null || oliOrderId.isEmpty) return;
+
+      final token = await _getAuthToken();
+      if (token == null) return;
+
+      final response = await http.get(
+        Uri.parse('$apiBase/api/unipesa/status/$oliOrderId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final status = data['status'] as String?;
+
+        if (status == 'success') {
+          _navigateToSuccess();
+        } else if (status == 'failed' || status == 'cancelled') {
+          _navigateToFailed(reason: 'rejected');
+        } else if (status == 'timeout') {
+          _navigateToFailed(reason: 'timeout');
+        }
+        // Si 'pending' → on attend le prochain cycle de polling
+      }
+    } catch (e) {
+      // Erreur réseau non fatale — on réessaie au prochain tick
+      debugPrint('⚠️ Erreur polling statut paiement: $e');
+    }
   }
 
-  void _toSuccess() {
+  /// Récupère le token JWT de l'utilisateur via SecureStorageService.
+  Future<String?> _getAuthToken() async {
+    try {
+      final storage = ref.read(secureStorageProvider);
+      return await storage.getToken();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _navigateToSuccess() {
     if (!mounted) return;
     _statusTimer?.cancel();
     _timeoutTimer?.cancel();
@@ -78,34 +146,30 @@ class _PaymentPendingPageState extends ConsumerState<PaymentPendingPage>
     );
   }
 
-  void _toFailed(String reason) {
+  void _navigateToFailed({required String reason}) {
     if (!mounted) return;
     _statusTimer?.cancel();
     _timeoutTimer?.cancel();
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => PaymentFailedPage(order: widget.order, reason: reason)),
+      MaterialPageRoute(
+        builder: (_) =>
+            PaymentFailedPage(order: widget.order, reason: reason),
+      ),
     );
   }
 
-  int get _minsLeft => ((_maxSec - _elapsed) / 60).ceil().clamp(0, 99);
-  String get _dotsStr => '.' * _dotCount;
+  String get _dots => '.' * _dotCount;
+  int get _minutesLeft =>
+      ((_maxWaitSeconds - _secondsElapsed) / 60).ceil().clamp(0, 99);
 
   String get _providerIcon {
-    final n = widget.providerName.toLowerCase();
-    if (n.contains('orange')) return 'O';
-    if (n.contains('mpesa') || n.contains('vodacom')) return 'M';
-    if (n.contains('airtel')) return 'A';
-    if (n.contains('africell')) return 'AF';
-    return 'MM';
-  }
-
-  Color get _providerColor {
-    final n = widget.providerName.toLowerCase();
-    if (n.contains('orange')) return const Color(0xFFFF6600);
-    if (n.contains('mpesa') || n.contains('vodacom')) return const Color(0xFFE60000);
-    if (n.contains('airtel')) return const Color(0xFF0047AB);
-    return Colors.green;
+    final name = widget.providerName.toLowerCase();
+    if (name.contains('orange')) return '🟠';
+    if (name.contains('mpesa') || name.contains('vodacom')) return '🔴';
+    if (name.contains('airtel')) return '🔵';
+    if (name.contains('africell')) return '🟢';
+    return '📱';
   }
 
   @override
@@ -118,177 +182,257 @@ class _PaymentPendingPageState extends ConsumerState<PaymentPendingPage>
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 60),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.vertical,
+            ),
+            child: IntrinsicHeight(
+              child: Column(
+                children: [
+                  const SizedBox(height: 60),
 
-              // Icone animee
-              AnimatedBuilder(
-                animation: _pulse,
-                builder: (_, child) => Transform.scale(scale: _pulse.value, child: child),
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.orange.withOpacity(0.08),
-                    border: Border.all(color: Colors.orange.withOpacity(0.4), width: 2),
-                  ),
-                  child: const Icon(Icons.phone_android_rounded, color: Colors.orange, size: 56),
-                ),
-              ),
-
-              const SizedBox(height: 36),
-
-              Text(
-                'En attente\',
-                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Validez le paiement sur votre telephone',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[400], fontSize: 15),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                widget.phoneNumber,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.orange, fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Card instructions
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141414),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header operateur
-                    Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: _providerColor.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: _providerColor.withOpacity(0.3)),
-                          ),
-                          child: Center(
-                            child: Text(
-                              _providerIcon,
-                              style: TextStyle(color: _providerColor, fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
-                          ),
+                  // Icône animée pulsante
+                  AnimatedBuilder(
+                    animation: _pulseAnimation,
+                    builder: (_, child) =>
+                        Transform.scale(scale: _pulseAnimation.value, child: child),
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            Colors.orange.withOpacity(0.25),
+                            Colors.orange.withOpacity(0.05),
+                          ],
                         ),
-                        const SizedBox(width: 12),
+                        border: Border.all(
+                          color: Colors.orange.withOpacity(0.5),
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.phone_android_rounded,
+                        color: Colors.orange,
+                        size: 56,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 36),
+
+                  Text(
+                    'En attente$_dots',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Validez le paiement sur votre téléphone',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey[400], fontSize: 15),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.phoneNumber,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.orange,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Card instructions
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141414),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.orange.withOpacity(0.25)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header provider
+                        Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _providerIcon,
+                                  style: const TextStyle(fontSize: 22),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.providerName,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                Text(
+                                  widget.phoneNumber,
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                'En cours',
+                                style: TextStyle(
+                                  color: Colors.orange[300],
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 20),
+                        const Divider(color: Color(0xFF252525)),
+                        const SizedBox(height: 16),
+
+                        // Étapes
+                        _buildStep(
+                          '1',
+                          'Vérifiez votre téléphone',
+                          'Une notification ou message USSD a été envoyé',
+                          Colors.orange,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildStep(
+                          '2',
+                          'Entrez votre code PIN',
+                          'Saisissez le PIN de votre compte ${widget.providerName}',
+                          Colors.orange,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildStep(
+                          '3',
+                          'Confirmez le montant',
+                          ex.formatProductPrice(widget.order.totalAmount),
+                          Colors.green,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Récap montant
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141414),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF252525)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(widget.providerName,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
-                            Text(widget.phoneNumber,
-                                style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                            Text(
+                              'Commande #${widget.order.id}',
+                              style: TextStyle(
+                                  color: Colors.grey[500], fontSize: 12),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              ex.formatProductPrice(widget.order.totalAmount),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ],
                         ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(20),
+                        if (_minutesLeft > 0)
+                          Row(
+                            children: [
+                              Icon(Icons.timer_outlined,
+                                  color: Colors.grey[600], size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$_minutesLeft min',
+                                style: TextStyle(
+                                    color: Colors.grey[600], fontSize: 12),
+                              ),
+                            ],
                           ),
-                          child: Text('En cours',
-                              style: TextStyle(color: Colors.orange[300], fontSize: 11, fontWeight: FontWeight.w600)),
-                        ),
                       ],
                     ),
-
-                    const SizedBox(height: 20),
-                    const Divider(color: Color(0xFF222222)),
-                    const SizedBox(height: 16),
-
-                    // Etapes
-                    _buildStep('1', 'Verifiez votre telephone', 'Une notification USSD a ete envoyee', Colors.orange),
-                    const SizedBox(height: 16),
-                    _buildStep('2', 'Entrez votre code PIN', 'PIN de votre compte \', Colors.orange),
-                    const SizedBox(height: 16),
-                    _buildStep('3', 'Confirmez le montant',
-                        ex.formatProductPrice(widget.order.totalAmount), Colors.green),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Montant et timer
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141414),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF222222)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Commande #\',
-                            style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                        const SizedBox(height: 2),
-                        Text(ex.formatProductPrice(widget.order.totalAmount),
-                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Icon(Icons.timer_outlined, color: Colors.grey[600], size: 14),
-                        const SizedBox(width: 4),
-                        Text('\ min',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Bouton annuler
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => _toFailed('cancelled'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.grey[400],
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    side: BorderSide(color: Colors.grey[800]!),
                   ),
-                  child: const Text('Annuler le paiement', style: TextStyle(fontSize: 15)),
-                ),
+
+                  const SizedBox(height: 32),
+
+                  // Bouton annuler
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => _navigateToFailed(reason: 'cancelled'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.grey[400],
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        side: BorderSide(color: Colors.grey[800]!),
+                      ),
+                      child: const Text(
+                        'Annuler le paiement',
+                        style: TextStyle(fontSize: 15),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                ],
               ),
-              const SizedBox(height: 32),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStep(String number, String title, String subtitle, Color color) {
+  Widget _buildStep(
+      String number, String title, String subtitle, Color color) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -296,12 +440,16 @@ class _PaymentPendingPageState extends ConsumerState<PaymentPendingPage>
           width: 28,
           height: 28,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withOpacity(0.12),
             shape: BoxShape.circle,
-            border: Border.all(color: color.withOpacity(0.35)),
+            border: Border.all(color: color.withOpacity(0.4)),
           ),
           child: Center(
-            child: Text(number, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+            child: Text(
+              number,
+              style: TextStyle(
+                  color: color, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
           ),
         ),
         const SizedBox(width: 14),
@@ -309,9 +457,18 @@ class _PaymentPendingPageState extends ConsumerState<PaymentPendingPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+              Text(
+                title,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 2),
-              Text(subtitle, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+              Text(
+                subtitle,
+                style: TextStyle(color: Colors.grey[500], fontSize: 12),
+              ),
             ],
           ),
         ),

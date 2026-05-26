@@ -106,8 +106,8 @@ class BonDealsGrid extends StatelessWidget {
                   borderRadius: BorderRadius.only(topLeft: Radius.circular(8), bottomRight: Radius.circular(4)),
                 ),
                 child: Text(
-                  product.promoPrice != null && (double.tryParse(product.price) ?? 0) > 0
-                    ? "-${((1 - (product.promoPrice! / (double.tryParse(product.price) ?? 1))) * 100).round()}%" 
+                  product.discountPrice != null && (double.tryParse(product.price) ?? 0) > 0
+                    ? "-${((1 - (product.discountPrice! / (double.tryParse(product.price) ?? 1))) * 100).round()}%" 
                     : "PROMO",
                   style: TextStyle(color: Colors.white, fontSize: isSmall ? 8 : 10, fontWeight: FontWeight.bold),
                 ),
@@ -131,7 +131,7 @@ class BonDealsGrid extends StatelessWidget {
                       )
                     ),
                   Text(
-                    "${product.promoPrice ?? product.price}\$", 
+                    "${product.discountPrice ?? product.price}\$", 
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isSmall ? 11 : 13)
                   ),
                 ],

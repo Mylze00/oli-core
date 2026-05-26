@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../orders/providers/orders_provider.dart';
 import '../../user/providers/address_provider.dart';
-import '../../user/models/address_model.dart';
 import '../../user/screens/address_management_page.dart';
+import '../../../core/user/user_model.dart';
+import '../../../core/user/user_provider.dart';
 import 'stripe_payment_page.dart';
 import 'order_success_page.dart';
 import 'payment_pending_page.dart';
+import 'payment_methods_page.dart';
 import '../../../providers/exchange_rate_provider.dart';
 
 /// Page de Checkout / Validation de commande
@@ -26,6 +28,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   String _paymentMethod = 'wallet';
   bool _isLoading = false;
   double _deliveryFee = 0.0;
+  String _mobileMoneyPhone = '';
+  final String _mobileMoneyProvider = 'Unipesa';
+  late final TextEditingController _mobileMoneyController;
 
   /// Retourne les items à checkout (achat direct ou panier)
   List<CartItem> get _checkoutItems {
@@ -43,6 +48,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   @override
   void initState() {
     super.initState();
+    _mobileMoneyController = TextEditingController(text: _mobileMoneyPhone);
+
     // Initialiser la livraison depuis l'item sélectionné (achat direct ou premier item du panier)
     if (widget.directPurchaseItem != null) {
       _deliveryFee = widget.directPurchaseItem!.deliveryPrice;
@@ -57,9 +64,24 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
     // Charger les adresses de l'utilisateur
     Future.microtask(() => ref.read(addressProvider.notifier).loadAddresses());
+
+    ref.listen<AsyncValue<User>>(userProvider, (previous, next) {
+      next.whenData((user) {
+        if (user.phone != null && user.phone!.isNotEmpty && _mobileMoneyPhone.isEmpty) {
+          setState(() {
+            _mobileMoneyPhone = user.phone!;
+            _mobileMoneyController.text = user.phone!;
+          });
+        }
+      });
+    });
   }
 
-
+  @override
+  void dispose() {
+    _mobileMoneyController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +90,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final total = subtotal + _deliveryFee;
     ref.watch(exchangeRateProvider);
     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+    final userAsync = ref.watch(userProvider);
+    final effectiveMobileMoneyPhone = _mobileMoneyPhone.isNotEmpty ? _mobileMoneyPhone : userAsync.maybeWhen(data: (user) => user.phone ?? '', orElse: () => '');
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -147,7 +171,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             _buildSectionTitle('Méthode de paiement'),
             _buildPaymentOption('wallet', 'Wallet OLI', Icons.account_balance_wallet, Colors.green),
             _buildPaymentOption('card', 'Carte bancaire', Icons.credit_card, Colors.blue),
-            _buildPaymentOption('mobile_money', 'Mobile Money', Icons.phone_android, Colors.orange),
+            _buildPaymentOption('mobile_money', 'Mobile Money (Unipesa)', Icons.phone_android, Colors.orange),
+            if (_paymentMethod == 'mobile_money') ...[
+              const SizedBox(height: 12),
+              _buildMobileMoneyDetails(effectiveMobileMoneyPhone),
+            ],
 
             const SizedBox(height: 32),
 
@@ -197,7 +225,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           decoration: BoxDecoration(
             color: const Color(0xFF1A1A1A),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.withOpacity(0.5), width: 1),
+            border: Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1),
           ),
           child: Row(
             children: [
@@ -226,7 +254,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.3), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,7 +266,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.15),
+                  color: Colors.blue.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(defaultAddr.label, style: const TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.w600)),
@@ -290,6 +318,62 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             if (isSelected) Icon(Icons.check_circle, color: color),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMobileMoneyDetails(String phone) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.phone_android, color: Colors.orange),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Paiement Mobile Money Unipesa',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsPage())),
+                child: const Text('Gérer', style: TextStyle(color: Colors.orange)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _mobileMoneyController,
+            keyboardType: TextInputType.phone,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              labelText: 'Numéro Unipesa',
+              hintText: '+243 820 000 000',
+              labelStyle: const TextStyle(color: Colors.grey),
+              hintStyle: TextStyle(color: Colors.grey.shade600),
+              filled: true,
+              fillColor: Colors.white10,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.orange)),
+            ),
+            onChanged: (value) => setState(() => _mobileMoneyPhone = value.trim()),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            phone.isNotEmpty
+                ? 'Nous utiliserons le numéro enregistré pour envoyer l’invitation USSD.'
+                : 'Renseignez le numéro de votre compte Mobile Money Unipesa.',
+            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+          ),
+        ],
       ),
     );
   }
@@ -357,7 +441,16 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       );
       return;
     }
+
     final deliveryAddress = defaultAddr?.fullAddress ?? '';
+    final mobileMoneyPhone = _paymentMethod == 'mobile_money' ? _mobileMoneyPhone : '';
+
+    if (_paymentMethod == 'mobile_money' && mobileMoneyPhone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez renseigner votre numéro Mobile Money'), backgroundColor: Colors.red),
+      );
+      return;
+    }
 
     // #20 — Dialog de confirmation pour wallet et mobile money
     if (_paymentMethod != 'card') {
@@ -377,9 +470,16 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Méthode : ${_paymentMethod == 'wallet' ? 'Portefeuille Oli' : 'Mobile Money'}',
+                'Méthode : ${_paymentMethod == 'wallet' ? 'Portefeuille Oli' : 'Mobile Money (Unipesa)'}',
                 style: const TextStyle(color: Colors.white70),
               ),
+              if (_paymentMethod == 'mobile_money') ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Numéro : $mobileMoneyPhone',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ],
               const SizedBox(height: 4),
               Text(
                 'Adresse : $deliveryAddress',
@@ -424,6 +524,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         deliveryFee: _deliveryFee,
         deliveryMethodId: widget.directPurchaseItem?.deliveryMethod
             ?? (_checkoutItems.isNotEmpty ? _checkoutItems.first.deliveryMethod : 'Standard'),
+        mobileMoneyPhone: _paymentMethod == 'mobile_money' ? _mobileMoneyPhone : null,
+        mobileMoneyProvider: _paymentMethod == 'mobile_money' ? _mobileMoneyProvider : null,
       );
 
       if (order != null) {
@@ -439,11 +541,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
         // SI PAIEMENT CARTE -> Redirection vers écran Stripe
         if (_paymentMethod == 'card') {
-           Navigator.pushReplacement(
-             context,
-             MaterialPageRoute(builder: (_) => StripePaymentPage(order: order)),
-           );
-           return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => StripePaymentPage(order: order)),
+          );
+          return;
         }
 
         if (_paymentMethod == 'mobile_money') {
@@ -459,6 +561,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           );
           return;
         }
+
         // WALLET -> Confirmation immediate
         Navigator.pushReplacement(
           context,

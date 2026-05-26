@@ -90,4 +90,5 @@ module.exports = {
     requireAuth,
     optionalAuth,
     requireRole,
+    authenticateToken: requireAuth,
 };

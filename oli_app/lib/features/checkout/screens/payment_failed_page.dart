@@ -76,7 +76,7 @@ class PaymentFailedPage extends ConsumerWidget {
                 ),
                 child: Column(
                   children: [
-                    _buildRow('Commande', '#\', Colors.grey[300]!),
+                    _buildRow('Commande', '#${order.id}', Colors.grey[300]!),
                     const SizedBox(height: 12),
                     _buildRow('Montant', ex.formatProductPrice(order.totalAmount), Colors.white,
                         fontSize: 16, bold: true),
@@ -126,7 +126,7 @@ class PaymentFailedPage extends ConsumerWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Votre commande #\ est conservee. Reessayez le paiement depuis Mes commandes.',
+                        'Votre commande #${order.id} est conservee. Reessayez le paiement depuis Mes commandes.',
                         style: TextStyle(color: Colors.blue[200], fontSize: 12, height: 1.4),
                       ),
                     ),

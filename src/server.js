@@ -31,7 +31,9 @@ const adminRoutes = require("./routes/admin.routes"); // ✨ Routes admin
 const sellerRoutes = require("./routes/seller.routes"); // ✨ Routes vendeur
 const paymentRoutes = require("./routes/payment.routes"); // 💳 Routes Paiement (Simulé)
 const webhookRoutes = require("./routes/webhook.routes"); // 🔔 Webhooks (Unipesa)
+const oliBankRoutes = require("./routes/oli_bank.routes"); // 🏦 OLI Bank — Portail Cryptographique
 const { requireAuth, optionalAuth } = require("./middlewares/auth.middleware");
+const oliSessionMiddleware = require("./middlewares/oli_session.middleware"); // 📊 Session Tracking
 
 const app = express();
 const server = http.createServer(app);
@@ -169,6 +171,9 @@ app.use("/api/payment", require('./routes/stripe-webhook.routes')); // 🔔 Stri
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
+// 📊 OLI Session Tracking (non-bloquant — sur toutes les routes auth)
+app.use(oliSessionMiddleware);
+
 // --- ROUTES API ---
 
 // Auth (public)
@@ -194,6 +199,7 @@ app.post('/api/price-worker/run', async (req, res) => {
 app.use("/api/shops", optionalAuth, shopsRoutes);
 app.use("/orders", requireAuth, ordersRoutes);
 app.use("/wallet", requireAuth, walletRoutes);
+app.use("/bank",   requireAuth, oliBankRoutes); // 🏦 OLI Bank — Portail Cryptographique
 app.use("/delivery", requireAuth, deliveryRoutes);
 app.use("/delivery/apply", requireAuth, delivererApplicationRoutes);
 app.use("/chat", requireAuth, chatRoutes);
@@ -313,6 +319,16 @@ if (process.env.NODE_ENV !== 'test') {
                 ADD COLUMN IF NOT EXISTS promo_price NUMERIC(10, 2);
             `);
             console.log('✅ [MIGRATION] Colonnes is_good_deal/promo_price vérifiées.');
+
+            // 🏦 Migration 039 — OLI Bank Portail Cryptographique
+            const fs = require('fs');
+            const path = require('path');
+            const migPath = path.join(__dirname, 'migrations', '039_oli_bank_crypto.sql');
+            if (fs.existsSync(migPath)) {
+                const sql = fs.readFileSync(migPath, 'utf8');
+                await pool.query(sql);
+                console.log('✅ [MIGRATION 039] OLI Bank Portail Cryptographique — OK');
+            }
         } catch (e) {
             console.warn('⚠️ [MIGRATION] is_good_deal:', e.message);
         }

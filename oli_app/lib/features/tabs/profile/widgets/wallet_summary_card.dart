@@ -5,6 +5,7 @@ import '../../../wallet/providers/wallet_provider.dart';
 import '../../../wallet/widgets/wallet_action_sheets.dart';
 import '../../../../providers/exchange_rate_provider.dart';
 import '../../../../features/auth/providers/auth_controller.dart';
+import '../../../bank/screens/bank_portal_screen.dart';
 
 class WalletSummaryCard extends ConsumerWidget {
   const WalletSummaryCard({super.key});
@@ -22,10 +23,16 @@ class WalletSummaryCard extends ConsumerWidget {
     return Column(
       children: [
         // ── Carte de crédit ──────────────────────────────────
-        _CreditCard(
-          balance: walletState.balance,
-          formattedBalance: exchangeNotifier.formatProductPrice(walletState.balance),
-          cardholderName: formattedName,
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BankPortalScreen()),
+          ),
+          child: _CreditCard(
+            balance: walletState.balance,
+            formattedBalance: exchangeNotifier.formatProductPrice(walletState.balance),
+            cardholderName: formattedName,
+          ),
         ),
 
         const SizedBox(height: 16),
@@ -121,11 +128,22 @@ class _CreditCard extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          // Icône NFC/sans-contact
-                          Icon(
-                            Icons.wifi,
-                            color: Colors.white.withOpacity(0.6),
-                            size: 18,
+                          // Icônes OLI Security Shield + NFC
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.shield_rounded,
+                                color: Color(0xFF00F5C4),
+                                size: 14,
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.wifi,
+                                color: Colors.white.withOpacity(0.6),
+                                size: 18,
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 2),
                           const Text(

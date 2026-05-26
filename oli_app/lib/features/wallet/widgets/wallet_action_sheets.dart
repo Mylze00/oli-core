@@ -914,10 +914,59 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
           const SizedBox(height: 14),
           _GlassField(
             controller: _amountCtrl,
-            hint: 'Montant (FC)',
+            hint: 'Montant (USD)',
             icon: Icons.attach_money_rounded,
             keyboardType: TextInputType.number,
+            onChanged: (val) => setState(() {}),
           ),
+          if (_amountCtrl.text.isNotEmpty && double.tryParse(_amountCtrl.text.replaceAll(',', '.')) != null)
+            Builder(builder: (context) {
+              final amt = double.parse(_amountCtrl.text.replaceAll(',', '.'));
+              final fee = amt * 0.05;
+              final total = amt + fee;
+              final isDeposit = widget.buttonLabel.toLowerCase().contains('recharger');
+              return Padding(
+                padding: const EdgeInsets.only(top: 12, left: 4, right: 4),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.03),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Montant demandé :', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+                          Text('\$${amt.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Frais de plateforme (5%) :', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+                          Text('\$${fee.toStringAsFixed(2)}', style: TextStyle(color: widget.buttonColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Divider(color: Colors.white24, height: 1),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(isDeposit ? 'Vous serez facturé :' : 'Total déduit du Wallet :', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                          Text('\$${total.toStringAsFixed(2)}', style: TextStyle(color: widget.buttonColor, fontSize: 14, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           const SizedBox(height: 10),
           _GlassField(
             controller: _phoneCtrl,
