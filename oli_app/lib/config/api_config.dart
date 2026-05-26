@@ -81,4 +81,10 @@ class ApiConfig {
   static String bankVerify(String txHash) => '$baseUrl/bank/verify/$txHash';
   static String bankEscrowRelease(int orderId) => '$baseUrl/bank/escrow/$orderId/release';
   static String bankEscrowRefund(int orderId)  => '$baseUrl/bank/escrow/$orderId/refund';
+
+  // --- Unipesa Mobile Money ---
+  static const String unipesaDeposit          = '$baseUrl/api/unipesa/deposit';
+  static String unipesaStatus(String orderId) => '$baseUrl/api/unipesa/status/$orderId';
+  static const String walletApiBalance         = '$baseUrl/api/wallet/wallet/balance';
+  static const String walletApiHistory         = '$baseUrl/api/wallet/wallet/history';
 }

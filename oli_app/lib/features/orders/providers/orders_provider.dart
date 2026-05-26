@@ -75,6 +75,31 @@ class OrderService {
       return false;
     }
   }
+
+  /// Initie le paiement Mobile Money via Unipesa (déclenche le push USSD)
+  /// Retourne l'oliOrderId pour le polling de statut, ou null si échec.
+  Future<Map<String, dynamic>?> initiateUnipesaDeposit({
+    required String phone,
+    required double amountFC,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.unipesaDeposit,
+        data: {
+          'phone': phone,
+          'amountFC': amountFC,
+        },
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return response.data as Map<String, dynamic>;
+      }
+      debugPrint('❌ Unipesa deposit error: ${response.data}');
+      return null;
+    } catch (e) {
+      debugPrint('❌ Erreur initiation Unipesa: $e');
+      return null;
+    }
+  }
   
   Future<bool> payOrder(int orderId, String paymentMethod) async {
     try {

@@ -6,6 +6,7 @@ import '../../user/providers/address_provider.dart';
 import '../../user/screens/address_management_page.dart';
 import '../../../core/user/user_model.dart';
 import '../../../core/user/user_provider.dart';
+import '../../../models/order_model.dart';
 import 'stripe_payment_page.dart';
 import 'order_success_page.dart';
 import 'payment_pending_page.dart';
@@ -443,7 +444,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
 
     final deliveryAddress = defaultAddr?.fullAddress ?? '';
-    final mobileMoneyPhone = _paymentMethod == 'mobile_money' ? _mobileMoneyPhone : '';
+    // ✅ Utiliser le contrôleur comme source de vérité (pré-rempli OU saisi)
+    final mobileMoneyPhone = _paymentMethod == 'mobile_money'
+        ? _mobileMoneyController.text.trim()
+        : '';
 
     if (_paymentMethod == 'mobile_money' && mobileMoneyPhone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -549,12 +553,52 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         }
 
         if (_paymentMethod == 'mobile_money') {
+          // ✅ Appel Unipesa pour déclencher le push USSD vers le téléphone
+          setState(() => _isLoading = true);
+          final unipesaResult = await orderService.initiateUnipesaDeposit(
+            phone: mobileMoneyPhone,
+            amountFC: total,
+          );
+
+          if (!mounted) return;
+
+          if (unipesaResult == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Impossible d\'initier le paiement Mobile Money. Vérifiez votre numéro et réessayez.'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 5),
+              ),
+            );
+            setState(() => _isLoading = false);
+            return;
+          }
+
+          // Récupérer l'ID de commande Unipesa pour le polling
+          final oliOrderId = unipesaResult['oliOrderId'] as String?;
+          final orderWithUnipesa = Order(
+            id: order.id,
+            userId: order.userId,
+            status: order.status,
+            totalAmount: order.totalAmount,
+            deliveryAddress: order.deliveryAddress,
+            deliveryFee: order.deliveryFee,
+            paymentMethod: order.paymentMethod,
+            paymentStatus: order.paymentStatus,
+            deliveryCode: order.deliveryCode,
+            deliveryMethodId: order.deliveryMethodId,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt,
+            items: order.items,
+            unipesaOrderId: oliOrderId,
+          );
+
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (_) => PaymentPendingPage(
-                order: order,
-                phoneNumber: _mobileMoneyPhone.isNotEmpty ? _mobileMoneyPhone : '+243 ---',
+                order: orderWithUnipesa,
+                phoneNumber: mobileMoneyPhone,
                 providerName: _mobileMoneyProvider,
               ),
             ),
