@@ -555,9 +555,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         if (_paymentMethod == 'mobile_money') {
           // ✅ Appel Unipesa pour déclencher le push USSD vers le téléphone
           setState(() => _isLoading = true);
+          // ✅ Conversion en FC avant d'appeler Unipesa
+          final amountFC = ref.read(exchangeRateProvider.notifier).convertAmount(total, from: Currency.USD);
+
           final unipesaResult = await orderService.initiateUnipesaDeposit(
             phone: mobileMoneyPhone,
-            amountFC: total,
+            amountFC: amountFC,
           );
 
           if (!mounted) return;
