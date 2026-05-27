@@ -167,11 +167,12 @@ if (config.NODE_ENV !== 'production') {
 }
 
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use(express.json());
+
 app.use("/webhooks", webhookRoutes); // 🔔 Webhooks Unipesa (public, sans auth)
 app.use("/api/payment", require('./routes/stripe-webhook.routes')); // 🔔 Stripe Webhook (simulation mode)
 app.use("/api/unipesa", unipesaRoutes); // 💰 Mobile Money dépôts (Unipesa C2B)
 app.use("/api/wallet",  requireAuth, unipesaRoutes); // 💳 Solde + Historique wallet
-app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
 // 📊 OLI Session Tracking (non-bloquant — sur toutes les routes auth)
