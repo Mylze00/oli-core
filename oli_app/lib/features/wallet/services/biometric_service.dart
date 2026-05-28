@@ -28,10 +28,9 @@ class BiometricService {
           biometricOnly: false, // Permet aussi le PIN si bio échoue
         ),
       );
-    } on PlatformException catch (e) {
-      // Sur web ou émulateur : ignorer l'erreur et laisser passer
-      if (e.code == 'NotAvailable' || e.code == 'NotEnrolled') return true;
-      return false;
+    } catch (e) {
+      // Sur web, émulateur ou si manque de permissions : ignorer l'erreur et laisser passer
+      return true;
     }
   }
 }

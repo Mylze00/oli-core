@@ -237,15 +237,23 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                   height: 34,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
-                    children: [
-                      _FilterChip(label: 'Tous', icon: Icons.inbox_outlined, selected: _filter == InboxFilter.all, onTap: () => setState(() => _filter = InboxFilter.all)),
-                      const SizedBox(width: 8),
-                      _FilterChip(label: 'Non lus', icon: Icons.mark_chat_unread_outlined, selected: _filter == InboxFilter.unread, onTap: () => setState(() => _filter = InboxFilter.unread)),
-                      const SizedBox(width: 8),
-                      _FilterChip(label: 'Favoris', icon: Icons.star_outline_rounded, selected: _filter == InboxFilter.favorites, onTap: () => setState(() => _filter = InboxFilter.favorites)),
-                      const SizedBox(width: 8),
-                      _FilterChip(label: 'Archives', icon: Icons.archive_outlined, selected: _filter == InboxFilter.archives, onTap: () => setState(() => _filter = InboxFilter.archives)),
-                    ],
+                    children: _selectedIndex == 2
+                        ? [
+                            _FilterChip(label: 'Pour vous', selected: true, onTap: () {}),
+                            const SizedBox(width: 8),
+                            _FilterChip(label: 'Abonnement', selected: false, onTap: () {}), // Par défaut non sélectionné sauf si on veut l'effet inverse
+                            const SizedBox(width: 8),
+                            _FilterChip(label: '...', selected: false, onTap: () {}),
+                          ]
+                        : [
+                            _FilterChip(label: 'Tous', icon: Icons.inbox_outlined, selected: _filter == InboxFilter.all, onTap: () => setState(() => _filter = InboxFilter.all)),
+                            const SizedBox(width: 8),
+                            _FilterChip(label: 'Non lus', icon: Icons.mark_chat_unread_outlined, selected: _filter == InboxFilter.unread, onTap: () => setState(() => _filter = InboxFilter.unread)),
+                            const SizedBox(width: 8),
+                            _FilterChip(label: 'Favoris', icon: Icons.star_outline_rounded, selected: _filter == InboxFilter.favorites, onTap: () => setState(() => _filter = InboxFilter.favorites)),
+                            const SizedBox(width: 8),
+                            _FilterChip(label: 'Archives', icon: Icons.archive_outlined, selected: _filter == InboxFilter.archives, onTap: () => setState(() => _filter = InboxFilter.archives)),
+                          ],
                   ),
                 ),
               ],
@@ -823,13 +831,13 @@ class ConversationTile extends StatelessWidget {
 
 class _FilterChip extends StatelessWidget {
   final String label;
-  final IconData icon;
+  final IconData? icon;
   final bool selected;
   final VoidCallback onTap;
 
   const _FilterChip({
     required this.label,
-    required this.icon,
+    this.icon,
     required this.selected,
     required this.onTap,
   });
@@ -837,27 +845,32 @@ class _FilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // On utilise un bleu foncé pour correspondre à la maquette si c'est sélectionné
+    final activeColor = const Color(0xFF1565C0); 
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? theme.primaryColor : Colors.grey.shade100,
+          color: selected ? activeColor : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? theme.primaryColor : Colors.grey.shade300,
+            color: selected ? activeColor : Colors.grey.shade300,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 14,
-              color: selected ? Colors.white : Colors.grey.shade600,
-            ),
-            const SizedBox(width: 5),
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 14,
+                color: selected ? Colors.white : Colors.grey.shade600,
+              ),
+              const SizedBox(width: 5),
+            ],
             Text(
               label,
               style: TextStyle(
