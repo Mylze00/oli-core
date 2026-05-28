@@ -218,44 +218,17 @@ const unipesaService = {
             return { status: 'timeout', amountFC: parseFloat(op.amount_fc) };
         }
 
-        // Interroger l'API Unipesa pour avoir le statut en temps réel
-        try {
-            const payload = {
-                merchant_id: UNIPESA_MERCHANT,
-                order_id:    oliOrderId,
-            };
-            payload.signature = _buildSignature(payload);
-
-            const response = await axios.post(
-                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/status`,
-                payload,
-                { 
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    }, 
-                    timeout: 8000 
-                }
-            );
-
-            const apiStatus = response.data?.status;
-            // status Unipesa: 1 = succès, 0 = pending, -1 = échoué
-            const mappedStatus = apiStatus === 1 ? 'success'
-                : apiStatus === -1 ? 'failed'
-                : 'pending';
-
-            return {
-                status:   mappedStatus,
-                amountFC: parseFloat(op.amount_fc),
-                provider: op.provider,
-                raw:      response.data,
-            };
-
-        } catch (err) {
-            // En cas d'erreur API, retourner le statut local
-            console.warn(`⚠️ Unipesa status check échoué pour ${oliOrderId}:`, err.message);
-            return { status: op.status, amountFC: parseFloat(op.amount_fc) };
-        }
+        // ─────────────────────────────────────────────────────────
+        // IMPORTANT : Ne PAS interroger l'API AvadaPay en boucle !
+        // L'application Flutter appelle cette route toutes les 2s.
+        // Si on relaye chaque appel vers AvadaPay, Cloudflare bloque l'IP (403).
+        // On attend que le Webhook d'AvadaPay mette à jour la DB locale.
+        // ─────────────────────────────────────────────────────────
+        return {
+            status:   op.status,
+            amountFC: parseFloat(op.amount_fc),
+            provider: op.provider,
+        };
     },
 
     /**
