@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../../core/storage/secure_storage_service.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../../../core/services/fcm_service.dart';
+import '../../../core/services/hive_cache_service.dart'; // [CACHE]
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>((ref) {
   return AuthController(ref);
@@ -91,6 +92,22 @@ class AuthController extends StateNotifier<AuthState> {
   /// 🔹 RÉCUPÉRER LE PROFIL (utilise Dio avec token automatique)
   Future<void> fetchUserProfile() async {
     try {
+      const cacheKey = 'user_profile_cache';
+      
+      // [CACHE] 1. Lecture rapide du cache
+      final cachedData = HiveCacheService.getCache(cacheKey);
+      if (cachedData != null && cachedData is Map<String, dynamic>) {
+        final currentData = state.userData ?? {};
+        final mergedAvatar = cachedData['avatar_url'] ?? currentData['avatar_url'];
+        final newData = {
+          ...currentData,
+          ...cachedData,
+          'avatar_url': mergedAvatar,
+        };
+        state = state.copyWith(userData: newData);
+      }
+
+      // 2. Rafraîchissement en arrière-plan
       final response = await _dio.get(ApiConfig.authMe);
 
       final data = response.data;
@@ -114,11 +131,17 @@ class AuthController extends StateNotifier<AuthState> {
       
       state = state.copyWith(userData: newData); 
       
+      
       if (mergedAvatar != null) {
         await _storage.saveProfile(
           name: newData['name'],
           avatarUrl: mergedAvatar
         );
+      }
+      
+      // [CACHE] 3. Mise à jour silencieuse
+      if (userData != null) {
+        await HiveCacheService.setCache(cacheKey, userData);
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {

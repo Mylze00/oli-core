@@ -82,10 +82,9 @@ class WalletNotifier extends StateNotifier<WalletState> {
   }
 
   Future<bool> deposit({required double amount, required String provider, required String phone}) async {
-    return _performTransaction(ApiConfig.walletDeposit, {
-      'amount': amount,
-      'provider': provider,
-      'phoneNumber': phone
+    return _performTransaction(ApiConfig.unipesaDeposit, {
+      'amountFC': amount,
+      'phone': phone,
     });
   }
 

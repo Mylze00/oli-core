@@ -7,12 +7,16 @@ import 'features/auth/screens/login_page.dart';
 import 'features/home/home_page.dart';
 import 'features/auth/providers/auth_controller.dart';
 import 'core/services/fcm_service.dart';
+import 'core/services/hive_cache_service.dart'; // [CACHE]
 import 'app/theme/theme_provider.dart';
 
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialiser le cache hors-ligne
+  await HiveCacheService.init(); // [CACHE]
   
   // Initialiser Firebase
   await Firebase.initializeApp(

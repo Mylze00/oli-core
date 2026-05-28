@@ -8,6 +8,7 @@ import '../../core/storage/secure_storage_service.dart';
 import '../../core/user/user_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'socket_service.dart';
+import '../../core/services/hive_cache_service.dart'; // [CACHE]
 
 class ChatState {
   final bool isLoading;
@@ -188,6 +189,32 @@ class ChatController extends StateNotifier<ChatState> {
         url += '?productId=$_productId';
       }
       
+      // [CACHE] 1. Lecture rapide du cache
+      final cacheKey = 'chat_messages_$otherUserId${_productId != null ? "_$_productId" : ""}';
+      final cachedData = HiveCacheService.getCache(cacheKey);
+      if (cachedData != null) {
+        final messages = List<Map<String, dynamic>>.from(cachedData['messages'] ?? []);
+        int? convId;
+        String? friendshipStatus;
+        int? requesterId;
+        
+        if (messages.isNotEmpty) {
+          convId = messages.first['conversation_id'];
+          friendshipStatus = messages.first['friendship_status'];
+          requesterId = messages.first['requester_id'];
+        }
+        
+        // Affichage instantané
+        state = state.copyWith(
+          isLoading: false,
+          messages: messages,
+          conversationId: convId,
+          friendshipStatus: friendshipStatus,
+          requesterId: requesterId,
+        );
+      }
+
+      // 2. Rafraîchissement en arrière-plan
       final response = await _dio.get(
         url,
         options: Options(headers: {'Authorization': 'Bearer $token'}),
@@ -207,6 +234,7 @@ class ChatController extends StateNotifier<ChatState> {
           requesterId = messages.first['requester_id'];
         }
         
+        
         state = state.copyWith(
           isLoading: false,
           messages: messages,
@@ -214,10 +242,16 @@ class ChatController extends StateNotifier<ChatState> {
           friendshipStatus: friendshipStatus,
           requesterId: requesterId,
         );
+
+        // [CACHE] 3. Mise à jour silencieuse du cache
+        await HiveCacheService.setCache(cacheKey, data);
       }
     } catch (e) {
       debugPrint('❌ Erreur loadMessages: $e');
-      state = state.copyWith(isLoading: false, error: "Erreur de chargement: $e");
+      // Si on a déjà chargé le cache, on ne remplace pas par une erreur
+      if (state.messages.isEmpty) {
+        state = state.copyWith(isLoading: false, error: "Erreur de chargement: $e");
+      }
     }
   }
 

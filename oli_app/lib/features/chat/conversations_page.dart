@@ -6,6 +6,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'chat_page.dart';
 import 'socket_service.dart';
 import 'providers/inbox_providers.dart';
+import '../feed/presentation/feed_tab_view.dart';
 import '../../config/api_config.dart';
 import '../../core/user/user_provider.dart';
 import '../../core/storage/secure_storage_service.dart';
@@ -216,7 +217,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                 ),
                 const SizedBox(height: 10),
 
-                // Type tabs (Privé / Market)
+                // Type tabs (Privé / Market / Fil)
                 Container(
                   height: 40,
                   decoration: BoxDecoration(
@@ -226,6 +227,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                   child: Row(children: [
                     _buildTabItem(0, 'Privé'),
                     _buildTabItem(1, 'Market Chat'),
+                    _buildTabItem(2, 'Fil'),
                   ]),
                 ),
                 const SizedBox(height: 10),
@@ -252,9 +254,11 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           
           const Divider(height: 1),
 
-          // 2. Liste des Conversations
+          // 2. Contenu (Fil d'actualité OU Liste des Conversations)
           Expanded(
-            child: Container(
+            child: _selectedIndex == 2 
+              ? const FeedTabView() // Affiche le fil d'actualité si l'onglet 2 est sélectionné
+              : Container(
               decoration: const BoxDecoration(
                 image: DecorationImage(
                   image: AssetImage("assets/images/chat_bg_new.png"),
@@ -464,7 +468,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                 child: const Icon(Icons.person_add, color: Colors.white),
               ),
             )
-          : null,
+          : null, // Le FloatingActionButton du Fil est géré dans FeedTabView
     );
   }
 
