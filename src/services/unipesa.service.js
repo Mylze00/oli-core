@@ -137,6 +137,8 @@ const unipesaService = {
                 }
             );
 
+            console.log(`🔍 AVADAPAY RESPONSE:`, typeof response.data === 'object' ? JSON.stringify(response.data) : response.data);
+
             // Gérer le cas où l'API renvoie du HTML (ex: "Error: <p>Signature is not valid</p>")
             if (typeof response.data === 'string' && response.data.toLowerCase().includes('error')) {
                 throw new Error(`API Error: ${response.data}`);
