@@ -119,15 +119,14 @@ const unipesaService = {
                 order_id:    oliOrderId,
                 amount:      amountFC.toString(),
                 currency:    'CDF', // Franc Congolais
-                phone:       phone.replace(/\D/g, ''), // digits only
-                description: `Recharge OLI Wallet — ${amountFC} FC`,
+                customer_phone: phone.replace(/\D/g, ''), // digits only
             };
             payload.signature = _buildSignature(payload);
 
             console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${amountFC} FC → ${phone}`);
 
             const response = await axios.post(
-                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/c2b`,
+                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/deposit`,
                 payload,
                 {
                     headers: { 
