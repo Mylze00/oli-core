@@ -1,3 +1,14 @@
-const jwt = require('jsonwebtoken');
-const token = jwt.sign({ id: 71, phone: '+243827088682', role: 'user' }, 'oli_strong_secret_change_me', { expiresIn: '1h' });
-console.log(token);
+require('dotenv').config();
+const unipesaService = require('./src/services/unipesa.service');
+
+async function test() {
+    try {
+        const res = await unipesaService.initiateDeposit(71, '243827088682', 500);
+        console.log(res);
+    } catch (e) {
+        console.error("Error:", e);
+    } finally {
+        process.exit();
+    }
+}
+test();

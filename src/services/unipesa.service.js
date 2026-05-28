@@ -135,6 +135,11 @@ const unipesaService = {
                 }
             );
 
+            // Vérifier les erreurs renvoyées dans le corps JSON (même si HTTP 200)
+            if (response.data && response.data.status === 0 && response.data.result && response.data.result.message) {
+                throw new Error(`API Error: ${response.data.result.message}`);
+            }
+
             const unipesaOrderId = response.data?.order_id || oliOrderId;
 
             // Mettre à jour avec l'ID Unipesa
