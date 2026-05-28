@@ -130,7 +130,10 @@ const unipesaService = {
                 `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/c2b`,
                 payload,
                 {
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    },
                     timeout: 15000,
                 }
             );
@@ -227,7 +230,13 @@ const unipesaService = {
             const response = await axios.post(
                 `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/status`,
                 payload,
-                { headers: { 'Content-Type': 'application/json' }, timeout: 8000 }
+                { 
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }, 
+                    timeout: 8000 
+                }
             );
 
             const apiStatus = response.data?.status;
