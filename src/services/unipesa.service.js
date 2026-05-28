@@ -117,13 +117,13 @@ const unipesaService = {
             const payload = {
                 merchant_id: UNIPESA_MERCHANT,
                 order_id:    oliOrderId,
-                amount:      amountFC.toString(),
+                amount:      Math.round(amountFC).toString(),
                 currency:    'CDF', // Franc Congolais
                 customer_phone: phone.replace(/\D/g, ''), // digits only
             };
             payload.signature = _buildSignature(payload);
 
-            console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${amountFC} FC → ${phone}`);
+            console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${Math.round(amountFC)} FC → ${phone}`);
 
             const response = await axios.post(
                 `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/deposit`,
@@ -136,6 +136,11 @@ const unipesaService = {
                     timeout: 15000,
                 }
             );
+
+            // Gérer le cas où l'API renvoie du HTML (ex: "Error: <p>Signature is not valid</p>")
+            if (typeof response.data === 'string' && response.data.toLowerCase().includes('error')) {
+                throw new Error(`API Error: ${response.data}`);
+            }
 
             // Vérifier les erreurs renvoyées dans le corps JSON (même si HTTP 200)
             if (response.data && response.data.status === 0 && response.data.result && response.data.result.message) {
