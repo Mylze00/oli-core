@@ -46,16 +46,13 @@ const TOTAL_FEE_RATE    = OLI_FEE_RATE + AGGREGATOR_FEE_RATE;                   
 
 /**
  * Calcule la signature HMAC-SHA512 d'un payload Unipesa.
- * La signature est calculée sur la concaténation triée des clés=valeurs.
+ * La signature doit inclure tous les paramètres envoyés DANS L'ORDRE où ils sont envoyés,
+ * sans tri alphabétique.
  */
 function _buildSignature(payload) {
-    // Trier les clés, exclure 'signature' si présent
-    const sortedKeys = Object.keys(payload)
-        .filter(k => k !== 'signature')
-        .sort();
-
     let str = '';
-    for (const key of sortedKeys) {
+    for (const key of Object.keys(payload)) {
+        if (key === 'signature') continue;
         str += `${key}${payload[key]}`;
     }
 
@@ -102,31 +99,39 @@ const unipesaService = {
         const totalFeeFC      = aggregatorFeeFC + oliFeeFC;                  // 6% total
         const netFC           = amountFC - totalFeeFC;                       // Montant crédité
 
+        const providerName = _detectProvider(phone);
+        const providerId = _getProviderId(providerName);
+
         // Enregistrer l'opération en statut "pending" AVANT l'appel API
         // → garantit la traçabilité même si l'API tombe
         await pool.query(`
             INSERT INTO unipesa_operations
                 (oli_order_id, user_id, phone, amount_fc, provider, operation_type, status, expires_at)
             VALUES ($1, $2, $3, $4, $5, 'deposit', 'pending', NOW() + INTERVAL '10 minutes')
-        `, [oliOrderId, uid, phone, amountFC, _detectProvider(phone)]);
+        `, [oliOrderId, uid, phone, amountFC, providerName]);
 
         console.log(`💱 Frais: ${amountFC} FC brut → ${totalFeeFC} FC frais (${aggregatorFeeFC} FC Unipesa + ${oliFeeFC} FC OLI) → ${netFC} FC net`);
 
         try {
-            // Construire le payload Unipesa C2B
+            // Le format exigé par AvadaPay pour le endpoint payment_c2b en RDC
+            // Les clés DOIVENT être dans cet ordre pour la génération de la signature
             const payload = {
                 merchant_id: UNIPESA_MERCHANT,
-                order_id:    oliOrderId,
-                amount:      Math.round(amountFC).toString(),
-                currency:    'CDF', // Franc Congolais
-                customer_phone: phone.replace(/\D/g, ''), // digits only
+                customer_id: _formatPhoneForProvider(phone, providerName),
+                customer_user_id: `user-${uid}`,
+                order_id: oliOrderId,
+                amount: Math.round(amountFC).toString(),
+                currency: 'CDF',
+                provider_id: providerId
             };
+            
+            // On calcule et on ajoute la signature (dynamique selon l'ordre du payload)
             payload.signature = _buildSignature(payload);
 
-            console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${Math.round(amountFC)} FC → ${phone}`);
+            console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${Math.round(amountFC)} FC → ${phone} (Provider: ${providerName})`);
 
             const response = await axios.post(
-                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/deposit`,
+                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/payment_c2b`,
                 payload,
                 {
                     headers: { 
@@ -146,7 +151,11 @@ const unipesaService = {
 
             // Vérifier les erreurs renvoyées dans le corps JSON (même si HTTP 200)
             if (response.data && response.data.status !== 1 && response.data.result && response.data.result.message) {
-                throw new Error(`API Error: ${response.data.result.message}`);
+                // status 1 = SUCCESS, 0 = PENDING/WAITING, 3 = ERROR
+                // Avadapay renvoie souvent status 0 avec un prompt USSD initié avec succès, ou status 1 si auto.
+                if (response.data.status === 3 || response.data.result.message.includes('ERROR')) {
+                    throw new Error(`API Error: ${response.data.result.message}`);
+                }
             }
 
             const unipesaOrderId = response.data?.order_id || oliOrderId;
@@ -167,7 +176,7 @@ const unipesaService = {
                 totalFeeFC,                         // 6% total frais (FC)
                 netAmountFC: netFC,                 // Montant crédité sur le wallet (FC)
                 phone,
-                provider:         _detectProvider(phone),
+                provider:         providerName,
             };
 
         } catch (err) {
@@ -350,7 +359,47 @@ function _detectProvider(phone) {
     if (/^(09[0-7])/.test(local))          return 'Airtel';
     if (/^(09[8-9]|08[0])/.test(local))    return 'Orange';
     if (/^(07[2-7])/.test(local))          return 'Africell';
-    return 'Mobile Money';
+    return 'Vodacom'; // Fallback
+}
+
+/**
+ * Convertit le nom du provider en ID provider AvadaPay.
+ */
+function _getProviderId(providerName) {
+    switch (providerName) {
+        case 'Vodacom': return 9;
+        case 'Orange':  return 10;
+        case 'Airtel':  return 17;
+        case 'Africell':return 14; // Supposé d'après les tests
+        default:        return 9;
+    }
+}
+
+/**
+ * Formate le numéro de téléphone selon les règles strictes d'AvadaPay par opérateur.
+ */
+function _formatPhoneForProvider(phone, providerName) {
+    let digits = phone.replace(/\D/g, '');
+    
+    if (providerName === 'Vodacom') {
+        // Exige le format international complet: 243XXXXXXXXX
+        if (digits.startsWith('0')) digits = '243' + digits.slice(1);
+        if (digits.length === 9) digits = '243' + digits;
+    } else if (providerName === 'Airtel') {
+        // Exige format 9XXXXXXXX (sans 0 ni 243)
+        if (digits.startsWith('243')) digits = digits.slice(3);
+        if (digits.startsWith('0')) digits = digits.slice(1);
+    } else if (providerName === 'Orange') {
+        // Exige format local avec le 0: 08XXXXXXXX
+        if (digits.startsWith('243')) digits = '0' + digits.slice(3);
+        if (!digits.startsWith('0')) digits = '0' + digits;
+    } else {
+        // Par défaut, format international complet 243
+        if (digits.startsWith('0')) digits = '243' + digits.slice(1);
+        if (digits.length === 9) digits = '243' + digits;
+    }
+    
+    return digits;
 }
 
 module.exports = unipesaService;
