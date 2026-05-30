@@ -5,6 +5,21 @@ import '../../../config/api_config.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../models/transaction_model.dart';
 
+// --- Résultat du dépôt Mobile Money ---
+class DepositResult {
+  final bool success;
+  final String? oliOrderId;   // Pour le polling de statut
+  final double? netAmountFC;  // Montant net crédité
+  final String? error;
+
+  const DepositResult({
+    required this.success,
+    this.oliOrderId,
+    this.netAmountFC,
+    this.error,
+  });
+}
+
 // --- STATE ---
 class WalletState {
   final double balance;
@@ -13,10 +28,10 @@ class WalletState {
   final String? error;
 
   WalletState({
-    this.balance = 0.0, 
-    this.transactions = const [], 
+    this.balance = 0.0,
+    this.transactions = const [],
     this.isLoading = false,
-    this.error
+    this.error,
   });
 
   WalletState copyWith({
@@ -50,7 +65,6 @@ class WalletNotifier extends StateNotifier<WalletState> {
   Future<void> loadWalletData() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      // Appels parallèles au lieu de séquentiels (#12)
       final results = await Future.wait([
         _dio.get(ApiConfig.walletBalance),
         _dio.get(ApiConfig.walletTransactions),
@@ -81,18 +95,53 @@ class WalletNotifier extends StateNotifier<WalletState> {
     }
   }
 
-  Future<bool> deposit({required double amount, required String provider, required String phone}) async {
-    return _performTransaction(ApiConfig.unipesaDeposit, {
-      'amountFC': amount,
-      'phone': phone,
-    });
+  /// Dépôt Mobile Money via Unipesa
+  /// Retourne un [DepositResult] avec l'oliOrderId pour le polling du statut
+  Future<DepositResult> deposit({
+    required double amount,
+    required String provider,
+    required String phone,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final response = await _dio.post(ApiConfig.unipesaDeposit, data: {
+        'amountFC': amount,
+        'phone': phone,
+      });
+
+      state = state.copyWith(isLoading: false);
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        return DepositResult(
+          success: true,
+          oliOrderId: data['oliOrderId'] as String?,
+          netAmountFC: (data['netAmountFC'] as num?)?.toDouble() ?? amount,
+        );
+      } else {
+        final errMsg = response.data['error'] ?? 'Erreur inconnue';
+        state = state.copyWith(error: errMsg.toString());
+        return DepositResult(success: false, error: errMsg.toString());
+      }
+    } on DioException catch (e) {
+      final errMsg = e.response?.data?['error'] ?? e.message ?? 'Erreur réseau';
+      state = state.copyWith(isLoading: false, error: errMsg.toString());
+      return DepositResult(success: false, error: errMsg.toString());
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return DepositResult(success: false, error: e.toString());
+    }
   }
 
-  Future<bool> withdraw({required double amount, required String provider, required String phone}) async {
+  Future<bool> withdraw({
+    required double amount,
+    required String provider,
+    required String phone,
+  }) async {
     return _performTransaction(ApiConfig.walletWithdraw, {
       'amount': amount,
       'provider': provider,
-      'phoneNumber': phone
+      'phoneNumber': phone,
     });
   }
 

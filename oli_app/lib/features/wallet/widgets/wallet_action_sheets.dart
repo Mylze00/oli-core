@@ -6,6 +6,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/wallet_provider.dart';
 import '../../../features/auth/providers/auth_controller.dart';
 import '../../../features/wallet/services/biometric_service.dart';
+import '../../../providers/exchange_rate_provider.dart';
+import 'deposit_status_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper global
@@ -36,9 +38,9 @@ class _RechargerSheetState extends ConsumerState<RechargerSheet> {
   Widget build(BuildContext context) {
     return _method == null
         ? _MethodPickerShell(
-            title: 'Recharger le wallet',
-            icon: Icons.add_circle_outline,
-            iconColor: const Color(0xFF22C55E),
+            title: 'Recharger votre portefeuille',
+            icon: Icons.add,
+            iconColor: const Color(0xFFE11D48), // Rouge comme sur la maquette
             onMobile: () => setState(() => _method = 'mobile'),
             onCard: () => setState(() => _method = 'card'),
           )
@@ -48,10 +50,25 @@ class _RechargerSheetState extends ConsumerState<RechargerSheet> {
                 buttonLabel: 'Recharger',
                 buttonColor: const Color(0xFF22C55E),
                 onSubmit: (amount, provider, phone) async {
-                  final ok = await ref
+                  // Lance le dépôt et récupère l'oliOrderId pour le popup de statut
+                  final result = await ref
                       .read(walletProvider.notifier)
                       .deposit(amount: amount, provider: provider, phone: phone);
-                  return ok;
+                  if (result.success && result.oliOrderId != null) {
+                    // Fermer le formulaire
+                    if (context.mounted) Navigator.pop(context);
+                    // Afficher le popup de suivi
+                    if (context.mounted) {
+                      await showDepositStatusDialog(
+                        context: context,
+                        ref: ref,
+                        orderId: result.oliOrderId!,
+                        amountFC: amount,
+                      );
+                    }
+                    return true;
+                  }
+                  return result.success;
                 },
               )
             : _CardForm(
@@ -812,10 +829,22 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
   String? _error;
 
   final _providers = [
-    {'value': 'orange', 'label': 'Orange Money', 'color': Color(0xFFF97316)},
+    {'value': 'orange', 'label': 'Orange', 'color': Color(0xFFF97316)},
     {'value': 'mpesa', 'label': 'M-Pesa', 'color': Color(0xFF22C55E)},
-    {'value': 'airtel', 'label': 'Airtel Money', 'color': Color(0xFFEF4444)},
+    {'value': 'airtel', 'label': 'Airtel', 'color': Color(0xFFEF4444)},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authState = ref.read(authControllerProvider);
+      final phone = authState.userData?['phone'] ?? '';
+      if (phone.isNotEmpty) {
+        _phoneCtrl.text = phone;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -824,7 +853,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit(bool isUSD) async {
     final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.'));
     if (amount == null || amount <= 0) {
       setState(() => _error = 'Montant invalide');
@@ -835,8 +864,9 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
       return;
     }
 
+    final currencyLabel = isUSD ? 'USD' : 'FC';
     final confirmed = await biometricService.authenticate(
-      reason: 'Confirmer ${widget.buttonLabel} de ${amount.toStringAsFixed(0)} FC',
+      reason: 'Confirmer ${widget.buttonLabel} de ${amount.toStringAsFixed(isUSD ? 2 : 0)} $currencyLabel',
     );
     if (!confirmed) {
       setState(() => _error = 'Authentification annulée');
@@ -844,7 +874,15 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
     }
 
     setState(() { _isLoading = true; _error = null; });
-    final ok = await widget.onSubmit(amount, _provider, _phoneCtrl.text.trim());
+    
+    // Le wallet_provider gère-t-il la devise ? Actuellement wallet_provider s'attend à amountFC pour UnipesaDeposit.
+    // L'API backend attend amountFC pour Unipesa. Donc si c'est USD, on doit convertir en FC avant d'appeler onSubmit.
+    // L'utilisateur demande que la recharge se fasse dans la monnaie du wallet.
+    final finalAmount = isUSD 
+        ? ref.read(exchangeRateProvider.notifier).convertAmount(amount, from: Currency.USD) 
+        : amount;
+
+    final ok = await widget.onSubmit(finalAmount, _provider, _phoneCtrl.text.trim());
     setState(() => _isLoading = false);
 
     if (mounted) {
@@ -853,7 +891,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${widget.buttonLabel} réussi !'),
-            backgroundColor: widget.buttonColor,
+            backgroundColor: const Color(0xFF103652),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -865,130 +903,245 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
 
   @override
   Widget build(BuildContext context) {
-    return _DarkSheet(
-      title: widget.title,
-      icon: Icons.phone_android_rounded,
-      iconColor: widget.buttonColor,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-          // Sélection opérateur
-          Row(
-            children: _providers.map((p) {
-              final isSelected = _provider == p['value'];
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _provider = p['value'] as String),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? (p['color'] as Color).withOpacity(0.18)
-                          : Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected
-                            ? (p['color'] as Color).withOpacity(0.7)
-                            : Colors.white.withOpacity(0.1),
-                      ),
-                    ),
-                    child: Text(
-                      p['label'] as String,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: isSelected
-                            ? p['color'] as Color
-                            : Colors.white.withOpacity(0.4),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+    final maxH = MediaQuery.of(context).size.height * 0.9;
+    final exchangeState = ref.watch(exchangeRateProvider);
+    final isUSD = exchangeState.selectedCurrency == Currency.USD;
+    final currencySymbol = isUSD ? '\$' : 'FC';
+    final hintCurrency = isUSD ? 'USD' : 'FC';
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white, // Thème épuré blanc
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 12, bottom: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 14),
-          _GlassField(
-            controller: _amountCtrl,
-            hint: 'Montant (USD)',
-            icon: Icons.attach_money_rounded,
-            keyboardType: TextInputType.number,
-            onChanged: (val) => setState(() {}),
-          ),
-          if (_amountCtrl.text.isNotEmpty && double.tryParse(_amountCtrl.text.replaceAll(',', '.')) != null)
-            Builder(builder: (context) {
-              final amt = double.parse(_amountCtrl.text.replaceAll(',', '.'));
-              final fee = amt * 0.05;
-              final total = amt + fee;
-              final isDeposit = widget.buttonLabel.toLowerCase().contains('recharger');
-              return Padding(
-                padding: const EdgeInsets.only(top: 12, left: 4, right: 4),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
-                  ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.phone_android_rounded, color: const Color(0xFF103652), size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: const TextStyle(
+                          color: Color(0xFF103652),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Content scrollable
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Sélection opérateur
+                      Text('Opérateur Mobile', style: TextStyle(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Montant demandé :', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
-                          Text('\$${amt.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                        ],
+                        children: _providers.map((p) {
+                          final isSelected = _provider == p['value'];
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() => _provider = p['value'] as String),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOutCubic,
+                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? const Color(0xFF103652) : Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected ? const Color(0xFF103652) : const Color(0xFFE2E8F0),
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: isSelected ? [
+                                    BoxShadow(color: const Color(0xFF103652).withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))
+                                  ] : [],
+                                ),
+                                child: Text(
+                                  p['label'] as String,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: isSelected ? Colors.white : const Color(0xFF64748B),
+                                    fontSize: 12,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Frais de plateforme (5%) :', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
-                          Text('\$${fee.toStringAsFixed(2)}', style: TextStyle(color: widget.buttonColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                        ],
+                      const SizedBox(height: 20),
+                      
+                      // Montant
+                      Text('Montant', style: TextStyle(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _amountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (val) => setState(() {}),
+                        style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w700),
+                        decoration: InputDecoration(
+                          hintText: '0.00',
+                          hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                          prefixIcon: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Text(currencySymbol, style: const TextStyle(color: Color(0xFF103652), fontSize: 18, fontWeight: FontWeight.w800)),
+                          ),
+                          suffixText: hintCurrency,
+                          suffixStyle: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF103652), width: 2)),
+                        ),
                       ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Divider(color: Colors.white24, height: 1),
+                      
+                      // Frais preview
+                      if (_amountCtrl.text.isNotEmpty && double.tryParse(_amountCtrl.text.replaceAll(',', '.')) != null)
+                        Builder(builder: (context) {
+                          final amt = double.parse(_amountCtrl.text.replaceAll(',', '.'));
+                          final fee = amt * 0.05;
+                          final total = amt + fee;
+                          final isDeposit = widget.buttonLabel.toLowerCase().contains('recharger');
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Montant demandé :', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                                      Text('$currencySymbol${amt.toStringAsFixed(isUSD ? 2 : 0)}', style: const TextStyle(color: Color(0xFF103652), fontSize: 13, fontWeight: FontWeight.w700)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Frais de plateforme (5%) :', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                                      Text('$currencySymbol${fee.toStringAsFixed(isUSD ? 2 : 0)}', style: const TextStyle(color: Color(0xFFE11D48), fontSize: 13, fontWeight: FontWeight.w700)),
+                                    ],
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 10),
+                                    child: Divider(color: Color(0xFFE2E8F0), height: 1),
+                                  ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(isDeposit ? 'Vous serez facturé :' : 'Total déduit :', style: const TextStyle(color: Color(0xFF103652), fontSize: 14, fontWeight: FontWeight.w800)),
+                                      Text('$currencySymbol${total.toStringAsFixed(isUSD ? 2 : 0)}', style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w900)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      
+                      const SizedBox(height: 20),
+                      
+                      // Numéro de téléphone
+                      Text('Numéro Mobile Money', style: TextStyle(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _phoneCtrl,
+                        keyboardType: TextInputType.phone,
+                        style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          hintText: '+243...',
+                          hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                          prefixIcon: const Icon(Icons.smartphone_rounded, color: Color(0xFF94A3B8)),
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF103652), width: 2)),
+                        ),
                       ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(isDeposit ? 'Vous serez facturé :' : 'Total déduit du Wallet :', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                          Text('\$${total.toStringAsFixed(2)}', style: TextStyle(color: widget.buttonColor, fontSize: 14, fontWeight: FontWeight.bold)),
-                        ],
+                      
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Color(0xFFE11D48), size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(_error!, style: const TextStyle(color: Color(0xFFE11D48), fontSize: 13, fontWeight: FontWeight.w500))),
+                            ],
+                          ),
+                        ),
+                        
+                      const SizedBox(height: 32),
+                      
+                      // Bouton
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : () => _submit(isUSD),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF103652), // Bouton toujours bleu pour le thème "bleu et blanc"
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                              : Text(widget.buttonLabel, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                        ),
                       ),
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),
-              );
-            }),
-          const SizedBox(height: 10),
-          _GlassField(
-            controller: _phoneCtrl,
-            hint: 'Numéro Mobile Money',
-            icon: Icons.smartphone_rounded,
-            keyboardType: TextInputType.phone,
+              ),
+            ],
           ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_error!,
-                  style: const TextStyle(color: Color(0xFFF87171), fontSize: 12)),
-            ),
-          const SizedBox(height: 20),
-          _ActionButton(
-            label: _isLoading ? 'Traitement...' : widget.buttonLabel,
-            color: widget.buttonColor,
-            isLoading: _isLoading,
-            onTap: _submit,
-          ),
-          const SizedBox(height: 24),
-        ],
+        ),
       ),
     );
   }
@@ -1089,69 +1242,222 @@ class _CardFormState extends ConsumerState<_CardForm> {
 
   @override
   Widget build(BuildContext context) {
-    return _DarkSheet(
-      title: widget.title,
-      icon: Icons.credit_card_rounded,
-      iconColor: const Color(0xFFD4A843),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-          _GlassField(
-              controller: _amountCtrl,
-              hint: 'Montant (FC)',
-              icon: Icons.attach_money_rounded,
-              keyboardType: TextInputType.number),
-          const SizedBox(height: 10),
-          _GlassField(
-              controller: _cardCtrl,
-              hint: '1234 5678 9012 3456',
-              icon: Icons.credit_card_rounded,
-              keyboardType: TextInputType.number,
-              maxLength: 19,
-              onChanged: _formatCard),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: _GlassField(
-                  controller: _expiryCtrl,
-                  hint: 'MM/AA',
-                  icon: Icons.calendar_today_outlined,
-                  keyboardType: TextInputType.number,
-                  maxLength: 5,
-                  onChanged: _formatExpiry),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _GlassField(
-                  controller: _cvvCtrl,
-                  hint: 'CVV',
-                  icon: Icons.lock_outline_rounded,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  obscure: true),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          _GlassField(
-              controller: _nameCtrl,
-              hint: 'Nom du titulaire',
-              icon: Icons.person_outline_rounded),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_error!,
-                  style: const TextStyle(color: Color(0xFFF87171), fontSize: 12)),
-            ),
-          const SizedBox(height: 20),
-          _ActionButton(
-            label: _isLoading ? 'Traitement...' : 'Confirmer',
-            color: const Color(0xFFD4A843),
-            isLoading: _isLoading,
-            onTap: _submit,
+    final maxH = MediaQuery.of(context).size.height * 0.9;
+    final exchangeState = ref.watch(exchangeRateProvider);
+    final isUSD = exchangeState.selectedCurrency == Currency.USD;
+    final currencySymbol = isUSD ? '\$' : 'FC';
+    final hintCurrency = isUSD ? 'USD' : 'FC';
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white, // Thème épuré blanc
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          const SizedBox(height: 24),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 12, bottom: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.credit_card_rounded, color: Color(0xFF103652), size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: const TextStyle(
+                          color: Color(0xFF103652),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Content scrollable
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Montant
+                      const Text('Montant', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _amountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (val) => setState(() {}),
+                        style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w700),
+                        decoration: InputDecoration(
+                          hintText: '0.00',
+                          hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                          prefixIcon: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Text(currencySymbol, style: const TextStyle(color: Color(0xFF103652), fontSize: 18, fontWeight: FontWeight.w800)),
+                          ),
+                          suffixText: hintCurrency,
+                          suffixStyle: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF103652), width: 2)),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      // Informations de la carte
+                      const Text('Détails de la carte', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      
+                      // Numéro de carte
+                      TextField(
+                        controller: _cardCtrl,
+                        keyboardType: TextInputType.number,
+                        maxLength: 19,
+                        onChanged: _formatCard,
+                        style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          counterText: '',
+                          hintText: '1234 5678 9012 3456',
+                          hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                          prefixIcon: const Icon(Icons.credit_card_rounded, color: Color(0xFF94A3B8)),
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF103652), width: 2)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      
+                      // Expiration et CVV
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _expiryCtrl,
+                              keyboardType: TextInputType.number,
+                              maxLength: 5,
+                              onChanged: _formatExpiry,
+                              style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w600),
+                              decoration: InputDecoration(
+                                counterText: '',
+                                hintText: 'MM/AA',
+                                hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                                prefixIcon: const Icon(Icons.calendar_today_outlined, color: Color(0xFF94A3B8), size: 20),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF103652), width: 2)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _cvvCtrl,
+                              keyboardType: TextInputType.number,
+                              maxLength: 4,
+                              obscureText: true,
+                              style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w600),
+                              decoration: InputDecoration(
+                                counterText: '',
+                                hintText: 'CVV',
+                                hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                                prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF94A3B8), size: 20),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF103652), width: 2)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      
+                      // Titulaire
+                      TextField(
+                        controller: _nameCtrl,
+                        keyboardType: TextInputType.name,
+                        style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          hintText: 'Nom sur la carte',
+                          hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                          prefixIcon: const Icon(Icons.person_outline_rounded, color: Color(0xFF94A3B8)),
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF103652), width: 2)),
+                        ),
+                      ),
+                      
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Color(0xFFE11D48), size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(_error!, style: const TextStyle(color: Color(0xFFE11D48), fontSize: 13, fontWeight: FontWeight.w500))),
+                            ],
+                          ),
+                        ),
+                        
+                      const SizedBox(height: 32),
+                      
+                      // Bouton
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF103652),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                              : const Text('Confirmer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1177,31 +1483,164 @@ class _MethodPickerShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _DarkSheet(
-      title: title,
-      icon: icon,
-      iconColor: iconColor,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 16),
-          _BigOptionTile(
-            icon: Icons.phone_android_rounded,
-            title: 'Mobile Money',
-            subtitle: 'Orange Money, M-Pesa, Airtel',
-            color: const Color(0xFF22C55E),
-            onTap: onMobile,
+    final maxH = MediaQuery.of(context).size.height * 0.88;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF103652), // Bleu foncé de la maquette
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          const SizedBox(height: 12),
-          _BigOptionTile(
-            icon: Icons.credit_card_rounded,
-            title: 'Carte Visa',
-            subtitle: 'Visa, Mastercard',
-            color: const Color(0xFFD4A843),
-            onTap: onCard,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 12, bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Header type Mockup
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: iconColor, size: 28, weight: 800),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            height: 1,
+                            color: Colors.white.withOpacity(0.6),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+              // Options
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: _WhiteOptionTile(
+                  icon: Icons.phone_android_rounded,
+                  title: 'Mobile Money',
+                  onTap: onMobile,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: _WhiteOptionTile(
+                  icon: Icons.credit_card_rounded,
+                  title: 'Carte crédit',
+                  onTap: onCard,
+                ),
+              ),
+              const SizedBox(height: 48),
+            ],
           ),
-          const SizedBox(height: 24),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WhiteOptionTile extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  const _WhiteOptionTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  State<_WhiteOptionTile> createState() => _WhiteOptionTileState();
+}
+
+class _WhiteOptionTileState extends State<_WhiteOptionTile> with SingleTickerProviderStateMixin {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _isPressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 15,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(widget.icon, color: const Color(0xFF103652), size: 30),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  widget.title,
+                  style: const TextStyle(
+                    color: Color(0xFF103652),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF103652),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
