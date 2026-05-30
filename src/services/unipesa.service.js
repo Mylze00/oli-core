@@ -353,7 +353,7 @@ const unipesaService = {
  */
 function _detectProvider(phone) {
     const digits = phone.replace(/\D/g, '');
-    const local  = digits.startsWith('243') ? digits.slice(3) : digits;
+    let local=digits.startsWith('243')?digits.slice(3):digits;if(!local.startsWith('0'))local='0'+local;
 
     if (/^(08[1-4]|08[5-9])/.test(local)) return 'Vodacom';
     if (/^(09[0-7])/.test(local))          return 'Airtel';
