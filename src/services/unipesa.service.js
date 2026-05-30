@@ -45,10 +45,9 @@ const TOTAL_FEE_RATE      = FEES.TOTAL_DEPOSIT_RATE;
  * La signature est calculée sur la concaténation triée des clés=valeurs.
  */
 function _buildSignature(payload) {
-    // Trier les clés, exclure 'signature' si présent
+    // Ne SURTOUT PAS trier les clés ! L'ordre d'insertion doit être conservé
     const sortedKeys = Object.keys(payload)
-        .filter(k => k !== 'signature')
-        .sort();
+        .filter(k => k !== 'signature');
 
     let str = '';
     for (const key of sortedKeys) {
@@ -116,14 +115,15 @@ const unipesaService = {
         console.log(`💱 Frais: ${amountFC} FC brut → ${totalFeeFC} FC frais (${aggregatorFeeFC} FC Unipesa + ${oliFeeFC} FC OLI) → ${netFC} FC net`);
 
         try {
-            // Construire le payload Unipesa C2B
+            const providerName = _detectProvider(phone);
             const payload = {
                 merchant_id: UNIPESA_MERCHANT,
+                customer_id: _formatPhoneForProvider(phone, providerName),
+                customer_user_id: `user-${userId}`,
                 order_id:    oliOrderId,
-                amount:      amountFC.toString(),
+                amount:      Math.round(amountFC).toString(),
                 currency:    'CDF', // Franc Congolais
-                phone:       phone.replace(/\D/g, '').replace(/^243/, '0'), // local format only
-                description: `Recharge OLI Wallet — ${amountFC} FC`,
+                provider_id: _getProviderId(providerName),
                 callback_url: 'https://oli-core.onrender.com/webhooks/unipesa/deposit',
             };
             payload.signature = _buildSignature(payload);
@@ -131,7 +131,7 @@ const unipesaService = {
             console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${amountFC} FC → ${phone}`);
 
             const response = await axios.post(
-                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/c2b`,
+                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/payment_c2b`,
                 payload,
                 {
                     headers: { 'Content-Type': 'application/json' },
@@ -197,13 +197,15 @@ const unipesaService = {
         `, [oliOrderId, uid, phone, amountFC, _detectProvider(phone)]);
 
         try {
+            const providerName = _detectProvider(phone);
             const payload = {
                 merchant_id: UNIPESA_MERCHANT,
+                customer_id: _formatPhoneForProvider(phone, providerName),
+                customer_user_id: `user-${userId}`,
                 order_id:    oliOrderId,
-                amount:      amountFC.toString(),
+                amount:      Math.round(amountFC).toString(),
                 currency:    'CDF',
-                phone:       phone.replace(/\D/g, '').replace(/^243/, '0'),
-                description: `Retrait OLI Wallet → Mobile Money — ${amountFC} FC`,
+                provider_id: _getProviderId(providerName),
                 callback_url: 'https://oli-core.onrender.com/webhooks/unipesa/withdrawal',
             };
             payload.signature = _buildSignature(payload);
@@ -211,7 +213,7 @@ const unipesaService = {
             console.log(`📤 Unipesa B2C initié: ${oliOrderId} — ${amountFC} FC → ${phone}`);
 
             const response = await axios.post(
-                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/b2c`,
+                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/payment_b2c`,
                 payload,
                 {
                     headers: { 'Content-Type': 'application/json' },
@@ -449,6 +451,42 @@ function _detectProvider(phone) {
     if (/^(09[8-9]|08[0])/.test(local))    return 'Orange';
     if (/^(07[2-7])/.test(local))          return 'Africell';
     return 'Mobile Money';
+}
+
+}
+
+/**
+ * Convertit le nom du provider en ID provider AvadaPay.
+ */
+function _getProviderId(providerName) {
+    switch (providerName) {
+        case 'Vodacom': return 9;
+        case 'Orange':  return 10;
+        case 'Airtel':  return 17;
+        case 'Africell':return 14;
+        default:        return 9;
+    }
+}
+
+/**
+ * Formate le numéro de téléphone selon les règles strictes d'AvadaPay par opérateur.
+ */
+function _formatPhoneForProvider(phone, providerName) {
+    let digits = phone.replace(/\D/g, '');
+    if (providerName === 'Airtel') {
+        // Exige format 9XXXXXXXX (sans 0 ni 243)
+        if (digits.startsWith('243')) digits = digits.slice(3);
+        if (digits.startsWith('0')) digits = digits.slice(1);
+    } else if (providerName === 'Orange') {
+        // Exige format local avec le 0: 08XXXXXXXX
+        if (digits.startsWith('243')) digits = '0' + digits.slice(3);
+        if (!digits.startsWith('0')) digits = '0' + digits;
+    } else {
+        // Par défaut (Vodacom, Africell), format international complet 243
+        if (digits.startsWith('0')) digits = '243' + digits.slice(1);
+        if (digits.length === 9) digits = '243' + digits;
+    }
+    return digits;
 }
 
 module.exports = unipesaService;
