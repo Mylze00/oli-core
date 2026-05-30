@@ -78,17 +78,15 @@ exports.handleDeposit = async (req, res) => {
             return;
         }
 
-        // 6. Créditer le Wallet OLI (conversion si montant en CDF)
-        const amountUSD = currency === 'CDF' ? (amount / FC_TO_USD) : amount;
-
+        // 6. Créditer le Wallet OLI (le wallet est en FC)
         // [P1.4] Taux de frais depuis config centralisée
         const TOTAL_FEE_RATE = FEES.TOTAL_DEPOSIT_RATE; // 6% (3% OLI + 3% Unipesa)
         // Le webhook reçoit le montant BRUT demandé (ex: 1060 FC)
         // Pour retrouver le net (ex: 1000 FC) : net = brut / (1 + 0.06)
-        const netAmount = amountUSD / (1 + TOTAL_FEE_RATE);
-        const feeAmount = amountUSD - netAmount;
+        const netAmount = amount / (1 + TOTAL_FEE_RATE);
+        const feeAmount = amount - netAmount;
 
-        console.log(`💰 Crédit Wallet OLI : user ${userId} → +${netAmount.toFixed(4)} USD net (${amount} ${currency} brut, ${(TOTAL_FEE_RATE * 100)}% frais)`);
+        console.log(`💰 Crédit Wallet OLI : user ${userId} → +${netAmount.toFixed(2)} FC net (${amount} ${currency} brut, ${(TOTAL_FEE_RATE * 100)}% frais)`);
 
         // Crédit au client (montant net)
         await walletRepository.performDeposit(userId, netAmount, {
@@ -116,7 +114,7 @@ exports.handleDeposit = async (req, res) => {
             );
         }
 
-        console.log(`✅ Wallet crédité: user #${userId} → +${netAmount.toFixed(4)} USD (frais: ${feeAmount.toFixed(4)} USD → Banque OLI)`);
+        console.log(`✅ Wallet crédité: user #${userId} → +${netAmount.toFixed(2)} FC (frais: ${feeAmount.toFixed(2)} FC → Banque OLI)`);
 
     } catch (err) {
         // La réponse 200 a déjà été envoyée — on logue seulement l'erreur
