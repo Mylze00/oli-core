@@ -1,6 +1,11 @@
 const walletRepository = require('../repositories/wallet.repository');
 const pool = require('../config/db');
 const unipesaService = require('../services/unipesa.service');
+const { FEES, FC_TO_USD_FALLBACK } = require('../config/index'); // [P1.4]
+
+const FC_TO_USD = FC_TO_USD_FALLBACK; // Depuis config — plus de hardcode
+const STATUS    = { SUCCESS: 2, FAILED: 3, PENDING: 1 };
+
 
 /**
  * Contrôleur Webhooks Unipesa
@@ -10,15 +15,13 @@ const unipesaService = require('../services/unipesa.service');
  *  POST /webhooks/unipesa/withdrawal — Confirmation B2C (OLI → client)
  */
 
-const FC_TO_USD = 2800; // Constante à harmoniser avec wallet.service.js si besoin
-
 // Codes de statut Unipesa
-const STATUS = {
-    INITIATED:  0,
+const UNIPESA_CODES = {
+    INITIATED:   0,
     IN_PROGRESS: 1,
-    SUCCESS:    2,
-    FAILED:     3,
-    CANCELLED:  4,
+    SUCCESS:     2,
+    FAILED:      3,
+    CANCELLED:   4,
 };
 
 /**
@@ -30,66 +33,94 @@ exports.handleDeposit = async (req, res) => {
         const payload = req.body;
         console.log('📨 Webhook Unipesa C2B reçu:', JSON.stringify(payload));
 
-        // 1. Vérification de la signature
+        // 1. Vérification de la signature AVANT tout traitement
         if (!unipesaService.verifyWebhookSignature(payload)) {
             console.warn('⚠️ Signature Unipesa invalide — Webhook rejeté.');
             return res.status(403).json({ error: 'Signature invalide' });
         }
 
-        // 2. On répond immédiatement 200 à Unipesa pour éviter les retries
+        // 2. [FIX B6] Répondre 200 immédiatement à Unipesa pour éviter les retries.
+        //    Le traitement se fait en fire-and-forget SÉCURISÉ ci-dessous.
         res.status(200).json({ received: true });
 
-        // 3. On traite uniquement les statuts SUCCESS (2)
-        if (parseInt(payload.status) !== STATUS.SUCCESS) {
+        // 3. Traiter uniquement les statuts SUCCESS (2)
+        if (parseInt(payload.status) !== UNIPESA_CODES.SUCCESS) {
             console.log(`ℹ️ Unipesa C2B — Statut non-terminal (${payload.status}), ignoré.`);
             return;
         }
 
-        const orderId    = payload.order_id;
-        const amount     = parseFloat(payload.amount) || 0;
-        const currency   = payload.currency || 'USD';
+        const orderId  = payload.order_id;
+        const amount   = parseFloat(payload.amount) || 0;
+        const currency = payload.currency || 'USD';
 
         if (!orderId || amount <= 0) {
             console.error('❌ Webhook C2B Unipesa invalide: orderId ou montant manquant');
             return;
         }
 
-        // 4. Retrouver l'utilisateur à partir de la référence (format: DEP_userId_timestamp ou CARD_userId_timestamp)
-        const match = orderId.match(/^(DEP|CARD)_(\d+)_\d+/);
+        // 4. Retrouver l'utilisateur via la référence
+        // FORMAT OFFICIEL : DEP-{userId}-{ts} ou WD-{userId}-{ts} (TIRETS)
+        // Le regex accepte les tirets uniquement — format standardisé depuis wallet.service et unipesa.service
+        const match = orderId.match(/^(DEP|CARD|WD)-(\d+)-\d+/);
         if (!match) {
-            console.error(`❌ Format de référence non reconnu: ${orderId}`);
+            console.error(`❌ Format de référence non reconnu: ${orderId} (attendu: DEP-userId-ts ou WD-userId-ts)`);
             return;
         }
         const userId = parseInt(match[2]);
 
-        console.log(`💰 Crédit du Wallet OLI : user ${userId} → +${amount} ${currency} (Réf: ${orderId})`);
+        // 5. Vérifier l'idempotence — éviter le double crédit
+        const existing = await pool.query(
+            `SELECT status FROM wallet_transactions WHERE reference = $1 AND type = 'deposit'`,
+            [orderId]
+        );
+        if (existing.rows.length > 0) {
+            console.log(`ℹ️ Webhook déjà traité pour ${orderId} — ignoré (idempotence).`);
+            return;
+        }
 
-        // 5. Créditer le Wallet OLI (conversion si nécessaire)
+        // 6. Créditer le Wallet OLI (conversion si montant en CDF)
         const amountUSD = currency === 'CDF' ? (amount / FC_TO_USD) : amount;
 
-        // Le montant reçu ici est le montant total (105%).
-        // On sépare le montant net (100%) et la commission (5%).
-        const netAmount = amountUSD / 1.05;
+        // [P1.4] Taux de frais depuis config centralisée
+        const TOTAL_FEE_RATE = FEES.TOTAL_DEPOSIT_RATE; // 6% (3% OLI + 3% Unipesa)
+        // Le webhook reçoit le montant BRUT demandé (ex: 1060 FC)
+        // Pour retrouver le net (ex: 1000 FC) : net = brut / (1 + 0.06)
+        const netAmount = amountUSD / (1 + TOTAL_FEE_RATE);
         const feeAmount = amountUSD - netAmount;
 
-        // Crédit au client
+        console.log(`💰 Crédit Wallet OLI : user ${userId} → +${netAmount.toFixed(4)} USD net (${amount} ${currency} brut, ${(TOTAL_FEE_RATE * 100)}% frais)`);
+
+        // Crédit au client (montant net)
         await walletRepository.performDeposit(userId, netAmount, {
             type:        'deposit',
             provider:    'UNIPESA',
             reference:   orderId,
-            description: `Dépôt Mobile Money confirmé par Unipesa (${payload.provider_id || ''})`,
+            description: `Recharge Mobile Money confirmée (${payload.provider_id || currency}) — ${amount} ${currency} brut`,
         });
 
-        // Crédit à la Banque OLI
+        // Mettre à jour l'état dans unipesa_operations pour que le polling fonctionne
+        await pool.query(
+            `UPDATE unipesa_operations 
+             SET status = 'success', confirmed_at = NOW(), webhook_payload = $1
+             WHERE oli_order_id = $2 OR unipesa_order_id = $2`,
+            [JSON.stringify(payload), orderId]
+        );
+
+        // Crédit des frais à la Banque OLI (user 0)
         if (feeAmount > 0) {
             const walletService = require('../services/wallet.service');
-            await walletService._creditSystemWallet(feeAmount, `${orderId}_FEE`, `Frais 5% sur dépôt C2B (User #${userId})`);
+            await walletService._creditSystemWallet(
+                feeAmount,
+                `${orderId}_FEE`,
+                `Frais 6% recharge C2B (User #${userId}) — ${amount} ${currency}`
+            );
         }
 
-        console.log(`✅ Wallet crédité avec succès : user ${userId} → +${netAmount} USD (Frais: ${feeAmount} USD)`);
+        console.log(`✅ Wallet crédité: user #${userId} → +${netAmount.toFixed(4)} USD (frais: ${feeAmount.toFixed(4)} USD → Banque OLI)`);
 
     } catch (err) {
-        console.error('Erreur handleDeposit Unipesa:', err.message);
+        // La réponse 200 a déjà été envoyée — on logue seulement l'erreur
+        console.error('❌ Erreur traitement webhook handleDeposit:', err.message, err.stack);
     }
 };
 
@@ -115,8 +146,16 @@ exports.handleWithdrawal = async (req, res) => {
         const status  = parseInt(payload.status);
 
         // 3. Si le décaissement a ÉCHOUÉ (status 3), on rembourse le wallet
-        if (status === STATUS.FAILED || status === STATUS.CANCELLED) {
-            const match = orderId.match(/^WD_(\d+)_\d+/);
+        if (status === UNIPESA_CODES.FAILED || status === UNIPESA_CODES.CANCELLED) {
+            await pool.query(
+                `UPDATE unipesa_operations 
+                 SET status = 'failed', error_message = $1, webhook_payload = $2
+                 WHERE oli_order_id = $3 OR unipesa_order_id = $3`,
+                [payload.description || 'Echec retrait', JSON.stringify(payload), orderId]
+            );
+
+            // FORMAT OFFICIEL : WD-{userId}-{ts} (tirets) — aligné avec wallet.service et unipesa.service
+            const match = orderId.match(/^WD-(\d+)-\d+/);
             if (match) {
                 const userId = parseInt(match[1]);
                 const amount = parseFloat(payload.amount) || 0;
@@ -149,13 +188,19 @@ exports.handleWithdrawal = async (req, res) => {
         }
 
         // 4. Si SUCCÈS, on met juste à jour le statut en base de données (le débit avait déjà été fait)
-        if (status === STATUS.SUCCESS) {
+        if (status === UNIPESA_CODES.SUCCESS) {
             console.log(`✅ Retrait Unipesa confirmé : ${orderId}`);
             await pool.query(
                 `UPDATE wallet_transactions 
                  SET status = 'completed', description = description || ' [Confirmé par Unipesa]'
                  WHERE reference = $1`,
                 [orderId]
+            );
+            await pool.query(
+                `UPDATE unipesa_operations 
+                 SET status = 'success', confirmed_at = NOW(), webhook_payload = $1
+                 WHERE oli_order_id = $2 OR unipesa_order_id = $2`,
+                [JSON.stringify(payload), orderId]
             );
         }
 

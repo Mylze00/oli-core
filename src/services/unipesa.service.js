@@ -97,12 +97,13 @@ const unipesaService = {
         const oliOrderId = _generateOliOrderId(uid, 'DEP');
 
         // ── Calcul des frais ──────────────────────────────────────────────────
-        // L'utilisateur saisit le montant BRUT qu'il souhaite envoyer depuis son Mobile Money.
-        // Les frais (6%) sont déduits pour obtenir le montant NET crédité sur le wallet OLI.
-        const aggregatorFeeFC = Math.round(amountFC * AGGREGATOR_FEE_RATE); // 3% Unipesa
-        const oliFeeFC        = Math.round(amountFC * OLI_FEE_RATE);        // 3% OLI
+        // L'utilisateur saisit le montant NET qu'il souhaite recevoir sur son Wallet OLI.
+        // Les frais (6%) sont AJOUTÉS pour obtenir le montant BRUT demandé via Mobile Money.
+        const netFC           = amountFC;                                    // Montant crédité
+        const aggregatorFeeFC = Math.round(netFC * AGGREGATOR_FEE_RATE);     // 3% Unipesa
+        const oliFeeFC        = Math.round(netFC * OLI_FEE_RATE);            // 3% OLI
         const totalFeeFC      = aggregatorFeeFC + oliFeeFC;                  // 6% total
-        const netFC           = amountFC - totalFeeFC;                       // Montant crédité
+        const grossFC         = netFC + totalFeeFC;                          // Montant demandé à AvadaPay
 
         // Enregistrer l'opération en statut "pending" AVANT l'appel API
         // → garantit la traçabilité même si l'API tombe
@@ -110,9 +111,9 @@ const unipesaService = {
             INSERT INTO unipesa_operations
                 (oli_order_id, user_id, phone, amount_fc, provider, operation_type, status, expires_at)
             VALUES ($1, $2, $3, $4, $5, 'deposit', 'pending', NOW() + INTERVAL '10 minutes')
-        `, [oliOrderId, uid, phone, amountFC, _detectProvider(phone)]);
+        `, [oliOrderId, uid, phone, grossFC, _detectProvider(phone)]);
 
-        console.log(`💱 Frais: ${amountFC} FC brut → ${totalFeeFC} FC frais (${aggregatorFeeFC} FC Unipesa + ${oliFeeFC} FC OLI) → ${netFC} FC net`);
+        console.log(`💱 Frais: ${netFC} FC net → ${totalFeeFC} FC frais (${aggregatorFeeFC} FC Unipesa + ${oliFeeFC} FC OLI) → ${grossFC} FC brut demandé`);
 
         try {
             const providerName = _detectProvider(phone);
@@ -121,14 +122,14 @@ const unipesaService = {
                 customer_id: _formatPhoneForProvider(phone, providerName),
                 customer_user_id: `user-${userId}`,
                 order_id:    oliOrderId,
-                amount:      Math.round(amountFC).toString(),
+                amount:      Math.round(grossFC).toString(),
                 currency:    'CDF', // Franc Congolais
                 provider_id: _getProviderId(providerName),
                 callback_url: 'https://oli-core.onrender.com/webhooks/unipesa/deposit',
             };
             payload.signature = _buildSignature(payload);
 
-            console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${amountFC} FC → ${phone}`);
+            console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${grossFC} FC brut demandé → ${phone}`);
 
             const response = await axios.post(
                 `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/payment_c2b`,
@@ -151,7 +152,7 @@ const unipesaService = {
                 oliOrderId,
                 unipesaOrderId,
                 status:           'pending',
-                amountFC,                           // Montant brut envoyé (FC)
+                amountFC:         grossFC,                  // Montant brut envoyé (FC)
                 aggregatorFeeFC,                    // 3% frais Unipesa (FC)
                 oliFeeFC,                           // 3% commission OLI (FC)
                 totalFeeFC,                         // 6% total frais (FC)
@@ -452,7 +453,6 @@ function _detectProvider(phone) {
     if (/^(07[2-7])/.test(local))          return 'Africell';
     return 'Mobile Money';
 }
-
 
 /**
  * Convertit le nom du provider en ID provider AvadaPay.
