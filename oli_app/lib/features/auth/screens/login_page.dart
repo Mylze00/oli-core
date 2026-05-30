@@ -1,10 +1,10 @@
+import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_controller.dart';
 import 'otp_page.dart';
-import '../../home/home_page.dart';
-
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -22,28 +22,36 @@ class _LoginPageState extends ConsumerState<LoginPage>
   bool _isValid = false;
   bool _hasPrefixError = false;
 
+  // Animation controllers
   late AnimationController _shakeController;
   late AnimationController _logoController;
+  late AnimationController _breatheController;
+  late AnimationController _contentController;
+
   late Animation<double> _logoScale;
   late Animation<double> _logoFade;
+  late Animation<double> _breatheScale;
+  late Animation<double> _contentFade;
+  late Animation<Offset> _contentSlide;
 
   @override
   void initState() {
     super.initState();
     _phoneController.addListener(_onPhoneChanged);
 
+    // 🔄 Shake animation (erreur préfixe)
     _shakeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
 
-    // 🎬 Animation du logo
+    // 🎬 Logo entrance animation
     _logoController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1000),
     );
 
-    _logoScale = Tween<double>(begin: 0.85, end: 1).animate(
+    _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
       CurvedAnimation(
         parent: _logoController,
         curve: Curves.easeOutBack,
@@ -53,11 +61,51 @@ class _LoginPageState extends ConsumerState<LoginPage>
     _logoFade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
         parent: _logoController,
-        curve: Curves.easeIn,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeIn),
       ),
     );
 
-    _logoController.forward();
+    // 🫁 Logo breathing animation (continu)
+    _breatheController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    );
+
+    _breatheScale = Tween<double>(begin: 0.97, end: 1.03).animate(
+      CurvedAnimation(
+        parent: _breatheController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    // 📝 Content fade-in (champs, boutons)
+    _contentController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _contentFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _contentController,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    _contentSlide = Tween<Offset>(
+      begin: const Offset(0, 0.15),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _contentController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    // Séquence d'animations
+    _logoController.forward().then((_) {
+      _breatheController.repeat(reverse: true);
+      _contentController.forward();
+    });
   }
 
   @override
@@ -65,6 +113,8 @@ class _LoginPageState extends ConsumerState<LoginPage>
     _phoneController.dispose();
     _shakeController.dispose();
     _logoController.dispose();
+    _breatheController.dispose();
+    _contentController.dispose();
     super.dispose();
   }
 
@@ -116,190 +166,402 @@ class _LoginPageState extends ConsumerState<LoginPage>
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
+    final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1E7DBA),
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            children: [
-              const Spacer(),
+      backgroundColor: const Color(0xFF2196C8),
+      body: Stack(
+        children: [
+          // 🎨 FOND — CustomPainter (ovale bleu marine + courbe)
+          CustomPaint(
+            size: size,
+            painter: _BackgroundPainter(),
+          ),
 
-              // 🔵 LOGO AGRANDI – SANS OMBRE – LÉGÈREMENT REMONTÉ
-              FadeTransition(
-                opacity: _logoFade,
-                child: ScaleTransition(
-                  scale: _logoScale,
-                  child: Transform.translate(
-                    offset: const Offset(0, -25),
-                    child: Column(
-                      children: [
-                        Image.asset(
-                          'assets/images/logo.png',
-                          height: 180, // ≈ 200%
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          '',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 3,
+          // 📱 CONTENU
+          SafeArea(
+            child: SizedBox(
+              width: size.width,
+              height: size.height - MediaQuery.of(context).padding.top,
+              child: Column(
+                children: [
+                  const Spacer(flex: 2),
+
+                  // 🔵 LOGO avec Hero + Breathing
+                  FadeTransition(
+                    opacity: _logoFade,
+                    child: ScaleTransition(
+                      scale: _logoScale,
+                      child: AnimatedBuilder(
+                        animation: _breatheController,
+                        builder: (context, child) {
+                          return Transform.scale(
+                            scale: _breatheScale.value,
+                            child: child,
+                          );
+                        },
+                        child: Hero(
+                          tag: 'oli_logo',
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            height: 180,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              const Text(
-                'N° Téléphone',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-
-              const SizedBox(height: 22),
-
-              AnimatedBuilder(
-                animation: _shakeController,
-                builder: (context, child) {
-                  final offset = 12 * (1 - _shakeController.value);
-                  return Transform.translate(
-                    offset: Offset(offset, 0),
-                    child: child,
-                  );
-                },
-                child: SizedBox(
-                  width: 290,
-                  child: TextField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    maxLength: 13,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^\+243\d*'),
-                      ),
-                    ],
-                    decoration: InputDecoration(
-                      counterText: '',
-                      filled: true,
-                      fillColor: Colors.white,
-                      hintText: '812345678',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(32),
-                        borderSide: BorderSide.none,
                       ),
                     ),
                   ),
-                ),
-              ),
 
-              const SizedBox(height: 14),
+                  const Spacer(flex: 1),
 
-              if (_hasPrefixError)
-                const Text(
-                  'Préfixe non reconnu',
-                  style: TextStyle(
-                    color: Colors.redAccent,
-                    fontWeight: FontWeight.bold,
-                  ),
-                )
-              else if (_operator != null)
-                Text(
-                  'Opérateur : $_operator',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                  ),
-                ),
+                  // 📝 FORMULAIRE (fade-in avec slide)
+                  FadeTransition(
+                    opacity: _contentFade,
+                    child: SlideTransition(
+                      position: _contentSlide,
+                      child: Column(
+                        children: [
+                          // Label
+                          const Text(
+                            'N° Téléphone',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
 
-              const SizedBox(height: 36),
+                          const SizedBox(height: 20),
 
-              SizedBox(
-                width: 230,
-                height: 56,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF1E7DBA),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(32),
-                    ),
-                  ),
-                  onPressed: (_isValid && !authState.isLoading)
-                      ? () async {
-                          final phone = _phoneController.text;
-                          final otpCode = await ref
-                              .read(authControllerProvider.notifier)
-                              .sendOtp(phone);
-
-                          if (otpCode != null && mounted) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => OtpPage(phone: phone, otpCode: otpCode),
+                          // 📞 Champ téléphone avec shake
+                          AnimatedBuilder(
+                            animation: _shakeController,
+                            builder: (context, child) {
+                              final sineValue = math.sin(
+                                _shakeController.value * math.pi * 4,
+                              );
+                              return Transform.translate(
+                                offset: Offset(
+                                  sineValue * 10 * (1 - _shakeController.value),
+                                  0,
+                                ),
+                                child: child,
+                              );
+                            },
+                            child: Container(
+                              width: 300,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(32),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.15),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
                               ),
-                            );
-                          }
-                        }
-                      : null,
-                  child: authState.isLoading
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text(
-                          'SE CONNECTER',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                              child: TextField(
+                                controller: _phoneController,
+                                keyboardType: TextInputType.phone,
+                                maxLength: 13,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF0B1727),
+                                ),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\+243\d*'),
+                                  ),
+                                ],
+                                decoration: InputDecoration(
+                                  counterText: '',
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  hintText: '+243',
+                                  hintStyle: TextStyle(
+                                    color: Colors.grey.shade400,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 18,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(32),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(32),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(32),
+                                    borderSide: const BorderSide(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                ),
-              ),
 
-              if (authState.error != null)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    authState.error!,
-                    style: const TextStyle(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.bold,
+                          const SizedBox(height: 12),
+
+                          // 📡 Opérateur / Erreur
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            child: _hasPrefixError
+                                ? const Text(
+                                    'Préfixe non reconnu',
+                                    key: ValueKey('error'),
+                                    style: TextStyle(
+                                      color: Colors.redAccent,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  )
+                                : _operator != null
+                                    ? Text(
+                                        'Opérateur : $_operator',
+                                        key: ValueKey(_operator),
+                                        style: TextStyle(
+                                          color: const Color.fromRGBO(255, 255, 255, 0.9),
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      )
+                                    : const SizedBox(
+                                        height: 18,
+                                        key: ValueKey('empty'),
+                                      ),
+                          ),
+
+                          const SizedBox(height: 28),
+
+                          // 🔘 BOUTON GLASSMORPHISM
+                          _GlassButton(
+                            label: 'Se connecter',
+                            isLoading: authState.isLoading,
+                            isEnabled: _isValid && !authState.isLoading,
+                            onPressed: (_isValid && !authState.isLoading)
+                                ? () async {
+                                    final phone = _phoneController.text;
+                                    final otpCode = await ref
+                                        .read(authControllerProvider.notifier)
+                                        .sendOtp(phone);
+
+                                    if (otpCode != null && mounted) {
+                                      Navigator.push(
+                                        context,
+                                        PageRouteBuilder(
+                                          transitionDuration:
+                                              const Duration(milliseconds: 500),
+                                          reverseTransitionDuration:
+                                              const Duration(milliseconds: 400),
+                                          pageBuilder: (context, animation,
+                                              secondaryAnimation) {
+                                            return OtpPage(
+                                              phone: phone,
+                                              otpCode: otpCode,
+                                            );
+                                          },
+                                          transitionsBuilder: (context,
+                                              animation,
+                                              secondaryAnimation,
+                                              child) {
+                                            return SlideTransition(
+                                              position: Tween<Offset>(
+                                                begin: const Offset(1.0, 0.0),
+                                                end: Offset.zero,
+                                              ).animate(CurvedAnimation(
+                                                parent: animation,
+                                                curve: Curves.easeOutCubic,
+                                              )),
+                                              child: FadeTransition(
+                                                opacity: animation,
+                                                child: child,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    }
+                                  }
+                                : null,
+                          ),
+
+                          // ❌ Erreur auth
+                          if (authState.error != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: Text(
+                                authState.error!,
+                                style: const TextStyle(
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
-              const Spacer(),
+                  const Spacer(flex: 2),
 
-              // 📝 SLOGAN
-              Padding(
-                padding: const EdgeInsets.only(bottom: 18),
-                child: Text(
-                  'Acheter et vendez comme jamais auparavant',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.4,
+                  // ✨ SLOGAN en bas — Police LetterMagic
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
+                    child: Text(
+                      'Simple, Rapide, Sûr',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'LetterMagic',
+                        fontSize: 36,
+                        color: const Color.fromRGBO(255, 255, 255, 0.95),
+                        letterSpacing: 1.5,
+                        height: 1.2,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎨 CUSTOM PAINTER — Fond avec ovale bleu marine
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _BackgroundPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. Fond teal complet
+    final tealPaint = Paint()..color = const Color(0xFF2196C8);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      tealPaint,
+    );
+
+    // 2. Grand ovale bleu marine foncé
+    final darkPaint = Paint()..color = const Color(0xFF0B1727);
+
+    final ovalPath = Path();
+    final ovalHeight = size.height * 0.78;
+
+    ovalPath.moveTo(-size.width * 0.15, 0);
+    ovalPath.lineTo(size.width * 1.15, 0);
+    ovalPath.lineTo(size.width * 1.15, ovalHeight - 80);
+
+    // Courbe douce en bas de l'ovale
+    ovalPath.quadraticBezierTo(
+      size.width * 0.5,   // point de contrôle X (centre)
+      ovalHeight + 60,     // point de contrôle Y (plus bas pour l'arrondi)
+      -size.width * 0.15,  // fin X
+      ovalHeight - 80,     // fin Y
+    );
+
+    ovalPath.close();
+    canvas.drawPath(ovalPath, darkPaint);
+
+    // 3. Subtile lueur en haut de l'ovale
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(0, -0.5),
+        radius: 0.8,
+        colors: [
+          const Color(0xFF1A3A5C).withOpacity(0.4),
+          const Color(0xFF0B1727).withOpacity(0.0),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, ovalHeight));
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, ovalHeight),
+      glowPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔘 GLASSMORPHISM BUTTON — Effet verre dépoli style iOS
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _GlassButton extends StatelessWidget {
+  final String label;
+  final bool isLoading;
+  final bool isEnabled;
+  final VoidCallback? onPressed;
+
+  const _GlassButton({
+    required this.label,
+    required this.isLoading,
+    required this.isEnabled,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: isEnabled ? onPressed : null,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 300),
+        opacity: isEnabled ? 1.0 : 0.5,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              width: 230,
+              height: 56,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(32),
+                color: Colors.white.withOpacity(0.2),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.4),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.05),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Center(
+                child: isLoading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+              ),
+            ),
           ),
         ),
       ),

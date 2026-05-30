@@ -62,8 +62,6 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   pdf: ^3.11.1
   printing: ^5.13.2
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
 
 
 dev_dependencies:
@@ -111,3 +109,6 @@ flutter:
     - family: olive_palm
       fonts:
         - asset: assets/fonts/olive_palm.otf
+    - family: LetterMagic
+      fonts:
+        - asset: assets/fonts/Letter Magic.ttf
