@@ -15,7 +15,6 @@ router.get('/', async (req, res) => {
     try {
         const { search, role, status, limit = 30, offset = 0 } = req.query;
 
-        // ── Conditions de filtre ──
         const conditions = [];
         const params = [];
         let paramIndex = 1;
@@ -36,13 +35,11 @@ router.get('/', async (req, res) => {
 
         const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-        // ── Total count (avec filtres) ──
         const countResult = await pool.query(
             `SELECT COUNT(*) as total FROM users ${whereClause}`,
             params.slice(0, paramIndex - 1)
         );
 
-        // ── Liste paginée ──
         const listParams = [...params.slice(0, paramIndex - 1)];
         const limitIdx = paramIndex++;
         const offsetIdx = paramIndex++;
@@ -50,17 +47,18 @@ router.get('/', async (req, res) => {
 
         const result = await pool.query(`
             SELECT 
-                id, phone, name, id_oli, wallet, avatar_url,
-                is_admin, is_seller, is_deliverer, is_suspended, is_verified,
-                account_type, has_certified_shop,
-                created_at, last_profile_update
-            FROM users
+                u.id, u.phone, u.name, u.id_oli, u.avatar_url,
+                u.is_admin, u.is_seller, u.is_deliverer, u.is_suspended, u.is_verified,
+                u.account_type, u.has_certified_shop,
+                u.created_at, u.last_profile_update,
+                COALESCE(w.balance, u.wallet::DECIMAL, 0) as wallet
+            FROM users u
+            LEFT JOIN wallets w ON w.user_id = u.id
             ${whereClause}
-            ORDER BY created_at DESC 
+            ORDER BY u.created_at DESC 
             LIMIT $${limitIdx} OFFSET $${offsetIdx}
         `, listParams);
 
-        // ── Stats globales (sans filtres) ──
         const statsResult = await pool.query(`
             SELECT 
                 COUNT(*) as total,
@@ -104,6 +102,32 @@ router.get('/:id', async (req, res) => {
 
         if (userResult.rows.length === 0) {
             return res.status(404).json({ error: 'Utilisateur non trouvé' });
+        }
+
+        // ── Solde réel depuis la table wallets ──
+        let walletBalance = parseFloat(userResult.rows[0].wallet || 0);
+        try {
+            const wRes = await pool.query('SELECT balance FROM wallets WHERE user_id = $1', [id]);
+            if (wRes.rows.length > 0) walletBalance = parseFloat(wRes.rows[0].balance);
+        } catch (e) { console.warn('wallets query error:', e.message); }
+
+        // ── Transactions wallet depuis wallet_transactions ──
+        let walletTransactions = [];
+        try {
+            const wtRes = await pool.query(
+                `SELECT id, type, amount, description, reference, status, created_at
+                 FROM wallet_transactions WHERE user_id = $1
+                 ORDER BY created_at DESC LIMIT 50`,
+                [id]
+            );
+            walletTransactions = wtRes.rows;
+        } catch (e) {
+            try {
+                const txRes = await pool.query(
+                    `SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [id]
+                );
+                walletTransactions = txRes.rows;
+            } catch (e2) { console.warn('transactions fallback error:', e2.message); }
         }
 
         // ── Stats produits ──
@@ -179,21 +203,10 @@ router.get('/:id', async (req, res) => {
             recentOrders = roResult.rows;
         } catch (e) { console.warn('recent orders error:', e.message); }
 
-        // ── Transactions wallet ──
-        let transactions = [];
-        try {
-            const txResult = await pool.query(`
-                SELECT * FROM transactions 
-                WHERE user_id = $1 
-                ORDER BY created_at DESC 
-                LIMIT 50
-            `, [id]);
-            transactions = txResult.rows;
-        } catch (e) { console.warn("Table transactions non trouvée:", e.message); }
-
         res.json({
             user: userResult.rows[0],
-            transactions,
+            wallet_balance: walletBalance,      // Solde réel FC depuis wallets
+            transactions: walletTransactions,   // Depuis wallet_transactions
             recentOrders,
             shops,
             stats: {
@@ -211,8 +224,82 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
+ * PATCH /admin/users/:id/wallet
+ * Modifier le solde du wallet d'un utilisateur (Admin uniquement)
+ */
+router.patch('/:id/wallet', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { amount, reason } = req.body;
+        const adminId = req.user?.id || 0;
+
+        if (amount === undefined || isNaN(parseFloat(amount))) {
+            return res.status(400).json({ error: 'Montant invalide' });
+        }
+        const newBalance = parseFloat(amount);
+        if (newBalance < 0) {
+            return res.status(400).json({ error: 'Le solde ne peut pas être négatif' });
+        }
+
+        await client.query('BEGIN');
+
+        // Lire le solde actuel
+        const currentRes = await client.query(
+            'SELECT balance FROM wallets WHERE user_id = $1 FOR UPDATE', [id]
+        );
+        const oldBalance = currentRes.rows.length > 0 ? parseFloat(currentRes.rows[0].balance) : 0;
+
+        if (currentRes.rows.length === 0) {
+            // Créer le wallet s'il n'existe pas
+            await client.query(
+                "INSERT INTO wallets (user_id, balance, currency) VALUES ($1, $2, 'FC') ON CONFLICT (user_id) DO UPDATE SET balance = $2, updated_at = NOW()",
+                [id, newBalance]
+            );
+        } else {
+            await client.query(
+                'UPDATE wallets SET balance = $1, updated_at = NOW() WHERE user_id = $2',
+                [newBalance, id]
+            );
+        }
+
+        // Sync users.wallet pour compatibilité
+        await client.query('UPDATE users SET wallet = $1 WHERE id = $2', [newBalance, id]);
+
+        // Enregistrer la transaction
+        const diff = newBalance - oldBalance;
+        await client.query(`
+            INSERT INTO wallet_transactions
+                (user_id, type, amount, balance_before, balance_after, currency, description, status, metadata)
+            VALUES ($1, 'system_credit', $2, $3, $4, 'FC', $5, 'completed', $6)
+        `, [
+            id,
+            Math.abs(diff),
+            oldBalance,
+            newBalance,
+            reason || `Ajustement administrateur (#${adminId})`,
+            JSON.stringify({ admin_id: adminId, reason: reason || 'manual_adjustment', old_balance: oldBalance, new_balance: newBalance })
+        ]);
+
+        await client.query('COMMIT');
+
+        res.json({
+            success: true,
+            message: `Solde mis à jour : ${oldBalance} FC → ${newBalance} FC`,
+            oldBalance,
+            newBalance,
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Erreur PATCH /admin/users/:id/wallet:', err);
+        res.status(500).json({ error: 'Erreur serveur: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+/**
  * PATCH /admin/users/:id/role
- * Modifier les rôles d'un utilisateur
  */
 router.patch('/:id/role', async (req, res) => {
     try {
@@ -223,35 +310,19 @@ router.patch('/:id/role', async (req, res) => {
         const values = [];
         let paramIndex = 1;
 
-        if (typeof is_admin === 'boolean') {
-            updates.push(`is_admin = $${paramIndex++}`);
-            values.push(is_admin);
-        }
-        if (typeof is_seller === 'boolean') {
-            updates.push(`is_seller = $${paramIndex++}`);
-            values.push(is_seller);
-        }
-        if (typeof is_deliverer === 'boolean') {
-            updates.push(`is_deliverer = $${paramIndex++}`);
-            values.push(is_deliverer);
-        }
+        if (typeof is_admin === 'boolean') { updates.push(`is_admin = $${paramIndex++}`); values.push(is_admin); }
+        if (typeof is_seller === 'boolean') { updates.push(`is_seller = $${paramIndex++}`); values.push(is_seller); }
+        if (typeof is_deliverer === 'boolean') { updates.push(`is_deliverer = $${paramIndex++}`); values.push(is_deliverer); }
 
-        if (updates.length === 0) {
-            return res.status(400).json({ error: 'Aucune modification fournie' });
-        }
+        if (updates.length === 0) return res.status(400).json({ error: 'Aucune modification fournie' });
 
         values.push(id);
         const result = await pool.query(`
-            UPDATE users 
-            SET ${updates.join(', ')}, updated_at = NOW()
-            WHERE id = $${paramIndex}
-            RETURNING *
+            UPDATE users SET ${updates.join(', ')}, updated_at = NOW()
+            WHERE id = $${paramIndex} RETURNING *
         `, values);
 
-        res.json({
-            message: 'Rôle mis à jour',
-            user: result.rows[0]
-        });
+        res.json({ message: 'Rôle mis à jour', user: result.rows[0] });
     } catch (err) {
         console.error('Erreur PATCH /admin/users/:id/role:', err);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -260,22 +331,13 @@ router.patch('/:id/role', async (req, res) => {
 
 /**
  * POST /admin/users/:id/suspend
- * Suspendre/débloquer un utilisateur
  */
 router.post('/:id/suspend', async (req, res) => {
     try {
         const { id } = req.params;
         const { suspended } = req.body;
-
-        await pool.query(`
-            UPDATE users 
-            SET is_suspended = $1, updated_at = NOW()
-            WHERE id = $2
-        `, [suspended, id]);
-
-        res.json({
-            message: suspended ? 'Utilisateur suspendu' : 'Utilisateur débloqué'
-        });
+        await pool.query(`UPDATE users SET is_suspended = $1, updated_at = NOW() WHERE id = $2`, [suspended, id]);
+        res.json({ message: suspended ? 'Utilisateur suspendu' : 'Utilisateur débloqué' });
     } catch (err) {
         console.error('Erreur POST /admin/users/:id/suspend:', err);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -284,28 +346,17 @@ router.post('/:id/suspend', async (req, res) => {
 
 /**
  * POST /admin/users/:id/hide
- * Masquer/afficher un utilisateur et ses produits du marketplace
  */
 router.post('/:id/hide', async (req, res) => {
     try {
         const { id } = req.params;
         const { hidden } = req.body;
-
         const result = await pool.query(`
-            UPDATE users 
-            SET is_hidden = $1, updated_at = NOW()
-            WHERE id = $2
-            RETURNING id, name, is_hidden
+            UPDATE users SET is_hidden = $1, updated_at = NOW()
+            WHERE id = $2 RETURNING id, name, is_hidden
         `, [hidden, id]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Utilisateur non trouvé' });
-        }
-
-        res.json({
-            message: hidden ? 'Utilisateur masqué avec succès' : 'Utilisateur rendu visible avec succès',
-            user: result.rows[0]
-        });
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+        res.json({ message: hidden ? 'Utilisateur masqué' : 'Utilisateur visible', user: result.rows[0] });
     } catch (err) {
         console.error('Erreur POST /admin/users/:id/hide:', err);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -314,28 +365,17 @@ router.post('/:id/hide', async (req, res) => {
 
 /**
  * PATCH /admin/users/:id/verify
- * Toggle le statut vérifié d'un utilisateur
  */
 router.patch('/:id/verify', async (req, res) => {
     try {
         const { id } = req.params;
         const { verified } = req.body;
-
         const result = await pool.query(`
-            UPDATE users 
-            SET is_verified = $1, updated_at = NOW()
-            WHERE id = $2
-            RETURNING id, name, phone, is_verified
+            UPDATE users SET is_verified = $1, updated_at = NOW()
+            WHERE id = $2 RETURNING id, name, phone, is_verified
         `, [verified, id]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Utilisateur non trouvé' });
-        }
-
-        res.json({
-            message: verified ? 'Utilisateur vérifié' : 'Vérification retirée',
-            user: result.rows[0]
-        });
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+        res.json({ message: verified ? 'Utilisateur vérifié' : 'Vérification retirée', user: result.rows[0] });
     } catch (err) {
         console.error('Erreur PATCH /admin/users/:id/verify:', err);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -344,7 +384,6 @@ router.patch('/:id/verify', async (req, res) => {
 
 /**
  * PATCH /admin/users/:id/account-type
- * Modifier le type de compte d'un utilisateur
  */
 router.patch('/:id/account-type', async (req, res) => {
     try {
@@ -357,61 +396,42 @@ router.patch('/:id/account-type', async (req, res) => {
 
         if (account_type) {
             const validTypes = ['ordinaire', 'certifie', 'premium', 'entreprise'];
-            if (!validTypes.includes(account_type)) {
-                return res.status(400).json({ error: 'Type de compte invalide' });
-            }
+            if (!validTypes.includes(account_type)) return res.status(400).json({ error: 'Type de compte invalide' });
             updates.push(`account_type = $${paramIndex++}`);
             values.push(account_type);
         }
-
         if (typeof has_certified_shop === 'boolean') {
             updates.push(`has_certified_shop = $${paramIndex++}`);
             values.push(has_certified_shop);
         }
-
-        if (updates.length === 0) {
-            return res.status(400).json({ error: 'Aucune modification fournie' });
-        }
+        if (updates.length === 0) return res.status(400).json({ error: 'Aucune modification fournie' });
 
         values.push(id);
         const result = await pool.query(`
-            UPDATE users 
-            SET ${updates.join(', ')}, updated_at = NOW()
-            WHERE id = $${paramIndex}
-            RETURNING id, name, phone, account_type, has_certified_shop
+            UPDATE users SET ${updates.join(', ')}, updated_at = NOW()
+            WHERE id = $${paramIndex} RETURNING id, name, phone, account_type, has_certified_shop
         `, values);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Utilisateur non trouvé' });
-        }
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Utilisateur non trouvé' });
 
         const updatedUser = result.rows[0];
 
-        // ✨ AUTO-CREATION BOUTIQUE pour les ENTREPRISES
-        // Si l'utilisateur devient "entreprise" et n'a pas de boutique, on en crée une basique
         if (account_type === 'entreprise') {
             const shopRepo = require('../../repositories/shop.repository');
-            // Note: le chemin relatif dépend de la structure, ici src/routes/admin/users.routes.js -> ../../repositories
-
             const userShops = await shopRepo.findByOwnerId(id);
             if (userShops.length === 0) {
-                console.log(`🏗️ Auto-création boutique pour Entreprise User ${id}`);
                 await shopRepo.create({
                     owner_id: id,
                     name: updatedUser.name || 'Boutique Entreprise',
                     description: 'Boutique officielle',
-                    category: 'Autres', // Par défaut
+                    category: 'Autres',
                     location: 'En ligne',
-                    logo_url: null, // Utilisera l'avatar user par défaut dans le front si null
+                    logo_url: null,
                     banner_url: null
                 });
             }
         }
 
-        res.json({
-            message: 'Type de compte mis à jour',
-            user: updatedUser
-        });
+        res.json({ message: 'Type de compte mis à jour', user: updatedUser });
     } catch (err) {
         console.error('Erreur PATCH /admin/users/:id/account-type:', err);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -420,19 +440,15 @@ router.patch('/:id/account-type', async (req, res) => {
 
 /**
  * GET /admin/users/:id/products
- * Récupérer les produits d'un utilisateur
  */
 router.get('/:id/products', async (req, res) => {
     try {
         const { id } = req.params;
         const result = await pool.query(`
             SELECT id, name, description, price, category, images, status, created_at
-            FROM products 
-            WHERE seller_id = $1 
-            ORDER BY created_at DESC
+            FROM products WHERE seller_id = $1 ORDER BY created_at DESC
         `, [id]);
 
-        // Transformer images[] en image_url pour le frontend
         const products = result.rows.map(p => {
             let image_url = null;
             if (p.images && p.images.length > 0) {
@@ -451,7 +467,6 @@ router.get('/:id/products', async (req, res) => {
 
 /**
  * GET /admin/users/:id/conversations
- * Voir les conversations d'un utilisateur (admin)
  */
 router.get('/:id/conversations', async (req, res) => {
     try {
@@ -506,21 +521,18 @@ router.get('/:id/conversations', async (req, res) => {
 
 /**
  * POST /admin/users/:id/message
- * Envoyer un message interne à l'utilisateur (Chat)
  */
 router.post('/:id/message', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id: targetUserId } = req.params;
         const { content } = req.body;
-        const adminId = req.user.id; // L'admin connecté
+        const adminId = req.user.id;
 
         if (!content) return res.status(400).json({ error: 'Message vide' });
 
         await client.query('BEGIN');
 
-        // 1. Chercher une conversation existante entre ces deux users
-        // On cherche une conversation où les deux users sont participants
         const findConvQuery = `
             SELECT cp1.conversation_id 
             FROM conversation_participants cp1
@@ -529,39 +541,28 @@ router.post('/:id/message', async (req, res) => {
             LIMIT 1
         `;
         let convResult = await client.query(findConvQuery, [adminId, targetUserId]);
-
         let conversationId;
 
         if (convResult.rows.length > 0) {
             conversationId = convResult.rows[0].conversation_id;
         } else {
-            // 2. Créer nouvelle conversation si inexistante
-            const newConv = await client.query(`
-                INSERT INTO conversations (created_at, updated_at) VALUES (NOW(), NOW()) RETURNING id
-            `);
+            const newConv = await client.query(`INSERT INTO conversations (created_at, updated_at) VALUES (NOW(), NOW()) RETURNING id`);
             conversationId = newConv.rows[0].id;
-
-            // Ajouter les participants
             await client.query(`
                 INSERT INTO conversation_participants (conversation_id, user_id, joined_at)
                 VALUES ($1, $2, NOW()), ($1, $3, NOW())
             `, [conversationId, adminId, targetUserId]);
         }
 
-        // 3. Insérer le message
         const insertMsg = await client.query(`
             INSERT INTO messages (conversation_id, sender_id, content, type, created_at, is_read)
-            VALUES ($1, $2, $3, 'text', NOW(), false)
-            RETURNING *
+            VALUES ($1, $2, $3, 'text', NOW(), false) RETURNING *
         `, [conversationId, adminId, content]);
 
-        // 4. Mettre à jour la date de la conversation
         await client.query(`UPDATE conversations SET updated_at = NOW() WHERE id = $1`, [conversationId]);
-
         await client.query('COMMIT');
 
         res.json({ success: true, message: insertMsg.rows[0] });
-
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Erreur POST /admin/users/:id/message:', err);

@@ -15,6 +15,8 @@ import {
     BuildingStorefrontIcon,
     EyeIcon,
     EyeSlashIcon,
+    PencilSquareIcon,
+    ArrowPathIcon,
 } from '@heroicons/react/24/solid';
 import api from '../services/api';
 import { getImageUrl } from '../utils/image';
@@ -32,40 +34,68 @@ function ToggleSwitch({ enabled, onChange, label, sublabel, loading: isLoading }
             <button
                 onClick={onChange}
                 disabled={isLoading}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${enabled ? 'bg-blue-600' : 'bg-gray-300'} ${isLoading ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                    isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                } ${enabled ? 'bg-blue-600' : 'bg-gray-200'}`}
             >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
         </div>
     );
 }
 
+// ═══════════════════════════════════
+// ══  TAB BUTTON
+// ═══════════════════════════════════
 function TabButton({ label, active, onClick, icon: Icon }) {
     return (
-        <button onClick={onClick}
-            className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200'}`}
+        <button
+            onClick={onClick}
+            className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                active ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
         >
-            {Icon && <Icon className="h-4 w-4" />}{label}
+            {Icon && <Icon className="h-4 w-4" />}
+            {label}
         </button>
     );
 }
 
+// ═══════════════════════════════════
+// ══  MINI STAT CARD
+// ═══════════════════════════════════
 function MiniStat({ label, value, icon: Icon, color = 'blue', subtitle }) {
-    const bg = { blue: 'bg-blue-50 text-blue-600', green: 'bg-green-50 text-green-600', amber: 'bg-amber-50 text-amber-600', purple: 'bg-purple-50 text-purple-600', rose: 'bg-rose-50 text-rose-600', indigo: 'bg-indigo-50 text-indigo-600' };
+    const colors = {
+        blue: 'bg-blue-50 text-blue-600',
+        green: 'bg-green-50 text-green-600',
+        amber: 'bg-amber-50 text-amber-600',
+        rose: 'bg-rose-50 text-rose-600',
+        purple: 'bg-purple-50 text-purple-600',
+        indigo: 'bg-indigo-50 text-indigo-600',
+    };
     return (
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-3">
-                <div className={`p-2 rounded-lg ${bg[color]}`}><Icon className="h-5 w-5" /></div>
-                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</span>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className={`inline-flex p-2 rounded-xl mb-3 ${colors[color]}`}>
+                <Icon className="h-5 w-5" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">{label}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
             {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
         </div>
     );
 }
 
+// ═══════════════════════════════════
+// ══  STATUS BADGE
+// ═══════════════════════════════════
 function StatusBadge({ status }) {
-    const m = { pending: { l: 'En attente', c: 'bg-yellow-100 text-yellow-700' }, paid: { l: 'Payée', c: 'bg-green-100 text-green-700' }, shipped: { l: 'Expédiée', c: 'bg-blue-100 text-blue-700' }, delivered: { l: 'Livrée', c: 'bg-emerald-100 text-emerald-700' }, cancelled: { l: 'Annulée', c: 'bg-red-100 text-red-700' } };
+    const m = {
+        pending: { l: 'En attente', c: 'bg-yellow-100 text-yellow-700' },
+        paid: { l: 'Payée', c: 'bg-green-100 text-green-700' },
+        shipped: { l: 'Expédiée', c: 'bg-blue-100 text-blue-700' },
+        delivered: { l: 'Livrée', c: 'bg-emerald-100 text-emerald-700' },
+        cancelled: { l: 'Annulée', c: 'bg-red-100 text-red-700' }
+    };
     const s = m[status] || { l: status, c: 'bg-gray-100 text-gray-600' };
     return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${s.c}`}>{s.l}</span>;
 }
@@ -90,12 +120,7 @@ function UserProducts({ userId, limit }) {
             {products.map(p => (
                 <div key={p.id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
                     <div className="h-40 bg-gray-100 relative">
-                        <img
-                            src={p.image_url || getImageUrl(p.images?.[0]) || 'https://via.placeholder.com/300x200?text=Pas+d%27image'}
-                            alt={p.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/300x200?text=Pas+d%27image'; }}
-                        />
+                        <img src={p.image_url || getImageUrl(p.images?.[0]) || 'https://via.placeholder.com/300x200?text=Pas+d%27image'} alt={p.name} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/300x200?text=Pas+d%27image'; }} />
                         <span className={`absolute top-2 right-2 px-2 py-0.5 text-xs rounded-full font-medium ${p.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{p.status}</span>
                     </div>
                     <div className="p-3">
@@ -142,16 +167,9 @@ function UserConversations({ userId }) {
         <div className="divide-y divide-gray-50">
             {convos.map(c => (
                 <div key={c.conversation_id} className="p-4 hover:bg-gray-50 transition flex items-center gap-4">
-                    {/* Avatar */}
                     <div className="relative flex-shrink-0">
-                        <img
-                            src={getImageUrl(c.other_avatar) || `https://ui-avatars.com/api/?name=${c.other_name || 'U'}&background=6366F1&color=fff`}
-                            className="w-12 h-12 rounded-full object-cover"
-                            alt={c.other_name}
-                            onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${c.other_name || 'U'}&background=6366F1&color=fff`; }}
-                        />
+                        <img src={getImageUrl(c.other_avatar) || `https://ui-avatars.com/api/?name=${c.other_name || 'U'}&background=6366F1&color=fff`} className="w-12 h-12 rounded-full object-cover" alt={c.other_name} onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${c.other_name || 'U'}&background=6366F1&color=fff`; }} />
                     </div>
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start">
                             <div>
@@ -163,14 +181,12 @@ function UserConversations({ userId }) {
                                 <p className="text-xs text-gray-300 mt-0.5">{c.total_messages} msg</p>
                             </div>
                         </div>
-                        {/* Last message */}
                         <p className="text-sm text-gray-500 truncate mt-1">
                             {c.last_message_type === 'image' ? '📷 Image' :
                                 c.last_message_type === 'voice' ? '🎤 Message vocal' :
                                     c.last_message_type === 'money' ? '💰 Transfert' :
                                         c.last_message || 'Aucun message'}
                         </p>
-                        {/* Product context */}
                         {c.product_name && (
                             <div className="flex items-center gap-2 mt-2 p-2 bg-blue-50 rounded-lg">
                                 {c.product_image && <img src={c.product_image} className="w-8 h-8 rounded object-cover" alt="" />}
@@ -198,7 +214,31 @@ export default function UserDetail() {
     const [loading, setLoading] = useState(true);
     const [toggleLoading, setToggleLoading] = useState({});
 
+    // ── Finance: taux de change & devise ──
+    const [exchangeRate, setExchangeRate] = useState(2850); // FC par USD (fallback)
+    const [rateUpdatedAt, setRateUpdatedAt] = useState(null);
+    const [currencyMode, setCurrencyMode] = useState('FC'); // 'FC' | 'USD'
+
+    // ── Modification du solde wallet ──
+    const [walletEditOpen, setWalletEditOpen] = useState(false);
+    const [walletEditAmount, setWalletEditAmount] = useState('');
+    const [walletEditReason, setWalletEditReason] = useState('');
+    const [walletEditLoading, setWalletEditLoading] = useState(false);
+    const [walletEditMsg, setWalletEditMsg] = useState(null);
+
     useEffect(() => { fetchUser(); }, [id]);
+
+    // Récupérer le taux de change du jour
+    useEffect(() => {
+        api.get('/api/exchange-rate/current')
+            .then(({ data }) => {
+                if (data?.data?.rate) {
+                    setExchangeRate(parseFloat(data.data.rate));
+                    setRateUpdatedAt(data.data.timestamp);
+                }
+            })
+            .catch(() => {}); // Utilise le fallback 2850
+    }, []);
 
     const fetchUser = async () => {
         try {
@@ -207,7 +247,8 @@ export default function UserDetail() {
             setUser({
                 ...u,
                 city: u.location || u.city || 'Non renseigné',
-                wallet_balance: parseFloat(u.wallet || 0),
+                // Utiliser wallet_balance retourné par le backend (depuis wallets table)
+                wallet_balance: parseFloat(data.wallet_balance ?? u.wallet ?? 0),
                 reward_points: u.reward_points || 0,
                 is_active: !u.is_suspended,
                 is_hidden: u.is_hidden || false,
@@ -231,7 +272,7 @@ export default function UserDetail() {
             setUser(prev => ({
                 ...prev, ...u,
                 city: u.location || u.city || 'Non renseigné',
-                wallet_balance: parseFloat(u.wallet || 0),
+                wallet_balance: parseFloat(data.wallet_balance ?? u.wallet ?? prev.wallet_balance),
                 is_active: !u.is_suspended,
                 is_hidden: u.is_hidden || false,
                 stats: data.stats || prev.stats,
@@ -239,34 +280,86 @@ export default function UserDetail() {
                 recentOrders: data.recentOrders || prev.recentOrders,
                 shops: data.shops || prev.shops,
             }));
-        } catch (err) {
-            console.error(err);
-            alert("Erreur lors de la mise à jour");
+        } catch (e) {
+            console.error("Erreur toggle:", e);
+            alert(e.response?.data?.error || "Erreur lors de la mise à jour");
         } finally {
             setToggleLoading(prev => ({ ...prev, [field]: false }));
         }
     };
 
-    if (loading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
+    // Modifier le solde du wallet
+    const handleWalletEdit = async (e) => {
+        e.preventDefault();
+        const amount = parseFloat(walletEditAmount);
+        if (isNaN(amount) || amount < 0) {
+            setWalletEditMsg({ type: 'error', text: 'Montant invalide' });
+            return;
+        }
+        setWalletEditLoading(true);
+        setWalletEditMsg(null);
+        try {
+            const { data } = await api.patch(`/admin/users/${id}/wallet`, {
+                amount,
+                reason: walletEditReason || 'Ajustement administrateur',
+            });
+            setUser(prev => ({ ...prev, wallet_balance: data.newBalance }));
+            setWalletEditMsg({ type: 'success', text: data.message });
+            setWalletEditAmount('');
+            setWalletEditReason('');
+            setTimeout(() => { setWalletEditOpen(false); setWalletEditMsg(null); }, 2000);
+        } catch (err) {
+            setWalletEditMsg({ type: 'error', text: err.response?.data?.error || 'Erreur serveur' });
+        } finally {
+            setWalletEditLoading(false);
+        }
+    };
 
-    const showBadge = user.is_verified || user.account_type === 'certifie' || user.account_type === 'entreprise' || user.has_certified_shop;
-    const badgeColor = user.has_certified_shop || user.account_type === 'entreprise' ? '#D4A500' : '#1DA1F2';
+    // Convertir FC ↔ USD pour l'affichage
+    const fmtAmount = (fc) => {
+        if (currencyMode === 'USD') {
+            return `${(fc / exchangeRate).toFixed(2)} $`;
+        }
+        return `${fc.toLocaleString('fr-CD')} FC`;
+    };
+
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+                <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">Chargement du profil...</p>
+            </div>
+        </div>
+    );
+
+    if (!user) return <div className="p-8 text-center text-gray-500">Utilisateur non trouvé</div>;
+
+    const showBadge = user.is_verified || user.account_type === 'certifie' || user.account_type === 'entreprise';
+    const badgeColor = user.account_type === 'entreprise' ? '#F59E0B' : '#3B82F6';
+
+    const accountTypes = [
+        { value: 'ordinaire', label: 'Ordinaire', desc: 'Compte standard', color: '#6B7280' },
+        { value: 'certifie', label: 'Certifié ✓', desc: 'Vendeur de confiance', color: '#3B82F6' },
+        { value: 'premium', label: 'Premium ★', desc: 'Compte premium', color: '#8B5CF6' },
+        { value: 'entreprise', label: 'Entreprise 🏢', desc: 'Compte pro', color: '#F59E0B' },
+    ];
 
     return (
-        <div className="space-y-6 p-4 md:p-6 bg-gray-50 min-h-screen">
-            {/* Back */}
-            <button onClick={() => navigate('/users')} className="flex items-center text-gray-400 hover:text-gray-600 transition text-sm">
-                <ChevronLeftIcon className="h-4 w-4 mr-1" /> Retour aux utilisateurs
+        <div className="space-y-6 pb-10">
+            {/* ── Retour ── */}
+            <button onClick={() => navigate('/users')} className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition text-sm font-medium">
+                <ChevronLeftIcon className="h-4 w-4" />
+                Retour aux utilisateurs
             </button>
 
-            {/* ═══════════════════════════════════ */}
-            {/* ══  PROFILE HEADER                  */}
-            {/* ═══════════════════════════════════ */}
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-                <div className="h-32 bg-gradient-to-r from-blue-600 via-indigo-500 to-emerald-400 relative">
-                    <div className={`absolute top-4 right-4 backdrop-blur-sm rounded-full px-3.5 py-1.5 flex items-center text-xs font-bold border ${user.is_active ? 'bg-white/20 text-white border-white/30' : 'bg-red-500/30 text-white border-red-300/30'}`}>
-                        {user.is_active ? 'ACTIF' : 'SUSPENDU'}
-                        <div className={`ml-2 w-2 h-2 rounded-full ${user.is_active ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+            {/* ── Header Card ── */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="h-24 bg-gradient-to-r from-slate-800 to-slate-700 relative">
+                    <div className="absolute top-3 right-3">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${user.is_active ? 'bg-green-500/20 text-green-200 border border-green-500/30' : 'bg-red-500/20 text-red-200 border border-red-500/30'}`}>
+                            {user.is_active ? 'ACTIF' : 'SUSPENDU'}
+                            <div className={`ml-2 w-2 h-2 rounded-full ${user.is_active ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+                        </span>
                     </div>
                 </div>
                 <div className="px-6 md:px-8 pb-6 relative">
@@ -348,27 +441,20 @@ export default function UserDetail() {
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3">Type de compte</h3>
                         <div className="space-y-2">
-                            {[
-                                { value: 'ordinaire', label: 'Ordinaire', desc: 'Compte standard', color: '#6b7280' },
-                                { value: 'certifie', label: 'Certifié ✓', desc: 'Vendeur de confiance', color: '#3b82f6' },
-                                { value: 'entreprise', label: 'Entreprise 🏢', desc: 'Compte pro', color: '#eab308' },
-                            ].map(type => (
+                            {accountTypes.map(type => (
                                 <button key={type.value}
                                     onClick={() => handleToggle('account_type', () => api.patch(`/admin/users/${user.id}/account-type`, { account_type: type.value }))}
-                                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${user.account_type === type.value ? 'border-current shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
-                                    style={{ borderColor: user.account_type === type.value ? type.color : undefined }}
+                                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition text-left ${user.account_type === type.value ? 'border-blue-200 bg-blue-50' : 'border-gray-100 bg-gray-50 hover:bg-gray-100'}`}
                                 >
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-900">{type.label}</p>
-                                            <p className="text-xs text-gray-400">{type.desc}</p>
-                                        </div>
-                                        {user.account_type === type.value && (
-                                            <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: type.color }}>
-                                                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                                            </div>
-                                        )}
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-900">{type.label}</p>
+                                        <p className="text-xs text-gray-400">{type.desc}</p>
                                     </div>
+                                    {user.account_type === type.value && (
+                                        <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: type.color }}>
+                                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                        </div>
+                                    )}
                                 </button>
                             ))}
                         </div>
@@ -397,7 +483,7 @@ export default function UserDetail() {
                     {activeTab === 'overview' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <MiniStat label="Wallet" value={`${user.wallet_balance.toLocaleString()} FC`} icon={CurrencyDollarIcon} color="green" />
+                                <MiniStat label="Wallet" value={`${user.wallet_balance.toLocaleString('fr-CD')} FC`} icon={CurrencyDollarIcon} color="green" />
                                 <MiniStat label="Produits" value={user.stats?.products_count || 0} icon={BuildingStorefrontIcon} color="blue" subtitle={user.is_seller ? 'En vente' : ''} />
                                 <MiniStat label="Commandes" value={user.stats?.orders?.total || 0} icon={ShoppingCartIcon} color="amber" subtitle={`${user.stats?.orders?.paid || 0} payées`} />
                                 <MiniStat label="Dépensé" value={`${(user.stats?.orders?.total_spent || 0).toLocaleString()} $`} icon={CurrencyDollarIcon} color="rose" />
@@ -457,49 +543,176 @@ export default function UserDetail() {
 
                     {/* ══ TAB: FINANCE ══ */}
                     {activeTab === 'finance' && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div className="space-y-6">
-                                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-2xl text-white shadow-lg">
-                                    <p className="text-blue-200 text-sm">Solde Wallet Oli</p>
-                                    <p className="text-4xl font-bold mt-2">{user.wallet_balance.toLocaleString()} FC</p>
-                                    <div className="border-t border-white/20 mt-4 pt-4 flex justify-between">
-                                        <div><p className="text-blue-200 text-xs">Points</p><p className="text-xl font-bold">{user.reward_points} Pts</p></div>
-                                        <div><p className="text-blue-200 text-xs">Dépensé</p><p className="text-xl font-bold">{(user.stats?.orders?.total_spent || 0).toLocaleString()} $</p></div>
-                                    </div>
+                        <div className="space-y-6">
+                            {/* ── Contrôles: devise + rafraîchir ── */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+                                    <button
+                                        onClick={() => setCurrencyMode('FC')}
+                                        className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${currencyMode === 'FC' ? 'bg-blue-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >FC</button>
+                                    <button
+                                        onClick={() => setCurrencyMode('USD')}
+                                        className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${currencyMode === 'USD' ? 'bg-green-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >USD $</button>
                                 </div>
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                    <h3 className="font-semibold text-gray-900 mb-4">Résumé financier</h3>
-                                    <div className="space-y-2">
-                                        {[
-                                            { l: 'Commandes passées', v: user.stats?.orders?.total || 0 },
-                                            { l: 'Commandes payées', v: user.stats?.orders?.paid || 0, green: true },
-                                            ...(user.is_seller ? [
-                                                { l: 'Ventes réalisées', v: user.stats?.seller_orders?.total || 0, amber: true },
-                                                { l: "Chiffre d'affaires", v: `${(user.stats?.seller_orders?.revenue || 0).toLocaleString()} $`, amber: true },
-                                            ] : []),
-                                        ].map((r, i) => (
-                                            <div key={i} className={`flex justify-between items-center p-3 rounded-xl ${r.amber ? 'bg-amber-50' : 'bg-gray-50'}`}>
-                                                <span className="text-sm text-gray-600">{r.l}</span>
-                                                <span className={`font-semibold ${r.green ? 'text-green-600' : r.amber ? 'text-amber-700' : 'text-gray-900'}`}>{r.v}</span>
-                                            </div>
-                                        ))}
-                                    </div>
+                                <div className="flex items-center gap-3">
+                                    {rateUpdatedAt && (
+                                        <p className="text-xs text-gray-400">
+                                            1 $ = {exchangeRate.toLocaleString('fr-CD')} FC
+                                            <span className="ml-1 text-gray-300">· {new Date(rateUpdatedAt).toLocaleDateString('fr-FR')}</span>
+                                        </p>
+                                    )}
+                                    <button
+                                        onClick={fetchUser}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+                                    >
+                                        <ArrowPathIcon className="h-3.5 w-3.5" /> Actualiser
+                                    </button>
                                 </div>
                             </div>
-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-                                <div className="p-5 border-b border-gray-100"><h3 className="font-semibold text-gray-900">Historique Transactions</h3></div>
-                                <div className="divide-y divide-gray-50 max-h-[500px] overflow-y-auto">
-                                    {user.transactions?.length > 0 ? user.transactions.map(tx => (
-                                        <div key={tx.id} className="p-4 flex justify-between items-center hover:bg-gray-50 transition">
-                                            <div className="flex gap-3 items-center">
-                                                <span className="text-gray-400 text-xs font-mono">{new Date(tx.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}</span>
-                                                <span className="text-gray-700 text-sm">{tx.description || tx.type}</span>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div className="space-y-6">
+                                    {/* ── Carte solde ── */}
+                                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+                                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+                                        <div className="relative">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <p className="text-blue-200 text-sm font-medium">Solde Wallet Oli</p>
+                                                <button
+                                                    onClick={() => { setWalletEditOpen(true); setWalletEditAmount(user.wallet_balance.toString()); }}
+                                                    className="flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 text-white text-xs font-medium rounded-lg transition backdrop-blur-sm"
+                                                    title="Modifier le solde"
+                                                >
+                                                    <PencilSquareIcon className="h-3.5 w-3.5" />
+                                                    Modifier
+                                                </button>
                                             </div>
-                                            <span className={`font-semibold text-sm ${parseFloat(tx.amount) > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {parseFloat(tx.amount) > 0 ? '+' : ''}{parseFloat(tx.amount).toLocaleString()} FC
-                                            </span>
+                                            <p className="text-4xl font-bold mt-1">{fmtAmount(user.wallet_balance)}</p>
+                                            {currencyMode === 'FC' && (
+                                                <p className="text-blue-300 text-xs mt-1">≈ {(user.wallet_balance / exchangeRate).toFixed(2)} $</p>
+                                            )}
+                                            {currencyMode === 'USD' && (
+                                                <p className="text-blue-300 text-xs mt-1">= {user.wallet_balance.toLocaleString('fr-CD')} FC</p>
+                                            )}
+                                            <div className="border-t border-white/20 mt-4 pt-4 flex justify-between">
+                                                <div><p className="text-blue-200 text-xs">Points fidélité</p><p className="text-xl font-bold">{user.reward_points} Pts</p></div>
+                                                <div><p className="text-blue-200 text-xs">Dépensé</p><p className="text-xl font-bold">{(user.stats?.orders?.total_spent || 0).toLocaleString()} $</p></div>
+                                            </div>
                                         </div>
-                                    )) : <div className="p-10 text-center text-gray-400">Aucune transaction</div>}
+                                    </div>
+
+                                    {/* ── Formulaire modification solde ── */}
+                                    {walletEditOpen && (
+                                        <div className="bg-white rounded-2xl border border-amber-200 shadow-md p-5">
+                                            <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                                <PencilSquareIcon className="h-5 w-5 text-amber-500" />
+                                                Modifier le solde du wallet
+                                            </h4>
+                                            <form onSubmit={handleWalletEdit} className="space-y-3">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 mb-1">Nouveau solde (FC)</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        value={walletEditAmount}
+                                                        onChange={(e) => setWalletEditAmount(e.target.value)}
+                                                        placeholder="Ex: 5000"
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        required
+                                                    />
+                                                    {walletEditAmount && !isNaN(parseFloat(walletEditAmount)) && (
+                                                        <p className="text-xs text-gray-400 mt-1">
+                                                            ≈ {(parseFloat(walletEditAmount) / exchangeRate).toFixed(2)} $ · Actuel: {user.wallet_balance.toLocaleString('fr-CD')} FC
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 mb-1">Motif (optionnel)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={walletEditReason}
+                                                        onChange={(e) => setWalletEditReason(e.target.value)}
+                                                        placeholder="Ex: Remboursement, correction, bonus..."
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    />
+                                                </div>
+                                                {walletEditMsg && (
+                                                    <div className={`px-3 py-2 rounded-lg text-xs font-medium ${walletEditMsg.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                                                        {walletEditMsg.text}
+                                                    </div>
+                                                )}
+                                                <div className="flex gap-2 pt-1">
+                                                    <button
+                                                        type="submit"
+                                                        disabled={walletEditLoading}
+                                                        className="flex-1 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
+                                                    >
+                                                        {walletEditLoading ? 'Mise à jour...' : 'Confirmer'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setWalletEditOpen(false); setWalletEditMsg(null); }}
+                                                        className="px-4 py-2 text-gray-600 text-sm font-medium bg-gray-100 rounded-xl hover:bg-gray-200 transition"
+                                                    >
+                                                        Annuler
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    )}
+
+                                    {/* ── Résumé financier ── */}
+                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                        <h3 className="font-semibold text-gray-900 mb-4">Résumé financier</h3>
+                                        <div className="space-y-2">
+                                            {[
+                                                { l: 'Commandes passées', v: user.stats?.orders?.total || 0 },
+                                                { l: 'Commandes payées', v: user.stats?.orders?.paid || 0, green: true },
+                                                ...(user.is_seller ? [
+                                                    { l: 'Ventes réalisées', v: user.stats?.seller_orders?.total || 0, amber: true },
+                                                    { l: "Chiffre d'affaires", v: `${(user.stats?.seller_orders?.revenue || 0).toLocaleString()} $`, amber: true },
+                                                ] : []),
+                                            ].map((r, i) => (
+                                                <div key={i} className={`flex justify-between items-center p-3 rounded-xl ${r.amber ? 'bg-amber-50' : 'bg-gray-50'}`}>
+                                                    <span className="text-sm text-gray-600">{r.l}</span>
+                                                    <span className={`font-semibold ${r.green ? 'text-green-600' : r.amber ? 'text-amber-700' : 'text-gray-900'}`}>{r.v}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ── Historique transactions ── */}
+                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                                    <div className="p-5 border-b border-gray-100 flex justify-between items-center">
+                                        <h3 className="font-semibold text-gray-900">Historique Transactions</h3>
+                                        <span className="text-xs text-gray-400">{user.transactions?.length || 0} entrées</span>
+                                    </div>
+                                    <div className="divide-y divide-gray-50 max-h-[500px] overflow-y-auto">
+                                        {user.transactions?.length > 0 ? user.transactions.map((tx, idx) => (
+                                            <div key={tx.id || idx} className="p-4 flex justify-between items-center hover:bg-gray-50 transition">
+                                                <div className="flex gap-3 items-center min-w-0">
+                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs ${parseFloat(tx.amount) >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                                                        {parseFloat(tx.amount) >= 0 ? '↑' : '↓'}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-gray-700 text-sm truncate">{tx.description || tx.type}</p>
+                                                        <p className="text-gray-400 text-xs">{new Date(tx.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</p>
+                                                    </div>
+                                                </div>
+                                                <span className={`font-semibold text-sm flex-shrink-0 ml-2 ${parseFloat(tx.amount) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {parseFloat(tx.amount) >= 0 ? '+' : ''}
+                                                    {currencyMode === 'FC'
+                                                        ? `${parseFloat(tx.amount).toLocaleString('fr-CD')} FC`
+                                                        : `${(parseFloat(tx.amount) / exchangeRate).toFixed(2)} $`}
+                                                </span>
+                                            </div>
+                                        )) : <div className="p-10 text-center text-gray-400">Aucune transaction</div>}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -582,7 +795,6 @@ export default function UserDetail() {
                                 <UserConversations userId={id} />
                             </div>
 
-                            {/* Account Info */}
                             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                                 <h3 className="font-bold text-gray-900 mb-4">Informations du compte</h3>
                                 <div className="space-y-2">
