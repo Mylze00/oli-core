@@ -166,8 +166,8 @@ SELECT
     u.id                                AS user_id,
     u.name,
     u.phone,
-    u.email,
-    u.role,
+    NULL AS email,
+    u.account_type AS role,
     u.is_verified,
     u.id_oli                            AS oli_id,
     kp.oli_address,
@@ -206,7 +206,7 @@ SELECT
 FROM  users u
 LEFT JOIN wallets w                 ON w.user_id = u.id
 LEFT JOIN oli_bank_keypairs kp      ON kp.user_id = u.id
-LEFT JOIN trust_scores ts           ON ts.user_id = u.id;
+LEFT JOIN user_trust_scores ts           ON ts.user_id = u.id;
 
 -- ─────────────────────────────────────────────────────────────────────
 -- 7. Triggers d'automatisation
