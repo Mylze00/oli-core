@@ -15,6 +15,10 @@ const axios   = require('axios');
 const crypto  = require('crypto');
 const pool    = require('../config/db');
 
+// [P1.4] Frais lus depuis la configuration centralisée (config/index.js)
+// Plus de constantes dupliquées — une seule source de vérité
+const { FEES } = require('../config/index');
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURATION
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,21 +28,13 @@ const UNIPESA_PUBLIC_ID = process.env.UNIPESA_PUBLIC_ID || '';
 const UNIPESA_SECRET    = process.env.UNIPESA_SECRET_KEY || '';
 const UNIPESA_MERCHANT  = process.env.UNIPESA_MERCHANT_ID || '';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STRUCTURE DE FRAIS (configurable via .env)
-// ─────────────────────────────────────────────────────────────────────────────
-// OLI prélève 3% de commission sur chaque recharge Mobile Money.
-// Unipesa (l'agrégateur) prélève 3% de frais de traitement.
-// Total : 6% déduit du montant brut envoyé par l'utilisateur.
-//
-// Exemple : l'utilisateur envoie 10 000 FC
-//   → Frais Unipesa : 300 FC (3%)
-//   → Commission OLI : 300 FC (3%)
-//   → Montant crédité sur le wallet : 9 400 FC
-// ─────────────────────────────────────────────────────────────────────────────
-const OLI_FEE_RATE      = parseFloat(process.env.OLI_DEPOSIT_FEE_RATE      || '0.03'); // 3% OLI
-const AGGREGATOR_FEE_RATE = parseFloat(process.env.UNIPESA_FEE_RATE         || '0.03'); // 3% Unipesa
-const TOTAL_FEE_RATE    = OLI_FEE_RATE + AGGREGATOR_FEE_RATE;                          // 6% total
+// [P1.4] Frais lus depuis config/index.js — NE PAS dupliquer ici
+// OLI_FEE_RATE      = FEES.OLI_DEPOSIT_RATE      (3%)
+// AGGREGATOR_FEE_RATE = FEES.AGGREGATOR_DEPOSIT_RATE (3%)
+// TOTAL_FEE_RATE    = FEES.TOTAL_DEPOSIT_RATE     (6%)
+const OLI_FEE_RATE        = FEES.OLI_DEPOSIT_RATE;
+const AGGREGATOR_FEE_RATE = FEES.AGGREGATOR_DEPOSIT_RATE;
+const TOTAL_FEE_RATE      = FEES.TOTAL_DEPOSIT_RATE;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS CRYPTO
@@ -46,13 +42,16 @@ const TOTAL_FEE_RATE    = OLI_FEE_RATE + AGGREGATOR_FEE_RATE;                   
 
 /**
  * Calcule la signature HMAC-SHA512 d'un payload Unipesa.
- * La signature doit inclure tous les paramètres envoyés DANS L'ORDRE où ils sont envoyés,
- * sans tri alphabétique.
+ * La signature est calculée sur la concaténation triée des clés=valeurs.
  */
 function _buildSignature(payload) {
+    // Trier les clés, exclure 'signature' si présent
+    const sortedKeys = Object.keys(payload)
+        .filter(k => k !== 'signature')
+        .sort();
+
     let str = '';
-    for (const key of Object.keys(payload)) {
-        if (key === 'signature') continue;
+    for (const key of sortedKeys) {
         str += `${key}${payload[key]}`;
     }
 
@@ -65,7 +64,14 @@ function _buildSignature(payload) {
 
 /**
  * Génère un ID d'ordre unique pour OLI.
- * Format : DEP-{userId}-{timestamp}
+ *
+ * ⚠️  FORMAT OFFICIEL : {TYPE}-{userId}-{timestamp} (TIRETS uniquement)
+ *     Exemples : DEP-42-1717000000000  |  WD-42-1717000000000
+ *
+ * Ce format est parsé par unipesa.controller.js via le regex :
+ *     /^(DEP|CARD|WD)-(\d+)-\d+/
+ *
+ * NE PAS utiliser de underscores (_) — risque de parsing silencieux raté.
  */
 function _generateOliOrderId(userId, type = 'DEP') {
     return `${type}-${userId}-${Date.now()}`;
@@ -99,64 +105,39 @@ const unipesaService = {
         const totalFeeFC      = aggregatorFeeFC + oliFeeFC;                  // 6% total
         const netFC           = amountFC - totalFeeFC;                       // Montant crédité
 
-        const providerName = _detectProvider(phone);
-        const providerId = _getProviderId(providerName);
-
         // Enregistrer l'opération en statut "pending" AVANT l'appel API
         // → garantit la traçabilité même si l'API tombe
         await pool.query(`
             INSERT INTO unipesa_operations
                 (oli_order_id, user_id, phone, amount_fc, provider, operation_type, status, expires_at)
             VALUES ($1, $2, $3, $4, $5, 'deposit', 'pending', NOW() + INTERVAL '10 minutes')
-        `, [oliOrderId, uid, phone, amountFC, providerName]);
+        `, [oliOrderId, uid, phone, amountFC, _detectProvider(phone)]);
 
         console.log(`💱 Frais: ${amountFC} FC brut → ${totalFeeFC} FC frais (${aggregatorFeeFC} FC Unipesa + ${oliFeeFC} FC OLI) → ${netFC} FC net`);
 
         try {
-            // Le format exigé par AvadaPay pour le endpoint payment_c2b en RDC
-            // Les clés DOIVENT être dans cet ordre pour la génération de la signature
+            // Construire le payload Unipesa C2B
             const payload = {
                 merchant_id: UNIPESA_MERCHANT,
-                customer_id: _formatPhoneForProvider(phone, providerName),
-                customer_user_id: `user-${uid}`,
-                order_id: oliOrderId,
-                amount: Math.round(amountFC).toString(),
-                currency: 'CDF',
-                provider_id: providerId
+                order_id:    oliOrderId,
+                amount:      amountFC.toString(),
+                currency:    'CDF', // Franc Congolais
+                phone:       phone.replace(/\D/g, '').replace(/^243/, '0'), // local format only
+                description: `Recharge OLI Wallet — ${amountFC} FC`,
+                callback_url: 'https://oli-core.onrender.com/webhooks/unipesa/deposit',
             };
-            
-            // On calcule et on ajoute la signature (dynamique selon l'ordre du payload)
             payload.signature = _buildSignature(payload);
 
-            console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${Math.round(amountFC)} FC → ${phone} (Provider: ${providerName})`);
+            console.log(`📲 Unipesa C2B initié: ${oliOrderId} — ${amountFC} FC → ${phone}`);
 
             const response = await axios.post(
-                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/payment_c2b`,
+                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/c2b`,
                 payload,
                 {
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     timeout: 15000,
                 }
             );
-
-            console.log(`🔍 AVADAPAY RESPONSE:`, typeof response.data === 'object' ? JSON.stringify(response.data) : response.data);
-
-            // Gérer le cas où l'API renvoie du HTML (ex: "Error: <p>Signature is not valid</p>")
-            if (typeof response.data === 'string' && response.data.toLowerCase().includes('error')) {
-                throw new Error(`API Error: ${response.data}`);
-            }
-
-            // Vérifier les erreurs renvoyées dans le corps JSON (même si HTTP 200)
-            if (response.data && response.data.status !== 1 && response.data.result && response.data.result.message) {
-                // status 1 = SUCCESS, 0 = PENDING/WAITING, 3 = ERROR
-                // Avadapay renvoie souvent status 0 avec un prompt USSD initié avec succès, ou status 1 si auto.
-                if (response.data.status === 3 || response.data.result.message.includes('ERROR')) {
-                    throw new Error(`API Error: ${response.data.result.message}`);
-                }
-            }
 
             const unipesaOrderId = response.data?.order_id || oliOrderId;
 
@@ -176,7 +157,7 @@ const unipesaService = {
                 totalFeeFC,                         // 6% total frais (FC)
                 netAmountFC: netFC,                 // Montant crédité sur le wallet (FC)
                 phone,
-                provider:         providerName,
+                provider:         _detectProvider(phone),
             };
 
         } catch (err) {
@@ -192,6 +173,80 @@ const unipesaService = {
 
             console.error(`❌ Unipesa C2B échoué: ${oliOrderId}`, errorMsg);
             throw new Error(`Impossible d'initier le paiement Mobile Money: ${errorMsg}`);
+        }
+    },
+
+    /**
+     * Initie un décaissement B2C (OLI Wallet → Mobile Money de l'utilisateur).
+     * Envoie les fonds depuis OLI vers le téléphone Mobile Money du client.
+     *
+     * @param {number} userId         - ID de l'utilisateur OLI
+     * @param {string} phone          - Numéro de téléphone Mobile Money (ex: +243XXXXXXXXX)
+     * @param {number} amountFC       - Montant NET à envoyer en Francs Congolais (sans les frais)
+     * @returns {Promise<{oliOrderId, unipesaOrderId, status, amountFC, provider}>}
+     */
+    async initiateWithdrawal(userId, phone, amountFC) {
+        const uid = parseInt(userId);
+        const oliOrderId = _generateOliOrderId(uid, 'WD');
+
+        // Enregistrer l'opération en statut "pending" AVANT l'appel API
+        await pool.query(`
+            INSERT INTO unipesa_operations
+                (oli_order_id, user_id, phone, amount_fc, provider, operation_type, status, expires_at)
+            VALUES ($1, $2, $3, $4, $5, 'withdrawal', 'pending', NOW() + INTERVAL '10 minutes')
+        `, [oliOrderId, uid, phone, amountFC, _detectProvider(phone)]);
+
+        try {
+            const payload = {
+                merchant_id: UNIPESA_MERCHANT,
+                order_id:    oliOrderId,
+                amount:      amountFC.toString(),
+                currency:    'CDF',
+                phone:       phone.replace(/\D/g, '').replace(/^243/, '0'),
+                description: `Retrait OLI Wallet → Mobile Money — ${amountFC} FC`,
+                callback_url: 'https://oli-core.onrender.com/webhooks/unipesa/withdrawal',
+            };
+            payload.signature = _buildSignature(payload);
+
+            console.log(`📤 Unipesa B2C initié: ${oliOrderId} — ${amountFC} FC → ${phone}`);
+
+            const response = await axios.post(
+                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/b2c`,
+                payload,
+                {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 20000, // B2C peut prendre plus de temps
+                }
+            );
+
+            const unipesaOrderId = response.data?.order_id || oliOrderId;
+
+            await pool.query(
+                'UPDATE unipesa_operations SET unipesa_order_id = $1 WHERE oli_order_id = $2',
+                [unipesaOrderId, oliOrderId]
+            );
+
+            return {
+                oliOrderId,
+                unipesaOrderId,
+                status:   'pending',
+                amountFC,
+                phone,
+                provider: _detectProvider(phone),
+            };
+
+        } catch (err) {
+            const errorMsg = err.response?.data
+                ? JSON.stringify(err.response.data)
+                : err.message;
+
+            await pool.query(
+                'UPDATE unipesa_operations SET status = $1, error_message = $2 WHERE oli_order_id = $3',
+                ['failed', errorMsg, oliOrderId]
+            );
+
+            console.error(`❌ Unipesa B2C échoué: ${oliOrderId}`, errorMsg);
+            throw new Error(`Impossible d'initier le décaissement Mobile Money: ${errorMsg}`);
         }
     },
 
@@ -234,17 +289,50 @@ const unipesaService = {
             return { status: 'timeout', amountFC: parseFloat(op.amount_fc) };
         }
 
-        // ─────────────────────────────────────────────────────────
-        // IMPORTANT : Ne PAS interroger l'API AvadaPay en boucle !
-        // L'application Flutter appelle cette route toutes les 2s.
-        // Si on relaye chaque appel vers AvadaPay, Cloudflare bloque l'IP (403).
-        // On attend que le Webhook d'AvadaPay mette à jour la DB locale.
-        // ─────────────────────────────────────────────────────────
-        return {
-            status:   op.status,
-            amountFC: parseFloat(op.amount_fc),
-            provider: op.provider,
-        };
+        // Interroger l'API Unipesa pour avoir le statut en temps réel
+        try {
+            const payload = {
+                merchant_id: UNIPESA_MERCHANT,
+                order_id:    oliOrderId,
+            };
+            payload.signature = _buildSignature(payload);
+
+            const response = await axios.post(
+                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/status`,
+                payload,
+                { headers: { 'Content-Type': 'application/json' }, timeout: 8000 }
+            );
+
+            const apiStatus = response.data?.status;
+            // status Unipesa: 1 = succès, 0 = pending, -1 = échoué
+            const mappedStatus = apiStatus === 1 ? 'success'
+                : apiStatus === -1 ? 'failed'
+                : 'pending';
+
+            // AUTO-RÉPARATION SI LE WEBHOOK A ÉTÉ MANQUÉ
+            if (mappedStatus === 'success' && op.status !== 'success') {
+                console.log(`🔄 Polling: Webhook manqué détecté. Force la validation pour ${oliOrderId}`);
+                await unipesaService.processWebhook({
+                    order_id: oliOrderId,
+                    status: 1,
+                    amount: op.amount_fc
+                });
+            } else if (mappedStatus === 'failed' && op.status !== 'failed') {
+                await pool.query('UPDATE unipesa_operations SET status = $1 WHERE oli_order_id = $2', ['failed', oliOrderId]);
+            }
+
+            return {
+                status:   mappedStatus,
+                amountFC: parseFloat(op.amount_fc),
+                provider: op.provider,
+                raw:      response.data,
+            };
+
+        } catch (err) {
+            // En cas d'erreur API, retourner le statut local
+            console.warn(`⚠️ Unipesa status check échoué pour ${oliOrderId}:`, err.message);
+            return { status: op.status, amountFC: parseFloat(op.amount_fc) };
+        }
     },
 
     /**
@@ -353,53 +441,14 @@ const unipesaService = {
  */
 function _detectProvider(phone) {
     const digits = phone.replace(/\D/g, '');
-    let local=digits.startsWith('243')?digits.slice(3):digits;if(!local.startsWith('0'))local='0'+local;
+    let local = digits.startsWith('243') ? digits.slice(3) : digits;
+    if (!local.startsWith('0')) local = '0' + local;
 
     if (/^(08[1-4]|08[5-9])/.test(local)) return 'Vodacom';
     if (/^(09[0-7])/.test(local))          return 'Airtel';
     if (/^(09[8-9]|08[0])/.test(local))    return 'Orange';
     if (/^(07[2-7])/.test(local))          return 'Africell';
-    return 'Vodacom'; // Fallback
-}
-
-/**
- * Convertit le nom du provider en ID provider AvadaPay.
- */
-function _getProviderId(providerName) {
-    switch (providerName) {
-        case 'Vodacom': return 9;
-        case 'Orange':  return 10;
-        case 'Airtel':  return 17;
-        case 'Africell':return 14; // Supposé d'après les tests
-        default:        return 9;
-    }
-}
-
-/**
- * Formate le numéro de téléphone selon les règles strictes d'AvadaPay par opérateur.
- */
-function _formatPhoneForProvider(phone, providerName) {
-    let digits = phone.replace(/\D/g, '');
-    
-    if (providerName === 'Vodacom') {
-        // Exige le format international complet: 243XXXXXXXXX
-        if (digits.startsWith('0')) digits = '243' + digits.slice(1);
-        if (digits.length === 9) digits = '243' + digits;
-    } else if (providerName === 'Airtel') {
-        // Exige format 9XXXXXXXX (sans 0 ni 243)
-        if (digits.startsWith('243')) digits = digits.slice(3);
-        if (digits.startsWith('0')) digits = digits.slice(1);
-    } else if (providerName === 'Orange') {
-        // Exige format local avec le 0: 08XXXXXXXX
-        if (digits.startsWith('243')) digits = '0' + digits.slice(3);
-        if (!digits.startsWith('0')) digits = '0' + digits;
-    } else {
-        // Par défaut, format international complet 243
-        if (digits.startsWith('0')) digits = '243' + digits.slice(1);
-        if (digits.length === 9) digits = '243' + digits;
-    }
-    
-    return digits;
+    return 'Mobile Money';
 }
 
 module.exports = unipesaService;
