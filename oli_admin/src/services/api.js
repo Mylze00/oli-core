@@ -5,12 +5,11 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://oli-core.onrender.com';
 
 const api = axios.create({
     baseURL: API_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 30000, // 30s — important pour Render cold start
 });
 
-// Intercepteur pour ajouter le token JWT
+// ── Intercepteur REQUEST : ajoute le token JWT ──
 api.interceptors.request.use(
     (config) => {
         const token = getToken();
@@ -22,31 +21,45 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Intercepteur pour gérer les erreurs 401
-// ⚠️ On ne déconnecte QUE si c'est explicitement un problème de token
-// (pas pour les 401 de ressources protégées qui pourraient être temporaires)
+// ── Intercepteur RESPONSE : déconnecte UNIQUEMENT si le token JWT lui-même est invalide/expiré ──
+// ⚠️  NE PAS déconnecter sur un 401 générique ou un 403 "Accès refusé"
+// car cela peut arriver lors d'un cold start Render ou d'une route partiellement restreinte
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response && error.response.status === 401) {
-            const errMsg = error.response.data?.error || '';
-            const isTokenError = (
-                errMsg.includes('Token') ||
-                errMsg.includes('Session') ||
-                errMsg.includes('expirée') ||
-                errMsg.includes('invalide') ||
-                errMsg.includes('requis') ||
-                errMsg.includes('Accès refusé')
-            );
-
-            if (isTokenError) {
-                console.warn('[API] Token invalide ou expiré — déconnexion.');
-                removeToken();
-                // Utiliser setTimeout pour éviter les redirections en cascade
-                setTimeout(() => { window.location.href = '/login'; }, 100);
-            }
-            // Ne pas auto-déconnecter pour les autres 401 (ex: ressource non autorisée)
+        // Ignorer les erreurs réseau / timeout (Render cold start)
+        if (!error.response) {
+            console.warn('[API] Erreur réseau ou timeout — session conservée');
+            return Promise.reject(error);
         }
+
+        const status = error.response.status;
+        const errMsg = (error.response.data?.error || '').toLowerCase();
+
+        // Déconnecter UNIQUEMENT si le JWT est explicitement rejeté par le backend
+        // et UNIQUEMENT sur HTTP 401 (pas 403 qui = "pas admin" pas "token invalide")
+        const isRealTokenError = (
+            status === 401 &&
+            (
+                errMsg.includes('jwt') ||
+                errMsg.includes('expiré') ||
+                errMsg.includes('token invalide') ||
+                errMsg.includes('token requis') ||
+                errMsg === 'non authentifié'
+            )
+        );
+
+        if (isRealTokenError) {
+            console.warn('[API] JWT expiré ou invalide — déconnexion propre.');
+            removeToken();
+            // Délai pour éviter les redirections en cascade pendant le chargement initial
+            setTimeout(() => {
+                if (window.location.pathname !== '/login') {
+                    window.location.href = '/login';
+                }
+            }, 300);
+        }
+
         return Promise.reject(error);
     }
 );

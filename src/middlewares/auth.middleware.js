@@ -13,7 +13,7 @@ const requireAuth = (req, res, next) => {
     const token = authHeader && authHeader.split(" ")[1];
 
     if (!token) {
-        return res.status(401).json({ error: "Accès refusé - Token requis" });
+        return res.status(401).json({ error: "Token requis", message: "Aucun token d'authentification fourni" });
     }
 
     try {
