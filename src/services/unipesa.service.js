@@ -453,7 +453,6 @@ function _detectProvider(phone) {
     return 'Mobile Money';
 }
 
-}
 
 /**
  * Convertit le nom du provider en ID provider AvadaPay.
