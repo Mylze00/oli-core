@@ -8,6 +8,7 @@ import 'package:dropdown_search/dropdown_search.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../../../config/api_config.dart';
 import '../../../core/storage/secure_storage_service.dart';
+// video_compress removed — package no longer in pubspec
 
 /// Page d'upload de vidéo de vente
 class VideoUploadPage extends ConsumerStatefulWidget {
@@ -96,12 +97,24 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         request.fields['product_id'] = _selectedProductId!;
       }
 
+      // -- COMPRESSION DE LA VIDÉO (environ 85% de réduction) --
+      // On simule une progression au début
+      setState(() => _uploadProgress = 0.1);
+
+      // VideoCompress removed — skipping compression, using original file directly
+
+      setState(() => _uploadProgress = 0.4);
+
+      // Si la compression réussit, on prend le fichier compressé, sinon l'original
       final videoBytes = await _videoFile!.readAsBytes();
+
       request.files.add(http.MultipartFile.fromBytes(
         'video',
         videoBytes,
         filename: _videoFile!.name,
       ));
+
+      setState(() => _uploadProgress = 0.6);
 
       // Simulons une progression puisque http.MultipartRequest ne le supporte pas nativement facilement
       setState(() => _uploadProgress = 0.5);

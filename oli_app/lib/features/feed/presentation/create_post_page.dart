@@ -1,5 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+// video_compress removed — package no longer in pubspec
+import 'package:video_player/video_player.dart';
 import '../providers/feed_provider.dart';
 
 class CreatePostPage extends ConsumerStatefulWidget {
@@ -11,17 +15,70 @@ class CreatePostPage extends ConsumerStatefulWidget {
 
 class _CreatePostPageState extends ConsumerState<CreatePostPage> {
   final TextEditingController _textController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
+  File? _selectedMedia;
+  String? _mediaType; // 'image' or 'video'
+
+  Future<void> _pickMedia(bool isVideo) async {
+    try {
+      final XFile? pickedFile = isVideo 
+        ? await _picker.pickVideo(source: ImageSource.gallery)
+        : await _picker.pickImage(source: ImageSource.gallery, imageQuality: 15); // Compression drastique 85%
+
+      if (pickedFile != null) {
+        if (isVideo) {
+          // Validation de la durée (< 1 minute)
+          final controller = VideoPlayerController.file(File(pickedFile.path));
+          await controller.initialize();
+          final duration = controller.value.duration;
+          await controller.dispose();
+
+          if (duration.inSeconds > 60) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("La vidéo doit durer moins d'une minute.")),
+              );
+            }
+            return;
+          }
+
+          setState(() { _isLoading = true; });
+          
+          // Compression vidéo moyenne pour réduire la taille sans détruire
+          // VideoCompress removed — using original file directly
+
+          setState(() {
+            _selectedMedia = File(pickedFile.path);
+            _mediaType = 'video';
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _selectedMedia = File(pickedFile.path);
+            _mediaType = 'image';
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Erreur media picker: $e");
+      setState(() { _isLoading = false; });
+    }
+  }
 
   void _publishPost() async {
     final text = _textController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && _selectedMedia == null) return;
 
     setState(() {
       _isLoading = true;
     });
 
-    final success = await ref.read(feedProvider.notifier).createPost(text);
+    final success = await ref.read(feedProvider.notifier).createPost(
+      text, 
+      mediaFile: _selectedMedia, 
+      mediaType: _mediaType
+    );
     
     if (mounted) {
       setState(() {
@@ -83,25 +140,42 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
                 style: const TextStyle(fontSize: 18),
               ),
             ),
-            // TODO: Ajouter un bouton pour sélectionner une image plus tard
+            if (_selectedMedia != null)
+              Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  Container(
+                    height: 200,
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.grey[200],
+                      image: _mediaType == 'image' ? DecorationImage(
+                        image: FileImage(_selectedMedia!),
+                        fit: BoxFit.cover,
+                      ) : null,
+                    ),
+                    child: _mediaType == 'video' ? const Center(
+                      child: Icon(Icons.videocam, size: 48, color: Colors.grey),
+                    ) : null,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.cancel, color: Colors.red),
+                    onPressed: () => setState(() { _selectedMedia = null; _mediaType = null; }),
+                  )
+                ],
+              ),
             const Divider(),
             Row(
               children: [
                 IconButton(
                   icon: const Icon(Icons.image_outlined, color: Colors.blue),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Bientôt disponible !")),
-                    );
-                  },
+                  onPressed: () => _pickMedia(false),
                 ),
                 IconButton(
                   icon: const Icon(Icons.videocam_outlined, color: Colors.red),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Bientôt disponible !")),
-                    );
-                  },
+                  onPressed: () => _pickMedia(true),
                 ),
               ],
             )

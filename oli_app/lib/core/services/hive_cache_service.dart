@@ -1,27 +1,27 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Service générique de cache offline-first utilisant Hive.
+/// Service générique de cache offline-first utilisant SharedPreferences.
+/// Remplace Hive qui a été retiré des dépendances.
 /// Permet de stocker et récupérer rapidement des réponses JSON pour
 /// affichage instantané avant rafraîchissement réseau.
 class HiveCacheService {
-  static const String _boxName = 'oli_offline_cache';
-  static Box<String>? _box;
+  static const String _prefix = 'oli_cache_';
+  static SharedPreferences? _prefs;
 
-  /// Initialise Hive et ouvre la boîte de cache. À appeler dans main().
+  /// Initialise SharedPreferences. À appeler dans main().
   static Future<void> init() async {
-    await Hive.initFlutter();
-    _box = await Hive.openBox<String>(_boxName);
-    debugPrint('✅ HiveCacheService initialisé');
+    _prefs = await SharedPreferences.getInstance();
+    debugPrint('✅ HiveCacheService initialisé (SharedPreferences)');
   }
 
   /// Sauvegarde des données JSON dans le cache local.
   static Future<void> setCache(String key, dynamic data) async {
     try {
-      if (_box == null) return;
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
       final jsonString = jsonEncode(data);
-      await _box!.put(key, jsonString);
+      await prefs.setString('$_prefix$key', jsonString);
     } catch (e) {
       debugPrint('❌ Erreur HiveCacheService.setCache [$key]: $e');
     }
@@ -30,8 +30,9 @@ class HiveCacheService {
   /// Récupère des données JSON depuis le cache local.
   static dynamic getCache(String key) {
     try {
-      if (_box == null) return null;
-      final jsonString = _box!.get(key);
+      final prefs = _prefs;
+      if (prefs == null) return null;
+      final jsonString = prefs.getString('$_prefix$key');
       if (jsonString != null) {
         return jsonDecode(jsonString);
       }
@@ -40,18 +41,19 @@ class HiveCacheService {
     }
     return null;
   }
-  
+
   /// Efface le cache pour une clé spécifique.
   static Future<void> clearCache(String key) async {
-    if (_box != null) {
-      await _box!.delete(key);
-    }
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    await prefs.remove('$_prefix$key');
   }
 
-  /// Efface entièrement la boîte de cache.
+  /// Efface entièrement le cache (toutes les clés préfixées).
   static Future<void> clearAll() async {
-    if (_box != null) {
-      await _box!.clear();
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith(_prefix)).toList();
+    for (final key in keys) {
+      await prefs.remove(key);
     }
   }
 }
