@@ -61,12 +61,28 @@ exports.verifyOtp = async (req, res) => {
             return res.status(401).json({ error: "Code invalide ou expiré" });
         }
 
-        // Générer le token JWT avec toutes les infos utiles (dont is_admin !)
+        // ✅ Lire le solde réel depuis wallets.balance (source de vérité)
+        let walletBalance = 0;
+        try {
+            const wRes = await pool.query(
+                'SELECT balance FROM wallets WHERE user_id = $1', [result.user.id]
+            );
+            if (wRes.rows.length > 0) {
+                walletBalance = parseFloat(wRes.rows[0].balance);
+            } else {
+                // Fallback sur users.wallet si pas de wallet encore créé
+                walletBalance = parseFloat(result.user.wallet || 0);
+            }
+        } catch (e) {
+            walletBalance = parseFloat(result.user.wallet || 0);
+        }
+
+        // Générer le token JWT
         const token = jwt.sign(
             {
                 id: result.user.id,
                 phone: result.user.phone,
-                is_admin: result.user.is_admin || false, // ✨ AJOUTÉ
+                is_admin: result.user.is_admin || false,
                 is_seller: result.user.is_seller || false,
                 is_deliverer: result.user.is_deliverer || false
             },
@@ -74,8 +90,8 @@ exports.verifyOtp = async (req, res) => {
             { expiresIn: JWT_EXPIRES_IN }
         );
 
-        // DEBUG: Afficher le token généré
         console.log("🔑 Token généré pour", phone, ":", token.substring(0, 20) + "...");
+        console.log("💰 Wallet balance retourné:", walletBalance, "FC");
 
         return res.json({
             message: "Connexion réussie",
@@ -85,7 +101,7 @@ exports.verifyOtp = async (req, res) => {
                 name: result.user.name,
                 id_oli: result.user.id_oli,
                 avatar_url: result.user.avatar_url,
-                wallet: parseFloat(result.user.wallet || 0).toFixed(2),
+                wallet: walletBalance.toFixed(2),  // ✅ Depuis wallets.balance
                 is_admin: result.user.is_admin || false,
                 is_seller: result.user.is_seller || false,
                 is_deliverer: result.user.is_deliverer || false,
@@ -134,11 +150,15 @@ exports.updateProfile = async (req, res) => {
  */
 exports.getMe = async (req, res) => {
     try {
+        // ✅ Jointure avec wallets pour avoir le solde réel
         const result = await pool.query(
-            `SELECT id, phone, name, id_oli, wallet, avatar_url, 
-                  is_seller, is_deliverer, rating, reward_points,
-                  is_verified, account_type, has_certified_shop 
-           FROM users WHERE phone = $1`,
+            `SELECT u.id, u.phone, u.name, u.id_oli, u.avatar_url,
+                  u.is_seller, u.is_deliverer, u.rating, u.reward_points,
+                  u.is_verified, u.account_type, u.has_certified_shop,
+                  COALESCE(w.balance, u.wallet::DECIMAL, 0) as wallet
+           FROM users u
+           LEFT JOIN wallets w ON w.user_id = u.id
+           WHERE u.phone = $1`,
             [req.user.phone]
         );
 
@@ -150,7 +170,7 @@ exports.getMe = async (req, res) => {
         res.json({
             user: imageService.formatUserImages({
                 ...user,
-                wallet: parseFloat(user.wallet || 0).toFixed(2),
+                wallet: parseFloat(user.wallet || 0).toFixed(2),  // ✅ Depuis wallets.balance
                 initial: user.name ? user.name[0].toUpperCase() : "?"
             })
         });
