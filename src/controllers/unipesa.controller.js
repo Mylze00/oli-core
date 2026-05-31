@@ -21,6 +21,7 @@ exports.handleOrderPayment = async (req, res) => {
 
         res.status(200).json({ received: true });
 
+        const UNIPESA_CODES = { SUCCESS: 2, FAILED: 3, PENDING: 1 };
         if (parseInt(payload.status) !== UNIPESA_CODES.SUCCESS) {
             return;
         }
@@ -33,7 +34,7 @@ exports.handleOrderPayment = async (req, res) => {
         }
 
         const opRes = await pool.query(
-            'SELECT * FROM unipesa_operations WHERE oli_order_id =  OR unipesa_order_id = ',
+            'SELECT * FROM unipesa_operations WHERE oli_order_id = $1 OR unipesa_order_id = $1',
             [oliOrderId]
         );
 
@@ -63,7 +64,7 @@ exports.handleOrderPayment = async (req, res) => {
             type:        'deposit',
             provider:    'UNIPESA',
             reference:   oliOrderId + '_DEPOSIT',
-            description: \Recharge intermédiaire pour paiement commande #\,
+            description: `Recharge intermédiaire pour paiement commande #${targetOrderId}`,
         });
 
         // 2. Prélever immédiatement pour la commande (crée le escrow_lock)
@@ -72,9 +73,9 @@ exports.handleOrderPayment = async (req, res) => {
 
         // 3. Marquer l'opération comme succès
         await pool.query(
-            \UPDATE unipesa_operations 
-             SET status = 'success', confirmed_at = NOW(), webhook_payload = 
-             WHERE id = \,
+            `UPDATE unipesa_operations 
+             SET status = 'success', confirmed_at = NOW(), webhook_payload = $1
+             WHERE id = $2`,
             [JSON.stringify(payload), op.id]
         );
 
@@ -82,8 +83,9 @@ exports.handleOrderPayment = async (req, res) => {
         if (feeAmount > 0) {
             await walletService._creditSystemWallet(
                 feeAmount,
-                \_FEE\,
-                \Frais achat direct (User #\) — \ CDF+            );
+                `${oliOrderId}_FEE`,
+                `Frais achat direct (User #${userId}) — ${amount} CDF`
+            );
         }
 
         // 5. Mettre à jour la commande OLI
@@ -91,7 +93,7 @@ exports.handleOrderPayment = async (req, res) => {
         const io = req.app ? req.app.get('io') : null;
         await orderService.simulatePayment(targetOrderId, 'mobile_money', io);
 
-        console.log(\✅ Paiement direct commande #\ validé avec succès (user #\)\);
+        console.log(`✅ Paiement direct commande #${targetOrderId} validé avec succès (user #${userId})`);
     } catch (err) {
         console.error('❌ Erreur traitement webhook handleOrderPayment:', err.message, err.stack);
     }
