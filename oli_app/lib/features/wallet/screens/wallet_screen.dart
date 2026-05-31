@@ -119,9 +119,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       child: _balanceVisible
                           ? Text(
                               key: const ValueKey('visible'),
-                              walletState.isLoading
-                                  ? '•••••'
-                                  : exchangeNotifier.formatProductPrice(walletState.balance),
+                                  walletState.isLoading
+                                      ? '•••••'
+                                      : exchangeNotifier.formatAmount(walletState.balance, currency: Currency.CDF),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 36,
@@ -373,7 +373,7 @@ class _TransactionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${_isCredit ? '+' : '-'}${exchangeNotifier.formatProductPrice(tx.amount)}',
+                  '${_isCredit ? '+' : '-'}${exchangeNotifier.formatAmount(tx.amount.abs(), currency: Currency.CDF)}',
                   style: TextStyle(
                     color: _color,
                     fontWeight: FontWeight.bold,

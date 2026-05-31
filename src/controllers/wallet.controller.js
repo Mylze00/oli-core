@@ -13,8 +13,8 @@ exports.getBalance = async (req, res) => {
         const balance = await walletService.getBalance(req.user.id);
         res.json({
             balance,
-            formattedBalance: `$${balance.toFixed(2)}`,
-            currency: 'USD',
+            formattedBalance: `${balance.toFixed(0)} FC`,
+            currency: 'FC',
         });
     } catch (err) {
         console.error('Erreur solde wallet:', err.message);
@@ -54,7 +54,7 @@ exports.deposit = async (req, res) => {
         );
         res.json({
             success: true,
-            message: `Recharge de $${parseFloat(amount).toFixed(2)} effectuée`,
+            message: `Recharge de ${parseFloat(amount).toFixed(0)} FC effectuée`,
             newBalance: result.balanceAfter,
             transactionId: result.transactionId,
         });
@@ -78,7 +78,7 @@ exports.depositCard = async (req, res) => {
         const result = await walletService.depositByCard(req.user.id, parseFloat(amount), cardInfo);
         res.json({
             success: true,
-            message: `Recharge de $${parseFloat(amount).toFixed(2)} par carte effectuée`,
+            message: `Recharge de ${parseFloat(amount).toFixed(0)} FC par carte effectuée`,
             newBalance: result.balanceAfter,
             transactionId: result.transactionId,
         });
@@ -109,7 +109,7 @@ exports.withdraw = async (req, res) => {
         );
         res.json({
             success: true,
-            message: `Retrait de $${parseFloat(amount).toFixed(2)} effectué`,
+            message: `Retrait de ${parseFloat(amount).toFixed(0)} FC effectué`,
             newBalance: result.balanceAfter,
             transactionId: result.transactionId,
         });
@@ -148,11 +148,11 @@ exports.transfer = async (req, res) => {
             req.user.id,
             parseInt(finalReceiverId),
             parseFloat(amount),
-            currency || 'USD'
+            currency || 'FC'
         );
         res.json({
             success: true,
-            message: `$${result.amountUSD.toFixed(2)} envoyé avec succès`,
+            message: `${result.amountUSD.toFixed(0)} FC envoyé avec succès`,
             ...result,
         });
     } catch (err) {

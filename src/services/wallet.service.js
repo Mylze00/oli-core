@@ -124,7 +124,7 @@ class WalletService {
         // Appel API Unipesa C2B - Mobile Money avec le montant total (Montant + Frais)
         const unipesaRes = await unipesaService.depositC2B({
             amount: totalToCharge,
-            currency: 'USD',
+            currency: 'CDF',
             provider,
             phoneNumber,
             reference,
@@ -216,8 +216,8 @@ class WalletService {
 
         // Appel API Unipesa B2C (Décaissements) - Unipesa envoie uniquement le montant NET
         const unipesaRes = await unipesaService.withdrawB2C({
-            amount,
-            currency: 'USD',
+            amount: amount,
+            currency: 'CDF',
             provider,
             phoneNumber,
             reference,

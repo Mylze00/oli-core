@@ -992,7 +992,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
     super.dispose();
   }
 
-  Future<void> _submit(bool isUSD) async {
+  Future<void> _submit() async {
     final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.'));
     if (amount == null || amount <= 0) {
       setState(() => _error = 'Montant invalide');
@@ -1003,9 +1003,8 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
       return;
     }
 
-    final currencyLabel = isUSD ? 'USD' : 'FC';
     final confirmed = await biometricService.authenticate(
-      reason: 'Confirmer ${widget.buttonLabel} de ${amount.toStringAsFixed(isUSD ? 2 : 0)} $currencyLabel',
+      reason: 'Confirmer ${widget.buttonLabel} de ${amount.toStringAsFixed(0)} FC',
     );
     if (!confirmed) {
       setState(() => _error = 'Authentification annulée');
@@ -1014,14 +1013,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
 
     setState(() { _isLoading = true; _error = null; });
     
-    // Le wallet_provider gère-t-il la devise ? Actuellement wallet_provider s'attend à amountFC pour UnipesaDeposit.
-    // L'API backend attend amountFC pour Unipesa. Donc si c'est USD, on doit convertir en FC avant d'appeler onSubmit.
-    // L'utilisateur demande que la recharge se fasse dans la monnaie du wallet.
-    final finalAmount = isUSD 
-        ? ref.read(exchangeRateProvider.notifier).convertAmount(amount, from: Currency.USD) 
-        : amount;
-
-    final ok = await widget.onSubmit(finalAmount, _provider, _phoneCtrl.text.trim());
+    final ok = await widget.onSubmit(amount, _provider, _phoneCtrl.text.trim());
     setState(() => _isLoading = false);
 
     if (mounted) {
@@ -1043,10 +1035,8 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
   @override
   Widget build(BuildContext context) {
     final maxH = MediaQuery.of(context).size.height * 0.9;
-    final exchangeState = ref.watch(exchangeRateProvider);
-    final isUSD = exchangeState.selectedCurrency == Currency.USD;
-    final currencySymbol = isUSD ? '\$' : 'FC';
-    final hintCurrency = isUSD ? 'USD' : 'FC';
+    const currencySymbol = 'FC';
+    const hintCurrency = 'FC';
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -1194,7 +1184,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       const Text('Montant demandé :', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-                                      Text('$currencySymbol${amt.toStringAsFixed(isUSD ? 2 : 0)}', style: const TextStyle(color: Color(0xFF103652), fontSize: 13, fontWeight: FontWeight.w700)),
+                                      Text('${amt.toStringAsFixed(0)} FC', style: const TextStyle(color: Color(0xFF103652), fontSize: 13, fontWeight: FontWeight.w700)),
                                     ],
                                   ),
                                   const SizedBox(height: 8),
@@ -1202,7 +1192,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       const Text('Frais de plateforme (5%) :', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-                                      Text('$currencySymbol${fee.toStringAsFixed(isUSD ? 2 : 0)}', style: const TextStyle(color: Color(0xFFE11D48), fontSize: 13, fontWeight: FontWeight.w700)),
+                                      Text('${fee.toStringAsFixed(0)} FC', style: const TextStyle(color: Color(0xFFE11D48), fontSize: 13, fontWeight: FontWeight.w700)),
                                     ],
                                   ),
                                   const Padding(
@@ -1213,7 +1203,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(isDeposit ? 'Vous serez facturé :' : 'Total déduit :', style: const TextStyle(color: Color(0xFF103652), fontSize: 14, fontWeight: FontWeight.w800)),
-                                      Text('$currencySymbol${total.toStringAsFixed(isUSD ? 2 : 0)}', style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w900)),
+                                      Text('${total.toStringAsFixed(0)} FC', style: const TextStyle(color: Color(0xFF103652), fontSize: 16, fontWeight: FontWeight.w900)),
                                     ],
                                   ),
                                 ],
@@ -1261,7 +1251,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : () => _submit(isUSD),
+                          onPressed: _isLoading ? null : () => _submit(),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF103652), // Bouton toujours bleu pour le thème "bleu et blanc"
                             foregroundColor: Colors.white,
