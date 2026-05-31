@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../providers/wallet_provider.dart';
 import '../../../features/auth/providers/auth_controller.dart';
 import '../../../features/wallet/services/biometric_service.dart';
@@ -678,6 +679,27 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
   final _amountCtrl = TextEditingController();
   bool _isLoading = false;
   String? _error;
+  bool _hasPermission = false;
+  bool _isPermissionChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCameraPermission();
+  }
+
+  Future<void> _checkCameraPermission() async {
+    final status = await Permission.camera.request();
+    if (mounted) {
+      setState(() {
+        _hasPermission = status.isGranted;
+        _isPermissionChecked = true;
+        if (!status.isGranted) {
+          _error = 'Accès à la caméra refusé. Veuillez l\'autoriser dans les paramètres.';
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -789,25 +811,42 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  MobileScanner(
-                    onDetect: (capture) {
-                      final List<Barcode> barcodes = capture.barcodes;
-                      for (final barcode in barcodes) {
-                        if (barcode.rawValue != null && _scannedPhone == null && !_isLoading) {
-                          _handleScannedQr(barcode.rawValue!);
-                          break;
+                  if (!_isPermissionChecked)
+                    const CircularProgressIndicator(color: Color(0xFF7C3AED))
+                  else if (_hasPermission)
+                    MobileScanner(
+                      onDetect: (capture) {
+                        final List<Barcode> barcodes = capture.barcodes;
+                        for (final barcode in barcodes) {
+                          if (barcode.rawValue != null && _scannedPhone == null && !_isLoading) {
+                            _handleScannedQr(barcode.rawValue!);
+                            break;
+                          }
                         }
-                      }
-                    },
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.8), width: 2),
-                      borderRadius: BorderRadius.circular(12),
+                      },
+                    )
+                  else
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.no_photography_rounded, color: Colors.white54, size: 40),
+                        const SizedBox(height: 12),
+                        const Text('Caméra bloquée', style: TextStyle(color: Colors.white54)),
+                        TextButton(
+                          onPressed: () => openAppSettings(),
+                          child: const Text('Ouvrir les paramètres', style: TextStyle(color: Color(0xFF7C3AED))),
+                        ),
+                      ],
                     ),
-                    width: 180,
-                    height: 180,
-                  ),
+                  if (_hasPermission)
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.8), width: 2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      width: 180,
+                      height: 180,
+                    ),
                   if (_isLoading)
                     Container(
                       color: Colors.black54,
