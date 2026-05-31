@@ -8,6 +8,9 @@ const walletController = require('../controllers/wallet.controller');
 /** GET /wallet/balance — Solde actuel */
 router.get('/balance', walletController.getBalance);
 
+/** GET /wallet/resolve-recipient — Récupère le vrai nom certifié d'un utilisateur depuis son identifiant (pseudo, tel, id) */
+router.get('/resolve-recipient', walletController.resolveRecipient);
+
 /** GET /wallet/transactions — Historique (query: ?limit=30) */
 router.get('/transactions', walletController.getHistory);
 

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../providers/wallet_provider.dart';
 import '../../../features/auth/providers/auth_controller.dart';
 import '../../../features/wallet/services/biometric_service.dart';
@@ -209,8 +210,8 @@ class RecevoirSheet extends ConsumerWidget {
     final authState = ref.watch(authControllerProvider);
     final phone = authState.userData?['phone'] ?? '';
     final name = authState.userData?['name'] ?? 'Utilisateur';
-    // QR data : format JSON que l'app peut parser
-    final qrData = 'oli://transfer?phone=$phone&name=${Uri.encodeComponent(name)}';
+    // QR data : Format sécurisé contenant uniquement l'identifiant
+    final qrData = 'oli://pay?id=$phone';
 
     return _DarkSheet(
       title: 'Recevoir de l\'argent',
@@ -537,19 +538,36 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
       return;
     }
 
-    final fee = amount * 0.01;
-    final confirmed = await biometricService.authenticate(
-      reason: 'Confirmer l\'envoi de ${amount.toStringAsFixed(0)} FC (+ ${fee.toStringAsFixed(0)} FC de frais)',
-    );
-    if (!confirmed) {
-      setState(() => _error = 'Authentification annulée');
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _error = null;
     });
+
+    // 1. Résolution sécurisée du destinataire
+    final resolvedUser = await ref.read(walletProvider.notifier).resolveRecipient(phone);
+    if (resolvedUser == null) {
+      setState(() {
+        _isLoading = false;
+        _error = 'Destinataire introuvable ou non autorisé';
+      });
+      return;
+    }
+
+    final recipientName = resolvedUser['name'] ?? 'Utilisateur';
+    
+    // 2. Confirmation biométrique avec le VRAI nom
+    final fee = amount * 0.01;
+    final confirmed = await biometricService.authenticate(
+      reason: 'Envoyer ${amount.toStringAsFixed(0)} FC à $recipientName ?\n(+ ${fee.toStringAsFixed(0)} FC de frais)',
+    );
+
+    if (!confirmed) {
+      setState(() {
+        _isLoading = false;
+        _error = 'Authentification annulée';
+      });
+      return;
+    }
 
     final ok = await ref.read(walletProvider.notifier).transfer(
           amount: amount,
@@ -667,18 +685,46 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
     super.dispose();
   }
 
-  // Pour un vrai scan, intégrer mobile_scanner ; ici on simule avec un textfield
-  void _handleScannedQr(String raw) {
+  void _handleScannedQr(String raw) async {
     try {
       final uri = Uri.parse(raw);
-      final phone = uri.queryParameters['phone'] ?? '';
-      final name = Uri.decodeComponent(uri.queryParameters['name'] ?? 'Destinataire');
+      String? identifier;
+      
+      if (uri.scheme == 'oli' && uri.host == 'pay') {
+        identifier = uri.queryParameters['id'];
+      } else if (uri.scheme == 'oli' && uri.host == 'transfer') {
+        // Rétrocompatibilité avec les anciens QR codes
+        identifier = uri.queryParameters['phone'];
+      }
+
+      if (identifier == null || identifier.isEmpty) {
+        setState(() => _error = 'QR code invalide');
+        return;
+      }
+
       setState(() {
-        _scannedPhone = phone;
-        _scannedName = name;
+        _isLoading = true;
+        _error = null;
       });
+
+      // Résolution sécurisée
+      final resolvedUser = await ref.read(walletProvider.notifier).resolveRecipient(identifier);
+      
+      setState(() => _isLoading = false);
+
+      if (resolvedUser != null) {
+        setState(() {
+          _scannedPhone = identifier;
+          _scannedName = resolvedUser['name'] ?? 'Utilisateur certifié';
+        });
+      } else {
+        setState(() => _error = 'Destinataire introuvable');
+      }
     } catch (_) {
-      setState(() => _error = 'QR invalide');
+      setState(() {
+        _isLoading = false;
+        _error = 'Format QR invalide';
+      });
     }
   }
 
@@ -691,7 +737,7 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
     
     final fee = amount * 0.01;
     final confirmed = await biometricService.authenticate(
-      reason: 'Confirmer l\'envoi de ${amount.toStringAsFixed(0)} FC (+ ${fee.toStringAsFixed(0)} FC de frais)',
+      reason: 'Envoyer ${amount.toStringAsFixed(0)} FC à $_scannedName ?\n(+ ${fee.toStringAsFixed(0)} FC de frais)',
     );
     if (!confirmed) {
       setState(() => _error = 'Authentification annulée');
@@ -732,26 +778,43 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
         children: [
           const SizedBox(height: 8),
           if (_scannedPhone == null) ...[
-            // Placeholder : en prod, remplacer par MobileScanner()
             Container(
-              height: 180,
+              height: 250,
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.4)),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              clipBehavior: Clip.hardEdge,
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  Icon(Icons.qr_code_scanner_rounded,
-                      size: 52, color: Colors.white.withOpacity(0.3)),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Placez le QR code du destinataire\ndans la zone de scan',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.4), fontSize: 12),
+                  MobileScanner(
+                    onDetect: (capture) {
+                      final List<Barcode> barcodes = capture.barcodes;
+                      for (final barcode in barcodes) {
+                        if (barcode.rawValue != null && _scannedPhone == null && !_isLoading) {
+                          _handleScannedQr(barcode.rawValue!);
+                          break;
+                        }
+                      }
+                    },
                   ),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.8), width: 2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    width: 180,
+                    height: 180,
+                  ),
+                  if (_isLoading)
+                    Container(
+                      color: Colors.black54,
+                      child: const Center(
+                        child: CircularProgressIndicator(color: Color(0xFF7C3AED)),
+                      ),
+                    ),
                 ],
               ),
             ),

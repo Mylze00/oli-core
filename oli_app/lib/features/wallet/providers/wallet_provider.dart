@@ -206,6 +206,21 @@ class WalletNotifier extends StateNotifier<WalletState> {
     });
   }
 
+  Future<Map<String, dynamic>?> resolveRecipient(String identifier) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.walletResolveRecipient,
+        queryParameters: {'identifier': identifier},
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return response.data['user'];
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<bool> depositByCard({
     required String cardNumber,
     required String expiryDate,

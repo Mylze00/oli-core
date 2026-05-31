@@ -160,3 +160,42 @@ exports.transfer = async (req, res) => {
         res.status(400).json({ error: err.message });
     }
 };
+
+// ─── Résolution Destinataire ──────────────────────────────────────────────────
+
+exports.resolveRecipient = async (req, res) => {
+    const { identifier } = req.query;
+
+    if (!identifier) {
+        return res.status(400).json({ error: 'Identifiant requis' });
+    }
+
+    // Ne pas autoriser la recherche de soi-même
+    if (identifier === req.user.phone || identifier === req.user.pseudo || identifier === req.user.id_oli) {
+        return res.status(400).json({ error: 'Vous ne pouvez pas vous envoyer des fonds à vous-même' });
+    }
+
+    try {
+        const userRepository = require('../repositories/user.repository');
+        const user = await userRepository.findByIdentifier(identifier);
+        
+        if (!user) {
+            return res.status(404).json({ error: 'Destinataire introuvable' });
+        }
+        
+        if (user.id === req.user.id) {
+            return res.status(400).json({ error: 'Vous ne pouvez pas vous envoyer des fonds à vous-même' });
+        }
+
+        res.json({
+            success: true,
+            user: {
+                name: user.name,
+                phone: user.phone,
+            }
+        });
+    } catch (err) {
+        console.error('Erreur resolveRecipient:', err.message);
+        res.status(500).json({ error: 'Erreur lors de la recherche du destinataire' });
+    }
+};
