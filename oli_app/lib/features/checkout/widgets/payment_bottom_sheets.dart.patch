@@ -1,0 +1,20 @@
+--- oli_app/lib/features/checkout/widgets/payment_bottom_sheets.dart
++++ oli_app/lib/features/checkout/widgets/payment_bottom_sheets.dart
+@@ -1,6 +1,7 @@
+ import 'dart:async';
+ import 'dart:convert';
+ import 'package:flutter/material.dart';
++import 'package:flutter/services.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:http/http.dart' as http;
+ import '../../../models/order_model.dart';
+@@ -236,6 +237,9 @@
+   required Order order,
+   required VoidCallback onDone,
+ }) {
++  // Petit retour haptique (vibration douce) pour célébrer le succès
++  HapticFeedback.mediumImpact();
++
+   final ex = ref.read(exchangeRateProvider.notifier);
+   
+   showModalBottomSheet(

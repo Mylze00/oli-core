@@ -346,7 +346,11 @@ class WalletService {
         }
         if (amount < 0.01) throw new Error('Montant trop faible après conversion');
 
+        const feeAmount = amount * 0.01;
+        const totalToDeduct = amount + feeAmount;
+
         const reference = `P2P_${Date.now()}_${senderId}_${receiverId}`;
+        const feeReference = `FEE_${reference}`;
 
         // Exécuter les deux opérations dans une seule transaction PostgreSQL
         const client = await pool.connect();
@@ -357,17 +361,17 @@ class WalletService {
             const senderWallet = await walletRepository._getOrCreateWallet(senderId, client);
             if (senderWallet.is_frozen) throw new Error('Votre wallet est gelé');
             const senderBalance = parseFloat(senderWallet.balance);
-            if (senderBalance < amount) {
-                throw new Error(`Solde insuffisant (${senderBalance.toFixed(2)} USD disponible)`);
+            if (senderBalance < totalToDeduct) {
+                throw new Error(`Solde insuffisant (disponible: $${senderBalance.toFixed(2)}, requis: $${totalToDeduct.toFixed(2)} incluant 1% de frais)`);
             }
-            const newSenderBalance = senderBalance - amount;
+            const newSenderBalance = senderBalance - totalToDeduct;
             await client.query(`UPDATE wallets SET balance = $1 WHERE id = $2`, [newSenderBalance, senderWallet.id]);
             await client.query(`UPDATE users SET wallet = $1 WHERE id = $2`, [newSenderBalance, senderId]);
             await walletRepository._insertTx(client, {
                 walletId: senderWallet.id, userId: senderId, type: 'transfer',
-                amount: -amount, balanceAfter: newSenderBalance,
+                amount: -totalToDeduct, balanceAfter: newSenderBalance,
                 provider: 'P2P', reference,
-                description: `Envoi à utilisateur #${receiverId}`,
+                description: `Envoi à utilisateur #${receiverId} (incl. frais de 1%)`,
             });
 
             // — Crédit destinataire
@@ -386,6 +390,9 @@ class WalletService {
             await client.query('COMMIT');
 
             console.log(`💸 Transfert P2P: #${senderId} → #${receiverId} — ${amount.toFixed(2)} USD (${amountRaw} ${currency})`);
+
+            // Verser les 1% au portefeuille d'administration OLI (user 0)
+            await this._creditSystemWallet(feeAmount, feeReference, `Frais 1% sur P2P #${senderId} → #${receiverId}`);
 
             return {
                 success: true,

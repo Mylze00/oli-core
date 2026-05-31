@@ -1,0 +1,515 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:audioplayers/audioplayers.dart';
+import '../../../models/order_model.dart';
+import '../../../providers/exchange_rate_provider.dart';
+import '../../../core/storage/secure_storage_service.dart';
+import '../../orders/screens/purchases_page.dart';
+
+// --- STYLES COMMUNS ---
+final _sheetShape = const RoundedRectangleBorder(
+  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+);
+const _sheetBgColor = Color(0xFF141414);
+
+// ---------------------------------------------------------
+// 1. CONFIRMATION SHEET (Dernière lecture avant validation)
+// ---------------------------------------------------------
+Future<bool?> showPaymentConfirmationSheet({
+  required BuildContext context,
+  required WidgetRef ref,
+  required double totalAmount,
+  required String paymentMethod,
+  required String mobileMoneyPhone,
+  required String deliveryAddress,
+}) {
+  final ex = ref.read(exchangeRateProvider.notifier);
+  final isMobileMoney = paymentMethod == 'mobile_money';
+  final paymentLabel = isMobileMoney ? 'Mobile Money (Unipesa)' : (paymentMethod == 'wallet' ? 'Wallet OLI' : 'Carte Bancaire');
+
+  return showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: _sheetBgColor,
+    shape: _sheetShape,
+    builder: (ctx) {
+      return Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Confirmer le paiement',
+              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 24),
+            
+            // Montant Total
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blueAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Montant total', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                  Text(
+                    ex.formatProductPrice(totalAmount),
+                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Détails
+            _buildDetailRow('Méthode', paymentLabel, Icons.payment),
+            if (isMobileMoney) ...[
+              const SizedBox(height: 12),
+              _buildDetailRow('Numéro', mobileMoneyPhone, Icons.phone_android, color: Colors.orange),
+            ],
+            const SizedBox(height: 12),
+            _buildDetailRow('Livraison', deliveryAddress, Icons.location_on_outlined),
+            
+            const SizedBox(height: 32),
+            
+            // Boutons
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(color: Colors.grey[800]!),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Payer', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: MediaQuery.of(ctx).padding.bottom),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildDetailRow(String label, String value, IconData icon, {Color? color}) {
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, color: color ?? Colors.grey[500], size: 20),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+            const SizedBox(height: 2),
+            Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+// ---------------------------------------------------------
+// 2. PENDING SHEET (Attente et Polling 60 secondes)
+// ---------------------------------------------------------
+enum PaymentResult { success, failed, timeout, cancelled }
+
+Future<PaymentResult?> showPaymentPendingSheet({
+  required BuildContext context,
+  required WidgetRef ref,
+  required String oliOrderId,
+  required String phoneNumber,
+  required String providerName,
+}) {
+  return showModalBottomSheet<PaymentResult>(
+    context: context,
+    isDismissible: false,
+    enableDrag: false,
+    isScrollControlled: true,
+    backgroundColor: _sheetBgColor,
+    shape: _sheetShape,
+    builder: (ctx) {
+      return _PaymentPendingWidget(
+        oliOrderId: oliOrderId,
+        phoneNumber: phoneNumber,
+        providerName: providerName,
+      );
+    },
+  );
+}
+
+class _PaymentPendingWidget extends ConsumerStatefulWidget {
+  final String oliOrderId;
+  final String phoneNumber;
+  final String providerName;
+
+  const _PaymentPendingWidget({
+    required this.oliOrderId,
+    required this.phoneNumber,
+    required this.providerName,
+  });
+
+  @override
+  ConsumerState<_PaymentPendingWidget> createState() => _PaymentPendingWidgetState();
+}
+
+class _PaymentPendingWidgetState extends ConsumerState<_PaymentPendingWidget> with TickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+  Timer? _statusTimer;
+  Timer? _countdownTimer;
+  int _secondsLeft = 60; // 60 secondes max
+  bool _isChecking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _startTimers();
+  }
+
+  void _startTimers() {
+    // Compte à rebours
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() {
+        if (_secondsLeft > 0) {
+          _secondsLeft--;
+        } else {
+          _handleResult(PaymentResult.timeout);
+        }
+      });
+    });
+
+    // Polling toutes les 4 secondes
+    _statusTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!_isChecking) _checkPaymentStatus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _statusTimer?.cancel();
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkPaymentStatus() async {
+    _isChecking = true;
+    try {
+      final apiBase = const String.fromEnvironment('API_BASE_URL', defaultValue: 'https://oli-core.onrender.com');
+      final storage = ref.read(secureStorageProvider);
+      final token = await storage.getToken();
+      if (token == null) return;
+
+      final response = await http.get(
+        Uri.parse('$apiBase/api/unipesa/status/${widget.oliOrderId}'),
+        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(response.body);
+        final status = data['status'] as String?;
+
+        if (status == 'success') {
+          _handleResult(PaymentResult.success);
+        } else if (status == 'failed' || status == 'cancelled') {
+          _handleResult(PaymentResult.failed);
+        } else if (status == 'timeout') {
+          _handleResult(PaymentResult.timeout);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erreur polling statut: $e');
+    } finally {
+      _isChecking = false;
+    }
+  }
+
+  void _handleResult(PaymentResult result) {
+    if (!mounted) return;
+    _statusTimer?.cancel();
+    _countdownTimer?.cancel();
+    Navigator.pop(context, result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (_, child) => Transform.scale(scale: _pulseAnimation.value, child: child),
+            child: Container(
+              width: 80, height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.orange.withOpacity(0.15),
+                border: Border.all(color: Colors.orange.withOpacity(0.5), width: 2),
+              ),
+              child: const Icon(Icons.phone_android_rounded, color: Colors.orange, size: 40),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'En attente de validation',
+            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Veuillez valider le paiement sur votre téléphone\n${widget.phoneNumber}',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[400], fontSize: 14),
+          ),
+          const SizedBox(height: 24),
+          
+          // Compte à rebours
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '00:${_secondsLeft.toString().padLeft(2, '0')}',
+                style: const TextStyle(color: Colors.orange, fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => _handleResult(PaymentResult.cancelled),
+              child: const Text('Annuler', style: TextStyle(color: Colors.white54, fontSize: 16)),
+            ),
+          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------
+// 3. SUCCESS SHEET
+// ---------------------------------------------------------
+void showPaymentSuccessSheet({
+  required BuildContext context,
+  required WidgetRef ref,
+  required Order order,
+  required VoidCallback onDone,
+}) {
+  // Petit retour haptique (vibration douce)
+  HapticFeedback.mediumImpact();
+  
+  // Jouer le son de succès
+  final player = AudioPlayer();
+  player.play(AssetSource('images/kaching.mp3'));
+
+  final ex = ref.read(exchangeRateProvider.notifier);
+  
+  showModalBottomSheet(
+    context: context,
+    isDismissible: false,
+    enableDrag: false,
+    isScrollControlled: true,
+    backgroundColor: _sheetBgColor,
+    shape: _sheetShape,
+    builder: (ctx) {
+      return Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 80, height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.green.withOpacity(0.15),
+              ),
+              child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 48),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Paiement Réussi',
+              style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Votre commande #${order.id} est confirmée',
+              style: TextStyle(color: Colors.grey[400], fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              ex.formatProductPrice(order.totalAmount),
+              style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  onDone();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Terminer', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(ctx).padding.bottom),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+// ---------------------------------------------------------
+// 4. FAILED SHEET (Avec option de Réessayer)
+// ---------------------------------------------------------
+void showPaymentFailedSheet({
+  required BuildContext context,
+  required PaymentResult reason,
+  required VoidCallback onRetry,
+  required VoidCallback onCancel,
+}) {
+  String title = 'Paiement échoué';
+  String message = 'Votre paiement n\'a pas pu être traité.';
+  
+  if (reason == PaymentResult.timeout) {
+    title = 'Temps écoulé';
+    message = 'Vous n\'avez pas validé le paiement à temps.';
+  } else if (reason == PaymentResult.cancelled) {
+    title = 'Paiement annulé';
+    message = 'Vous avez annulé la transaction.';
+  }
+
+  showModalBottomSheet(
+    context: context,
+    isDismissible: false,
+    enableDrag: false,
+    isScrollControlled: true,
+    backgroundColor: _sheetBgColor,
+    shape: _sheetShape,
+    builder: (ctx) {
+      return Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 80, height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.red.withOpacity(0.15),
+              ),
+              child: const Icon(Icons.error_outline_rounded, color: Colors.red, size: 48),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[400], fontSize: 14),
+            ),
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      onCancel();
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(color: Colors.grey[800]!),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Fermer', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      onRetry();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Réessayer', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: MediaQuery.of(ctx).padding.bottom),
+          ],
+        ),
+      );
+    },
+  );
+}

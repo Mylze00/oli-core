@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../widgets/payment_bottom_sheets.dart';
+import '../../orders/screens/purchases_page.dart';
 import '../../orders/providers/orders_provider.dart';
 import '../../user/providers/address_provider.dart';
 import '../../user/screens/address_management_page.dart';
@@ -456,58 +458,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       return;
     }
 
-    // #20 — Dialog de confirmation pour wallet et mobile money
     if (_paymentMethod != 'card') {
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showPaymentConfirmationSheet(
         context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A2E),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Confirmer le paiement', style: TextStyle(color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Montant total : ${ref.read(exchangeRateProvider.notifier).formatProductPrice(total)}',
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Méthode : ${_paymentMethod == 'wallet' ? 'Portefeuille Oli' : 'Mobile Money (Unipesa)'}',
-                style: const TextStyle(color: Colors.white70),
-              ),
-              if (_paymentMethod == 'mobile_money') ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Numéro : $mobileMoneyPhone',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-              const SizedBox(height: 4),
-              Text(
-                'Adresse : $deliveryAddress',
-                style: const TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Cette action est irréversible.',
-                style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: Colors.white54)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E7DBA)),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Confirmer', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
+        ref: ref,
+        totalAmount: total,
+        paymentMethod: _paymentMethod,
+        mobileMoneyPhone: mobileMoneyPhone,
+        deliveryAddress: deliveryAddress,
       );
 
       if (confirmed != true) return;
@@ -553,57 +511,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         }
 
         if (_paymentMethod == 'mobile_money') {
-          // ✅ Appel Unipesa pour déclencher le push USSD vers le téléphone
-          setState(() => _isLoading = true);
-
-          final unipesaResult = await orderService.payOrderMobileMoney(
-            orderId: order.id,
-            phone: mobileMoneyPhone,
-          );
-
-          if (!mounted) return;
-
-          if (unipesaResult == null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Impossible d\'initier le paiement Mobile Money. Vérifiez votre numéro et réessayez.'),
-                backgroundColor: Colors.red,
-                duration: Duration(seconds: 5),
-              ),
-            );
-            setState(() => _isLoading = false);
-            return;
-          }
-
-          // Récupérer l'ID de commande Unipesa pour le polling
-          final oliOrderId = unipesaResult['oliOrderId'] as String?;
-          final orderWithUnipesa = Order(
-            id: order.id,
-            userId: order.userId,
-            status: order.status,
-            totalAmount: order.totalAmount,
-            deliveryAddress: order.deliveryAddress,
-            deliveryFee: order.deliveryFee,
-            paymentMethod: order.paymentMethod,
-            paymentStatus: order.paymentStatus,
-            deliveryCode: order.deliveryCode,
-            deliveryMethodId: order.deliveryMethodId,
-            createdAt: order.createdAt,
-            updatedAt: order.updatedAt,
-            items: order.items,
-            unipesaOrderId: oliOrderId,
-          );
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PaymentPendingPage(
-                order: orderWithUnipesa,
-                phoneNumber: mobileMoneyPhone,
-                providerName: _mobileMoneyProvider,
-              ),
-            ),
-          );
+          await _processMobileMoneyPayment(order, mobileMoneyPhone);
           return;
         }
 
@@ -622,6 +530,67 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _processMobileMoneyPayment(Order order, String phone) async {
+    bool keepTrying = true;
+
+    while (keepTrying && mounted) {
+      setState(() => _isLoading = true);
+      
+      final unipesaResult = await ref.read(orderServiceProvider).payOrderMobileMoney(
+        orderId: order.id,
+        phone: phone,
+      );
+      
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      
+      if (unipesaResult == null) {
+        keepTrying = false;
+        showPaymentFailedSheet(
+          context: context,
+          reason: PaymentResult.failed,
+          onRetry: () => _processMobileMoneyPayment(order, phone),
+          onCancel: () {},
+        );
+        return;
+      }
+
+      final oliOrderId = unipesaResult['oliOrderId'] as String?;
+      if (oliOrderId == null) return;
+
+      final result = await showPaymentPendingSheet(
+        context: context,
+        ref: ref,
+        oliOrderId: oliOrderId,
+        phoneNumber: phone,
+        providerName: _mobileMoneyProvider,
+      );
+
+      if (!mounted) return;
+      keepTrying = false;
+
+      if (result == PaymentResult.success) {
+        showPaymentSuccessSheet(
+          context: context,
+          ref: ref,
+          order: order,
+          onDone: () => Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const PurchasesPage()), 
+            (route) => route.isFirst
+          ),
+        );
+      } else {
+        final reason = result ?? PaymentResult.cancelled;
+        showPaymentFailedSheet(
+          context: context, 
+          reason: reason,
+          onRetry: () => _processMobileMoneyPayment(order, phone),
+          onCancel: () {},
+        );
+      }
     }
   }
 }

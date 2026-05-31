@@ -7,3 +7,4 @@ data/competitors/*.csv
 .env.local
 oli_seller/.env.local
 *.env.local
+oli_app/assets/images/Téléchargements/

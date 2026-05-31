@@ -24,6 +24,31 @@ async function findById(userId) {
 }
 
 /**
+ * Trouver un utilisateur par son identifiant (téléphone, id_oli, ou @pseudo)
+ */
+async function findByIdentifier(identifier) {
+  if (!identifier) return null;
+  
+  let q = identifier.trim();
+  // Si ça commence par @, on enlève le @ pour la recherche du nom ou on le garde si le nom l'inclut.
+  // Dans notre cas, on va chercher tel quel OU sans le @.
+  const qWithoutAt = q.startsWith('@') ? q.substring(1) : q;
+  
+  const query = `
+    SELECT *
+    FROM users
+    WHERE phone = $1 
+       OR id_oli = $1 
+       OR id_oli = $2
+       OR name ILIKE $1 
+       OR name ILIKE $2
+    LIMIT 1
+  `;
+  const { rows } = await pool.query(query, [q, qWithoutAt]);
+  return rows[0] || null;
+}
+
+/**
  * Generate a unique ID OLI
  */
 function generateIdOli(phone) {
@@ -211,7 +236,7 @@ module.exports = {
   clearOtp,
   findVisitedProducts,
   trackProductView,
-  trackProductView,
   updateName,
-  findPublicProfile
+  findPublicProfile,
+  findByIdentifier
 };

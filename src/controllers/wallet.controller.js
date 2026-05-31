@@ -122,19 +122,31 @@ exports.withdraw = async (req, res) => {
 // ─── Transfert P2P ───────────────────────────────────────────────────────────
 
 exports.transfer = async (req, res) => {
-    const { receiverId, amount, currency } = req.body;
+    // Le frontend envoie 'recipient_phone' au lieu de 'receiverId'
+    const { receiverId, recipient_phone, amount, currency } = req.body;
 
-    if (!receiverId) {
-        return res.status(400).json({ error: 'ID du destinataire requis' });
+    if (!receiverId && !recipient_phone) {
+        return res.status(400).json({ error: 'Identifiant du destinataire requis' });
     }
     if (!amount || parseFloat(amount) <= 0) {
         return res.status(400).json({ error: 'Montant invalide' });
     }
 
     try {
+        let finalReceiverId = receiverId;
+
+        if (!finalReceiverId && recipient_phone) {
+            const userRepository = require('../repositories/user.repository');
+            const user = await userRepository.findByIdentifier(recipient_phone);
+            if (!user) {
+                return res.status(404).json({ error: 'Destinataire introuvable avec cet identifiant' });
+            }
+            finalReceiverId = user.id;
+        }
+
         const result = await walletService.transferToUser(
             req.user.id,
-            parseInt(receiverId),
+            parseInt(finalReceiverId),
             parseFloat(amount),
             currency || 'USD'
         );

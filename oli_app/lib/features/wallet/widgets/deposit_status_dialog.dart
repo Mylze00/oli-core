@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../config/api_config.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../providers/wallet_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enum des états du dépôt
@@ -119,6 +121,11 @@ class _DepositStatusDialogState extends ConsumerState<DepositStatusDialog>
         _pollingTimer?.cancel();
         // Rafraîchir le solde du wallet
         await widget.ref.read(walletProvider.notifier).loadWalletData();
+        
+        // Retour haptique et son
+        HapticFeedback.mediumImpact();
+        AudioPlayer().play(AssetSource('images/kaching.mp3'));
+
         if (mounted) {
           setState(() => _status = DepositStatus.success);
           _dotController.stop();

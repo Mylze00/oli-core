@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../providers/wallet_provider.dart';
 import '../../../features/auth/providers/auth_controller.dart';
 import '../../../features/wallet/services/biometric_service.dart';
@@ -536,8 +537,9 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
       return;
     }
 
+    final fee = amount * 0.01;
     final confirmed = await biometricService.authenticate(
-      reason: 'Confirmer l\'envoi de ${amount.toStringAsFixed(0)} FC',
+      reason: 'Confirmer l\'envoi de ${amount.toStringAsFixed(0)} FC (+ ${fee.toStringAsFixed(0)} FC de frais)',
     );
     if (!confirmed) {
       setState(() => _error = 'Authentification annulée');
@@ -559,6 +561,8 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
 
     if (mounted) {
       if (ok) {
+        HapticFeedback.mediumImpact();
+        AudioPlayer().play(AssetSource('images/kaching.mp3'));
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -586,9 +590,9 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
           const SizedBox(height: 8),
           _GlassField(
             controller: _phoneCtrl,
-            hint: 'Numéro de téléphone (+243...)',
-            icon: Icons.phone_outlined,
-            keyboardType: TextInputType.phone,
+            hint: 'Identifiant (@pseudo, numéro ou ID)',
+            icon: Icons.person_search_rounded,
+            keyboardType: TextInputType.text,
           ),
           const SizedBox(height: 10),
           _GlassField(
@@ -597,7 +601,21 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
             icon: Icons.attach_money_rounded,
             keyboardType: TextInputType.number,
           ),
-          const SizedBox(height: 10),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _amountCtrl,
+            builder: (context, value, _) {
+              final amt = double.tryParse(value.text.replaceAll(',', '.')) ?? 0;
+              if (amt <= 0) return const SizedBox(height: 10);
+              final fee = amt * 0.01;
+              return Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 6),
+                child: Text(
+                  'Frais de transfert OLI (1%) : +${fee.toStringAsFixed(0)} FC',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
+                ),
+              );
+            },
+          ),
           _GlassField(
             controller: _noteCtrl,
             hint: 'Motif (optionnel)',
@@ -670,8 +688,10 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
       setState(() => _error = 'Montant invalide');
       return;
     }
+    
+    final fee = amount * 0.01;
     final confirmed = await biometricService.authenticate(
-      reason: 'Confirmer l\'envoi de ${amount.toStringAsFixed(0)} FC',
+      reason: 'Confirmer l\'envoi de ${amount.toStringAsFixed(0)} FC (+ ${fee.toStringAsFixed(0)} FC de frais)',
     );
     if (!confirmed) {
       setState(() => _error = 'Authentification annulée');
@@ -685,6 +705,8 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
     setState(() => _isLoading = false);
     if (mounted) {
       if (ok) {
+        HapticFeedback.mediumImpact();
+        AudioPlayer().play(AssetSource('images/kaching.mp3'));
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -778,6 +800,21 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
               hint: 'Montant (FC)',
               icon: Icons.attach_money_rounded,
               keyboardType: TextInputType.number,
+            ),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _amountCtrl,
+              builder: (context, value, _) {
+                final amt = double.tryParse(value.text.replaceAll(',', '.')) ?? 0;
+                if (amt <= 0) return const SizedBox(height: 12);
+                final fee = amt * 0.01;
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                  child: Text(
+                    'Frais de transfert OLI (1%) : +${fee.toStringAsFixed(0)} FC',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
+                  ),
+                );
+              },
             ),
             if (_error != null)
               Padding(

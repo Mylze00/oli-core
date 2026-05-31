@@ -323,18 +323,11 @@ class _TransactionCard extends StatelessWidget {
     required this.onReceiptTap,
   });
 
-  bool get _isCredit => tx.type == 'deposit' || tx.type == 'refund';
+  bool get _isCredit => tx.amount > 0;
 
-  IconData get _icon {
-    switch (tx.type) {
-      case 'deposit': return Icons.call_received_rounded;
-      case 'refund': return Icons.replay_rounded;
-      case 'transfer': return Icons.swap_horiz_rounded;
-      default: return Icons.call_made_rounded;
-    }
-  }
+  IconData get _icon => _isCredit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
 
-  Color get _color => _isCredit ? const Color(0xFF00C853) : const Color(0xFFDD2C00);
+  Color get _color => _isCredit ? const Color(0xFF00C853) : const Color(0xFFE53935);
 
   @override
   Widget build(BuildContext context) {
