@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/feed_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/feed_provider.dart';
+import 'feed_comments_bottom_sheet.dart';
 
 class FeedPostWidget extends ConsumerWidget {
   final FeedPost post;
@@ -17,11 +18,18 @@ class FeedPostWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtextColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    final cardColor = isDark ? Colors.white.withOpacity(0.05) : Colors.white;
+    final borderColor = isDark ? Colors.white.withOpacity(0.08) : Colors.black12;
+
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.black12, width: 1)),
+      decoration: BoxDecoration(
+        color: cardColor,
+        border: Border(bottom: BorderSide(color: borderColor, width: 1)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -29,8 +37,9 @@ class FeedPostWidget extends ConsumerWidget {
           // Avatar
           CircleAvatar(
             radius: 24,
+            backgroundColor: isDark ? Colors.grey[700] : Colors.grey[300],
             backgroundImage: post.authorAvatar != null ? NetworkImage(post.authorAvatar!) : null,
-            child: post.authorAvatar == null ? Text(post.authorName[0].toUpperCase()) : null,
+            child: post.authorAvatar == null ? Text(post.authorName[0].toUpperCase(), style: const TextStyle(color: Colors.white)) : null,
           ),
           const SizedBox(width: 12),
           // Content
@@ -41,22 +50,56 @@ class FeedPostWidget extends ConsumerWidget {
                 // Header (Name + Time)
                 Row(
                   children: [
-                    Text(post.authorName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(post.authorName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                     const SizedBox(width: 8),
-                    Text('· ${_formatTime(post.createdAt)}', style: const TextStyle(color: Colors.grey)),
+                    Text('· ${_formatTime(post.createdAt)}', style: TextStyle(color: subtextColor)),
                   ],
                 ),
                 const SizedBox(height: 4),
                 // Text Content
                 if (post.content != null && post.content!.isNotEmpty)
-                  Text(post.content!, style: const TextStyle(fontSize: 15)),
+                  Text(post.content!, style: TextStyle(fontSize: 15, color: textColor)),
                 const SizedBox(height: 12),
                 
                 // Media
                 if (post.mediaUrl != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(post.mediaUrl!, fit: BoxFit.cover, width: double.infinity, height: 200),
+                  Builder(
+                    builder: (context) {
+                      String displayUrl = post.mediaUrl!;
+                      if (post.mediaType == 'video' && displayUrl.contains('cloudinary')) {
+                         displayUrl = displayUrl.replaceAll(RegExp(r'\.[^.]+$'), '.jpg'); // Cloudinary video thumbnail
+                      }
+                      
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              displayUrl, 
+                              fit: BoxFit.cover, 
+                              width: double.infinity, 
+                              height: 200,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                width: double.infinity,
+                                height: 200,
+                                color: Colors.grey[800],
+                                child: const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                          if (post.mediaType == 'video')
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.play_arrow, color: Colors.white, size: 32),
+                            ),
+                        ],
+                      );
+                    }
                   ),
                 
                 const SizedBox(height: 12),
@@ -70,7 +113,12 @@ class FeedPostWidget extends ConsumerWidget {
                       icon: Icons.chat_bubble_outline,
                       count: post.commentsCount,
                       onTap: () {
-                        // TODO: Open comments modal
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => FeedCommentsBottomSheet(postId: post.id),
+                        );
                       },
                     ),
                     // Like
@@ -108,13 +156,16 @@ class _InteractionButton extends StatelessWidget {
 
   const _InteractionButton({
     required this.icon,
-    this.color = Colors.black54,
+    this.color = Colors.grey,
     this.count,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final effectiveColor = color == Colors.grey ? (isDark ? Colors.grey[400]! : Colors.black54) : color;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -122,10 +173,10 @@ class _InteractionButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: color),
+            Icon(icon, size: 20, color: effectiveColor),
             if (count != null && count! > 0) ...[
               const SizedBox(width: 4),
-              Text(count.toString(), style: TextStyle(color: color, fontSize: 13)),
+              Text(count.toString(), style: TextStyle(color: effectiveColor, fontSize: 13)),
             ]
           ],
         ),

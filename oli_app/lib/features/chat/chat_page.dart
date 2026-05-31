@@ -14,6 +14,9 @@ import '../../config/api_config.dart';
 import '../../core/router/network/dio_provider.dart';
 import '../cart/providers/cart_provider.dart';
 import '../checkout/screens/checkout_page.dart';
+import 'call_screen.dart';
+import 'socket_service.dart';
+import '../auth/providers/auth_controller.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   final String myId;
@@ -117,8 +120,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authControllerProvider);
     final chatState = ref.watch(chatControllerProvider(widget.otherId));
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bgImage = isDark ? "assets/images/chat_bg_new.png" : "assets/images/chat_bg_new blanc.png";
 
     // Écouteur pour scroll automatique lors de nouveaux messages
     ref.listen(chatControllerProvider(widget.otherId), (previous, next) {
@@ -170,17 +176,77 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.phone, color: Colors.blueAccent, size: 26),
+            onPressed: () {
+              final conversationId = chatState.messages.isNotEmpty 
+                  ? chatState.messages.first['conversation_id']?.toString() 
+                  : null;
+              
+              ref.read(socketServiceProvider).emit('webrtc_call_initiate', {
+                'toId': widget.otherId,
+                'callerName': authState.userData?['name'] ?? 'Utilisateur',
+                'callerAvatar': authState.userData?['avatar_url'] ?? '',
+                'type': 'audio',
+                'conversationId': conversationId,
+              });
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CallScreen(
+                    otherId: widget.otherId,
+                    conversationId: conversationId,
+                    otherName: widget.otherName,
+                    otherAvatarUrl: _effectiveAvatarUrl,
+                    isVideoCall: false,
+                    isIncoming: false,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.videocam, color: Colors.blueAccent, size: 28),
+            onPressed: () {
+              final conversationId = chatState.messages.isNotEmpty 
+                  ? chatState.messages.first['conversation_id']?.toString() 
+                  : null;
+
+              ref.read(socketServiceProvider).emit('webrtc_call_initiate', {
+                'toId': widget.otherId,
+                'callerName': authState.userData?['name'] ?? 'Utilisateur',
+                'callerAvatar': authState.userData?['avatar_url'] ?? '',
+                'type': 'video',
+                'conversationId': conversationId,
+              });
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CallScreen(
+                    otherId: widget.otherId,
+                    conversationId: conversationId,
+                    otherName: widget.otherName,
+                    otherAvatarUrl: _effectiveAvatarUrl,
+                    isVideoCall: true,
+                    isIncoming: false,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.more_vert, color: Colors.black54),
             onPressed: () {},
           ),
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage("assets/images/chat_bg_new.png"),
+            image: AssetImage(bgImage),
             fit: BoxFit.cover,
-            opacity: 0.1, // Légère transparence pour la lisibilité
+            opacity: isDark ? 0.1 : 0.8, // Plus visible en mode clair si nécessaire, ou ajustable
           ),
         ),
         child: Column(

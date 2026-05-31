@@ -6,6 +6,7 @@ import '../../../user/screens/addresses_page.dart';
 import '../../../../app/theme/theme_provider.dart';
 import '../../../settings/screens/settings_page.dart';
 import '../../../bank/screens/bank_portal_screen.dart';
+import '../../../auth/providers/auth_controller.dart';
 
 class ProfileToolsGrid extends ConsumerWidget {
   final Color cardColor;
@@ -154,6 +155,32 @@ class ProfileToolsGrid extends ConsumerWidget {
                 () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())),
               ),
             ],
+          ),
+        ),
+
+        const SizedBox(height: 30),
+
+        // Bouton de Déconnexion
+        SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              // Appeler la fonction logout() qui va supprimer le token et rediriger
+              ref.read(authControllerProvider.notifier).logout();
+            },
+            icon: const Icon(Icons.logout, color: Colors.white),
+            label: const Text(
+              "Déconnexion",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent.shade400,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 2,
+            ),
           ),
         ),
       ],

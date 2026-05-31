@@ -66,9 +66,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     // Charger les adresses de l'utilisateur
     Future.microtask(() => ref.read(addressProvider.notifier).loadAddresses());
 
-    ref.listen<AsyncValue<User>>(userProvider, (previous, next) {
+    ref.listen<AsyncValue<User?>>(userProvider, (previous, next) {
       next.whenData((user) {
-        if (user.phone != null && user.phone!.isNotEmpty && _mobileMoneyPhone.isEmpty) {
+        if (user != null && user.phone != null && user.phone!.isNotEmpty && _mobileMoneyPhone.isEmpty) {
           setState(() {
             _mobileMoneyPhone = user.phone!;
             _mobileMoneyController.text = user.phone!;
@@ -92,7 +92,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     ref.watch(exchangeRateProvider);
     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
     final userAsync = ref.watch(userProvider);
-    final effectiveMobileMoneyPhone = _mobileMoneyPhone.isNotEmpty ? _mobileMoneyPhone : userAsync.maybeWhen(data: (user) => user.phone ?? '', orElse: () => '');
+    final effectiveMobileMoneyPhone = _mobileMoneyPhone.isNotEmpty ? _mobileMoneyPhone : userAsync.maybeWhen(data: (user) => user?.phone ?? '', orElse: () => '');
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -555,12 +555,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         if (_paymentMethod == 'mobile_money') {
           // ✅ Appel Unipesa pour déclencher le push USSD vers le téléphone
           setState(() => _isLoading = true);
-          // ✅ Conversion en FC avant d'appeler Unipesa
-          final amountFC = ref.read(exchangeRateProvider.notifier).convertAmount(total, from: Currency.USD);
 
-          final unipesaResult = await orderService.initiateUnipesaDeposit(
+          final unipesaResult = await orderService.payOrderMobileMoney(
+            orderId: order.id,
             phone: mobileMoneyPhone,
-            amountFC: amountFC,
           );
 
           if (!mounted) return;

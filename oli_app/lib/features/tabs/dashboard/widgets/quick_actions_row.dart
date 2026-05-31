@@ -41,7 +41,7 @@ class QuickActionsRow extends ConsumerWidget {
           _buildQuickActionCard(context, isDark, "O-ticket", Icons.confirmation_number, Colors.purple, () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const OTicketPage()));
           }),
-          _buildQuickActionCard(context, isDark, "Live", Icons.live_tv, Colors.red, () {
+          _buildAnimatedLiveActionCard(context, isDark, "Live", () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveShoppingPage()));
           }),
         ],
@@ -121,4 +121,95 @@ class QuickActionsRow extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _buildAnimatedLiveActionCard(BuildContext context, bool isDark, String title, VoidCallback? onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap ?? () {},
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 1.0, end: 1.15),
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeInOut,
+              builder: (context, scale, child) {
+                return Transform.scale(
+                  scale: scale,
+                  child: child,
+                );
+              },
+              onEnd: () {
+                // To make it loop, we'd need a StatefulWidget. 
+                // But a simple TweenAnimationBuilder doesn't loop natively without rebuilding.
+                // For a proper loop without converting QuickActionsRow to stateful:
+              },
+              child: _LivePulseIcon(isDark: isDark),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold), // Bold for Live
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
+class _LivePulseIcon extends StatefulWidget {
+  final bool isDark;
+  const _LivePulseIcon({required this.isDark});
+
+  @override
+  State<_LivePulseIcon> createState() => _LivePulseIconState();
+}
+
+class _LivePulseIconState extends State<_LivePulseIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: widget.isDark
+            ? Colors.white.withOpacity(0.05)
+            : Colors.black.withOpacity(0.06),
+        shape: BoxShape.circle,
+      ),
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: const Icon(Icons.live_tv, color: Colors.redAccent, size: 24),
+      ),
+    );
+  }
+}
+

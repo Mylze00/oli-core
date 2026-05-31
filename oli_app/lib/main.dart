@@ -9,8 +9,11 @@ import 'features/auth/providers/auth_controller.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/hive_cache_service.dart'; // [CACHE]
 import 'app/theme/theme_provider.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'firebase_options.dart';
+
+final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,6 +59,7 @@ class OliApp extends ConsumerWidget {
 
     return MaterialApp(
       title: 'Oli App',
+      navigatorKey: globalNavigatorKey,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: context.localizationDelegates,
       supportedLocales: context.supportedLocales,
@@ -107,29 +111,56 @@ class SplashWrapper extends StatefulWidget {
 }
 
 class _SplashWrapperState extends State<SplashWrapper>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _minDelayPassed = false;
-  late AnimationController _fadeCtrl;
-  late Animation<double> _fadeAnim;
+  late AnimationController _breatheCtrl;
+  late Animation<double> _breatheAnim;
+
+  late AnimationController _zoomCtrl;
+  late Animation<double> _zoomAnim;
 
   @override
   void initState() {
     super.initState();
-    _fadeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeIn);
-    _fadeCtrl.forward();
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _minDelayPassed = true);
+    _breatheCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+    _breatheAnim = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _breatheCtrl, curve: Curves.easeInOut),
+    );
+    _breatheCtrl.repeat(reverse: true);
+
+    _zoomCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _zoomAnim = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.65).chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 35.0, // Rétraction pendant ~300ms
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.65, end: 35.0).chain(CurveTween(curve: Curves.easeInExpo)),
+        weight: 65.0, // Zoom avant géant
+      ),
+    ]).animate(_zoomCtrl);
+
+    // Attente de 3 secondes (vérification connexion arrière-plan implicite)
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        _zoomCtrl.forward().then((_) {
+          if (mounted) setState(() => _minDelayPassed = true);
+        });
+      }
     });
   }
 
   @override
   void dispose() {
-    _fadeCtrl.dispose();
+    _breatheCtrl.dispose();
+    _zoomCtrl.dispose();
     super.dispose();
   }
 
@@ -141,48 +172,61 @@ class _SplashWrapperState extends State<SplashWrapper>
     if (!_readyToLeave) {
       return Scaffold(
         backgroundColor: Colors.black,
-        body: FadeTransition(
-          opacity: _fadeAnim,
-          child: Stack(
-            children: [
-              // Spinner centré
-              const Center(
-                child: SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(Colors.white24),
+        body: Stack(
+          children: [
+            // Logo centré
+            Center(
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_breatheCtrl, _zoomCtrl]),
+                builder: (context, child) {
+                  // Si l'animation de transition (zoom) a démarré, elle prend le dessus
+                  final scale = _zoomCtrl.isAnimating || _zoomCtrl.isCompleted
+                      ? _zoomAnim.value
+                      : _breatheAnim.value;
+                  return Transform.scale(
+                    scale: scale,
+                    child: child,
+                  );
+                },
+                child: Hero(
+                  tag: 'oli_logo',
+                  child: SvgPicture.asset(
+                    'assets/images/logo - Copie (1).svg',
+                    width: 140,
+                    height: 140,
                   ),
                 ),
               ),
-              // Logo Oli en bas de page
-              Positioned(
-                bottom: 60,
-                left: 0,
-                right: 0,
-                child: Column(
-                  children: [
-                    Image.asset(
-                      'assets/images/logo.png',
-                      width: 80,
-                      height: 80,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Simple, Rapide, Congolais',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withOpacity(0.5),
-                        fontFamily: 'Inter',
-                      ),
-                    ),
-                  ],
+            ),
+            // Texte en bas de page
+            Positioned(
+              bottom: 60,
+              left: 0,
+              right: 0,
+              child: AnimatedBuilder(
+                animation: _zoomCtrl,
+                builder: (context, child) {
+                  // Le texte disparait rapidement dès que le zoom démarre
+                  double opacity = 1.0 - (_zoomCtrl.value * 2.0);
+                  if (opacity < 0) opacity = 0;
+                  return Opacity(
+                    opacity: opacity,
+                    child: child,
+                  );
+                },
+                child: const Text(
+                  'Simple, Rapide, Sûr',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'LetterMagic',
+                    fontSize: 24,
+                    color: Color.fromRGBO(255, 255, 255, 0.8),
+                    letterSpacing: 1.2,
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }

@@ -24,6 +24,7 @@ class ApiConfig {
   static const String orders = '$baseUrl/orders';
   static String orderCancel(int id) => '$baseUrl/orders/$id/cancel';
   static String orderPay(int id) => '$baseUrl/orders/$id/pay';
+  static String orderPayMobileMoney(int id) => '$baseUrl/orders/$id/pay-mobile-money';
   static String orderTracking(int id) => '$baseUrl/orders/$id/tracking';
   static String orderPrepare(int id) => '$baseUrl/orders/$id/prepare';
   static String orderReady(int id) => '$baseUrl/orders/$id/ready';

@@ -100,8 +100,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       body: userAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erreur: $e', style: const TextStyle(color: Colors.white))),
-        data: (user) => ListView(
-          padding: const EdgeInsets.all(16),
+        data: (user) {
+          if (user == null) {
+             return const Center(child: Text('Vous devez être connecté', style: TextStyle(color: Colors.white)));
+          }
+          return ListView(
+            padding: const EdgeInsets.all(16),
           children: [
             // --- COMPTE ---
             _buildSectionTitle('Compte'),
@@ -250,8 +254,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           const SizedBox(height: 40),
         ],
-      ), // end ListView
-      ), // end data callback
+      ); // end ListView
+      }, // end data callback
+      ), // end when
     ); // end Scaffold
   }
 

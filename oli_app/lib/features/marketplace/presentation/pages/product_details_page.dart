@@ -41,6 +41,7 @@ class ProductDetailsPage extends ConsumerStatefulWidget {
 class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   ShippingOption? _selectedShipping;
   ProductVariant? _selectedVariant;
+  int _quantity = 1;
 
   void _shareProduct() {
       debugPrint("📤 [DEBUG] Bouton Partage cliqué");
@@ -83,6 +84,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     
     userState.when(
       data: (user) {
+        if (user == null) return;
         if (user.id.toString() == p.sellerId) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Vous ne pouvez pas discuter avec vous-même !"))
@@ -141,6 +143,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       productId: p.id,
       productName: variantLabel != null ? '${p.name} ($variantLabel)' : p.name,
       price: effectivePrice,
+      quantity: _quantity,
       imageUrl: p.images.isNotEmpty ? p.images.first : null,
       sellerName: p.seller,
       sellerId: p.sellerId,
@@ -184,7 +187,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       productId: p.id,
       productName: variantLabel != null ? '${p.name} ($variantLabel)' : p.name,
       price: effectivePrice,
-      quantity: 1,
+      quantity: _quantity,
       imageUrl: p.images.isNotEmpty ? p.images.first : null,
       sellerName: p.seller,
       sellerId: p.sellerId,
@@ -245,7 +248,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
               final userState = ref.watch(userProvider);
               return userState.maybeWhen(
                 data: (user) {
-                  if (user.id.toString() == p.sellerId) {
+                  if (user != null && user.id.toString() == p.sellerId) {
                     return IconButton(
                       icon: const Icon(Icons.edit, size: 20, color: Colors.blueAccent),
                       tooltip: 'Modifier',
@@ -391,6 +394,50 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
                   },
                 ),
                 
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Quantité",
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : Colors.black.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove),
+                            color: isDark ? Colors.white : Colors.black,
+                            onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                          ),
+                          Text(
+                            '$_quantity',
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            color: isDark ? Colors.white : Colors.black,
+                            onPressed: () => setState(() => _quantity++),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
                 ProductActionButtons(
                   onBuyNow: _buyNow,
                   onAddToCart: _addToCart,

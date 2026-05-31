@@ -57,6 +57,8 @@ class ProductService {
             shippingOptions: p.shipping_options || [],
             brandCertified: p.brand_certified || false,
             brandDisplayName: p.brand_display_name || null,
+            productType: p.product_type || 'Standard',
+            sortOrder: p.sort_order || 0,
             isFeatured: p.isFeatured // For featured query
         };
     }
@@ -223,7 +225,9 @@ class ProductService {
             latitude: (data.latitude && !isNaN(data.latitude)) ? parseFloat(data.latitude) : null,
             longitude: (data.longitude && !isNaN(data.longitude)) ? parseFloat(data.longitude) : null,
             brand_certified: data.brand_certified === 'true' || data.brand_certified === true,
-            brand_display_name: data.brand_display_name || null
+            brand_display_name: data.brand_display_name || null,
+            product_type: data.product_type || 'Standard',
+            sort_order: (data.sort_order && !isNaN(data.sort_order)) ? parseInt(data.sort_order) : 0
         };
 
         const createdProduct = await productRepository.create(productData);

@@ -4,11 +4,10 @@ const db = require('../config/db');
 exports.getFeed = async (req, res) => {
     try {
         const userId = req.user?.id;
-        const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
-        const offset = (page - 1) * limit;
+        const cursor = req.query.cursor; // ISO timestamp string
 
-        const query = `
+        let query = `
             SELECT 
                 p.id, 
                 p.content, 
@@ -22,16 +21,28 @@ exports.getFeed = async (req, res) => {
                 EXISTS(SELECT 1 FROM feed_likes WHERE post_id = p.id AND user_id = $1) AS is_liked_by_me
             FROM feed_posts p
             JOIN users u ON p.user_id = u.id
-            ORDER BY p.created_at DESC
-            LIMIT $2 OFFSET $3
         `;
 
-        const result = await db.query(query, [userId || 0, limit, offset]);
+        const params = [userId || 0, limit];
+        
+        if (cursor) {
+            query += ` WHERE p.created_at < $3`;
+            params.push(cursor);
+        }
+
+        query += ` ORDER BY p.created_at DESC LIMIT $2`;
+
+        const result = await db.query(query, params);
+
+        let nextCursor = null;
+        if (result.rows.length === limit) {
+            nextCursor = result.rows[result.rows.length - 1].created_at;
+        }
 
         res.json({
             success: true,
-            page,
-            posts: result.rows
+            posts: result.rows,
+            nextCursor
         });
     } catch (error) {
         console.error('Erreur getFeed:', error);
@@ -43,7 +54,20 @@ exports.getFeed = async (req, res) => {
 exports.createPost = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { content, media_url, media_type } = req.body;
+        let { content, media_url, media_type } = req.body;
+
+        // Si un fichier a été uploadé (via Cloudinary ou local)
+        if (req.file) {
+            // Dans Cloudinary, l'URL est dans path. En local, c'est filename
+            media_url = req.file.path || `/uploads/${req.file.filename}`;
+            
+            // Déduction du type de média depuis le mimetype
+            if (req.file.mimetype.startsWith('video/')) {
+                media_type = 'video';
+            } else if (req.file.mimetype.startsWith('image/')) {
+                media_type = 'image';
+            }
+        }
 
         if (!content && !media_url) {
             return res.status(400).json({ error: 'La publication doit contenir du texte ou un média' });

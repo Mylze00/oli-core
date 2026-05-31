@@ -62,6 +62,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   pdf: ^3.11.1
   printing: ^5.13.2
+  flutter_svg: ^2.0.10
 
 
 dev_dependencies:
@@ -89,6 +90,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/logo.png
+    - "assets/images/logo - Copie (1).svg"
     - assets/images/chat_bg.png
     - assets/images/chat_bg_new.png
     - assets/images/services_icon.png

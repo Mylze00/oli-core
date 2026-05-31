@@ -11,40 +11,7 @@ import '../../config/api_config.dart';
 import '../../core/user/user_provider.dart';
 import '../../core/storage/secure_storage_service.dart';
 
-// Provider pour les conversations
-final conversationsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final user = ref.watch(userProvider).value;
-  if (user == null) return [];
-  
-  final storage = SecureStorageService();
-  final token = await storage.getToken();
-  if (token == null || token.isEmpty) {
-    debugPrint('⚠️ conversationsProvider: token absent, skip');
-    return [];
-  }
-  
-  final dio = Dio();
-  
-  try {
-    final response = await dio.get(
-      '${ApiConfig.baseUrl}/chat/conversations',
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    
-    if (response.statusCode == 200) {
-      return List<Map<String, dynamic>>.from(response.data);
-    }
-  } on DioException catch (e) {
-    if (e.response?.statusCode == 401) {
-      debugPrint('⚠️ conversations 401 : token expiré ou invalide');
-    } else {
-      debugPrint('❌ Erreur chargement conversations: $e');
-    }
-  } catch (e) {
-    debugPrint('❌ Erreur chargement conversations: $e');
-  }
-  return [];
-});
+// Provider pour les conversations migré vers inbox_providers.dart pour le cache offline-first
 
 class ConversationsPage extends ConsumerStatefulWidget {
   const ConversationsPage({super.key});
@@ -88,7 +55,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
       await socketService.connect(user.id.toString());
       
       socketService.onMessage((data) {
-        ref.invalidate(conversationsProvider);
+        ref.read(inboxConversationsProvider.notifier).fetchConversations();
       });
     }
   }
@@ -130,30 +97,37 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider).value;
-    final conversationsAsync = ref.watch(conversationsProvider);
+    final conversationsAsync = ref.watch(inboxConversationsProvider);
     final theme = Theme.of(context);
+
+    final isDark = theme.brightness == Brightness.dark;
+    final bgColor = theme.scaffoldBackgroundColor;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final iconColor = isDark ? Colors.white : Colors.black;
+    final containerColor = isDark ? Colors.white.withOpacity(0.08) : Colors.grey[100];
+    final bgImage = isDark ? "assets/images/chat_bg_new.png" : "assets/images/chat_bg_new blanc.png";
 
     if (user == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: bgColor,
         elevation: 0,
         title: _multiSelectMode
             ? Text(
                 '${_selectedConvIds.length} sélectionné${_selectedConvIds.length > 1 ? 's' : ''}',
-                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
               )
-            : const Text(
+            : Text(
                 'Discussions',
-                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
               ),
         leading: _multiSelectMode
             ? IconButton(
-                icon: const Icon(Icons.close, color: Colors.black),
+                icon: Icon(Icons.close, color: iconColor),
                 onPressed: () => setState(() {
                   _multiSelectMode = false;
                   _selectedConvIds.clear();
@@ -178,14 +152,14 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
               ]
             : [
                 IconButton(
-                  icon: const Icon(Icons.checklist_rounded, color: Colors.black),
+                  icon: Icon(Icons.checklist_rounded, color: iconColor),
                   tooltip: 'Multi-sélection',
                   onPressed: () => setState(() {
                     _multiSelectMode = true;
                   }),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.more_vert, color: Colors.black),
+                  icon: Icon(Icons.more_vert, color: iconColor),
                   onPressed: () {},
                 ),
               ],
@@ -195,23 +169,25 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           // Search + Tabs + Filters
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.white,
+            color: bgColor,
             child: Column(
               children: [
                 // Search Bar
                 Container(
                   height: 45,
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: containerColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: TextField(
                     controller: _searchController,
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
                       hintText: 'Rechercher un message...',
-                      prefixIcon: Icon(Icons.search, color: Colors.grey),
+                      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
+                      prefixIcon: Icon(Icons.search, color: isDark ? Colors.white54 : Colors.grey),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
                 ),
@@ -221,7 +197,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                 Container(
                   height: 40,
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: containerColor,
                     borderRadius: BorderRadius.circular(25),
                   ),
                   child: Row(children: [
@@ -267,11 +243,11 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
             child: _selectedIndex == 2 
               ? const FeedTabView() // Affiche le fil d'actualité si l'onglet 2 est sélectionné
               : Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage("assets/images/chat_bg_new.png"),
+                  image: AssetImage(bgImage),
                   fit: BoxFit.cover,
-                  opacity: 0.40,
+                  opacity: isDark ? 0.40 : 0.8,
                 ),
               ),
               child: conversationsAsync.when(
@@ -348,7 +324,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                   }
 
                   return RefreshIndicator(
-                    onRefresh: () async => ref.invalidate(conversationsProvider),
+                    onRefresh: () async => ref.read(inboxConversationsProvider.notifier).fetchConversations(),
                     child: ListView.separated(
                       padding: const EdgeInsets.only(top: 8, bottom: 80),
                       itemCount: filteredConversations.length,
@@ -432,30 +408,60 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                           },
                           onDismissed: (direction) {
                             // Confirmé uniquement pour endToStart (supprimer)
-                            ref.invalidate(conversationsProvider);
+                            ref.read(inboxConversationsProvider.notifier).fetchConversations();
                           },
-                          child: ConversationTile(
-                            conversation: conv,
-                            currentUserId: user.id.toString(),
-                            // Badge for duplicate conversations
-                            extraBadge: (() {
-                              final otherId = conv['other_id']?.toString() ?? '';
-                              final list = grouped[otherId] ?? [];
-                              final uniquePIds = list.map((c) => c['product_id']?.toString() ?? 'private').toSet();
-                              final count = uniquePIds.length;
-                              return count > 1 ? count : null;
-                            })(),
-                            onTap: () {
-                              final otherId = conv['other_id']?.toString() ?? '';
-                              final dupeList = grouped[otherId] ?? [conv];
+                          child: Row(
+                            children: [
+                              if (_multiSelectMode)
+                                Checkbox(
+                                  value: _selectedConvIds.contains(convId),
+                                  activeColor: theme.primaryColor,
+                                  onChanged: (bool? checked) {
+                                    setState(() {
+                                      if (checked == true) {
+                                        _selectedConvIds.add(convId);
+                                      } else {
+                                        _selectedConvIds.remove(convId);
+                                      }
+                                    });
+                                  },
+                                ),
+                              Expanded(
+                                child: ConversationTile(
+                                  conversation: conv,
+                                  currentUserId: user.id.toString(),
+                                  // Extra badge for duplicate conversations
+                                  extraBadge: (() {
+                                    final otherId = conv['other_id']?.toString() ?? '';
+                                    final list = grouped[otherId] ?? [];
+                                    final uniquePIds = list.map((c) => c['product_id']?.toString() ?? 'private').toSet();
+                                    final count = uniquePIds.length;
+                                    return count > 1 ? count : null;
+                                  })(),
+                                  onTap: () {
+                                    if (_multiSelectMode) {
+                                      setState(() {
+                                        if (_selectedConvIds.contains(convId)) {
+                                          _selectedConvIds.remove(convId);
+                                        } else {
+                                          _selectedConvIds.add(convId);
+                                        }
+                                      });
+                                      return;
+                                    }
 
-                              if (dupeList.length > 1) {
-                                // Afficher le sélecteur de conversation
-                                _showConversationSelector(context, dupeList, user.id.toString());
-                              } else {
-                                _openConversation(context, conv, user.id.toString());
-                              }
-                            },
+                                    final otherId = conv['other_id']?.toString() ?? '';
+                                    final dupeList = grouped[otherId] ?? [conv];
+
+                                    if (dupeList.length > 1) {
+                                      _showConversationSelector(context, dupeList, user.id.toString());
+                                    } else {
+                                      _openConversation(context, conv, user.id.toString());
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -495,7 +501,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           otherAvatarUrl: conv['other_avatar'],
         ),
       ),
-    ).then((_) => ref.invalidate(conversationsProvider));
+    ).then((_) => ref.read(inboxConversationsProvider.notifier).fetchConversations());
   }
 
   void _showConversationSelector(
@@ -511,9 +517,11 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
     }
     final uniqueConvs = deduped.values.toList();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.grey[900] : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -576,6 +584,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
 
   Widget _buildTabItem(int index, String label) {
     final isSelected = _selectedIndex == index;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _selectedIndex = index),
@@ -583,7 +592,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
+            color: isSelected ? (isDark ? Colors.grey[800] : Colors.white) : Colors.transparent,
             borderRadius: BorderRadius.circular(25),
             boxShadow: isSelected ? [
               BoxShadow(
@@ -598,7 +607,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
               label,
               style: TextStyle(
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? Colors.black : Colors.grey[600],
+                color: isSelected ? (isDark ? Colors.white : Colors.black) : Colors.grey[500],
               ),
             ),
           ),
@@ -658,9 +667,13 @@ class ConversationTile extends StatelessWidget {
     final isOnline = conversation['is_online'] == true;
     final timestamp = conversation['last_message_time'];
     final otherAvatar = conversation['other_avatar'];
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Material(
-      color: unreadCount > 0 ? Colors.blue.withOpacity(0.05) : Colors.white,
+      color: unreadCount > 0 
+          ? theme.primaryColor.withOpacity(0.1) 
+          : Colors.transparent, // transparent respects the scaffold background
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -672,7 +685,7 @@ class ConversationTile extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 28,
-                    backgroundColor: Colors.grey[300],
+                    backgroundColor: isDark ? Colors.grey[700] : Colors.grey[300],
                     backgroundImage: otherAvatar != null ? NetworkImage(otherAvatar) : null,
                     child: otherAvatar == null
                         ? Text(
@@ -696,7 +709,7 @@ class ConversationTile extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.green,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(color: isDark ? Colors.grey[900]! : Colors.white, width: 2),
                         ),
                       ),
                     ),
@@ -710,7 +723,7 @@ class ConversationTile extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.deepPurple,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white, width: 1.5),
+                          border: Border.all(color: isDark ? Colors.grey[900]! : Colors.white, width: 1.5),
                         ),
                         child: Text(
                           '+$extraBadge',
@@ -740,8 +753,8 @@ class ConversationTile extends StatelessWidget {
                             otherName,
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: unreadCount > 0 ? FontWeight.w700 : FontWeight.w600,
-                              color: Colors.black87,
+                              fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -751,7 +764,7 @@ class ConversationTile extends StatelessWidget {
                           _formatTimestamp(timestamp),
                           style: TextStyle(
                             fontSize: 12,
-                            color: unreadCount > 0 ? Colors.blue : Colors.grey[600],
+                            color: unreadCount > 0 ? Colors.blue : (isDark ? Colors.grey[400] : Colors.grey[600]),
                             fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
                           ),
                         ),
@@ -760,43 +773,62 @@ class ConversationTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     
                     // Contexte produit (si existe)
-                    if (productName != null) ...[
-                      Row(
-                        children: [
-                          Icon(Icons.shopping_bag, size: 14, color: Colors.grey[500]),
+                    Row(
+                      children: [
+                        if (productName != null) ...[
+                          Icon(Icons.shopping_bag_outlined, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               productName,
                               style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
+                                fontSize: 13,
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
                                 fontWeight: FontWeight.w500,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                        ] else ...[
+                          Expanded(
+                            child: Text(
+                              lastMessage,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: unreadCount > 0 
+                                    ? (isDark ? Colors.white : Colors.black87) 
+                                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                                fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
-                      ),
+                      ],
+                    ),
+                    if (productName != null && lastMessage.isNotEmpty) ...[
                       const SizedBox(height: 4),
+                      Text(
+                        lastMessage,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: unreadCount > 0 
+                              ? (isDark ? Colors.white : Colors.black87) 
+                              : (isDark ? Colors.grey[500] : Colors.grey[500]),
+                          fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                     
                     // Dernier message + Badge
+                    if (productName == null && lastMessage.isEmpty) const SizedBox(height: 4),
                     Row(
                       children: [
-                        Expanded(
-                          child: Text(
-                            lastMessage,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: unreadCount > 0 ? Colors.black87 : Colors.grey[600],
-                              fontWeight: unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                        const Spacer(),
                         if (unreadCount > 0)
                           Container(
                             margin: const EdgeInsets.only(left: 8),

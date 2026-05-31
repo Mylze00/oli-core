@@ -4,7 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
-import '../../../models/product_model.dart'; // Assuming this exists based on usage
+import '../../../core/services/hive_cache_service.dart';
+import '../../../models/product_model.dart';
 
 class MarketState {
   final List<Product> products;
@@ -161,6 +162,23 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
     _offset = 0;
     _error = null;
 
+    // --- CACHE OFFLINE-FIRST ---
+    if (state.isEmpty) {
+      try {
+        final cachedData = HiveCacheService.getCache('market_featured_cache');
+        if (cachedData != null) {
+          final List<dynamic> data = cachedData as List<dynamic>;
+          final cachedProducts = data.map((item) => Product.fromJson(item as Map<String, dynamic>)).toList();
+          if (cachedProducts.isNotEmpty) {
+            state = cachedProducts;
+            debugPrint('✅ [CACHE] Featured chargé instantanément (${cachedProducts.length} produits)');
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Erreur lecture cache featured: $e');
+      }
+    }
+
     try {
       final uri = Uri.parse('${ApiConfig.productsFeatured}?limit=$_initialPageSize');
       final response = await http.get(uri);
@@ -182,6 +200,12 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
         state = newProducts;
         _error = null;
         debugPrint('✅ [Featured] ${newProducts.length} produits chargés et mis en cache (24h)');
+        // Mise à jour du cache local
+        try {
+          await HiveCacheService.setCache('market_featured_cache', data);
+        } catch (e) {
+          debugPrint('Erreur écriture cache featured: $e');
+        }
       } else {
         _error = 'Erreur serveur: ${response.statusCode}';
       }
@@ -273,6 +297,23 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
     _isLoading = true;
     _error = null;
 
+    // --- CACHE OFFLINE-FIRST ---
+    if (state.isEmpty) {
+      try {
+        final cachedData = HiveCacheService.getCache('market_topsellers_cache');
+        if (cachedData != null) {
+          final List<dynamic> data = cachedData as List<dynamic>;
+          final cachedProducts = data.map((item) => Product.fromJson(item as Map<String, dynamic>)).toList();
+          if (cachedProducts.isNotEmpty) {
+            state = cachedProducts;
+            debugPrint('✅ [CACHE] Top Sellers chargé instantanément (${cachedProducts.length} produits)');
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Erreur lecture cache topsellers: $e');
+      }
+    }
+
     try {
       final topSellersUrl = '${ApiConfig.productsTopSellers}?limit=30';
       final uri = Uri.parse(topSellersUrl);
@@ -290,6 +331,12 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
         state = newProducts;
         _error = null;
         debugPrint('✅ [TopSellers] ${newProducts.length} produits chargés et mis en cache (24h)');
+        // Mise à jour du cache local
+        try {
+          await HiveCacheService.setCache('market_topsellers_cache', data);
+        } catch (e) {
+          debugPrint('Erreur écriture cache topsellers: $e');
+        }
       } else {
         _error = "Erreur serveur: ${response.statusCode}";
       }
@@ -317,6 +364,16 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
     _isLoading = true;
     _error = null;
 
+    if (state.isEmpty) {
+      try {
+        final cachedData = HiveCacheService.getCache('market_verified_shops_cache');
+        if (cachedData != null) {
+          final List<dynamic> data = cachedData as List<dynamic>;
+          state = data.map((item) => Product.fromJson(item as Map<String, dynamic>)).toList();
+        }
+      } catch (e) {}
+    }
+
     try {
       final verifiedUrl = '${ApiConfig.productsVerifiedShops}?limit=50';
       final uri = Uri.parse(verifiedUrl);
@@ -327,20 +384,15 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
         final allProducts = data.map((item) => Product.fromJson(item)).toList();
         
         if (shuffle && allProducts.isNotEmpty) {
-          // Round-robin : diversifier les produits de différentes boutiques
           final Map<String, List<Product>> byShop = {};
           for (final p in allProducts) {
             final key = p.sellerId.isNotEmpty ? p.sellerId : p.seller;
             byShop.putIfAbsent(key, () => []).add(p);
           }
-          
-          // Mélanger les boutiques et les produits au sein de chaque boutique
           final shopKeys = byShop.keys.toList()..shuffle();
           for (final key in shopKeys) {
             byShop[key]!.shuffle();
           }
-          
-          // Sélection round-robin : 1 produit par boutique en alternance
           final List<Product> diversified = [];
           bool hasMore = true;
           int round = 0;
@@ -355,12 +407,12 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
             }
             round++;
           }
-          
           state = diversified;
         } else {
           state = allProducts;
         }
         _error = null;
+        HiveCacheService.setCache('market_verified_shops_cache', data);
       } else {
         _error = "Erreur serveur: ${response.statusCode}";
       }
@@ -388,6 +440,16 @@ class BrandedProductsNotifier extends StateNotifier<List<Product>> {
   }
 
   Future<void> fetchBrandedProducts() async {
+    if (state.isEmpty) {
+      try {
+        final cachedData = HiveCacheService.getCache('market_branded_cache');
+        if (cachedData != null) {
+          final List<dynamic> data = cachedData as List<dynamic>;
+          state = data.map((item) => Product.fromJson(item as Map<String, dynamic>)).toList();
+        }
+      } catch (e) {}
+    }
+
     try {
       final uri = Uri.parse('${ApiConfig.productsBranded}?limit=50');
       final response = await http.get(uri);
@@ -402,6 +464,7 @@ class BrandedProductsNotifier extends StateNotifier<List<Product>> {
           }
         }
         state = products;
+        HiveCacheService.setCache('market_branded_cache', data);
         debugPrint('✅ brandedProductsProvider: ${state.length} produits Original chargés');
       }
     } catch (e) {
@@ -420,12 +483,22 @@ class AdsNotifier extends StateNotifier<List<Map<String, dynamic>>> {
   }
 
   Future<void> fetchAds() async {
+    if (state.isEmpty) {
+      try {
+        final cachedData = HiveCacheService.getCache('ads_cache');
+        if (cachedData != null) {
+          state = (cachedData as List<dynamic>).cast<Map<String, dynamic>>();
+        }
+      } catch (e) {}
+    }
+
     try {
       final uri = Uri.parse(ApiConfig.ads);
       final response = await http.get(uri);
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         state = data.cast<Map<String, dynamic>>();
+        HiveCacheService.setCache('ads_cache', data);
       }
     } catch (e) {
       debugPrint("Erreur fetch ads: $e");

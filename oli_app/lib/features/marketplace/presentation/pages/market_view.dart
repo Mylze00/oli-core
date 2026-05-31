@@ -13,6 +13,7 @@ import '../../../../app/theme/theme_provider.dart';
 import '../../../tabs/dashboard/widgets/verified_shops_carousel.dart';
 import '../../../tabs/dashboard/widgets/product_sections.dart';
 import '../../../tabs/dashboard/providers/shops_provider.dart';
+import '../../../tabs/dashboard/widgets/category_glass_section.dart';
 
 /// Page Marché - Produits des utilisateurs
 class MarketView extends ConsumerStatefulWidget {
@@ -494,44 +495,15 @@ class _MarketViewState extends ConsumerState<MarketView> {
   /// Chips de catégories horizontales
   Widget _buildCategoryChips(bool isDark) {
     return SliverToBoxAdapter(
-      child: SizedBox(
-        height: 44,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          itemCount: _categories.length,
-          itemBuilder: (context, index) {
-            final label = _categories.keys.elementAt(index);
-            final isSelected = label == _selectedCategory;
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: GestureDetector(
-                onTap: () => setState(() {
-                  _selectedCategory = label;
-                }),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Colors.blueAccent
-                        : (isDark ? const Color(0xFF2C2C2C) : Colors.grey[300]),
-                    borderRadius: BorderRadius.circular(20),
-                    border: isSelected ? null : Border.all(
-                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.3),
-                    ),
-                  ),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : (isDark ? Colors.white.withOpacity(0.7) : Colors.black87),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ),
-            );
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: CategoryGlassSection(
+          categories: _categories,
+          selectedCategory: _selectedCategory,
+          onCategorySelected: (label) {
+            setState(() {
+              _selectedCategory = label;
+            });
           },
         ),
       ),

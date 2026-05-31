@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../config/api_config.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../models/transaction_model.dart';
+import '../../../core/services/hive_cache_service.dart';
 
 // --- Résultat du dépôt Mobile Money ---
 class DepositResult {
@@ -64,6 +65,30 @@ class WalletNotifier extends StateNotifier<WalletState> {
 
   Future<void> loadWalletData() async {
     state = state.copyWith(isLoading: true, error: null);
+
+    // --- CACHE OFFLINE-FIRST ---
+    try {
+      final cachedBal = HiveCacheService.getCache('wallet_balance_cache');
+      final cachedHist = HiveCacheService.getCache('wallet_history_cache');
+      
+      double bal = state.balance;
+      List<WalletTransaction> hist = state.transactions;
+      
+      if (cachedBal != null) {
+        bal = double.tryParse(cachedBal.toString()) ?? bal;
+      }
+      if (cachedHist != null && cachedHist is List) {
+        hist = cachedHist.map((e) => WalletTransaction.fromJson(e)).toList();
+      }
+      
+      if (cachedBal != null || cachedHist != null) {
+        state = state.copyWith(balance: bal, transactions: hist);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erreur lecture cache wallet: $e');
+    }
+    // ---------------------------
+
     try {
       final results = await Future.wait([
         _dio.get(ApiConfig.walletBalance),
@@ -82,7 +107,10 @@ class WalletNotifier extends StateNotifier<WalletState> {
       if (histRes.statusCode == 200) {
         final List list = histRes.data is List ? histRes.data : [];
         transactions = list.map((e) => WalletTransaction.fromJson(e)).toList();
+        HiveCacheService.setCache('wallet_history_cache', list);
       }
+
+      HiveCacheService.setCache('wallet_balance_cache', balance.toString());
 
       state = state.copyWith(
         isLoading: false,

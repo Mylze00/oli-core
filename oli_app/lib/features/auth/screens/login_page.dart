@@ -422,7 +422,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: 'LetterMagic',
-                        fontSize: 36,
+                        fontSize: 24,
                         color: const Color.fromRGBO(255, 255, 255, 0.95),
                         letterSpacing: 1.5,
                         height: 1.2,

@@ -1,8 +1,91 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:dio/dio.dart';
+import '../../../config/api_config.dart';
+import '../../../core/storage/secure_storage_service.dart';
+import '../../../core/services/hive_cache_service.dart';
+import '../../../core/user/user_provider.dart';
 
 // ─── Providers Riverpod ──────────────────────────────────────────
+
+/// Inbox Conversations Provider (Offline-First)
+final inboxConversationsProvider = StateNotifierProvider<ConversationsNotifier, AsyncValue<List<Map<String, dynamic>>>>((ref) {
+  final user = ref.watch(userProvider).value;
+  return ConversationsNotifier(user?.id.toString());
+});
+
+class ConversationsNotifier extends StateNotifier<AsyncValue<List<Map<String, dynamic>>>> {
+  final String? userId;
+  bool _isLoading = false;
+
+  ConversationsNotifier(this.userId) : super(const AsyncValue.loading()) {
+    if (userId != null) {
+      fetchConversations();
+    } else {
+      state = const AsyncValue.data([]);
+    }
+  }
+
+  Future<void> fetchConversations() async {
+    if (_isLoading) return;
+    _isLoading = true;
+
+    // --- CACHE OFFLINE-FIRST ---
+    if (!state.hasValue || state.value!.isEmpty) {
+      try {
+        final cachedData = await HiveCacheService.getCache('inbox_cache_$userId');
+        if (cachedData != null) {
+          final List<dynamic> data = jsonDecode(cachedData);
+          final cachedConversations = List<Map<String, dynamic>>.from(data);
+          if (cachedConversations.isNotEmpty) {
+            state = AsyncValue.data(cachedConversations);
+            debugPrint('✅ [CACHE] Inbox chargé instantanément');
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Erreur lecture cache inbox: $e');
+      }
+    }
+
+    if (!state.hasValue) {
+      state = const AsyncValue.loading();
+    }
+
+    try {
+      final storage = SecureStorageService();
+      final token = await storage.getToken();
+      if (token == null || token.isEmpty) {
+        _isLoading = false;
+        return;
+      }
+
+      final dio = Dio();
+      final response = await dio.get(
+        '${ApiConfig.baseUrl}/chat/conversations',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      if (response.statusCode == 200) {
+        final conversations = List<Map<String, dynamic>>.from(response.data);
+        state = AsyncValue.data(conversations);
+        // Mise à jour du cache
+        await HiveCacheService.setCache('inbox_cache_$userId', jsonEncode(response.data));
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        debugPrint('⚠️ conversations 401 : token expiré ou invalide');
+      } else {
+        debugPrint('❌ Erreur chargement conversations: $e');
+      }
+    } catch (e) {
+      debugPrint('❌ Erreur chargement conversations: $e');
+    } finally {
+      _isLoading = false;
+    }
+  }
+}
 
 /// Conversations épinglées (Set de otherId)
 final pinnedConversationsProvider =

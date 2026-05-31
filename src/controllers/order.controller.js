@@ -92,7 +92,36 @@ exports.pay = async (req, res) => {
         if (error.message === "Commande non trouvée") {
             return res.status(404).json({ error: "Commande non trouvée" });
         }
-        res.status(500).json({ error: "Erreur serveur" });
+    }
+};
+
+exports.payMobileMoney = async (req, res) => {
+    try {
+        const orderId = parseInt(req.params.id);
+        const { phone } = req.body;
+        const userId = req.user.id;
+
+        if (!phone) {
+            return res.status(400).json({ error: 'Numéro de téléphone requis' });
+        }
+
+        const orderService = require('../services/order.service');
+        const order = await orderService.getOrderById(userId, orderId);
+        if (!order) {
+            return res.status(404).json({ error: 'Commande non trouvée' });
+        }
+
+        if (order.status !== 'pending' && order.paymentStatus !== 'pending') {
+            return res.status(400).json({ error: 'La commande n\'est pas en attente de paiement' });
+        }
+
+        const unipesaService = require('../services/unipesa.service');
+        const result = await unipesaService.initiateOrderPayment(userId, phone, order.total_amount, orderId);
+
+        res.json({ message: 'Paiement initié', result });
+    } catch (error) {
+        console.error('Erreur payMobileMoney:', error);
+        res.status(500).json({ error: error.message || 'Erreur serveur' });
     }
 };
 

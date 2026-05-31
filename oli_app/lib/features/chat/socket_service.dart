@@ -3,6 +3,9 @@ import '../../config/api_config.dart';
 import '../../core/storage/secure_storage_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import '../../../main.dart';
+import 'call_screen.dart';
 
 final socketServiceProvider = Provider<SocketService>((ref) {
   return SocketService();
@@ -69,10 +72,66 @@ class SocketService {
     _socket!.on('new_message', (data) => _onMessageReceived(data));
     
     // Ecoute des changements de statut (online/offline) — handler séparé (#9)
+    // Ecoute des changements de statut (online/offline) — handler séparé (#9)
     _socket!.on('user_status', (data) {
        debugPrint("👤 Statut utilisateur changé: $data");
        _onStatusChanged(data);
     });
+
+    // --- WebRTC Incoming Call ---
+    _socket!.on('webrtc_call_initiate', (data) {
+      if (data is Map) {
+        debugPrint("📞 APPEL ENTRANT REÇU: $data");
+        final context = globalNavigatorKey.currentContext;
+        if (context != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CallScreen(
+                otherId: data['callerId']?.toString() ?? '',
+                otherName: data['callerName']?.toString() ?? 'Utilisateur',
+                otherAvatarUrl: data['callerAvatar']?.toString(),
+                isVideoCall: data['type'] == 'video',
+                isIncoming: true,
+                conversationId: data['conversationId']?.toString(),
+              ),
+            ),
+          );
+        }
+      }
+    });
+
+    _socket!.on('webrtc_call_accept', (data) => _onCallAccepted(data));
+    _socket!.on('webrtc_call_reject', (data) => _onCallRejected(data));
+    _socket!.on('webrtc_call_cancel', (data) => _onCallCancelled(data));
+  }
+
+  // Callbacks spécifiques pour l'appel (peuvent être enregistrés par CallScreen)
+  Function(Map<String, dynamic>)? _callAcceptHandler;
+  Function(Map<String, dynamic>)? _callRejectHandler;
+  Function(Map<String, dynamic>)? _callCancelHandler;
+
+  VoidCallback onCallAccepted(Function(Map<String, dynamic>) callback) {
+    _callAcceptHandler = callback;
+    return () => _callAcceptHandler = null;
+  }
+  VoidCallback onCallRejected(Function(Map<String, dynamic>) callback) {
+    _callRejectHandler = callback;
+    return () => _callRejectHandler = null;
+  }
+  VoidCallback onCallCancelled(Function(Map<String, dynamic>) callback) {
+    _callCancelHandler = callback;
+    return () => _callCancelHandler = null;
+  }
+
+  void _onCallAccepted(dynamic data) {
+    if (_callAcceptHandler != null && data is Map) _callAcceptHandler!(Map<String, dynamic>.from(data));
+  }
+  void _onCallRejected(dynamic data) {
+    if (_callRejectHandler != null && data is Map) _callRejectHandler!(Map<String, dynamic>.from(data));
+  }
+  void _onCallCancelled(dynamic data) {
+    if (_callCancelHandler != null && data is Map) _callCancelHandler!(Map<String, dynamic>.from(data));
   }
 
   // Callbacks séparés pour messages et statuts (#9)

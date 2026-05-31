@@ -119,6 +119,126 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 5. WEBRTC SIGNALING (Appels P2P)
+    // Transfert direct des paquets SDP et ICE sans stockage en base de données
+    socket.on('webrtc_offer', (data) => {
+        if (userId) {
+            console.log(`📞 [WebRTC] Offer from ${userId} to ${data.receiverId}`);
+            socket.to(`user_${data.receiverId}`).emit('webrtc_offer', {
+                callerId: userId,
+                offer: data.offer,
+                type: data.type, // 'audio' ou 'video'
+                conversationId: data.conversationId
+            });
+        }
+    });
+
+    socket.on('webrtc_answer', (data) => {
+        if (userId) {
+            console.log(`📞 [WebRTC] Answer from ${userId} to ${data.callerId}`);
+            socket.to(`user_${data.callerId}`).emit('webrtc_answer', {
+                receiverId: userId,
+                answer: data.answer
+            });
+        }
+    });
+
+    socket.on('webrtc_ice_candidate', (data) => {
+        if (userId) {
+            socket.to(`user_${data.toId}`).emit('webrtc_ice_candidate', {
+                fromId: userId,
+                candidate: data.candidate
+            });
+        }
+    });
+
+    socket.on('webrtc_call_ended', (data) => {
+        if (userId) {
+            console.log(`📞 [WebRTC] Call ended between ${userId} and ${data.toId}`);
+            socket.to(`user_${data.toId}`).emit('webrtc_call_ended', {
+                fromId: userId
+            });
+        }
+    });
+
+    // --- NOUVEAUX ÉVÉNEMENTS D'APPEL (Ringing & Actions) ---
+    socket.on('webrtc_call_initiate', (data) => {
+        if (userId) {
+            console.log(`📞 [WebRTC] Initiate call from ${userId} to ${data.toId} (type: ${data.type})`);
+            socket.to(`user_${data.toId}`).emit('webrtc_call_initiate', {
+                callerId: userId,
+                callerName: data.callerName,
+                callerAvatar: data.callerAvatar,
+                type: data.type, // 'audio' ou 'video'
+                conversationId: data.conversationId
+            });
+        }
+    });
+
+    socket.on('webrtc_call_accept', (data) => {
+        if (userId) {
+            console.log(`📞 [WebRTC] Call accepted by ${userId} for caller ${data.callerId}`);
+            socket.to(`user_${data.callerId}`).emit('webrtc_call_accept', {
+                receiverId: userId
+            });
+        }
+    });
+
+    socket.on('webrtc_call_reject', (data) => {
+        if (userId) {
+            console.log(`📞 [WebRTC] Call rejected by ${userId} for caller ${data.callerId}`);
+            socket.to(`user_${data.callerId}`).emit('webrtc_call_reject', {
+                receiverId: userId
+            });
+        }
+    });
+
+    socket.on('webrtc_call_cancel', (data) => {
+        if (userId) {
+            console.log(`📞 [WebRTC] Call cancelled by caller ${userId} for receiver ${data.toId}`);
+            socket.to(`user_${data.toId}`).emit('webrtc_call_cancel', {
+                callerId: userId
+            });
+        }
+    });
+
+    socket.on('webrtc_call_missed', async (data) => {
+        if (userId) {
+            console.log(`📞 [WebRTC] Missed call from ${userId} to ${data.toId}`);
+            try {
+                const pool = require('./config/db');
+                const content = data.type === 'video' ? 'Appel vidéo manqué' : 'Appel audio manqué';
+                // Insérer le message système dans la base de données
+                await pool.query(
+                    `INSERT INTO messages (conversation_id, sender_id, content, message_type, is_read) 
+                     VALUES ($1, $2, $3, $4, false)`,
+                    [data.conversationId, userId, content, 'system']
+                );
+                
+                // Mettre à jour la date de la conversation
+                await pool.query(
+                    `UPDATE conversations SET updated_at = NOW() WHERE id = $1`,
+                    [data.conversationId]
+                );
+
+                // Notifier les deux parties pour mettre à jour la vue chat
+                const payload = {
+                    conversation_id: data.conversationId,
+                    sender_id: userId,
+                    content: content,
+                    message_type: 'system',
+                    created_at: new Date()
+                };
+                
+                io.to(`conversation_${data.conversationId}`).emit('new_message', payload);
+                // Also notify the receiver directly in case they aren't in the room
+                socket.to(`user_${data.toId}`).emit('new_message', payload);
+            } catch (err) {
+                console.error("Erreur webrtc_call_missed:", err);
+            }
+        }
+    });
+
     socket.on('disconnect', () => {
         if (userId) {
             io.emit('user_online', { userId, online: false });

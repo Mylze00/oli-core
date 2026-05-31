@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const feedController = require('../controllers/feed.controller');
 const { requireAuth, optionalAuth } = require('../middlewares/auth.middleware');
+const { genericUpload } = require('../config/upload');
 
 // Note: Certaines routes comme getFeed peuvent être optionnellement sans auth si on veut un fil public,
 // mais pour interagir (liker, commenter), l'authentification est requise.
@@ -10,7 +11,7 @@ const { requireAuth, optionalAuth } = require('../middlewares/auth.middleware');
 router.get('/', optionalAuth, feedController.getFeed);
 
 // Créer une publication
-router.post('/', requireAuth, feedController.createPost);
+router.post('/', requireAuth, genericUpload.single('media'), feedController.createPost);
 
 // Liker / Unliker une publication
 router.post('/:id/like', requireAuth, feedController.toggleLike);

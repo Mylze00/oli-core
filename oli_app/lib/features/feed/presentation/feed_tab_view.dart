@@ -12,7 +12,7 @@ class FeedTabView extends ConsumerWidget {
     final feedState = ref.watch(feedProvider);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: feedState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(
@@ -41,28 +41,54 @@ class FeedTabView extends ConsumerWidget {
           }
           
           return RefreshIndicator(
-            onRefresh: () => ref.read(feedProvider.notifier).fetchFeed(),
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 80),
-              itemCount: posts.length,
-              itemBuilder: (context, index) {
-                return FeedPostWidget(post: posts[index]);
+            onRefresh: () => ref.read(feedProvider.notifier).fetchFeed(isRefresh: true),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (ScrollNotification scrollInfo) {
+                if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
+                  final notifier = ref.read(feedProvider.notifier);
+                  if (notifier.hasMore && !notifier.isLoadingMore) {
+                    notifier.loadMore();
+                  }
+                }
+                return false;
               },
+              child: ListView.builder(
+                padding: const EdgeInsets.only(bottom: 80),
+                itemCount: posts.length + (ref.watch(feedProvider.notifier).hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == posts.length) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24.0),
+                      child: Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    );
+                  }
+                  return FeedPostWidget(post: posts[index]);
+                },
+              ),
             ),
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const CreatePostPage()),
-          );
-        },
-        backgroundColor: const Color(0xFF1565C0), // Bleu foncé comme sur la maquette
-        elevation: 4,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: Colors.white, size: 32),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 72),
+        child: FloatingActionButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CreatePostPage()),
+            );
+          },
+          backgroundColor: const Color(0xFF1565C0), // Bleu foncé comme sur la maquette
+          elevation: 4,
+          shape: const CircleBorder(),
+          child: const Icon(Icons.add, color: Colors.white, size: 32),
+        ),
       ),
     );
   }

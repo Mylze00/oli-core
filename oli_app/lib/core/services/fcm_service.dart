@@ -10,7 +10,41 @@ import '../storage/secure_storage_service.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  debugPrint('🔔 [FCM] Message reçu en arrière-plan: ${message.notification?.title}');
+  debugPrint('🔔 [FCM] Message reçu en arrière-plan: ${message.messageId}');
+
+  // Affichage manuel si c'est un message de données (Appel ou Message critique)
+  if (message.notification == null && message.data.isNotEmpty) {
+    final title = message.data['title'] ?? 'Oli';
+    final body = message.data['body'] ?? 'Vous avez une nouvelle notification';
+    final isCall = message.data['type'] == 'call';
+
+    final localNotifications = FlutterLocalNotificationsPlugin();
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings();
+    await localNotifications.initialize(const InitializationSettings(android: androidSettings, iOS: iosSettings));
+
+    final androidChannel = AndroidNotificationDetails(
+      isCall ? 'oli_calls_bg' : 'oli_notifications_bg',
+      isCall ? 'Appels Oli' : 'Notifications Arrière-plan',
+      importance: Importance.max,
+      priority: Priority.max,
+      fullScreenIntent: isCall, // Réveille l'écran pour les appels
+      playSound: true,
+      enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    await localNotifications.show(
+      message.hashCode,
+      title,
+      body,
+      NotificationDetails(
+        android: androidChannel,
+        iOS: const DarwinNotificationDetails(presentAlert: true, presentSound: true, presentBadge: true),
+      ),
+      payload: message.data.toString(),
+    );
+  }
 }
 
 /// Service FCM pour gérer les push notifications
@@ -26,13 +60,14 @@ class FcmService {
 
   bool _initialized = false;
 
-  /// Canal de notification Android
+  /// Canal de notification Android (Haute priorité)
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'oli_notifications',
     'Notifications Oli',
     description: 'Notifications de l\'application Oli',
-    importance: Importance.high,
+    importance: Importance.max,
     playSound: true,
+    enableVibration: true,
   );
 
   /// Initialiser FCM (appeler après login)
@@ -141,8 +176,9 @@ class FcmService {
           _channel.id,
           _channel.name,
           channelDescription: _channel.description,
-          importance: Importance.high,
-          priority: Priority.high,
+          importance: Importance.max,
+          priority: Priority.max,
+          fullScreenIntent: message.data['type'] == 'call', // Important pour les appels
           icon: '@mipmap/ic_launcher',
         ),
         iOS: const DarwinNotificationDetails(
