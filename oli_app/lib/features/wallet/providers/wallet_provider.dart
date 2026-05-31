@@ -5,6 +5,7 @@ import '../../../config/api_config.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../models/transaction_model.dart';
 import '../../../core/services/hive_cache_service.dart';
+import 'dart:async';
 
 // --- Résultat du dépôt Mobile Money ---
 class DepositResult {
@@ -58,13 +59,31 @@ final walletProvider = StateNotifierProvider<WalletNotifier, WalletState>((ref) 
 // --- NOTIFIER ---
 class WalletNotifier extends StateNotifier<WalletState> {
   final Ref _ref;
+  Timer? _syncTimer;
 
-  WalletNotifier(this._ref) : super(WalletState());
+  WalletNotifier(this._ref) : super(WalletState()) {
+    _startBackgroundSync();
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startBackgroundSync() {
+    // Actualisation silencieuse toutes les 15 secondes
+    _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      loadWalletData(background: true);
+    });
+  }
 
   Dio get _dio => _ref.read(dioProvider);
 
-  Future<void> loadWalletData() async {
-    state = state.copyWith(isLoading: true, error: null);
+  Future<void> loadWalletData({bool background = false}) async {
+    if (!background) {
+      state = state.copyWith(isLoading: true, error: null);
+    }
 
     // --- CACHE OFFLINE-FIRST ---
     try {
@@ -118,8 +137,10 @@ class WalletNotifier extends StateNotifier<WalletState> {
         transactions: transactions,
       );
     } catch (e) {
-      debugPrint('❌ Erreur loadWalletData: $e');
-      state = state.copyWith(isLoading: false, error: e.toString());
+      if (!background) {
+        debugPrint('❌ Erreur loadWalletData: $e');
+        state = state.copyWith(isLoading: false, error: e.toString());
+      }
     }
   }
 
