@@ -116,6 +116,22 @@ exports.handleDeposit = async (req, res) => {
 
         console.log(`✅ Wallet crédité: user #${userId} → +${netAmount.toFixed(2)} FC (frais: ${feeAmount.toFixed(2)} FC → Banque OLI)`);
 
+        // Notifier le client via Socket.io et FCM pour débloquer l'app Flutter
+        try {
+            const notifService = require('../services/notification.service');
+            await notifService.send(
+                userId, 
+                'wallet_deposit', 
+                `Recharge réussie !`, 
+                `Votre dépôt de ${amount} FC a été confirmé.`, 
+                { orderId: orderId, amount: amount, netAmount: netAmount, status: 'success' },
+                req.app ? req.app.get('io') : null
+            );
+            console.log(`📡 Notification de succès envoyée au user #${userId}`);
+        } catch (e) {
+            console.error('Erreur notification dépôt:', e);
+        }
+
     } catch (err) {
         // La réponse 200 a déjà été envoyée — on logue seulement l'erreur
         console.error('❌ Erreur traitement webhook handleDeposit:', err.message, err.stack);
