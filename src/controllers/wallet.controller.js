@@ -320,6 +320,30 @@ exports.withdraw = async (req, res) => {
 //
 // Body attendu : { receiverId: number, amount: number, currency?: 'USD'|'FC' }
 
+exports.resolveRecipient = async (req, res) => {
+    try {
+        const { identifier } = req.query;
+        if (!identifier) {
+            return res.status(400).json({ success: false, error: 'Identifier is required' });
+        }
+        
+        const pool = require('../config/db');
+        const { rows } = await pool.query(
+            'SELECT id, name, phone FROM users WHERE phone = $1 OR email = $1',
+            [identifier]
+        );
+        
+        if (rows.length > 0) {
+            return res.json({ success: true, user: rows[0] });
+        } else {
+            return res.status(404).json({ success: false, error: 'Utilisateur introuvable' });
+        }
+    } catch (err) {
+        console.error('Erreur resolveRecipient:', err.message);
+        res.status(500).json({ success: false, error: 'Erreur serveur' });
+    }
+};
+
 exports.transfer = async (req, res) => {
     const { receiverId, recipient_phone, amount, currency, note } = req.body;
 

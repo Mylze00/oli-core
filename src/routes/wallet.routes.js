@@ -78,6 +78,11 @@ router.post('/deposit-card', walletController.depositCard);
 //                 → push fonds vers téléphone
 router.post('/withdraw', walletController.withdraw);
 
+// ─── GET /api/wallet/resolve-recipient ───────────────────────────────────────
+// Résoudre un utilisateur par son numéro de téléphone ou email
+// Query: ?identifier=+243992000001
+router.get('/resolve-recipient', walletController.resolveRecipient);
+
 // ─── POST /api/wallet/transfer ───────────────────────────────────────────────
 // Transfert P2P entre utilisateurs OLI (interne — pas de Mobile Money).
 // Body: { receiverId: number, amount: number, currency?: 'FC'|'USD' }
