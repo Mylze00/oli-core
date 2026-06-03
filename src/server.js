@@ -120,6 +120,73 @@ io.on('connection', (socket) => {
         }
     });
 
+
+    // ── 5. WEBRTC CALL SIGNALING ─────────────────────────────────────────
+    socket.on('webrtc_call_initiate', async (data) => {
+        const { toId, callerName, callerAvatar, type, conversationId } = data;
+        if (!userId || !toId) return;
+        const targetRoom = 'user_' + toId;
+
+        // 1. Relayer via Socket.IO (si User B connecte)
+        socket.to(targetRoom).emit('webrtc_call_incoming', {
+            fromId: userId,
+            callerName: callerName || 'Utilisateur OLI',
+            callerAvatar: callerAvatar || '',
+            type: type || 'audio',
+            conversationId: conversationId || '',
+        });
+
+        // 2. FCM push si hors-ligne ou app fermee
+        try {
+            const fcmService = require('./services/fcm.service');
+            await fcmService.sendCallNotification(parseInt(toId), {
+                callerId: String(userId),
+                callerName: callerName || 'Utilisateur OLI',
+                callerAvatar: callerAvatar || '',
+                callType: type || 'audio',
+                conversationId: String(conversationId || ''),
+            });
+        } catch (fcmErr) {
+            console.warn('[CALL FCM] Push ignore:', fcmErr.message);
+        }
+    });
+
+    socket.on('webrtc_call_accept', (data) => {
+        if (!userId || !data.callerId) return;
+        socket.to('user_' + data.callerId).emit('webrtc_call_accepted', { fromId: userId });
+    });
+
+    socket.on('webrtc_call_reject', (data) => {
+        if (!userId || !data.callerId) return;
+        socket.to('user_' + data.callerId).emit('webrtc_call_rejected', { fromId: userId });
+    });
+
+    socket.on('webrtc_call_cancel', (data) => {
+        if (!userId || !data.toId) return;
+        socket.to('user_' + data.toId).emit('webrtc_call_cancelled', { fromId: userId });
+    });
+
+    socket.on('webrtc_call_ended', (data) => {
+        if (!userId || !data.toId) return;
+        socket.to('user_' + data.toId).emit('webrtc_call_ended', { fromId: userId });
+    });
+
+    socket.on('webrtc_call_missed', async (data) => {
+        if (!userId || !data.toId) return;
+        socket.to('user_' + data.toId).emit('webrtc_call_missed', { fromId: userId, type: data.type });
+        try {
+            const notifService = require('./services/notification.service');
+            await notifService.send(
+                parseInt(data.toId), 'call',
+                'Appel manque',
+                'Vous avez manque un appel ' + (data.type === 'video' ? 'video' : 'audio'),
+                { type: 'missed_call', fromId: String(userId), callType: data.type || 'audio' }
+            );
+        } catch (e) {
+            console.warn('[CALL] Notif appel manque echouee:', e.message);
+        }
+    });
+
     socket.on('disconnect', () => {
         if (userId) {
             io.emit('user_online', { userId, online: false });

@@ -159,6 +159,123 @@ class FcmService {
             console.error(`❌ [FCM] Erreur broadcast topic "${topic}":`, error.message);
         }
     }
+
+    /**
+     * Notification d'appel entrant — HAUTE PRIORITE
+     * Utilise un message "data-only" pour Android full-screen intent
+     * et content-available pour iOS VoIP-like wakeup
+     *
+     * @param {number} userId     - Destinataire de l'appel
+     * @param {object} callData   - { callerId, callerName, callerAvatar, callType, conversationId }
+     */
+    async sendCallNotification(userId, callData) {
+        if (!initialized || !admin) {
+            console.log(`[FCM] sendCallNotification ignore (non initialise) pour user ${userId}`);
+            return;
+        }
+
+        try {
+            const result = await db.query(
+                'SELECT token, platform FROM device_tokens WHERE user_id = $1',
+                [userId]
+            );
+
+            if (result.rows.length === 0) {
+                console.log(`[FCM] Aucun token d'appel pour user ${userId}`);
+                return;
+            }
+
+            const tokens = result.rows.map(r => r.token);
+
+            // Data-only payload (Flutter gere l'UI lui-meme)
+            const callPayload = {
+                oli_notification_type: 'incoming_call',
+                caller_id:            String(callData.callerId || ''),
+                caller_name:          String(callData.callerName || 'Utilisateur OLI'),
+                caller_avatar:        String(callData.callerAvatar || ''),
+                call_type:            String(callData.callType || 'audio'),
+                conversation_id:      String(callData.conversationId || ''),
+                timestamp:            String(Date.now()),
+            };
+
+            const message = {
+                // Pas de "notification" block -> data-only -> Flutter le gere
+                data: callPayload,
+                tokens: tokens,
+                android: {
+                    priority: 'high',
+                    ttl: 30000, // 30 secondes max (appel)
+                    // Full-screen intent sur Android (ecran verrouille)
+                    notification: {
+                        channelId: 'oli_calls',
+                        priority: 'max',
+                        defaultVibrateTimings: false,
+                        vibrateTimingsMillis: [0, 500, 200, 500],
+                        visibility: 'PUBLIC',
+                    },
+                },
+                apns: {
+                    headers: {
+                        'apns-priority': '10',
+                        'apns-push-type': 'alert',
+                        'apns-expiration': '30',
+                    },
+                    payload: {
+                        aps: {
+                            'content-available': 1,
+                            sound: 'default',
+                            alert: {
+                                title: `Appel ${callData.callType === 'video' ? 'video' : 'audio'} entrant`,
+                                body: `${callData.callerName || 'Quelqu\'un'} vous appelle`,
+                            },
+                        },
+                    },
+                },
+                // Web Push (Chrome)
+                webpush: {
+                    headers: { Urgency: 'high' },
+                    notification: {
+                        title: `Appel ${callData.callType === 'video' ? 'video' : 'audio'} entrant`,
+                        body: `${callData.callerName || 'Quelqu\'un'} vous appelle`,
+                        icon: '/icons/Icon-192.png',
+                        badge: '/icons/Icon-192.png',
+                        tag: 'incoming-call',
+                        renotify: true,
+                        requireInteraction: true, // Reste visible jusqu'a action
+                        actions: [
+                            { action: 'accept', title: 'Decrocher' },
+                            { action: 'reject', title: 'Refuser' },
+                        ],
+                        data: callPayload,
+                    },
+                    fcm_options: { link: '/chat' },
+                },
+            };
+
+            const response = await admin.messaging().sendEachForMulticast(message);
+            console.log(`[FCM CALL] Push appel envoye a user ${userId}: ${response.successCount}/${tokens.length} OK`);
+
+            // Nettoyer tokens invalides
+            if (response.failureCount > 0) {
+                const invalid = [];
+                response.responses.forEach((resp, idx) => {
+                    if (!resp.success) {
+                        const code = resp.error?.code;
+                        if (code === 'messaging/invalid-registration-token' ||
+                            code === 'messaging/registration-token-not-registered') {
+                            invalid.push(tokens[idx]);
+                        }
+                    }
+                });
+                if (invalid.length > 0) {
+                    await db.query('DELETE FROM device_tokens WHERE token = ANY($1)', [invalid]);
+                }
+            }
+
+        } catch (error) {
+            console.error(`[FCM CALL] Erreur push appel user ${userId}:`, error.message);
+        }
+    }
 }
 
 module.exports = new FcmService();
