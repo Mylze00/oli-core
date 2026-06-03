@@ -447,10 +447,11 @@ function _detectProvider(phone) {
     let local = digits.startsWith('243') ? digits.slice(3) : digits;
     if (!local.startsWith('0')) local = '0' + local;
 
-    if (/^(08[1-4]|08[5-9])/.test(local)) return 'Vodacom';
-    if (/^(09[0-7])/.test(local))          return 'Airtel';
-    if (/^(09[8-9]|08[0])/.test(local))    return 'Orange';
-    if (/^(07[2-7])/.test(local))          return 'Africell';
+    if (/^(081|082|083)/.test(local)) return 'Vodacom';
+    if (/^(084|085|089|080)/.test(local)) return 'Orange';
+    if (/^(099|097|098)/.test(local)) return 'Airtel';
+    if (/^(090|088|086)/.test(local)) return 'Africell';
+    
     return 'Mobile Money';
 }
 
