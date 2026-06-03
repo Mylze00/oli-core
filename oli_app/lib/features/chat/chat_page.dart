@@ -175,24 +175,22 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.phone, color: Colors.blueAccent, size: 26),
-            onPressed: () {
-              final conversationId = chatState.messages.isNotEmpty 
-                  ? chatState.messages.first['conversation_id']?.toString() 
-                  : null;
-              
-              ref.read(socketServiceProvider).emit('webrtc_call_initiate', {
-                'toId': widget.otherId,
-                'callerName': authState.userData?['name'] ?? 'Utilisateur',
-                'callerAvatar': authState.userData?['avatar_url'] ?? '',
-                'type': 'audio',
-                'conversationId': conversationId,
-              });
-
-              Navigator.push(
-                context,
-                MaterialPageRoute(
+          // Bouton Appel Audio
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: GestureDetector(
+              onTap: () {
+                final conversationId = chatState.messages.isNotEmpty
+                    ? chatState.messages.first['conversation_id']?.toString()
+                    : null;
+                ref.read(socketServiceProvider).emit('webrtc_call_initiate', {
+                  'toId': widget.otherId,
+                  'callerName': authState.userData?['name'] ?? 'Utilisateur',
+                  'callerAvatar': authState.userData?['avatar_url'] ?? '',
+                  'type': 'audio',
+                  'conversationId': conversationId,
+                });
+                Navigator.push(context, MaterialPageRoute(
                   builder: (_) => CallScreen(
                     otherId: widget.otherId,
                     conversationId: conversationId,
@@ -201,28 +199,34 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     isVideoCall: false,
                     isIncoming: false,
                   ),
+                ));
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
                 ),
-              );
-            },
+                child: Icon(Icons.phone, color: Colors.green.shade600, size: 22),
+              ),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.videocam, color: Colors.blueAccent, size: 28),
-            onPressed: () {
-              final conversationId = chatState.messages.isNotEmpty 
-                  ? chatState.messages.first['conversation_id']?.toString() 
-                  : null;
-
-              ref.read(socketServiceProvider).emit('webrtc_call_initiate', {
-                'toId': widget.otherId,
-                'callerName': authState.userData?['name'] ?? 'Utilisateur',
-                'callerAvatar': authState.userData?['avatar_url'] ?? '',
-                'type': 'video',
-                'conversationId': conversationId,
-              });
-
-              Navigator.push(
-                context,
-                MaterialPageRoute(
+          // Bouton Appel Vidéo
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: GestureDetector(
+              onTap: () {
+                final conversationId = chatState.messages.isNotEmpty
+                    ? chatState.messages.first['conversation_id']?.toString()
+                    : null;
+                ref.read(socketServiceProvider).emit('webrtc_call_initiate', {
+                  'toId': widget.otherId,
+                  'callerName': authState.userData?['name'] ?? 'Utilisateur',
+                  'callerAvatar': authState.userData?['avatar_url'] ?? '',
+                  'type': 'video',
+                  'conversationId': conversationId,
+                });
+                Navigator.push(context, MaterialPageRoute(
                   builder: (_) => CallScreen(
                     otherId: widget.otherId,
                     conversationId: conversationId,
@@ -231,9 +235,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     isVideoCall: true,
                     isIncoming: false,
                   ),
+                ));
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  shape: BoxShape.circle,
                 ),
-              );
-            },
+                child: Icon(Icons.videocam, color: Colors.blue.shade600, size: 24),
+              ),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.more_vert, color: Colors.black54),
