@@ -109,6 +109,10 @@ flutter:
     - assets/translations/
 
   fonts:
+    - family: CreatoDisplay
+      fonts:
+        - asset: assets/fonts/CreatoDisplay-Medium.otf
+          weight: 500
     - family: olive_palm
       fonts:
         - asset: assets/fonts/olive_palm.otf

@@ -9,27 +9,32 @@ class IdentityVerificationPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(userProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        title: const Text('Statut du compte'),
-        elevation: 0,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'CreatoDisplay'),
       ),
-      body: userAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur: $e')),
-        data: (user) {
-          if (user == null) {
-            return const Center(child: Text('Non connecté', style: TextStyle(color: Colors.white)));
-          }
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          title: const Text('Statut du compte'),
+          elevation: 0,
+        ),
+        body: userAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('Erreur: $e')),
+          data: (user) {
+            if (user == null) {
+              return const Center(child: Text('Non connecté', style: TextStyle(color: Colors.white)));
+            }
 
-          if (user.isVerified) {
-            return _buildVerifiedState();
-          } else {
-            return _buildUnverifiedState(context);
-          }
-        },
+            if (user.isVerified) {
+              return _buildVerifiedState();
+            } else {
+              return _buildUnverifiedState(context);
+            }
+          },
+        ),
       ),
     );
   }

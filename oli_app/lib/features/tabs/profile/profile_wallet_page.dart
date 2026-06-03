@@ -45,7 +45,13 @@ class ProfileAndWalletPage extends ConsumerWidget {
       return _buildLoginPrompt(context, oliBlue);
     }
 
-    return Scaffold(
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(
+          fontFamily: 'CreatoDisplay',
+        ),
+      ),
+      child: Scaffold(
       backgroundColor: bgColor,
       body: RefreshIndicator(
         onRefresh: () async {
@@ -134,6 +140,7 @@ class ProfileAndWalletPage extends ConsumerWidget {
           ),
         ),
       ),
+    ),
     );
   }
 
