@@ -259,7 +259,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _buildListTile(
               icon: Icons.info_outline,
               title: 'Version',
-              trailing: const Text('1.0.0', style: TextStyle(color: Colors.grey)),
+              trailingText: '1.0.0',
+              showArrow: false,
               onTap: () {},
             ),
             _buildDivider(),
