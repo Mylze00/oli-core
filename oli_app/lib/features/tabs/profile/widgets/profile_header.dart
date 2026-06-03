@@ -19,29 +19,6 @@ class ProfileHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
-        // Top Bar (Location Badge aligned to right)
-        Align(
-          alignment: Alignment.centerRight,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.location_on, color: Colors.white, size: 14),
-                SizedBox(width: 4),
-                Text(
-                  "Kinshasa", 
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-        ),
-        
         const SizedBox(height: 30), // Espace pour descendre l'avatar
 
         // Main content centered
@@ -85,99 +62,45 @@ class ProfileHeader extends ConsumerWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          AutoRefreshAvatar(
-            // Utilise une clé unique ou l'URL pour forcer le rafraîchissement
-            avatarUrl: user['avatar_url'], 
-            size: 70,
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
+            ),
+            child: AutoRefreshAvatar(
+              avatarUrl: user['avatar_url'], 
+              size: 80,
+            ),
           ),
-          _buildCameraIcon(),
-          _buildVerificationBadge(),
         ],
       ),
     );
   }
 
-  Widget _buildCameraIcon() {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: const BoxDecoration(
-          color: Colors.amber,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.camera_alt, size: 12, color: Colors.black),
-      ),
-    );
-  }
-
-  Widget _buildVerificationBadge() {
-    final badgeType = VerificationBadge.fromUser(user);
-
-    if (badgeType == null) return const SizedBox.shrink();
-
-    return Positioned(
-      bottom: -6,
-      left: 0,
-      right: 0,
-      child: Center(
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2), // White border for visibility
-            color: Colors.white,
-          ),
-          child: VerificationBadge(
-            type: badgeType,
-            size: 22,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildUserInfoSection(BuildContext context, WidgetRef ref) {
+    final badgeType = VerificationBadge.fromUser(user);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 6,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               (user["name"] ?? "Utilisateur Oli").toString().toUpperCase(),
               style: const TextStyle(
-                color: Colors.white, // Modifié pour être visible sur tous les fonds
-                fontSize: 16,
+                color: Colors.white,
+                fontSize: 18,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.5,
               ),
               textAlign: TextAlign.center,
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF0C2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.stars, size: 12, color: Color(0xFFD4A500)),
-                  SizedBox(width: 3),
-                  Text(
-                    "GOLD MEMBRE",
-                    style: TextStyle(
-                      color: Color(0xFFD4A500),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            if (badgeType != null) ...[
+              const SizedBox(width: 4),
+              VerificationBadge(type: badgeType, size: 16),
+            ],
+            const SizedBox(width: 4),
             IconButton(
               icon: const Icon(Icons.settings, color: Colors.white70, size: 18),
               onPressed: () => Navigator.push(
@@ -189,13 +112,13 @@ class ProfileHeader extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 2),
         Text(
           "Bio: Entrepreneur passionné | Tech & Business",
           style: TextStyle(
-            color: Colors.white.withOpacity(0.8), // Modifié pour mode sombre
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
+            color: Colors.white.withOpacity(0.9),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
           textAlign: TextAlign.center,
         ),
@@ -204,6 +127,7 @@ class ProfileHeader extends ConsumerWidget {
       ],
     );
   }
+
 
   Widget _buildBadgesRow() {
     return Wrap( // Wrap est plus sûr que Row si tu as beaucoup de badges
