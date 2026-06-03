@@ -125,7 +125,13 @@ class WalletNotifier extends StateNotifier<WalletState> {
 
       List<WalletTransaction> transactions = [];
       if (histRes.statusCode == 200) {
-        final List list = histRes.data is List ? histRes.data : [];
+        dynamic data = histRes.data;
+        List list = [];
+        if (data is List) {
+          list = data;
+        } else if (data is Map && data.containsKey('transactions')) {
+          list = data['transactions'] as List;
+        }
         transactions = list.map((e) => WalletTransaction.fromJson(e)).toList();
         HiveCacheService.setCache('wallet_history_cache', list);
       }
