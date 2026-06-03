@@ -15,8 +15,5 @@ router.post('/unipesa/deposit', unipesaWebhookController.handleDeposit);
 // Callback pour les retraits B2C (OLI Wallet → client)
 router.post('/unipesa/withdrawal', unipesaWebhookController.handleWithdrawal);
 
-// Callback pour le paiement direct des commandes (C2B)
-router.post('/unipesa/order_payment', unipesaWebhookController.handleOrderPayment);
-
 
 module.exports = router;

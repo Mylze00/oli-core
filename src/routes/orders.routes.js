@@ -64,9 +64,5 @@ router.post("/:id/cancel", orderController.cancel);
  * POST /orders/:id/pay - Simuler le paiement (DEV)
  */
 router.post("/:id/pay", orderController.pay);
-/**
- * POST /orders/:id/pay-mobile-money - Initie le paiement direct de la commande via Mobile Money
- */
-router.post("/:id/pay-mobile-money", orderController.payMobileMoney);
 
 module.exports = router;

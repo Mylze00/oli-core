@@ -5,6 +5,7 @@ import {
     ShoppingBagIcon,
     CubeIcon,
     CreditCardIcon,
+    BanknotesIcon,
     ExclamationTriangleIcon,
     TruckIcon,
     ShieldCheckIcon,
@@ -28,7 +29,8 @@ const navigation = [
     { name: 'Demandes Produit', href: '/product-requests', icon: GiftIcon }, // 📦
     { name: 'Livreurs', href: '/delivery', icon: TruckIcon },
     { name: 'Commandes', href: '/orders', icon: CubeIcon },
-    { name: 'Finances', href: '/finances', icon: CreditCardIcon },
+    { name: 'Finances (Commandes)', href: '/finances', icon: CreditCardIcon },
+    { name: 'Wallets OLI', href: '/finances-wallet', icon: BanknotesIcon },
     { name: 'Modération', href: '/disputes', icon: ShieldCheckIcon },
     { name: 'Publicités', href: '/ads', icon: MegaphoneIcon },
     { name: 'Services', href: '/services', icon: BoltIcon }, // ✨

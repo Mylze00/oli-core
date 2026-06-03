@@ -17,7 +17,8 @@ import Verifications from './pages/Verifications'; // 🆕 Certifications
 import ProductRequests from './pages/ProductRequests'; // 📦 Demandes produit
 import DatabaseManager from './pages/DatabaseManager'; // 🗄️ Gestion DB
 import Delivery from './pages/Delivery'; // 🚚 Livreurs
-import Finances from './pages/Finances'; // 💰 Finances
+import Finances from './pages/Finances';
+import FinancesWallet from './pages/FinancesWallet'; // 💰 Finances
 import PriceWorker from './pages/PriceWorker'; // 🤖 Worker Prix
 import ProductComparator from './pages/ProductComparator'; // 🔍 Comparateur Prix
 
@@ -45,6 +46,7 @@ function App() {
             <Route path="/database" element={<DatabaseManager />} /> {/* 🗄️ */}
             <Route path="/delivery" element={<Delivery />} /> {/* 🚚 */}
             <Route path="/finances" element={<Finances />} /> {/* 💰 */}
+            <Route path="/finances-wallet" element={<FinancesWallet />} /> 
             <Route path="/price-worker" element={<PriceWorker />} /> {/* 🤖 */}
             <Route path="/product-comparator" element={<ProductComparator />} /> {/* 🔍 */}
           </Route>

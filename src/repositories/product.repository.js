@@ -263,7 +263,7 @@ class ProductRepository {
         if (filters.filterType === 'popular') {
             query += ` ORDER BY COALESCE(p.view_count, 0) DESC, p.created_at DESC`;
         } else {
-            query += ` ORDER BY p.sort_order ASC, p.product_type ASC NULLS LAST, p.created_at DESC`;
+            query += ` ORDER BY p.created_at DESC`;
         }
 
         query += ` LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
@@ -328,7 +328,6 @@ class ProductRepository {
                 discount_price, discount_start_date, discount_end_date,
                 express_delivery_price, shipping_options,
                 latitude, longitude, brand_certified, brand_display_name,
-                product_type, sort_order,
                 status, created_at, updated_at
             )
             VALUES (
@@ -338,7 +337,6 @@ class ProductRepository {
                 $20, $21, $22,
                 $23, $24,
                 $25, $26, $27, $28,
-                $29, $30,
                 'active', NOW(), NOW()
             )
             RETURNING *
@@ -352,8 +350,7 @@ class ProductRepository {
             express_delivery_price || null,
             JSON.stringify(shipping_options || []),
             latitude || null, longitude || null,
-            brand_certified || false, brand_display_name || null,
-            product.product_type || 'Standard', product.sort_order || 0
+            brand_certified || false, brand_display_name || null
         ];
 
         const { rows } = await pool.query(query, values);
@@ -381,7 +378,7 @@ class ProductRepository {
             'quantity', 'color', 'location', 'status', 'delivery_price', 'delivery_time',
             'is_good_deal', 'unit', 'brand', 'weight', 'b2b_pricing',
             'discount_price', 'discount_start_date', 'discount_end_date', 'shipping_options',
-            'latitude', 'longitude', 'product_type', 'sort_order'];
+            'latitude', 'longitude'];
         const setClauses = [];
         const values = [];
         let i = 1;

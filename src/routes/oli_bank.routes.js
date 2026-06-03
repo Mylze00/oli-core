@@ -147,15 +147,54 @@ router.get('/escrow', authenticateToken, async (req, res) => {
 
 /**
  * POST /bank/escrow/:orderId/release
- * Libère l'escrow d'une commande. Utilisé par le système lors de la confirmation de livraison.
- * Accessible par admin ou via token système.
+ * Libère l'escrow (vendeur reçoit son paiement).
+ *
+ * [P1.3] Règles de sécurité :
+ *   - L'acheteur peut confirmer la réception → trigger: 'delivery_confirmed'
+ *   - Un admin peut forcer la libération   → trigger: 'admin_override'
+ *   - Le vendeur ne peut PAS libérer son propre escrow (conflit d'intérêt)
+ *   - Un tiers n'a aucun droit sur cet escrow
  */
 router.post('/escrow/:orderId/release', authenticateToken, async (req, res) => {
     try {
         const orderId = parseInt(req.params.orderId);
-        const trigger = req.body.trigger || 'manual';
+        const callerId = req.user.id;
+        const isAdmin  = req.user.is_admin === true;
+
+        // Récupérer l'escrow pour vérifier la propriété
+        const { rows } = await pool.query(
+            'SELECT buyer_id, seller_id, status FROM oli_bank_escrow WHERE order_id = $1',
+            [orderId]
+        );
+
+        if (!rows.length) {
+            return res.status(404).json({ error: `Aucun escrow trouvé pour la commande #${orderId}` });
+        }
+
+        const escrow = rows[0];
+
+        // Vérifier que l'escrow est bien en statut 'locked'
+        if (escrow.status !== 'locked') {
+            return res.status(409).json({
+                error: `Impossible de libérer : escrow en statut '${escrow.status}'`,
+            });
+        }
+
+        // [SÉCURITÉ] Seul l'acheteur ou un admin peut libérer
+        const isBuyer = parseInt(escrow.buyer_id) === parseInt(callerId);
+        if (!isBuyer && !isAdmin) {
+            console.warn(`🚨 Tentative non autorisée: user #${callerId} → release escrow order #${orderId} (buyer: #${escrow.buyer_id})`);
+            return res.status(403).json({
+                error: 'Seul l\'acheteur ou un administrateur peut confirmer la réception et libérer le paiement.',
+            });
+        }
+
+        const trigger = isAdmin ? (req.body.trigger || 'admin_override') : 'delivery_confirmed';
         const result  = await oliBank.releaseEscrow(orderId, trigger);
+
+        console.log(`✅ Escrow libéré: commande #${orderId} par user #${callerId} (${isAdmin ? 'admin' : 'acheteur'})`);
         res.json({ success: true, ...result });
+
     } catch (err) {
         console.error('Erreur POST /bank/escrow/release:', err.message);
         res.status(400).json({ error: err.message });
@@ -165,13 +204,54 @@ router.post('/escrow/:orderId/release', authenticateToken, async (req, res) => {
 /**
  * POST /bank/escrow/:orderId/refund
  * Rembourse l'acheteur depuis l'escrow (annulation ou litige).
+ *
+ * [P1.3] Règles de sécurité :
+ *   - L'acheteur peut demander un remboursement (annulation)
+ *   - Le vendeur peut initier un remboursement (si commande annulée de son côté)
+ *   - Un admin peut forcer un remboursement
+ *   - Un tiers n'a aucun accès
  */
 router.post('/escrow/:orderId/refund', authenticateToken, async (req, res) => {
     try {
-        const orderId = parseInt(req.params.orderId);
-        const reason  = req.body.reason || 'order_cancelled';
-        const result  = await oliBank.refundEscrow(orderId, reason);
+        const orderId  = parseInt(req.params.orderId);
+        const callerId = req.user.id;
+        const isAdmin  = req.user.is_admin === true;
+
+        // Récupérer l'escrow pour vérifier la propriété
+        const { rows } = await pool.query(
+            'SELECT buyer_id, seller_id, status FROM oli_bank_escrow WHERE order_id = $1',
+            [orderId]
+        );
+
+        if (!rows.length) {
+            return res.status(404).json({ error: `Aucun escrow trouvé pour la commande #${orderId}` });
+        }
+
+        const escrow = rows[0];
+
+        // Vérifier que l'escrow est remboursable (locked ou disputed)
+        if (!['locked', 'disputed'].includes(escrow.status)) {
+            return res.status(409).json({
+                error: `Impossible de rembourser : escrow en statut '${escrow.status}'`,
+            });
+        }
+
+        // [SÉCURITÉ] Seuls l'acheteur, le vendeur ou un admin peuvent rembourser
+        const isBuyer  = parseInt(escrow.buyer_id)  === parseInt(callerId);
+        const isSeller = parseInt(escrow.seller_id) === parseInt(callerId);
+        if (!isBuyer && !isSeller && !isAdmin) {
+            console.warn(`🚨 Tentative non autorisée: user #${callerId} → refund escrow order #${orderId}`);
+            return res.status(403).json({
+                error: 'Accès refusé. Seuls l\'acheteur, le vendeur ou un administrateur peuvent demander un remboursement.',
+            });
+        }
+
+        const reason = req.body.reason || (isAdmin ? 'admin_decision' : 'order_cancelled');
+        const result = await oliBank.refundEscrow(orderId, reason);
+
+        console.log(`💸 Escrow remboursé: commande #${orderId} par user #${callerId} (${isAdmin ? 'admin' : isBuyer ? 'acheteur' : 'vendeur'})`);
         res.json({ success: true, ...result });
+
     } catch (err) {
         console.error('Erreur POST /bank/escrow/refund:', err.message);
         res.status(400).json({ error: err.message });

@@ -14,6 +14,7 @@
 const walletRepository = require('../repositories/wallet.repository');
 const unipesaService = require('./unipesa.service');
 const pool = require('../config/db');
+const { FEES, FC_TO_USD_FALLBACK } = require('../config/index'); // [P1.4]
 
 // 🏦 OLI Bank — import différé pour éviter les dépendances circulaires
 let _oliBank = null;
@@ -39,8 +40,8 @@ function _recordToLedger(userId, txType, amount, meta = {}) {
     });
 }
 
-// Taux FC→USD fixe (à externaliser dans exchange_rates si nécessaire)
-const FC_TO_USD = 2800;
+// [P1.4] Taux FC→USD depuis la configuration centralisée (plus de hardcode)
+const FC_TO_USD = FC_TO_USD_FALLBACK; // config/index.js → FC_TO_USD_FALLBACK
 
 class WalletService {
 
@@ -72,8 +73,8 @@ class WalletService {
             
             // Assurer que le user 0 existe
             await client.query(`
-                INSERT INTO users (id, name, email, phone, role, password, wallet)
-                VALUES (0, 'Banque Crédit OLI', 'bank@oli-core.com', '+0000000000', 'admin', 'N/A', 0)
+                INSERT INTO users (id, name, phone, wallet)
+                VALUES (0, 'Banque Crédit OLI', '+0000000000', 0)
                 ON CONFLICT (id) DO NOTHING
             `);
             
@@ -109,44 +110,45 @@ class WalletService {
     // 1. Recharge — Mobile Money
     // ─────────────────────────────────────────────────────────────
 
-    async deposit(userId, amountRaw, provider, phoneNumber) {
-        const amount = parseFloat(amountRaw);
+    async deposit(userId, amountFC, provider, phoneNumber) {
+        // amountFC : montant brut en Francs Congolais saisi par l'utilisateur
+        const amount = parseFloat(amountFC);
         if (!amount || amount <= 0) throw new Error('Montant invalide');
-        if (!provider) throw new Error('Opérateur Mobile Money requis');
         if (!phoneNumber) throw new Error('Numéro de téléphone requis');
 
-        // Application des frais OLI (5%) - Le client paie 105% via Unipesa
-        const feeAmount = amount * 0.05;
-        const totalToCharge = amount + feeAmount;
+        // ⚠️  NE PAS multiplier par FC_TO_USD ici — amount est déjà en FC
+        //     La conversion USD→FC avait été introduite par erreur (multipliait par 2800 !)
 
-        const reference = `DEP_${userId}_${Date.now()}`;
-
-        // Appel API Unipesa C2B - Mobile Money avec le montant total (Montant + Frais)
-        const unipesaRes = await unipesaService.depositC2B({
-            amount: totalToCharge,
-            currency: 'CDF',
-            provider,
+        // ── [FIX B1] : Appel de la vraie méthode initiateDeposit (C2B) ────
+        // unipesa.service gère lui-même les 6% de frais (3% Unipesa + 3% OLI).
+        // L'utilisateur saisit le montant BRUT qu'il envoie depuis son téléphone.
+        const unipesaRes = await unipesaService.initiateDeposit(
+            userId,
             phoneNumber,
-            reference,
-            customer_user_id: String(userId)
+            amount // montant brut en FC — les frais sont déduits dans unipesa.service
+        );
+
+        // L'opération est en cours sur le téléphone de l'utilisateur (push USSD).
+        // Le crédit du wallet se fera à la réception du webhook de confirmation.
+        // 🏦 OLI Bank — Ledger non-bloquant (montant net estimé)
+        _recordToLedger(userId, 'deposit', unipesaRes.netAmountFC, {
+            reference: unipesaRes.oliOrderId,
+            provider: provider || unipesaRes.provider,
+            fee: unipesaRes.totalFeeFC,
         });
 
-        if (!unipesaRes.success || unipesaRes.status === 'failed') {
-            throw new Error(unipesaRes.message || 'Échec de l\'initiation du dépôt');
-        }
-
-        // On enregistre le montant net que l'utilisateur recevra en attente. 
-        // Les frais seront prélevés lors de la confirmation du webhook.
-        const depResult = await walletRepository.performDeposit(userId, 0, {
-            type: 'deposit_pending',
-            provider: 'UNIPESA',
-            reference: unipesaRes.transaction_id || reference,
-            description: `Recharge initiée via ${provider}. En attente de validation PIN.`,
-            metadata: { netAmount: amount, feeAmount: feeAmount }
-        });
-        // 🏦 OLI Bank — Ledger (non-bloquant)
-        _recordToLedger(userId, 'deposit', amount, { reference, provider, fee: feeAmount });
-        return depResult;
+        return {
+            status:          'pending',
+            oliOrderId:      unipesaRes.oliOrderId,
+            amountFC:        unipesaRes.amountFC,
+            netAmountFC:     unipesaRes.netAmountFC,
+            totalFeeFC:      unipesaRes.totalFeeFC,
+            aggregatorFeeFC: unipesaRes.aggregatorFeeFC,
+            oliFeeFC:        unipesaRes.oliFeeFC,
+            provider:        unipesaRes.provider,
+            phone:           phoneNumber,
+            message:         'Paiement initié. Validez sur votre téléphone Mobile Money.',
+        };
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -161,26 +163,19 @@ class WalletService {
         const reference = `CARD_${userId}_${Date.now()}`;
 
         // Appel API Unipesa C2B - Carte Bancaire (provider = equity ou ecobank selon la carte)
-        const unipesaRes = await unipesaService.depositC2B({
-            amount,
-            currency: 'USD',
-            provider: 'card', // mappage vers equity (ID 20) par défaut
-            phoneNumber: '+243000000000',
-            reference,
-            customer_user_id: String(userId)
-        });
+        // [FIX B5] : cardNumber doit être lu depuis cardInfo.cardNumber
+        const last4 = cardInfo.cardNumber.replace(/\s/g, '').slice(-4);
 
-        if (!unipesaRes.success) {
-            throw new Error(unipesaRes.message || 'Échec de l\'initiation du paiement carte');
-        }
+        // Note: Unipesa ne supporte pas directement le paiement par carte bancaire
+        // via C2B standard. Ce flux doit passer par un gateway spécifique (Equity/Ecobank).
+        // Pour l'instant on lève une erreur informative.
+        throw new Error(
+            `Paiement par carte non encore disponible via Unipesa. ` +
+            `Utilisez Mobile Money (Vodacom, Airtel, Orange, Africell) pour recharger votre wallet.`
+        );
 
-        // Solde en attente — sera crédité par le webhook /webhooks/unipesa/deposit
-        return await walletRepository.performDeposit(userId, 0, {
-            type: 'deposit_pending',
-            provider: 'UNIPESA',
-            reference: unipesaRes.transaction_id || reference,
-            description: `Recharge carte ****${cardNumber.slice(-4)} en attente`,
-        });
+        // TODO: Implémenter le flux carte via Equity (provider ID 20) ou Ecobank (ID 23)
+        // quand la documentation Unipesa carte sera disponible.
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -193,54 +188,73 @@ class WalletService {
         if (!provider) throw new Error('Opérateur requis');
         if (!phoneNumber) throw new Error('Numéro de téléphone requis');
 
-        // Frais de retrait (5%)
-        const feeAmount = amount * 0.05;
+        // Frais de retrait OLI : depuis config centralisée [P1.4]
+        const OLI_WITHDRAW_FEE = FEES.OLI_WITHDRAW_RATE; // 3% par défaut
+        const feeAmount    = amount * OLI_WITHDRAW_FEE;
         const totalToDeduct = amount + feeAmount;
 
-        // Vérification solde OLI (doit couvrir le montant + les frais)
+        // Vérification solde (doit couvrir montant + frais)
         const balance = await walletRepository.getBalance(userId);
         if (balance < totalToDeduct) {
-            throw new Error(`Solde insuffisant (disponible: $${balance.toFixed(2)}, requis: $${totalToDeduct.toFixed(2)} incluant 5% de frais)`);
+            throw new Error(
+                `Solde insuffisant (disponible: ${balance.toFixed(2)} FC, ` +
+                `requis: ${totalToDeduct.toFixed(2)} FC incluant ${(OLI_WITHDRAW_FEE * 100)}% de frais)`
+            );
         }
 
-        const reference = `WD_${userId}_${Date.now()}`;
+        const reference = `WD-${userId}-${Date.now()}`; // FORMAT OFFICIEL : tirets (aligné avec unipesa.service)
 
-        // IMPORTANT : Débit immédiat du Wallet OLI (Montant Total = Retrait + Frais) pour empêcher le double retrait
-        const withdrawResult = await walletRepository.performWithdrawal(userId, totalToDeduct, {
+        // ── [FIX B3] : Débit immédiat via performDebit (remplace performWithdrawal inexistant) ──
+        // Le débit est fait AVANT l'appel Unipesa pour empêcher tout double retrait.
+        const withdrawResult = await walletRepository.performDebit(userId, totalToDeduct, {
             type: 'withdrawal_pending',
             provider: 'UNIPESA',
             reference,
-            description: `Retrait vers ${provider} ($${amount.toFixed(2)} + $${feeAmount.toFixed(2)} frais)`,
-            metadata: { netAmount: amount, feeAmount: feeAmount }
+            description: `Retrait vers ${provider} — ${amount.toFixed(0)} FC (+ ${feeAmount.toFixed(0)} FC frais)`,
+            metadata: { netAmount: amount, feeAmount, provider, phoneNumber },
         });
 
-        // Appel API Unipesa B2C (Décaissements) - Unipesa envoie uniquement le montant NET
-        const unipesaRes = await unipesaService.withdrawB2C({
-            amount: amount,
-            currency: 'CDF',
-            provider,
-            phoneNumber,
-            reference,
-            customer_user_id: String(userId)
-        });
+        try {
+            // ── [FIX B2] : Appel de la vraie méthode initiateWithdrawal (B2C) ─────────
+            const amountFC = Math.round(amount);
+            const unipesaRes = await unipesaService.initiateWithdrawal(
+                userId,
+                phoneNumber,
+                amountFC // on envoie le NET (sans frais) vers le Mobile Money
+            );
 
-        if (!unipesaRes.success || unipesaRes.status === 'failed') {
-             // Si l'API échoue *immédiatement*, on rembourse le wallet (Montant + Frais)
-             await walletRepository.performDeposit(userId, totalToDeduct, {
+            // ✅ Retrait initié — les fonds arriveront après confirmation Unipesa
+            // Les frais OLI sont immédiatement crédités à la Banque OLI
+            await this._creditSystemWallet(
+                feeAmount,
+                `${reference}_FEE`,
+                `Frais 3% retrait — ${amount.toFixed(0)} FC (User #${userId})`
+            );
+
+            // 🏦 OLI Bank — Ledger (non-bloquant)
+            _recordToLedger(userId, 'withdrawal', amount, { reference, provider, fee: feeAmount });
+
+            return {
+                ...withdrawResult,
+                oliOrderId:  unipesaRes.oliOrderId,
+                status:      'pending',
+                netAmountFC: amount,
+                feeFC:       feeAmount,
+                provider:    unipesaRes.provider,
+                message:     `Retrait de ${amount.toFixed(0)} FC initié vers ${provider}.`,
+            };
+
+        } catch (err) {
+            // Si l'appel Unipesa B2C échoue immédiatement → remboursement complet
+            console.error(`❌ Unipesa B2C échoué, remboursement user #${userId}:`, err.message);
+            await walletRepository.performDeposit(userId, totalToDeduct, {
                 type: 'refund',
                 provider: 'UNIPESA',
                 reference: `${reference}_REFUND`,
-                description: `Échec du retrait Unipesa - Remboursé`,
-             });
-             throw new Error(unipesaRes.message || "Impossible d'initier le décaissement externe");
+                description: `Remboursement — échec retrait Unipesa: ${err.message}`,
+            });
+            throw new Error(err.message || "Impossible d'initier le décaissement Mobile Money");
         }
-
-        // Le retrait a réussi au niveau de l'initiation. On crédite la Banque OLI avec les 5% de frais.
-        await this._creditSystemWallet(feeAmount, `${reference}_FEE`, `Frais 5% sur retrait de $${amount.toFixed(2)} (User #${userId})`);
-        // 🏦 OLI Bank — Ledger (non-bloquant)
-        _recordToLedger(userId, 'withdrawal', amount, { reference, provider, fee: feeAmount });
-
-        return withdrawResult;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -255,7 +269,7 @@ class WalletService {
         const amount = parseFloat(amountRaw);
         if (!amount || amount <= 0) throw new Error('Montant de commande invalide');
 
-        const payResult = await walletRepository.performWithdrawal(userId, amount, {
+        const payResult = await walletRepository.performDebit(userId, amount, {
             type: 'payment',
             provider: 'WALLET',
             reference: `ORDER_${orderId || Date.now()}`,
@@ -330,7 +344,7 @@ class WalletService {
      * Supporte USD et FC (Francs Congolais).
      * Atomique : si le crédit échoue, le débit est annulé.
      */
-    async transferToUser(senderIdRaw, receiverIdRaw, amountRaw, currency = 'USD') {
+    async transferToUser(senderIdRaw, receiverIdRaw, amountRaw, currency = 'FC', io = null) {
         const senderId = parseInt(senderIdRaw);
         const receiverId = parseInt(receiverIdRaw);
         let amount = parseFloat(amountRaw);
@@ -339,44 +353,48 @@ class WalletService {
         if (!receiverId) throw new Error('Destinataire invalide');
         if (senderId === receiverId) throw new Error("Impossible de s'envoyer de l'argent à soi-même");
         if (!amount || amount <= 0) throw new Error('Montant invalide');
+        if (amount < 100) throw new Error('Montant trop faible (minimum 100 FC)');
 
-        // Conversion FC → USD
-        if (currency === 'FC') {
-            amount = amount / FC_TO_USD;
-        }
-        if (amount < 0.01) throw new Error('Montant trop faible après conversion');
-
-        const feeAmount = amount * 0.01;
-        const totalToDeduct = amount + feeAmount;
+        // Frais P2P : 1% à la charge de l'expéditeur
+        const FEE_RATE = 0.01;
+        const feeAmount = Math.round(amount * FEE_RATE);
+        const totalDebit = amount + feeAmount; // L'expéditeur paie montant + frais
 
         const reference = `P2P_${Date.now()}_${senderId}_${receiverId}`;
-        const feeReference = `FEE_${reference}`;
 
-        // Exécuter les deux opérations dans une seule transaction PostgreSQL
+        // Récupérer les noms pour les descriptions
+        const usersRes = await pool.query(
+            'SELECT id, name, phone FROM users WHERE id = ANY($1)', [[senderId, receiverId]]
+        );
+        const usersMap = {};
+        usersRes.rows.forEach(u => { usersMap[u.id] = u; });
+        const senderName = usersMap[senderId]?.name || `#${senderId}`;
+        const receiverName = usersMap[receiverId]?.name || `#${receiverId}`;
+
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
 
-            // — Débit expéditeur (vérifie le solde atomiquement)
+            // — Débit expéditeur (montant + frais)
             const senderWallet = await walletRepository._getOrCreateWallet(senderId, client);
             if (senderWallet.is_frozen) throw new Error('Votre wallet est gelé');
             const senderBalance = parseFloat(senderWallet.balance);
-            if (senderBalance < totalToDeduct) {
-                throw new Error(`Solde insuffisant (disponible: $${senderBalance.toFixed(2)}, requis: $${totalToDeduct.toFixed(2)} incluant 1% de frais)`);
+            if (senderBalance < totalDebit) {
+                throw new Error(`Solde insuffisant. Requis: ${totalDebit.toFixed(0)} FC (${amount.toFixed(0)} FC + ${feeAmount} FC frais), Disponible: ${senderBalance.toFixed(0)} FC`);
             }
-            const newSenderBalance = senderBalance - totalToDeduct;
+            const newSenderBalance = senderBalance - totalDebit;
             await client.query(`UPDATE wallets SET balance = $1 WHERE id = $2`, [newSenderBalance, senderWallet.id]);
             await client.query(`UPDATE users SET wallet = $1 WHERE id = $2`, [newSenderBalance, senderId]);
             await walletRepository._insertTx(client, {
                 walletId: senderWallet.id, userId: senderId, type: 'transfer',
-                amount: -totalToDeduct, balanceAfter: newSenderBalance,
+                amount: -totalDebit, balanceAfter: newSenderBalance,
                 provider: 'P2P', reference,
-                description: `Envoi à utilisateur #${receiverId} (incl. frais de 1%)`,
+                description: `Envoi à ${receiverName} (frais ${feeAmount} FC inclus)`,
             });
 
-            // — Crédit destinataire
+            // — Crédit destinataire (montant net, sans les frais)
             const receiverWallet = await walletRepository._getOrCreateWallet(receiverId, client);
-            if (receiverWallet.is_frozen) throw new Error('Le destinataire ne peut pas recevoir de fonds');
+            if (receiverWallet.is_frozen) throw new Error('Le destinataire ne peut pas recevoir de fonds (wallet gelé)');
             const newReceiverBalance = parseFloat(receiverWallet.balance) + amount;
             await client.query(`UPDATE wallets SET balance = $1 WHERE id = $2`, [newReceiverBalance, receiverWallet.id]);
             await client.query(`UPDATE users SET wallet = $1 WHERE id = $2`, [newReceiverBalance, receiverId]);
@@ -384,22 +402,46 @@ class WalletService {
                 walletId: receiverWallet.id, userId: receiverId, type: 'transfer',
                 amount, balanceAfter: newReceiverBalance,
                 provider: 'P2P', reference,
-                description: `Reçu de utilisateur #${senderId}`,
+                description: `Reçu de ${senderName}`,
             });
 
             await client.query('COMMIT');
 
-            console.log(`💸 Transfert P2P: #${senderId} → #${receiverId} — ${amount.toFixed(2)} USD (${amountRaw} ${currency})`);
+            // — Frais → Banque OLI (non-bloquant, hors transaction)
+            if (feeAmount > 0) {
+                this._creditSystemWallet(
+                    feeAmount,
+                    `${reference}_FEE`,
+                    `Frais P2P 1% — ${senderName}→${receiverName} (${amount.toFixed(0)} FC)`
+                ).catch(e => console.warn('⚠️ Frais P2P non crédités à la banque:', e.message));
+            }
 
-            // Verser les 1% au portefeuille d'administration OLI (user 0)
-            await this._creditSystemWallet(feeAmount, feeReference, `Frais 1% sur P2P #${senderId} → #${receiverId}`);
+            // — Notification FCM au destinataire (non-bloquant)
+            setImmediate(async () => {
+                try {
+                    const notifService = require('./notification.service');
+                    await notifService.send(
+                        receiverId, 'wallet',
+                        `💸 Vous avez reçu ${amount.toFixed(0)} FC`,
+                        `${senderName} vous a envoyé ${amount.toFixed(0)} FC via OLI Wallet`,
+                        { type: 'transfer_received', amountFC: amount, senderId, reference },
+                        io
+                    );
+                } catch (notifErr) {
+                    console.warn('⚠️ Notification P2P non envoyée:', notifErr.message);
+                }
+            });
+
+            console.log(`💸 Transfert P2P: #${senderId}(${senderName}) → #${receiverId}(${receiverName}) — ${amount.toFixed(0)} FC (frais: ${feeAmount} FC)`);
 
             return {
                 success: true,
-                amountUSD: amount,
-                amountOriginal: parseFloat(amountRaw),
-                currency,
+                amountFC: amount,
+                feeFC: feeAmount,
+                totalDebitFC: totalDebit,
+                currency: 'FC',
                 reference,
+                receiverName,
                 senderNewBalance: newSenderBalance,
                 receiverNewBalance: newReceiverBalance,
             };
@@ -411,6 +453,7 @@ class WalletService {
             client.release();
         }
     }
+
 
     // ─────────────────────────────────────────────────────────────
     // 8. Récompense utilisateur (reward points → wallet)

@@ -86,15 +86,18 @@ exports.createRequest = async (req, res) => {
                 });
             }
 
-            const walletResult = await walletRepository.performWithdrawal(
+            const walletResult = await walletRepository.performDebit(
                 userId,
                 amount,
-                'CERT_PAYMENT',
-                `CERT_${Date.now()}`,
-                `Paiement certification ${plan}`
+                {
+                    type: 'payment',
+                    provider: 'CERT_PAYMENT',
+                    reference: `CERT_${Date.now()}`,
+                    description: `Paiement certification ${plan}`,
+                }
             );
 
-            paymentReference = walletResult.id || `CERT_WALLET_${Date.now()}`;
+            paymentReference = walletResult.transactionId || `CERT_WALLET_${Date.now()}`;
             console.log(`💰 Paiement Wallet: ${amount}$ débité du wallet user ${userId} → ref: ${paymentReference}`);
 
         } else if (payment_method === 'card') {

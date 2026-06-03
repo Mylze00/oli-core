@@ -178,76 +178,6 @@ const unipesaService = {
     },
 
     /**
-     * Initie un paiement Mobile Money direct pour une COMMANDE (Checkout).
-     * Les frais sont ajoutés au total. Le webhook utilisé est order_payment.
-     */
-    async initiateOrderPayment(userId, phone, amountFC, targetOrderId) {
-        const uid = parseInt(userId);
-        const oliOrderId = _generateOliOrderId(uid, 'ORD');
-
-        const netFC           = amountFC; 
-        const aggregatorFeeFC = Math.round(netFC * AGGREGATOR_FEE_RATE);
-        const oliFeeFC        = Math.round(netFC * OLI_FEE_RATE);
-        const totalFeeFC      = aggregatorFeeFC + oliFeeFC;
-        const grossFC         = netFC + totalFeeFC;
-
-        await pool.query(`ALTER TABLE unipesa_operations ADD COLUMN IF NOT EXISTS target_order_id INTEGER;`).catch(() => {});
-
-        await pool.query(`
-            INSERT INTO unipesa_operations
-                (oli_order_id, user_id, phone, amount_fc, provider, operation_type, status, expires_at, target_order_id)
-            VALUES ($1, $2, $3, $4, $5, 'order_payment', 'pending', NOW() + INTERVAL '10 minutes', $6)
-        `, [oliOrderId, uid, phone, grossFC, _detectProvider(phone), targetOrderId]);
-
-        console.log(`💱 [ORDER ${targetOrderId}] Frais: ${netFC} FC net → ${grossFC} FC brut demandé`);
-
-        try {
-            const providerName = _detectProvider(phone);
-            const payload = {
-                merchant_id: UNIPESA_MERCHANT,
-                customer_id: _formatPhoneForProvider(phone, providerName),
-                customer_user_id: `user-${userId}`,
-                order_id:    oliOrderId,
-                amount:      Math.round(grossFC).toString(),
-                currency:    'CDF',
-                provider_id: _getProviderId(providerName),
-                callback_url: 'https://oli-core.onrender.com/webhooks/unipesa/order_payment',
-            };
-            payload.signature = _buildSignature(payload);
-
-            const response = await axios.post(
-                `${UNIPESA_API_URL}/${UNIPESA_PUBLIC_ID}/payment_c2b`,
-                payload,
-                { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
-            );
-
-            const unipesaOrderId = response.data?.order_id || oliOrderId;
-
-            await pool.query(
-                'UPDATE unipesa_operations SET unipesa_order_id = $1 WHERE oli_order_id = $2',
-                [unipesaOrderId, oliOrderId]
-            );
-
-            return {
-                oliOrderId,
-                unipesaOrderId,
-                status: 'pending',
-                amountFC: grossFC,
-                totalFeeFC,
-                netAmountFC: netFC,
-                phone,
-                provider: _detectProvider(phone),
-            };
-
-        } catch (err) {
-            const errorMsg = err.response?.data ? JSON.stringify(err.response.data) : err.message;
-            await pool.query('UPDATE unipesa_operations SET status = $1, error_message = $2 WHERE oli_order_id = $3', ['failed', errorMsg, oliOrderId]);
-            console.error(`❌ Unipesa C2B Order Payment échoué: ${oliOrderId}`, errorMsg);
-            throw new Error(`Impossible d'initier le paiement Mobile Money: ${errorMsg}`);
-        }
-    },
-
-    /**
      * Initie un décaissement B2C (OLI Wallet → Mobile Money de l'utilisateur).
      * Envoie les fonds depuis OLI vers le téléphone Mobile Money du client.
      *
@@ -451,10 +381,10 @@ const unipesaService = {
         const oliBank = require('./oli_bank.service');
 
         try {
-            // Calcul du montant net à créditer (montant brut - 6% de frais)
+            // Calcul du montant net à créditer (le webhook reçoit le brut, on retrouve le net)
             const grossAmount = parseFloat(op.amount_fc);
-            const totalFee    = Math.round(grossAmount * TOTAL_FEE_RATE);
-            const netAmount   = grossAmount - totalFee;
+            const netAmount   = grossAmount / (1 + TOTAL_FEE_RATE);
+            const totalFee    = grossAmount - netAmount;
 
             console.log(`💱 Crédit wallet: ${grossAmount} FC brut → ${netAmount} FC net (frais ${totalFee} FC)`);
 

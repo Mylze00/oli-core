@@ -244,7 +244,7 @@ class _DelivererWalletPageState extends ConsumerState<DelivererWalletPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '≈ \$${_balance.toStringAsFixed(2)} USD',
+                        '≈ \${(_balance / 2800).toStringAsFixed(2)} USD',
                         style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
                       ),
                       const SizedBox(height: 20),
@@ -336,7 +336,7 @@ class _DelivererWalletPageState extends ConsumerState<DelivererWalletPage> {
                           style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                         ),
                         trailing: Text(
-                          '${isCredit ? '+' : '-'}\$${amount.toStringAsFixed(2)}',
+                          '${isCredit ? '+' : '-'}${_formatFC(amount)}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,

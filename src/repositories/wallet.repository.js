@@ -227,12 +227,21 @@ const walletRepository = {
      */
     async getHistory(userId, limit = 20, offset = 0) {
         const res = await pool.query(`
-            SELECT id, type, amount, balance_before, balance_after,
-                   currency, provider, reference, description,
-                   status, created_at, metadata
-            FROM   wallet_transactions
-            WHERE  user_id = $1
-            ORDER BY created_at DESC
+            SELECT wt.id, wt.type, wt.amount, wt.balance_before, wt.balance_after,
+                   wt.currency, wt.provider, wt.reference, wt.description,
+                   wt.status, wt.created_at, wt.metadata,
+                   CASE
+                       WHEN wt.type = 'deposit' THEN 'Recharge Mobile Money'
+                       WHEN wt.type = 'withdrawal' THEN 'Retrait vers Mobile Money'
+                       WHEN wt.type = 'transfer' AND wt.amount < 0 THEN 'Envoi'
+                       WHEN wt.type = 'transfer' AND wt.amount > 0 THEN 'Reçu'
+                       WHEN wt.type = 'payment' THEN 'Achat'
+                       WHEN wt.type = 'credit' THEN 'Vente confirmée'
+                       ELSE wt.type
+                   END as label
+            FROM   wallet_transactions wt
+            WHERE  wt.user_id = $1
+            ORDER BY wt.created_at DESC
             LIMIT $2 OFFSET $3
         `, [parseInt(userId), Math.min(limit, 100), offset]);
 
@@ -254,10 +263,6 @@ const walletRepository = {
         );
     },
 
-    /**
-     * Crée un wallet pour un nouvel utilisateur.
-     * Appelé lors de l'inscription.
-     */
     async createWallet(userId) {
         await pool.query(`
             INSERT INTO wallets (user_id, balance, currency)
@@ -266,6 +271,28 @@ const walletRepository = {
         `, [parseInt(userId)]);
         console.log(`👛 Wallet créé pour user #${userId}`);
     },
+
+    async _getOrCreateWallet(userId, client) {
+        let res = await client.query('SELECT * FROM wallets WHERE user_id = $1 FOR UPDATE', [parseInt(userId)]);
+        if (res.rows.length === 0) {
+            await client.query(`INSERT INTO wallets (user_id, balance, currency) VALUES ($1, 0, 'FC') ON CONFLICT DO NOTHING`, [parseInt(userId)]);
+            res = await client.query('SELECT * FROM wallets WHERE user_id = $1 FOR UPDATE', [parseInt(userId)]);
+        }
+        return res.rows[0];
+    },
+
+    async _insertTx(client, txData) {
+        await client.query(`
+            INSERT INTO wallet_transactions
+                (user_id, type, amount, balance_before, balance_after,
+                 currency, provider, reference, description, status)
+            VALUES ($1,$2,$3,$4,$5,'FC',$6,$7,$8,'completed')
+        `, [
+            txData.userId, txData.type, txData.amount, 
+            txData.balanceAfter - txData.amount, txData.balanceAfter,
+            txData.provider, txData.reference, txData.description
+        ]);
+    }
 };
 
 module.exports = walletRepository;
