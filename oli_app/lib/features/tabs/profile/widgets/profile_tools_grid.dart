@@ -21,74 +21,75 @@ class ProfileToolsGrid extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ─── Bannière OLI Bank ───────────────────────────────────────
-        GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const BankPortalScreen()),
-          ),
-          child: Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0D1B2A), Color(0xFF1B4F72)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+        // ─── Bannière OLI Bank (Masquée pour l'instant) ─────────────────────
+        if (false)
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BankPortalScreen()),
+            ),
+            child: Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0D1B2A), Color(0xFF1B4F72)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1B4F72).withOpacity(0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF1B4F72).withOpacity(0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Icône crypto animée
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF00D4FF).withOpacity(0.5), width: 1.5),
+              child: Row(
+                children: [
+                  // Icône crypto animée
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF00D4FF).withOpacity(0.5), width: 1.5),
+                    ),
+                    child: const Icon(Icons.account_balance, color: Color(0xFF00D4FF), size: 22),
                   ),
-                  child: const Icon(Icons.account_balance, color: Color(0xFF00D4FF), size: 22),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Banque OLI',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                          letterSpacing: 0.2,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Banque OLI',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            letterSpacing: 0.2,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Portail cryptographique · Grand Livre · Escrow',
-                        style: TextStyle(
-                          color: Color(0xFF8ECAE6),
-                          fontSize: 11.5,
+                        SizedBox(height: 2),
+                        Text(
+                          'Portail cryptographique · Grand Livre · Escrow',
+                          style: TextStyle(
+                            color: Color(0xFF8ECAE6),
+                            fontSize: 11.5,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const Icon(Icons.chevron_right, color: Color(0xFF00D4FF), size: 22),
-              ],
+                  const Icon(Icons.chevron_right, color: Color(0xFF00D4FF), size: 22),
+                ],
+              ),
             ),
           ),
-        ),
 
         // Titre
         Row(
