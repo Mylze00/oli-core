@@ -32,14 +32,14 @@ class ApiConfig {
   static String orderVerifyDelivery(int id) => '$baseUrl/orders/$id/verify-delivery';
   
   // --- Wallet ---
-  static const String wallet = '$baseUrl/wallet';
-  static const String walletBalance = '$baseUrl/wallet/balance';
-  static const String walletTransactions = '$baseUrl/wallet/transactions';
-  static const String walletDeposit = '$baseUrl/wallet/deposit';
-  static const String walletWithdraw = '$baseUrl/wallet/withdraw';
-  static const String walletDepositCard = '$baseUrl/wallet/deposit-card';
-  static const String walletTransfer = '$baseUrl/wallet/transfer';
-  static const String walletResolveRecipient = '$baseUrl/wallet/resolve-recipient';
+  static const String wallet = '$baseUrl/api/wallet';
+  static const String walletBalance = '$baseUrl/api/wallet/balance';
+  static const String walletTransactions = '$baseUrl/api/wallet/transactions';
+  static const String walletDeposit = '$baseUrl/api/wallet/deposit';
+  static const String walletWithdraw = '$baseUrl/api/wallet/withdraw';
+  static const String walletDepositCard = '$baseUrl/api/wallet/deposit-card';
+  static const String walletTransfer = '$baseUrl/api/wallet/transfer';
+  static const String walletResolveRecipient = '$baseUrl/api/wallet/resolve-recipient';
   
   // --- Chat ---
   static const String chat = '$baseUrl/chat';
