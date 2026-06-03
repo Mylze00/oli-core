@@ -119,7 +119,8 @@ class WalletNotifier extends StateNotifier<WalletState> {
 
       double balance = 0.0;
       if (balRes.statusCode == 200) {
-        balance = double.parse(balRes.data['balance'].toString());
+        final balVal = balRes.data['balanceFC'] ?? balRes.data['balance'] ?? 0;
+        balance = double.parse(balVal.toString());
       }
 
       List<WalletTransaction> transactions = [];
