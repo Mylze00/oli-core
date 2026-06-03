@@ -30,7 +30,7 @@ class WalletSummaryCard extends ConsumerWidget {
           ),
           child: _CreditCard(
             balance: walletState.balance,
-            formattedBalance: exchangeNotifier.formatProductPrice(walletState.balance),
+            formattedBalance: exchangeNotifier.formatWalletBalance(walletState.balance),
             cardholderName: formattedName,
           ),
         ),

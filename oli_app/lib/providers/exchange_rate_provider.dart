@@ -190,6 +190,16 @@ class ExchangeRateNotifier extends StateNotifier<ExchangeRateState> {
       return formatAmount(convertedPrice, currency: Currency.CDF);
     }
   }
+
+  /// Formater le solde du portefeuille (toujours stocké en FC dans la DB)
+  String formatWalletBalance(double fcBalance) {
+    if (state.selectedCurrency == Currency.CDF) {
+      return formatAmount(fcBalance, currency: Currency.CDF);
+    } else {
+      final convertedPrice = convertAmount(fcBalance, from: Currency.CDF);
+      return formatAmount(convertedPrice, currency: Currency.USD);
+    }
+  }
 }
 
 /// Provider global pour les taux de change
