@@ -19,7 +19,30 @@ class ProfileHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
-        const SizedBox(height: 30), // Espace pour descendre l'avatar
+        // Top Bar (Location Badge aligned to right)
+        Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.location_on, color: Colors.white, size: 14),
+                SizedBox(width: 4),
+                Text(
+                  "Kinshasa", 
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
+        
+        const SizedBox(height: 10), // Espace pour descendre l'avatar
 
         // Main content centered
         Column(
@@ -72,6 +95,18 @@ class ProfileHeader extends ConsumerWidget {
               size: 80,
             ),
           ),
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E2430),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.edit, size: 14, color: Colors.white),
+            ),
+          ),
         ],
       ),
     );
@@ -112,18 +147,29 @@ class ProfileHeader extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 2),
-        Text(
-          "Bio: Entrepreneur passionné | Tech & Business",
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(8),
           ),
-          textAlign: TextAlign.center,
+          child: Column(
+            children: [
+              Text(
+                "Bio: Entrepreneur passionné | Tech & Business",
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              _buildAddressDisplay(),
+            ],
+          ),
         ),
-        const SizedBox(height: 4),
-        _buildAddressDisplay(),
       ],
     );
   }
