@@ -119,7 +119,7 @@ exports.verifyOtp = async (req, res) => {
  * Met à jour le profil utilisateur
  */
 exports.updateProfile = async (req, res) => {
-    const { name } = req.body;
+    const { name, username, bio, city } = req.body;
 
     // req.user est injecté par le middleware requireAuth
     if (!req.user) {
@@ -129,7 +129,7 @@ exports.updateProfile = async (req, res) => {
     try {
         // 2. Mettre à jour le profil via le service
         const userService = require('../services/user.service');
-        const user = await userService.updateProfile(req.user.phone, name);
+        const user = await userService.updateProfile(req.user.phone, name, username, bio, city);
 
         if (!user) {
             return res.status(404).json({ error: "Utilisateur non trouvé" });
@@ -141,6 +141,9 @@ exports.updateProfile = async (req, res) => {
         });
     } catch (e) {
         console.error("Erreur update-profile:", e);
+        if (e.message && e.message.includes("déjà pris")) {
+             return res.status(400).json({ error: e.message });
+        }
         res.status(500).json({ error: "Erreur serveur" });
     }
 };
@@ -152,7 +155,7 @@ exports.getMe = async (req, res) => {
     try {
         // ✅ Jointure avec wallets pour avoir le solde réel
         const result = await pool.query(
-            `SELECT u.id, u.phone, u.name, u.id_oli, u.avatar_url,
+            `SELECT u.id, u.phone, u.name, u.username, u.bio, u.city, u.loyalty_tier, u.id_oli, u.avatar_url,
                   u.is_seller, u.is_deliverer, u.rating, u.reward_points,
                   u.is_verified, u.account_type, u.has_certified_shop,
                   COALESCE(w.balance, u.wallet::DECIMAL, 0) as wallet

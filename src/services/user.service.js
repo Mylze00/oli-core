@@ -142,14 +142,36 @@ module.exports = {
  * @param {string} name 
  * @returns 
  */
-async function updateProfile(phone, name) {
+async function updateProfile(phone, name, username, bio, city) {
     try {
-        const result = await pool.query(
-            "UPDATE users SET name = $1, last_profile_update = NOW(), updated_at = NOW() WHERE phone = $2 RETURNING *",
-            [name, phone]
-        );
+        let queryParams = [phone];
+        let setClauses = ["last_profile_update = NOW()", "updated_at = NOW()"];
+        let paramIndex = 2;
+
+        if (name !== undefined) {
+            setClauses.push(`name = $${paramIndex++}`);
+            queryParams.push(name);
+        }
+        if (username !== undefined) {
+            setClauses.push(`username = $${paramIndex++}`);
+            queryParams.push(username);
+        }
+        if (bio !== undefined) {
+            setClauses.push(`bio = $${paramIndex++}`);
+            queryParams.push(bio);
+        }
+        if (city !== undefined) {
+            setClauses.push(`city = $${paramIndex++}`);
+            queryParams.push(city);
+        }
+
+        const query = `UPDATE users SET ${setClauses.join(", ")} WHERE phone = $1 RETURNING *`;
+        const result = await pool.query(query, queryParams);
         return result.rows[0];
     } catch (e) {
+        if (e.constraint === 'users_username_key') {
+            throw new Error("Ce nom d'utilisateur est déjà pris.");
+        }
         throw e;
     }
 }
