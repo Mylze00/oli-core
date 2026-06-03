@@ -119,17 +119,22 @@ class _DepositStatusDialogState extends ConsumerState<DepositStatusDialog>
 
       if (serverStatus == 'success') {
         _pollingTimer?.cancel();
-        // Rafraîchir le solde du wallet
-        await widget.ref.read(walletProvider.notifier).loadWalletData();
         
-        // Retour haptique et son
-        HapticFeedback.mediumImpact();
-        AudioPlayer().play(AssetSource('images/kaching.mp3'));
-
         if (mounted) {
           setState(() => _status = DepositStatus.success);
           _dotController.stop();
           _scaleController.forward();
+        }
+
+        try {
+          // Rafraîchir le solde du wallet
+          await widget.ref.read(walletProvider.notifier).loadWalletData();
+          
+          // Retour haptique et son
+          HapticFeedback.mediumImpact();
+          AudioPlayer().play(AssetSource('images/kaching.mp3'));
+        } catch (e) {
+          debugPrint('Erreur lors des effets de succès: $e');
         }
       } else if (serverStatus == 'failed' ||
           serverStatus == 'timeout' ||
