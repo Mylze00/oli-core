@@ -111,23 +111,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _buildSectionTitle('Compte'),
             _buildCard([
               _buildListTile(
-                icon: Icons.person_outline,
-                title: 'Modifier le profil',
-                subtitle: user.name,
+                title: 'Nom d\'utilisateur',
+                trailingText: '@${user.name}',
                 onTap: () => _showEditProfileDialog(user.name),
               ),
               _buildDivider(),
               _buildListTile(
-                icon: Icons.lock_outline,
-                title: 'Changer le mot de passe',
-                onTap: () => _showChangePasswordDialog(),
+                title: 'N° Téléphone',
+                trailingText: user.phone ?? 'Non défini',
+                onTap: () {},
               ),
               _buildDivider(),
               _buildListTile(
-                icon: Icons.phone_android,
-                title: 'Numéro de téléphone',
-                subtitle: user.phone ?? 'Non défini',
+                title: 'ID',
+                trailingText: user.idOli ?? 'OLI-UNKNOWN',
+                showArrow: false,
                 onTap: () {},
+              ),
+              _buildDivider(),
+              _buildListTile(
+                title: 'Compte',
+                trailingWidget: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(user.isVerified ? Icons.verified_user : Icons.error_outline, color: user.isVerified ? Colors.green : Colors.orange, size: 16),
+                    const SizedBox(width: 4),
+                    Text(user.isVerified ? 'Verifié' : 'Non verifié', style: TextStyle(color: user.isVerified ? Colors.green : Colors.orange, fontSize: 13)),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14),
+                  ],
+                ),
+                onTap: () {
+                   // Naviguer vers la page de vérification si besoin
+                },
               ),
             ]),
 
@@ -138,7 +154,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _buildCard([
               SwitchListTile(
                 secondary: const Icon(Icons.fingerprint, color: Colors.green),
-                title: const Text('Connexion biométrique', style: TextStyle(color: Colors.white)),
+                title: const Text('Connexion biométrique', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
                 subtitle: Text(
                   _biometricAvailable 
                     ? 'Face ID / Empreinte digitale' 
@@ -150,7 +166,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 value: _biometricEnabled,
                 onChanged: _biometricAvailable ? _toggleBiometric : null,
-                activeColor: Colors.green,
+                activeColor: Colors.blueAccent,
               ),
             ]),
 
@@ -161,7 +177,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _buildCard([
               SwitchListTile(
                 secondary: const Icon(Icons.notifications_outlined, color: Colors.blueAccent),
-                title: const Text('Notifications push', style: TextStyle(color: Colors.white)),
+                title: const Text('Notifications push', style: TextStyle(color: Colors.white, fontSize: 15)),
                 value: _notificationsEnabled,
                 onChanged: (v) => setState(() => _notificationsEnabled = v),
                 activeColor: Colors.blueAccent,
@@ -169,7 +185,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _buildDivider(),
               SwitchListTile(
                 secondary: const Icon(Icons.mail_outline, color: Colors.orange),
-                title: const Text('Notifications email', style: TextStyle(color: Colors.white)),
+                title: const Text('Notifications email', style: TextStyle(color: Colors.white, fontSize: 15)),
                 value: _emailNotifications,
                 onChanged: (v) => setState(() => _emailNotifications = v),
                 activeColor: Colors.blueAccent,
@@ -177,7 +193,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _buildDivider(),
               SwitchListTile(
                 secondary: const Icon(Icons.sms_outlined, color: Colors.green),
-                title: const Text('Notifications SMS', style: TextStyle(color: Colors.white)),
+                title: const Text('Notifications SMS', style: TextStyle(color: Colors.white, fontSize: 15)),
                 value: _smsNotifications,
                 onChanged: (v) => setState(() => _smsNotifications = v),
                 activeColor: Colors.blueAccent,
@@ -192,14 +208,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _buildListTile(
                 icon: Icons.language,
                 title: 'Langue',
-                trailing: Text(selectedLanguage, style: const TextStyle(color: Colors.grey)),
+                trailingText: selectedLanguage,
+                iconColor: Colors.blueAccent,
                 onTap: () => _showLanguageDialog(),
               ),
               _buildDivider(),
               _buildListTile(
                 icon: Icons.attach_money,
                 title: 'Devise',
-                trailing: Text(selectedCurrency, style: const TextStyle(color: Colors.grey)),
+                trailingText: selectedCurrency,
+                iconColor: Colors.blueAccent,
                 onTap: () => _showCurrencyDialog(),
               ),
             ]),
@@ -212,12 +230,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _buildListTile(
                 icon: Icons.privacy_tip_outlined,
                 title: 'Politique de confidentialité',
+                iconColor: Colors.blueAccent,
                 onTap: () => _showPrivacyPolicy(),
               ),
               _buildDivider(),
               _buildListTile(
                 icon: Icons.description_outlined,
                 title: 'Conditions d\'utilisation',
+                iconColor: Colors.blueAccent,
                 onTap: () => _showTerms(),
               ),
             _buildDivider(),
@@ -225,6 +245,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               icon: Icons.delete_outline,
               title: 'Supprimer mon compte',
               titleColor: Colors.red,
+              iconColor: Colors.red,
               onTap: () => _showDeleteAccountDialog(),
             ),
           ]),
@@ -278,18 +299,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Widget _buildListTile({
-    required IconData icon,
+    IconData? icon,
     required String title,
     String? subtitle,
-    Widget? trailing,
+    String? trailingText,
+    Widget? trailingWidget,
+    bool showArrow = true,
     Color? titleColor,
+    Color? iconColor,
     required VoidCallback onTap,
   }) {
+    Widget? trailing;
+    if (trailingWidget != null) {
+      trailing = trailingWidget;
+    } else if (trailingText != null) {
+      trailing = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(trailingText, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          if (showArrow) ...[
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_ios, color: Colors.white30, size: 14),
+          ]
+        ],
+      );
+    } else if (showArrow) {
+      trailing = const Icon(Icons.arrow_forward_ios, color: Colors.white30, size: 14);
+    }
+
     return ListTile(
-      leading: Icon(icon, color: titleColor ?? Colors.blueAccent),
-      title: Text(title, style: TextStyle(color: titleColor ?? Colors.white)),
+      leading: icon != null ? Icon(icon, color: iconColor ?? Colors.blueGrey.shade300) : null,
+      title: Text(title, style: TextStyle(color: titleColor ?? Colors.white, fontSize: 15)),
       subtitle: subtitle != null ? Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)) : null,
-      trailing: trailing ?? const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14),
+      trailing: trailing,
       onTap: onTap,
     );
   }
