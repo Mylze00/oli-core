@@ -11,6 +11,11 @@ class User {
   final bool isVerified; // Basic verification
   final String accountType; // 'ordinary', 'certifie', 'entreprise', 'premium'
 
+  final String? username;
+  final String? bio;
+  final String? city;
+  final String? loyaltyTier;
+
   User({
     required this.id,
     this.idOli,
@@ -23,6 +28,10 @@ class User {
     this.isAdmin = false,
     this.isVerified = false,
     this.accountType = 'ordinary',
+    this.username,
+    this.bio,
+    this.city,
+    this.loyaltyTier,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -38,6 +47,10 @@ class User {
       isAdmin: json['is_admin'] ?? false,
       isVerified: json['is_verified'] ?? false,
       accountType: json['account_type'] ?? 'ordinary',
+      username: json['username'],
+      bio: json['bio'],
+      city: json['city'],
+      loyaltyTier: json['loyalty_tier'],
     );
   }
 

@@ -122,7 +122,7 @@ class ProfileHeader extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
-              (user["name"] ?? "Utilisateur Oli").toString().toUpperCase(),
+              (user["username"] ?? user["name"] ?? "Utilisateur Oli").toString().toUpperCase(),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -147,29 +147,34 @@ class ProfileHeader extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.5),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            children: [
-              Text(
-                "Bio: Entrepreneur passionné | Tech & Business",
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+        if (user["bio"] != null && user["bio"].toString().isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  user["bio"].toString(),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              _buildAddressDisplay(),
-            ],
+                const SizedBox(height: 4),
+                _buildAddressDisplay(user),
+              ],
+            ),
           ),
-        ),
+        ] else ...[
+          const SizedBox(height: 6),
+          _buildAddressDisplay(user),
+        ],
       ],
     );
   }
@@ -190,7 +195,7 @@ class ProfileHeader extends ConsumerWidget {
     );
   }
 
-  Widget _buildAddressDisplay() {
+  Widget _buildAddressDisplay(Map<String, dynamic> user) {
     return Consumer(
       builder: (context, ref, child) {
         final defaultAddr = ref.watch(defaultAddressProvider);
@@ -213,9 +218,12 @@ class ProfileHeader extends ConsumerWidget {
             ],
           );
         }
-        return const Text(
-          "📍 Kinshasa, Gombe",
-          style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+        
+        final city = user['city']?.toString();
+        
+        return Text(
+          city != null && city.isNotEmpty ? "📍 $city" : "📍 Kinshasa, Gombe",
+          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
           textAlign: TextAlign.center,
         );
       },

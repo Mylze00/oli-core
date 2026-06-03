@@ -7,6 +7,7 @@ import '../../../core/user/user_provider.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../../../core/storage/biometric_service.dart';
 import '../../../providers/exchange_rate_provider.dart';
+import '../../tabs/profile/screens/identity_verification_page.dart';
 
 /// Page "Paramètres"
 class SettingsPage extends ConsumerStatefulWidget {
@@ -112,8 +113,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _buildCard([
               _buildListTile(
                 title: 'Nom d\'utilisateur',
-                trailingText: '@${user.name}',
-                onTap: () => _showEditProfileDialog(user.name),
+                trailingText: '@${user.username ?? user.name}',
+                onTap: () => _showEditProfileDialog(user.name, user.username, user.bio, user.city),
               ),
               _buildDivider(),
               _buildListTile(
@@ -142,7 +143,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ],
                 ),
                 onTap: () {
-                   // Naviguer vers la page de vérification si besoin
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const IdentityVerificationPage()));
                 },
               ),
             ]),
@@ -340,8 +341,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return const Divider(height: 1, color: Colors.white10, indent: 56);
   }
 
-  void _showEditProfileDialog(String currentName) {
+  void _showEditProfileDialog(String currentName, String? currentUsername, String? currentBio, String? currentCity) {
     final nameController = TextEditingController(text: currentName);
+    final usernameController = TextEditingController(text: currentUsername ?? '');
+    final bioController = TextEditingController(text: currentBio ?? '');
+    final cityController = TextEditingController(text: currentCity ?? '');
     bool isLoading = false;
     
     showDialog(
@@ -350,15 +354,61 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF1A1A1A),
           title: const Text('Modifier le profil', style: TextStyle(color: Colors.white)),
-          content: TextField(
-            controller: nameController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              labelText: 'Nom',
-              labelStyle: const TextStyle(color: Colors.grey),
-              filled: true,
-              fillColor: Colors.white10,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Nom complet (Privé)',
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    filled: true,
+                    fillColor: Colors.white10,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: usernameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Nom d\'utilisateur (Public)',
+                    prefixText: '@',
+                    prefixStyle: const TextStyle(color: Colors.white70),
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    filled: true,
+                    fillColor: Colors.white10,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: cityController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Ville',
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    filled: true,
+                    fillColor: Colors.white10,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: bioController,
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Bio',
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    filled: true,
+                    fillColor: Colors.white10,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
             ),
           ),
           actions: [
@@ -369,6 +419,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ElevatedButton(
               onPressed: isLoading ? null : () async {
                 final newName = nameController.text.trim();
+                final newUsername = usernameController.text.trim();
+                final newCity = cityController.text.trim();
+                final newBio = bioController.text.trim();
+
                 if (newName.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Le nom ne peut pas être vide'), backgroundColor: Colors.red),
@@ -386,12 +440,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       'Content-Type': 'application/json',
                       if (token != null) 'Authorization': 'Bearer $token',
                     },
-                    body: jsonEncode({'name': newName}),
+                    body: jsonEncode({
+                      'name': newName,
+                      'username': newUsername.isNotEmpty ? newUsername : null,
+                      'bio': newBio.isNotEmpty ? newBio : null,
+                      'city': newCity.isNotEmpty ? newCity : null,
+                    }),
                   );
                   
                   if (response.statusCode == 200) {
                     Navigator.pop(dialogContext);
-                    // Rafraîchir les données utilisateur
                     ref.invalidate(userProvider);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Profil mis à jour !'), backgroundColor: Colors.green),
