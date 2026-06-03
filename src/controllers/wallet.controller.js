@@ -329,7 +329,7 @@ exports.resolveRecipient = async (req, res) => {
         
         const pool = require('../config/db');
         const { rows } = await pool.query(
-            'SELECT id, name, phone FROM users WHERE phone = $1 OR email = $1',
+            'SELECT id, name, phone FROM users WHERE phone = $1',
             [identifier]
         );
         
