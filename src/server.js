@@ -341,6 +341,8 @@ app.get("/api/categories", (req, res) => {
     res.json(CATEGORIES);
 });
 app.use("/api/videos", requireAuth, require('./routes/video-sales.routes')); // 🎬 Live Shopping vidéos
+app.use("/api/feed", require('./routes/feed.routes')); // 📰 Fil d'actualité (Feed)
+
 
 // Health check
 app.get("/health", (req, res) => {
