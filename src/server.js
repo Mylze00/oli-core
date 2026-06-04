@@ -151,6 +151,23 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ── 5.1 WEBRTC SIGNALING (SDP & ICE) ─────────────────────────────────
+    socket.on('webrtc_offer', (data) => {
+        if (!userId || !data.toId) return;
+        socket.to('user_' + data.toId).emit('webrtc_offer', { fromId: userId, sdp: data.sdp });
+    });
+
+    socket.on('webrtc_answer', (data) => {
+        if (!userId || !data.toId) return;
+        socket.to('user_' + data.toId).emit('webrtc_answer', { fromId: userId, sdp: data.sdp });
+    });
+
+    socket.on('webrtc_ice_candidate', (data) => {
+        if (!userId || !data.toId) return;
+        socket.to('user_' + data.toId).emit('webrtc_ice_candidate', { fromId: userId, candidate: data.candidate });
+    });
+
+    // Accepter l'appel
     socket.on('webrtc_call_accept', (data) => {
         if (!userId || !data.callerId) return;
         socket.to('user_' + data.callerId).emit('webrtc_call_accepted', { fromId: userId });
