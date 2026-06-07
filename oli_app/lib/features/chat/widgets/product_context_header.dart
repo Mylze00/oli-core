@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../providers/exchange_rate_provider.dart';
 
 /// En-tête de contexte produit dans le chat — version améliorée
 /// Affiche image HD, nom, prix, stock et boutons d'action
-class ProductContextHeader extends StatelessWidget {
+class ProductContextHeader extends ConsumerWidget {
   final String? productName;
   final double? productPrice;
   final String? productImage;
@@ -21,11 +23,17 @@ class ProductContextHeader extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (productName == null && productImage == null) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
     final hasStock = stockQuantity == null || stockQuantity! > 0;
+    
+    String formattedPrice = '';
+    if (productPrice != null) {
+      final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+      formattedPrice = exchangeNotifier.formatProductPrice(productPrice!);
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -133,7 +141,7 @@ class ProductContextHeader extends StatelessWidget {
                       // Price
                       if (productPrice != null)
                         Text(
-                          '${productPrice!.toStringAsFixed(0)} FC',
+                          formattedPrice,
                           style: TextStyle(
                             color: theme.primaryColor,
                             fontWeight: FontWeight.bold,

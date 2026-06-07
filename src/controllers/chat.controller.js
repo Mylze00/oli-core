@@ -47,8 +47,8 @@ exports.sendInitialMessage = async (req, res) => {
                 SELECT c.id FROM conversations c
                 JOIN conversation_participants cp1 ON cp1.conversation_id = c.id AND cp1.user_id = $1
                 JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id = $2
-                WHERE c.product_id = $3 AND c.type = 'private' LIMIT 1
-            `, [senderId, recipientId, productId]);
+                WHERE c.type = 'private' LIMIT 1
+            `, [senderId, recipientId]);
 
             if (convCheck.rows.length > 0) {
                 conversationId = convCheck.rows[0].id;
@@ -230,12 +230,6 @@ exports.getMessages = async (req, res) => {
         let conversationFilter = "";
         const params = [myId, otherUserId];
         let paramIndex = 3;
-
-        if (productId) {
-            conversationFilter = `AND c.product_id = $${paramIndex}`;
-            params.push(productId);
-            paramIndex++;
-        }
 
         let cursorCondition = "";
         if (cursor) {

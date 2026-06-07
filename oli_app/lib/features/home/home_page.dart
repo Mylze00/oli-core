@@ -10,6 +10,7 @@ import '../chat/providers/unread_count_provider.dart';
 import '../marketplace/presentation/pages/market_view.dart';
 import '../tabs/profile/profile_wallet_page.dart';
 import '../shop/screens/publish_article_page.dart';
+import '../feed/presentation/create_post_page.dart';
 import '../search/providers/search_filters_provider.dart';
 import '../../app/theme/theme_provider.dart';
 
@@ -37,6 +38,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       MainDashboardView(
         key: _dashboardStateKey,
         onSwitchToMarket: () => _switchToMarket(),
+        onSwitchToProfile: () => _onTabSelected(4), // Profile tab is index 4 (Moi)
         onBecameVisible: () {},
       ),
       const ConversationsPage(),
@@ -49,7 +51,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   void _onTabSelected(int index) {
     if (index == 2) {
-      _openPublishPage();
+      _showCreateMenu();
       return;
     }
     final adjusted = index > 2 ? index - 1 : index;
@@ -77,20 +79,114 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  void _showCreateMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (context) {
+        final isDark = ref.watch(themeProvider);
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark 
+                      ? Colors.black.withOpacity(0.55)
+                      : Colors.white.withOpacity(0.85),
+                  border: Border.all(
+                    color: isDark 
+                        ? Colors.white.withOpacity(0.15)
+                        : Colors.black.withOpacity(0.1),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white30 : Colors.black26,
+                        borderRadius: BorderRadius.circular(2.5),
+                      ),
+                    ),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.blue.withOpacity(0.15), shape: BoxShape.circle),
+                        child: const Icon(Icons.storefront, color: Colors.blue),
+                      ),
+                      title: Text('Vendre un produit', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _openPublishPage();
+                      },
+                    ),
+                    Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12, indent: 64),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), shape: BoxShape.circle),
+                        child: const Icon(Icons.video_library, color: Colors.red),
+                      ),
+                      title: Text('Publier une vidéo', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePostPage()));
+                      },
+                    ),
+                    Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12, indent: 64),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.green.withOpacity(0.15), shape: BoxShape.circle),
+                        child: const Icon(Icons.dynamic_feed, color: Colors.green),
+                      ),
+                      title: Text('Publier sur Fil', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePostPage()));
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final unreadCount = ref.watch(unreadCountProvider);
     final isDark = ref.watch(themeProvider);
 
-    return Scaffold(
-      backgroundColor: isDark ? Colors.black : const Color(0xFFD9D9D9),
-      extendBody: true,
-      body: IndexedStack(index: _currentIndex, children: _pages),
-      bottomNavigationBar: _OliBottomNav(
-        currentIndex: _currentIndex,
-        onTap: _onTabSelected,
-        unreadMessages: unreadCount,
-        isDark: isDark,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'CreatoDisplay-Medium'),
+      ),
+      child: DefaultTextStyle(
+        style: DefaultTextStyle.of(context).style.copyWith(fontFamily: 'CreatoDisplay-Medium'),
+        child: Scaffold(
+          backgroundColor: isDark ? Colors.black : const Color(0xFFD9D9D9),
+          extendBody: true,
+          body: IndexedStack(index: _currentIndex, children: _pages),
+          bottomNavigationBar: _OliBottomNav(
+            currentIndex: _currentIndex,
+            onTap: _onTabSelected,
+            unreadMessages: unreadCount,
+            isDark: isDark,
+          ),
+        ),
       ),
     );
   }
@@ -385,17 +481,6 @@ class _SellButtonState extends State<_SellButton>
                         : Icon(Icons.add, color: color, size: 22),
                   );
                 },
-              ),
-            ),
-            const SizedBox(height: 3),
-            // Label fixe — ne bouge pas, ne tourne pas
-            Text(
-              widget.label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                fontFamily: 'olive_palm',
               ),
             ),
           ],

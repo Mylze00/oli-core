@@ -63,6 +63,10 @@ class QuickActionsRow extends ConsumerWidget {
                     ? Colors.white.withOpacity(0.05)
                     : Colors.black.withOpacity(0.06),
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark ? Colors.black : Colors.white, 
+                  width: 1.5
+                ),
               ),
               child: Icon(icon, color: color, size: 24),
             ),
@@ -97,6 +101,10 @@ class QuickActionsRow extends ConsumerWidget {
                     ? Colors.white.withOpacity(0.05)
                     : Colors.black.withOpacity(0.06),
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark ? Colors.black : Colors.white, 
+                  width: 1.5
+                ),
               ),
               child: Image.asset(
                 imagePath,
@@ -204,6 +212,10 @@ class _LivePulseIconState extends State<_LivePulseIcon> with SingleTickerProvide
             ? Colors.white.withOpacity(0.05)
             : Colors.black.withOpacity(0.06),
         shape: BoxShape.circle,
+        border: Border.all(
+          color: widget.isDark ? Colors.black : Colors.white, 
+          width: 1.5
+        ),
       ),
       child: ScaleTransition(
         scale: _scaleAnimation,

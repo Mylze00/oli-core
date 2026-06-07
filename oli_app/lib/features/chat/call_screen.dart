@@ -1,31 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'dart:async';
+import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
 import 'socket_service.dart';
-
-// === Stubs WebRTC ===
-class RTCVideoRenderer {
-  RTCVideoRenderer();
-  Future<void> initialize() async {}
-  void dispose() {}
-}
-
-class RTCVideoView extends StatelessWidget {
-  final RTCVideoRenderer renderer;
-  final bool mirror;
-  final dynamic objectFit;
-  const RTCVideoView(this.renderer, {super.key, this.mirror = false, this.objectFit});
-  @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
-}
-
-class RTCVideoViewObjectFit {
-  static const dynamic RTCVideoViewObjectFitCover = null;
-}
-// === End stubs ===
 
 class CallScreen extends ConsumerStatefulWidget {
   final String otherId;
@@ -51,8 +33,22 @@ class CallScreen extends ConsumerStatefulWidget {
 
 class _CallScreenState extends ConsumerState<CallScreen>
     with TickerProviderStateMixin {
+  
+  // === WebRTC ===
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+  RTCPeerConnection? _peerConnection;
+  MediaStream? _localStream;
+  MediaStream? _remoteStream;
+
+  // Servers STUN
+  final Map<String, dynamic> _iceServers = {
+    'iceServers': [
+      {'urls': 'stun:stun.l.google.com:19302'},
+      {'urls': 'stun:stun1.l.google.com:19302'},
+    ]
+  };
+
   bool _isMuted = false;
   bool _isSpeakerOn = false;
   bool _isVideoEnabled = false;
@@ -65,11 +61,9 @@ class _CallScreenState extends ConsumerState<CallScreen>
   Timer? _callTimer;
   int _callSeconds = 0;
 
-  // Animation de pulsation (sonnerie)
+  // Animation
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-
-  // Animation du bouton décrocher (slide)
   late AnimationController _slideController;
 
   @override
@@ -77,129 +71,215 @@ class _CallScreenState extends ConsumerState<CallScreen>
     super.initState();
     _isVideoEnabled = widget.isVideoCall;
 
-    // Animation pulsation
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
+    
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.18).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Animation slide
     _slideController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
 
     _initRenderers();
-    _setupAudioAndSignaling();
-  }
-
-  void _setupAudioAndSignaling() {
-    final socket = ref.read(socketServiceProvider);
-
+    _setupSocketListeners();
+    
     if (!widget.isIncoming) {
-      _timeoutTimer = Timer(const Duration(seconds: 45), () {
-        if (!_isCallActive) {
-          socket.emit('webrtc_call_cancel', {'toId': widget.otherId});
-          socket.emit('webrtc_call_missed', {
-            'toId': widget.otherId,
-            'type': widget.isVideoCall ? 'video' : 'audio',
-            'conversationId': widget.conversationId,
-          });
-          if (mounted) Navigator.pop(context);
-        }
-      });
-
-      socket.onCallAccepted((data) {
-        if (mounted) {
-          setState(() {
-            _isCallActive = true;
-            _timeoutTimer?.cancel();
-          });
-          _audioPlayer.stop();
-          _pulseController.stop();
-          _startCallTimer();
-        }
-      });
-
-      socket.onCallRejected((data) {
-        if (mounted) {
-          _timeoutTimer?.cancel();
-          _audioPlayer.stop();
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Appel refusé')),
-          );
-        }
-      });
-    } else {
-      socket.onCallCancelled((data) {
-        if (mounted) {
-          _audioPlayer.stop();
-          Navigator.pop(context);
-        }
-      });
+      _startOutgoingCall();
     }
-  }
-
-  void _startCallTimer() {
-    _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _callSeconds++);
-    });
-  }
-
-  String get _formattedCallTime {
-    final m = (_callSeconds ~/ 60).toString().padLeft(2, '0');
-    final s = (_callSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   Future<void> _initRenderers() async {
-    if (_isVideoEnabled) {
-      await _localRenderer.initialize();
-      await _remoteRenderer.initialize();
-    }
+    await _localRenderer.initialize();
+    await _remoteRenderer.initialize();
   }
 
-  @override
-  void dispose() {
-    _timeoutTimer?.cancel();
-    _callTimer?.cancel();
-    _pulseController.dispose();
-    _slideController.dispose();
-    _audioPlayer.dispose();
-    if (_isVideoEnabled) {
-      _localRenderer.dispose();
-      _remoteRenderer.dispose();
+  Future<void> _setupWebRTC() async {
+    // Request permissions
+    await [Permission.microphone, if (widget.isVideoCall) Permission.camera].request();
+
+    // Create Peer Connection
+    _peerConnection = await createPeerConnection(_iceServers);
+
+    // Setup Local Stream
+    final mediaConstraints = {
+      'audio': true,
+      'video': _isVideoEnabled
+          ? {'facingMode': 'user', 'ideal': '720p'}
+          : false,
+    };
+
+    try {
+      _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      _localRenderer.srcObject = _localStream;
+
+      _localStream?.getTracks().forEach((track) {
+        _peerConnection?.addTrack(track, _localStream!);
+      });
+    } catch (e) {
+      debugPrint("MediaStream Error: $e");
     }
-    super.dispose();
+
+    // Handle Remote Stream
+    _peerConnection?.onTrack = (RTCTrackEvent event) {
+      if (event.streams.isNotEmpty) {
+        setState(() {
+          _remoteStream = event.streams[0];
+          _remoteRenderer.srcObject = _remoteStream;
+        });
+      }
+    };
+
+    // Handle ICE Candidates
+    _peerConnection?.onIceCandidate = (RTCIceCandidate candidate) {
+      ref.read(socketServiceProvider).emit('webrtc_ice_candidate', {
+        'toId': widget.otherId,
+        'candidate': {
+          'candidate': candidate.candidate,
+          'sdpMid': candidate.sdpMid,
+          'sdpMLineIndex': candidate.sdpMLineIndex,
+        }
+      });
+    };
   }
 
-  void _acceptCall() {
+  void _setupSocketListeners() {
+    final socket = ref.read(socketServiceProvider);
+
+    socket.onCallAccepted((data) async {
+      if (mounted) {
+        setState(() {
+          _isCallActive = true;
+          _timeoutTimer?.cancel();
+        });
+        _audioPlayer.stop();
+        _pulseController.stop();
+        _startCallTimer();
+      }
+    });
+
+    socket.onCallRejected((data) {
+      if (mounted) {
+        _endCallCleanup();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Appel refusé')),
+        );
+      }
+    });
+
+    socket.onCallCancelled((data) {
+      if (mounted) _endCallCleanup();
+    });
+
+    socket.onCallEnded((data) {
+      if (mounted) _endCallCleanup();
+    });
+
+    // === WebRTC Signaling ===
+    socket.onWebrtcOffer((data) async {
+      if (!_isCallActive) return; // Prevent offer if call not accepted yet
+      await _handleOffer(data['sdp']);
+    });
+
+    socket.onWebrtcAnswer((data) async {
+      if (_peerConnection == null) return;
+      try {
+        final answer = RTCSessionDescription(data['sdp']['sdp'], data['sdp']['type']);
+        await _peerConnection?.setRemoteDescription(answer);
+      } catch (e) {
+        debugPrint("Set Remote Desc (Answer) error: $e");
+      }
+    });
+
+    socket.onWebrtcIceCandidate((data) async {
+      if (_peerConnection == null) return;
+      try {
+        final cand = data['candidate'];
+        await _peerConnection?.addCandidate(RTCIceCandidate(
+          cand['candidate'],
+          cand['sdpMid'],
+          cand['sdpMLineIndex'],
+        ));
+      } catch (e) {
+        debugPrint("Add ICE candidate error: $e");
+      }
+    });
+  }
+
+  void _startOutgoingCall() {
+    _timeoutTimer = Timer(const Duration(seconds: 45), () {
+      if (!_isCallActive) {
+        ref.read(socketServiceProvider).emit('webrtc_call_cancel', {'toId': widget.otherId});
+        _endCallCleanup();
+      }
+    });
+    // L'appelant (User A) a déjà émis webrtc_call_initiate avant d'ouvrir cet écran
+  }
+
+  Future<void> _acceptCall() async {
     setState(() => _isCallActive = true);
     _audioPlayer.stop();
     _pulseController.stop();
     _slideController.stop();
+    
+    // Notify peer
     ref.read(socketServiceProvider).emit('webrtc_call_accept', {
       'callerId': widget.otherId,
     });
+    
     _startCallTimer();
+    await _setupWebRTC();
+  }
+
+  // Caller creates offer AFTER getting the accept event
+  // Wait! Let's make Caller A create the offer as soon as Call is Accepted.
+  Future<void> _createOffer() async {
+    await _setupWebRTC();
+    if (_peerConnection == null) return;
+
+    try {
+      RTCSessionDescription offer = await _peerConnection!.createOffer();
+      await _peerConnection!.setLocalDescription(offer);
+      
+      ref.read(socketServiceProvider).emit('webrtc_offer', {
+        'toId': widget.otherId,
+        'sdp': {'sdp': offer.sdp, 'type': offer.type}
+      });
+    } catch (e) {
+      debugPrint("Create offer error: $e");
+    }
+  }
+
+  Future<void> _handleOffer(Map<String, dynamic> sdpMap) async {
+    if (_peerConnection == null) return;
+    try {
+      final offer = RTCSessionDescription(sdpMap['sdp'], sdpMap['type']);
+      await _peerConnection?.setRemoteDescription(offer);
+      
+      final answer = await _peerConnection!.createAnswer();
+      await _peerConnection!.setLocalDescription(answer);
+      
+      ref.read(socketServiceProvider).emit('webrtc_answer', {
+        'toId': widget.otherId,
+        'sdp': {'sdp': answer.sdp, 'type': answer.type}
+      });
+    } catch (e) {
+      debugPrint("Handle offer error: $e");
+    }
   }
 
   void _rejectCall() {
-    _audioPlayer.stop();
     ref.read(socketServiceProvider).emit('webrtc_call_reject', {
       'callerId': widget.otherId,
     });
-    Navigator.pop(context);
+    _endCallCleanup();
   }
 
   void _endCall() {
-    _timeoutTimer?.cancel();
-    _callTimer?.cancel();
-    _audioPlayer.stop();
     final socket = ref.read(socketServiceProvider);
     if (!_isCallActive && !widget.isIncoming) {
       socket.emit('webrtc_call_cancel', {'toId': widget.otherId});
@@ -211,7 +291,78 @@ class _CallScreenState extends ConsumerState<CallScreen>
     } else {
       socket.emit('webrtc_call_ended', {'toId': widget.otherId});
     }
-    Navigator.pop(context);
+    _endCallCleanup();
+  }
+
+  void _endCallCleanup() {
+    _timeoutTimer?.cancel();
+    _callTimer?.cancel();
+    _audioPlayer.stop();
+    
+    _localStream?.getTracks().forEach((track) => track.stop());
+    _remoteStream?.getTracks().forEach((track) => track.stop());
+    _peerConnection?.close();
+    
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  void _startCallTimer() {
+    // If I'm the caller, create the offer now
+    if (!widget.isIncoming) {
+      _createOffer();
+    }
+    
+    _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _callSeconds++);
+    });
+  }
+
+  String get _formattedCallTime {
+    final m = (_callSeconds ~/ 60).toString().padLeft(2, '0');
+    final s = (_callSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  void dispose() {
+    _timeoutTimer?.cancel();
+    _callTimer?.cancel();
+    _pulseController.dispose();
+    _slideController.dispose();
+    _audioPlayer.dispose();
+    
+    _localStream?.getTracks().forEach((t) => t.stop());
+    _remoteStream?.getTracks().forEach((t) => t.stop());
+    _peerConnection?.close();
+    
+    _localRenderer.dispose();
+    _remoteRenderer.dispose();
+    
+    super.dispose();
+  }
+
+  void _toggleMute() {
+    setState(() => _isMuted = !_isMuted);
+    _localStream?.getAudioTracks().forEach((track) {
+      track.enabled = !_isMuted;
+    });
+  }
+
+  void _toggleVideo() {
+    setState(() => _isVideoEnabled = !_isVideoEnabled);
+    _localStream?.getVideoTracks().forEach((track) {
+      track.enabled = _isVideoEnabled;
+    });
+  }
+  
+  void _toggleSpeaker() {
+    setState(() => _isSpeakerOn = !_isSpeakerOn);
+    // Dans flutter_webrtc mobile
+    _localStream?.getAudioTracks().forEach((track) {
+       Helper.setSpeakerphoneOn(_isSpeakerOn);
+    });
   }
 
   @override
@@ -233,7 +384,6 @@ class _CallScreenState extends ConsumerState<CallScreen>
           else
             _buildGradientBg(),
 
-          // Flou + overlay dégradé
           if (!_isVideoEnabled)
             BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
@@ -277,7 +427,6 @@ class _CallScreenState extends ConsumerState<CallScreen>
               children: [
                 const SizedBox(height: 48),
 
-                // Statut
                 Text(
                   _isCallActive
                       ? _formattedCallTime
@@ -292,7 +441,6 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
                 const SizedBox(height: 12),
 
-                // Nom
                 Text(
                   widget.otherName,
                   style: const TextStyle(
@@ -305,7 +453,6 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
                 const SizedBox(height: 8),
 
-                // Type d'appel
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
@@ -331,7 +478,6 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
                 const SizedBox(height: 40),
 
-                // Avatar avec animation de pulsation
                 if (!_isVideoEnabled)
                   AnimatedBuilder(
                     animation: _pulseAnimation,
@@ -340,7 +486,6 @@ class _CallScreenState extends ConsumerState<CallScreen>
                       return Stack(
                         alignment: Alignment.center,
                         children: [
-                          // Cercles pulsants (sonnerie uniquement)
                           if (!_isCallActive) ...[
                             Transform.scale(
                               scale: scale * 1.35,
@@ -365,7 +510,6 @@ class _CallScreenState extends ConsumerState<CallScreen>
                               ),
                             ),
                           ],
-                          // Avatar
                           Container(
                             padding: const EdgeInsets.all(4),
                             decoration: BoxDecoration(
@@ -398,7 +542,6 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
                 const Spacer(),
 
-                // ── 4. Boutons de contrôle ──
                 if (widget.isIncoming && !_isCallActive)
                   _buildIncomingButtons()
                 else
@@ -425,21 +568,18 @@ class _CallScreenState extends ConsumerState<CallScreen>
     );
   }
 
-  // Boutons appel entrant : Refuser / Décrocher
   Widget _buildIncomingButtons() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Refuser
           _buildCallActionButton(
             icon: Icons.call_end,
             color: const Color(0xFFFF3B30),
             label: 'Refuser',
             onTap: _rejectCall,
           ),
-          // Décrocher
           _buildCallActionButton(
             icon: Icons.call,
             color: const Color(0xFF34C759),
@@ -452,11 +592,9 @@ class _CallScreenState extends ConsumerState<CallScreen>
     );
   }
 
-  // Boutons appel en cours / sortant
   Widget _buildActiveCallButtons() {
     return Column(
       children: [
-        // Ligne de contrôles secondaires
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
           child: Row(
@@ -466,26 +604,25 @@ class _CallScreenState extends ConsumerState<CallScreen>
                 icon: _isMuted ? Icons.mic_off : Icons.mic,
                 label: _isMuted ? 'Muet' : 'Micro',
                 isActive: _isMuted,
-                onTap: () => setState(() => _isMuted = !_isMuted),
+                onTap: _toggleMute,
               ),
               _buildControlButton(
                 icon: _isSpeakerOn ? Icons.volume_up : Icons.volume_off,
                 label: 'Haut-parl.',
                 isActive: _isSpeakerOn,
-                onTap: () => setState(() => _isSpeakerOn = !_isSpeakerOn),
+                onTap: _toggleSpeaker,
               ),
               if (widget.isVideoCall)
                 _buildControlButton(
                   icon: _isVideoEnabled ? Icons.videocam : Icons.videocam_off,
                   label: 'Caméra',
                   isActive: !_isVideoEnabled,
-                  onTap: () => setState(() => _isVideoEnabled = !_isVideoEnabled),
+                  onTap: _toggleVideo,
                 ),
             ],
           ),
         ),
         const SizedBox(height: 32),
-        // Bouton raccrocher (centré et grand)
         _buildCallActionButton(
           icon: Icons.call_end,
           color: const Color(0xFFFF3B30),

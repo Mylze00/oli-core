@@ -11,14 +11,15 @@ import '../../../notifications/screens/notifications_view.dart';
 import '../../../../models/product_model.dart';
 import '../providers/shops_provider.dart';
 import '../../../../app/theme/theme_provider.dart';
+import 'network_status_indicator.dart';
 
 class HomeAppBar extends ConsumerWidget {
   final TextEditingController searchCtrl;
   final Function(String) onSearch;
   final List<Product> allProducts;
   final List<Product> verifiedShopsProducts;
-
   final bool isScrolled;
+  final VoidCallback? onSwitchToProfile;
 
   const HomeAppBar({
     super.key,
@@ -27,6 +28,7 @@ class HomeAppBar extends ConsumerWidget {
     required this.allProducts,
     required this.verifiedShopsProducts,
     this.isScrolled = false,
+    this.onSwitchToProfile,
   });
 
   @override
@@ -41,31 +43,35 @@ class HomeAppBar extends ConsumerWidget {
       shadowColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AutoRefreshAvatar(
-            avatarUrl: authState.userData?['avatar_url'],
-            size: 32,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              authState.userData?['name'] ?? 'Utilisateur',
-              style: TextStyle(
-              color: isDark ? Colors.white : Colors.black87, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
+      title: GestureDetector(
+        onTap: onSwitchToProfile,
+        behavior: HitTestBehavior.opaque,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AutoRefreshAvatar(
+              avatarUrl: authState.userData?['avatar_url'],
+              size: 32,
             ),
-          ),
-          // Badge de certification
-          if (authState.userData != null && VerificationBadge.fromUser(authState.userData!) != null) ...[
-            const SizedBox(width: 4),
-            VerificationBadge(
-              type: VerificationBadge.fromUser(authState.userData!)!,
-              size: 16,
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                authState.userData?['name'] ?? 'Utilisateur',
+                style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87, fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
+            // Badge de certification
+            if (authState.userData != null && VerificationBadge.fromUser(authState.userData!) != null) ...[
+              const SizedBox(width: 4),
+              VerificationBadge(
+                type: VerificationBadge.fromUser(authState.userData!)!,
+                size: 16,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
       flexibleSpace: Stack(
         fit: StackFit.expand,
@@ -123,7 +129,14 @@ class HomeAppBar extends ConsumerWidget {
       actions: [
         const Padding(
           padding: EdgeInsets.only(right: 8.0),
-          child: CurrencySelectorWidget(),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              NetworkStatusIndicator(),
+              SizedBox(width: 6),
+              CurrencySelectorWidget(),
+            ],
+          ),
         ),
         // Bouton bascule thème clair / sombre
         Consumer(

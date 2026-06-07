@@ -1,8 +1,9 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-// video_compress removed — package no longer in pubspec
+import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
 import '../providers/feed_provider.dart';
 
@@ -17,19 +18,26 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
   final TextEditingController _textController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
-  File? _selectedMedia;
+  XFile? _selectedMedia;
   String? _mediaType; // 'image' or 'video'
 
   Future<void> _pickMedia(bool isVideo) async {
     try {
       final XFile? pickedFile = isVideo 
         ? await _picker.pickVideo(source: ImageSource.gallery)
-        : await _picker.pickImage(source: ImageSource.gallery, imageQuality: 15); // Compression drastique 85%
+        : await _picker.pickImage(
+            source: ImageSource.gallery, 
+            imageQuality: 50, 
+            maxWidth: 1080, 
+            maxHeight: 1080
+          ); // Compression drastique 50% max HD
 
       if (pickedFile != null) {
         if (isVideo) {
           // Validation de la durée (< 1 minute)
-          final controller = VideoPlayerController.file(File(pickedFile.path));
+          final controller = kIsWeb 
+              ? VideoPlayerController.networkUrl(Uri.parse(pickedFile.path))
+              : VideoPlayerController.file(File(pickedFile.path));
           await controller.initialize();
           final duration = controller.value.duration;
           await controller.dispose();
@@ -45,17 +53,29 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
 
           setState(() { _isLoading = true; });
           
-          // Compression vidéo moyenne pour réduire la taille sans détruire
-          // VideoCompress removed — using original file directly
+          XFile compressedFile = pickedFile;
+          
+          if (!kIsWeb) {
+            // Compression vidéo native sur mobile
+            final info = await VideoCompress.compressVideo(
+              pickedFile.path,
+              quality: VideoQuality.MediumQuality,
+              deleteOrigin: false,
+              includeAudio: true,
+            );
+            if (info != null && info.file != null) {
+              compressedFile = XFile(info.file!.path);
+            }
+          }
 
           setState(() {
-            _selectedMedia = File(pickedFile.path);
+            _selectedMedia = compressedFile;
             _mediaType = 'video';
             _isLoading = false;
           });
         } else {
           setState(() {
-            _selectedMedia = File(pickedFile.path);
+            _selectedMedia = pickedFile;
             _mediaType = 'image';
           });
         }
@@ -152,7 +172,9 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
                       borderRadius: BorderRadius.circular(12),
                       color: Colors.grey[200],
                       image: _mediaType == 'image' ? DecorationImage(
-                        image: FileImage(_selectedMedia!),
+                        image: kIsWeb 
+                            ? NetworkImage(_selectedMedia!.path) as ImageProvider
+                            : FileImage(File(_selectedMedia!.path)),
                         fit: BoxFit.cover,
                       ) : null,
                     ),

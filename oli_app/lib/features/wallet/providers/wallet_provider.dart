@@ -189,16 +189,43 @@ class WalletNotifier extends StateNotifier<WalletState> {
     }
   }
 
-  Future<bool> withdraw({
+  /// Retrait Mobile Money via Unipesa
+  /// Retourne un [DepositResult] avec l'oliOrderId pour le polling du statut
+  Future<DepositResult> withdraw({
     required double amount,
     required String provider,
     required String phone,
   }) async {
-    return _performTransaction(ApiConfig.walletWithdraw, {
-      'amount': amount,
-      'provider': provider,
-      'phoneNumber': phone,
-    });
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final response = await _dio.post(ApiConfig.walletWithdraw, data: {
+        'amountFC': amount,
+        'provider': provider,
+        'phone': phone,
+      });
+
+      state = state.copyWith(isLoading: false);
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        return DepositResult(
+          success: true,
+          oliOrderId: data['oliOrderId'] as String?,
+          netAmountFC: (data['amountFC'] as num?)?.toDouble() ?? amount,
+        );
+      } else {
+        final errMsg = response.data['error'] ?? 'Erreur inconnue';
+        state = state.copyWith(error: errMsg.toString());
+        return DepositResult(success: false, error: errMsg.toString());
+      }
+    } on DioException catch (e) {
+      final errMsg = e.response?.data?['error'] ?? e.message ?? 'Erreur réseau';
+      state = state.copyWith(isLoading: false, error: errMsg.toString());
+      return DepositResult(success: false, error: errMsg.toString());
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return DepositResult(success: false, error: e.toString());
+    }
   }
 
   Future<bool> transfer({

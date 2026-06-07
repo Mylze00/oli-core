@@ -11,6 +11,7 @@ import '../../../features/auth/providers/auth_controller.dart';
 import '../../../features/wallet/services/biometric_service.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import 'deposit_status_dialog.dart';
+import 'withdraw_status_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper global
@@ -121,10 +122,7 @@ class _RetirerSheetState extends ConsumerState<RetirerSheet> {
                 buttonLabel: 'Retirer',
                 buttonColor: const Color(0xFFF59E0B),
                 onSubmit: (amount, provider, phone) async {
-                  final ok = await ref
-                      .read(walletProvider.notifier)
-                      .withdraw(amount: amount, provider: provider, phone: phone);
-                  return ok;
+                  final result = await ref.read(walletProvider.notifier).withdraw(amount: amount, provider: provider, phone: phone); if (result.success && result.oliOrderId != null) { if (context.mounted) Navigator.pop(context); if (context.mounted) { await showWithdrawStatusDialog(context: context, ref: ref, orderId: result.oliOrderId!, amountFC: amount); } return true; } return result.success;
                 },
               )
             : _CardForm(
@@ -2060,3 +2058,5 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
+
+

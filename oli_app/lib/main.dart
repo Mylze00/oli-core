@@ -7,13 +7,31 @@ import 'features/auth/screens/login_page.dart';
 import 'features/home/home_page.dart';
 import 'features/auth/providers/auth_controller.dart';
 import 'core/services/fcm_service.dart';
-import 'core/services/hive_cache_service.dart'; // [CACHE]
+import 'core/services/hive_cache_service.dart';
 import 'app/theme/theme_provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-
+import 'features/chat/call_screen.dart';
 import 'firebase_options.dart';
 
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
+
+// Ouvrir CallScreen depuis n'importe quel contexte (FCM, Socket)
+void openIncomingCallScreen(Map<String, String> callData) {
+  final context = globalNavigatorKey.currentContext;
+  if (context == null) return;
+  Navigator.of(context, rootNavigator: true).push(
+    MaterialPageRoute(
+      builder: (_) => CallScreen(
+        otherId:        callData['callerId'] ?? '',
+        otherName:      callData['callerName'] ?? 'Utilisateur OLI',
+        otherAvatarUrl: callData['callerAvatar'],
+        conversationId: callData['conversationId'],
+        isVideoCall:    callData['callType'] == 'video',
+        isIncoming:     true,
+      ),
+    ),
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +46,10 @@ void main() async {
   
   // Enregistrer le handler pour les messages en arrière-plan
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  
+
+  // Brancher le callback d'appel entrant sur le navigateur global
+  FcmService().onIncomingCall = openIncomingCallScreen;
+
   await EasyLocalization.ensureInitialized();
 
   runApp(

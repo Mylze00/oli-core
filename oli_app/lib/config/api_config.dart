@@ -2,7 +2,7 @@ class ApiConfig {
   // URL de production (Render)
   static const String baseUrl = 'https://oli-core.onrender.com';
   
-  // URL de développement (décommenter pour tester en local)
+  // URL de dÃ©veloppement (dÃ©commenter pour tester en local)
   // static const String baseUrl = 'http://127.0.0.1:3000'; 
   
   // --- Auth ---
@@ -73,7 +73,7 @@ class ApiConfig {
   static String supportTicketDetail(int id) => '$baseUrl/support/tickets/$id';
   static String supportTicketReply(int id) => '$baseUrl/support/tickets/$id/reply';
 
-  // --- OLI Bank — Portail Cryptographique ---
+  // --- OLI Bank â€” Portail Cryptographique ---
   static const String bankPortal      = '$baseUrl/bank/portal';
   static const String bankLedger      = '$baseUrl/bank/ledger';
   static const String bankAddress     = '$baseUrl/bank/address';
@@ -86,7 +86,9 @@ class ApiConfig {
 
   // --- Unipesa Mobile Money ---
   static const String unipesaDeposit          = '$baseUrl/api/unipesa/deposit';
+  static const String unipesaWithdraw         = '$baseUrl/api/unipesa/withdraw';
   static String unipesaStatus(String orderId) => '$baseUrl/api/unipesa/status/$orderId';
   static const String walletApiBalance         = '$baseUrl/api/wallet/wallet/balance';
   static const String walletApiHistory         = '$baseUrl/api/wallet/wallet/history';
 }
+

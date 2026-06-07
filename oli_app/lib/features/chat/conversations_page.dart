@@ -430,14 +430,6 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                                 child: ConversationTile(
                                   conversation: conv,
                                   currentUserId: user.id.toString(),
-                                  // Extra badge for duplicate conversations
-                                  extraBadge: (() {
-                                    final otherId = conv['other_id']?.toString() ?? '';
-                                    final list = grouped[otherId] ?? [];
-                                    final uniquePIds = list.map((c) => c['product_id']?.toString() ?? 'private').toSet();
-                                    final count = uniquePIds.length;
-                                    return count > 1 ? count : null;
-                                  })(),
                                   onTap: () {
                                     if (_multiSelectMode) {
                                       setState(() {
@@ -450,14 +442,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                                       return;
                                     }
 
-                                    final otherId = conv['other_id']?.toString() ?? '';
-                                    final dupeList = grouped[otherId] ?? [conv];
-
-                                    if (dupeList.length > 1) {
-                                      _showConversationSelector(context, dupeList, user.id.toString());
-                                    } else {
-                                      _openConversation(context, conv, user.id.toString());
-                                    }
+                                    _openConversation(context, conv, user.id.toString());
                                   },
                                 ),
                               ),
@@ -504,84 +489,6 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
     ).then((_) => ref.read(inboxConversationsProvider.notifier).fetchConversations());
   }
 
-  void _showConversationSelector(
-    BuildContext context,
-    List<Map<String, dynamic>> convList,
-    String myUserId,
-  ) {
-    // Dédupliquer par product_id pour éviter de voir N fois le même produit
-    final Map<String, Map<String, dynamic>> deduped = {};
-    for (var c in convList) {
-      final pKey = c['product_id']?.toString() ?? 'private';
-      if (!deduped.containsKey(pKey)) deduped[pKey] = c;
-    }
-    final uniqueConvs = deduped.values.toList();
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDark ? Colors.grey[900] : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.chat_bubble_outline, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Conversations avec ${convList.first['other_name'] ?? 'cet utilisateur'}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            ...uniqueConvs.map((conv) {
-              final product = conv['product_name'];
-              final lastMsg = conv['last_message'] ?? '';
-              return ListTile(
-                leading: Icon(
-                  product != null ? Icons.shopping_bag_outlined : Icons.chat_bubble_outline,
-                  color: product != null ? Colors.orange : Colors.blue,
-                ),
-                title: Text(
-                  product != null ? '📦 $product' : '💬 Conversation privée',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-                subtitle: Text(
-                  lastMsg,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openConversation(context, conv, myUserId);
-                },
-              );
-            }),
-            const SizedBox(height: 16),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildTabItem(int index, String label) {
     final isSelected = _selectedIndex == index;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -622,14 +529,12 @@ class ConversationTile extends StatelessWidget {
   final Map<String, dynamic> conversation;
   final String currentUserId;
   final VoidCallback onTap;
-  final int? extraBadge; // Nombre de conversations en double avec ce user
 
   const ConversationTile({
     Key? key,
     required this.conversation,
     required this.currentUserId,
     required this.onTap,
-    this.extraBadge,
   }) : super(key: key);
 
   String _formatTimestamp(String? timestamp) {
@@ -710,28 +615,6 @@ class ConversationTile extends StatelessWidget {
                           color: Colors.green,
                           shape: BoxShape.circle,
                           border: Border.all(color: isDark ? Colors.grey[900]! : Colors.white, width: 2),
-                        ),
-                      ),
-                    ),
-                  // Badge "+ X conversations" en double
-                  if (extraBadge != null && extraBadge! > 1)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.deepPurple,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: isDark ? Colors.grey[900]! : Colors.white, width: 1.5),
-                        ),
-                        child: Text(
-                          '+$extraBadge',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
                         ),
                       ),
                     ),

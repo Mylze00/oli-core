@@ -91,13 +91,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final String selectedCurrency = exchangeState.selectedCurrency.code;
     final String selectedLanguage = 'Français'; // TODO: Make dynamic later
     
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: const Text('Paramètres'),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(
+          fontFamily: 'CreatoDisplay',
+        ),
+        appBarTheme: AppBarTheme.of(context).copyWith(
+          titleTextStyle: const TextStyle(
+            fontFamily: 'CreatoDisplay',
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        listTileTheme: ListTileTheme.of(context).copyWith(
+          titleTextStyle: const TextStyle(fontFamily: 'CreatoDisplay', fontSize: 15, color: Colors.white),
+          subtitleTextStyle: const TextStyle(fontFamily: 'CreatoDisplay', fontSize: 12, color: Colors.grey),
+        ),
       ),
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          elevation: 0,
+          title: const Text('Paramètres', style: TextStyle(fontFamily: 'CreatoDisplay')),
+        ),
       body: userAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erreur: $e', style: const TextStyle(color: Colors.white))),
@@ -280,7 +298,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ); // end ListView
       }, // end data callback
       ), // end when
-    ); // end Scaffold
+    ), // end Scaffold
+    ); // end Theme
   }
 
   Widget _buildSectionTitle(String title) {

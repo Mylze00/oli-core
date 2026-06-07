@@ -37,12 +37,18 @@ class HorizontalProductSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(themeProvider);
-    final titleColor = isDark ? Colors.white : Colors.black;
-    final subtitleColor = isDark ? Colors.white.withOpacity(0.7) : Colors.black54;
+    final titleColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.white54 : Colors.grey.shade500;
+    final containerBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    final containerBorderColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final chevronBgColor = isDark ? Colors.white12 : Colors.grey.shade200;
+    final chevronIconColor = isDark ? Colors.white70 : Colors.grey.shade600;
+    final productNameColor = isDark ? Colors.white70 : Colors.grey.shade600;
+    final priceColor = isDark ? badgeColor : const Color(0xFFFF6B6B); // Coral red
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       decoration: BoxDecoration(
         gradient: gradient != null
             ? LinearGradient(
@@ -51,8 +57,9 @@ class HorizontalProductSection extends ConsumerWidget {
                 end: Alignment.bottomRight,
               )
             : null,
-        color: gradient == null ? Colors.transparent : null,
-        borderRadius: BorderRadius.circular(12),
+        color: gradient == null ? containerBgColor : null,
+        border: gradient == null ? Border.all(color: containerBorderColor, width: 1) : null,
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,8 +74,8 @@ class HorizontalProductSection extends ConsumerWidget {
                   Text(title,
                       style: TextStyle(
                           color: titleColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16)),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15)),
                   const SizedBox(height: 2),
                   Text(subtitle,
                       style:
@@ -89,16 +96,16 @@ class HorizontalProductSection extends ConsumerWidget {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: titleColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    color: chevronBgColor,
+                    shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.arrow_forward_ios,
-                      color: titleColor, size: 14),
+                      color: chevronIconColor, size: 12),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
           // ── Liste horizontale de cartes produits ──
           SizedBox(
@@ -111,11 +118,10 @@ class HorizontalProductSection extends ConsumerWidget {
                 return GestureDetector(
                   onTap: () => onProductTap(product),
                   child: Container(
-                    width: 110,
+                    width: 105,
                     margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-                      borderRadius: BorderRadius.circular(8),
+                    decoration: const BoxDecoration(
+                      color: Colors.transparent,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,14 +131,14 @@ class HorizontalProductSection extends ConsumerWidget {
                           child: Stack(
                             children: [
                               ClipRRect(
-                                borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(8)),
+                                borderRadius: BorderRadius.circular(6),
                                 child: product.images.isNotEmpty
                                     ? Image.network(
                                         CloudinaryHelper.small(
                                             product.images.first),
                                         fit: BoxFit.cover,
                                         width: double.infinity,
+                                        height: double.infinity,
                                         frameBuilder: (context, child, frame,
                                             wasSynchronouslyLoaded) {
                                           if (wasSynchronouslyLoaded) {
@@ -185,18 +191,18 @@ class HorizontalProductSection extends ConsumerWidget {
                                 left: 0,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 2),
+                                      horizontal: 5, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: badgeColor,
                                     borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(8),
-                                      bottomRight: Radius.circular(8),
+                                      topLeft: Radius.circular(6),
+                                      bottomRight: Radius.circular(6),
                                     ),
                                   ),
                                   child: Text(badgeText,
                                       style: const TextStyle(
                                           color: Colors.white,
-                                          fontSize: 8,
+                                          fontSize: 9,
                                           fontWeight: FontWeight.bold)),
                                 ),
                               ),
@@ -206,7 +212,7 @@ class HorizontalProductSection extends ConsumerWidget {
 
                         // Nom + prix
                         Padding(
-                          padding: const EdgeInsets.all(6.0),
+                          padding: const EdgeInsets.only(top: 6.0, left: 2, right: 2),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -214,8 +220,9 @@ class HorizontalProductSection extends ConsumerWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                      color: isDark ? Colors.white : Colors.black87,
+                                      color: productNameColor,
                                       fontSize: 10)),
+                              const SizedBox(height: 2),
                               Consumer(builder: (context, ref, _) {
                                 final notifier =
                                     ref.read(exchangeRateProvider.notifier);
@@ -224,9 +231,9 @@ class HorizontalProductSection extends ConsumerWidget {
                                   notifier.formatProductPrice(
                                       double.tryParse(product.price) ?? 0.0),
                                   style: TextStyle(
-                                      color: isDark ? badgeColor : Colors.red,
+                                      color: priceColor,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: isDark ? 12 : 18),
+                                      fontSize: 14),
                                 );
                               }),
                             ],

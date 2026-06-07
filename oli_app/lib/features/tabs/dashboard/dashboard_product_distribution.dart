@@ -29,10 +29,15 @@ mixin DashboardProductDistribution {
   void computeProductDistribution(List<Product> allProducts) {
     cachedSelectionKeyword = '';
     cachedSelectionProducts = [];
+    
+    final Set<String> usedIds = {};
+    
+    // Pour que ce soit aléatoire à chaque fois
+    final shuffledProducts = List<Product>.from(allProducts)..shuffle();
 
     // ── 1. Section "Sélection" : groupe par mot-clé (seuil min 3 produits) ──
     final Map<String, List<Product>> groupedProducts = {};
-    for (final product in allProducts) {
+    for (final product in shuffledProducts) {
       final words = product.name.split(' ');
       String focusKW = words.isNotEmpty ? words.first : '';
       if (words.length > 1 &&
@@ -55,19 +60,56 @@ mixin DashboardProductDistribution {
       cachedSelectionKeyword = validKeys.first;
       cachedSelectionProducts =
           groupedProducts[cachedSelectionKeyword]!.take(15).toList();
+      for (var p in cachedSelectionProducts) {
+        usedIds.add(p.id);
+      }
     }
 
-    // ── 2. Section "Découverte" : 5 produits aléatoires parmi TOUS les produits admin ──
-    final shuffledForDiscovery = List<Product>.from(allProducts)..shuffle();
-    cachedDiscoveryList = shuffledForDiscovery.take(5).toList();
+    // Méthode locale pour piocher sans doublon
+    List<Product> getAvailable(int count) {
+      final available = shuffledProducts
+          .where((p) => !usedIds.contains(p.id))
+          .take(count)
+          .toList();
+      for (var p in available) {
+        usedIds.add(p.id);
+      }
+      return available;
+    }
 
-    // ── 3. Super Offres (donnée intermédiaire pour fallback) : aléatoire ──
-    final shuffledForOffers = List<Product>.from(allProducts)..shuffle();
-    cachedSuperOffers = shuffledForOffers.take(10).toList();
+    // ── 2. Super Offres (10 produits max) ──
+    cachedSuperOffers = getAvailable(10);
 
-    // ── 4. Section "Top Classement" : TOUS les produits admin, mélangés aléatoirement ──
-    cachedRankingList = List<Product>.from(allProducts)..shuffle();
+    // ── 3. Section "Découverte" (5 produits max) ──
+    cachedDiscoveryList = getAvailable(5);
 
+    // ── 4. Section "Top Classement" : Diversification par catégorie ──
+    // On récupère tout ce qui reste
+    final remainingProducts = shuffledProducts
+        .where((p) => !usedIds.contains(p.id))
+        .toList();
+    
+    // On les regroupe par catégorie (ou un fallback "Autre")
+    final Map<String, List<Product>> categoryGroups = {};
+    for (var p in remainingProducts) {
+      final cat = p.category ?? 'Autre';
+      categoryGroups.putIfAbsent(cat, () => []).add(p);
+    }
+
+    // On les pioche à tour de rôle (Round-Robin) pour assurer la diversité
+    List<Product> diversifiedRanking = [];
+    bool hasAdded = true;
+    while(hasAdded) {
+      hasAdded = false;
+      for (var key in categoryGroups.keys) {
+        if (categoryGroups[key]!.isNotEmpty) {
+          diversifiedRanking.add(categoryGroups[key]!.removeAt(0));
+          hasAdded = true;
+        }
+      }
+    }
+    
+    cachedRankingList = diversifiedRanking;
     distributionComputed = true;
   }
 

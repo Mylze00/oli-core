@@ -17,7 +17,7 @@ import '../checkout/screens/checkout_page.dart';
 import 'call_screen.dart';
 import 'socket_service.dart';
 import '../auth/providers/auth_controller.dart';
-
+import '../wallet/providers/wallet_provider.dart';
 class ChatPage extends ConsumerStatefulWidget {
   final String myId;
   final String otherId;
@@ -532,21 +532,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
       
       String? url;
-      // Sur le Web, path est vide (''). En réalité sur Web on devrait recevoir un Blob ou des bytes.
-      // Le plugin record sur Web ne retourne pas de path.
-      // Il faut adapter ChatInputArea pour passer les bytes ou un XFile valide sur le web.
-      // Pour ce correctif rapide: on vérifie si le path est une "fake string" vide du web.
+      
       if (path.isEmpty) {
-        // TODO: Sur Web, il faut refactoriser pour passer Uint8List depuis ChatInputArea
-        // Pour l'instant, signalons qu'on ne peut pas upload sans bytes
-        debugPrint("Upload Audio Web non implémenté sans bytes");
-        // Solution temporaire: ne rien faire ou simuler
         setState(() => _isUploading = false);
         return;
       }
 
-      // Cas Mobile/Desktop
-      final xFile = XFile(path);
+      // Cas Mobile/Desktop et Web (Blob URL géré par XFile)
+      // On ajoute un nom de fichier par défaut pour le Web où le blob n'a pas d'extension
+      final xFile = XFile(path, name: 'audio_message.m4a', mimeType: 'audio/mp4');
+      
       url = await controller.uploadImage(xFile); // Use existing upload logic
 
       setState(() => _isUploading = false);
@@ -561,11 +556,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           productName: widget.productName,
           productImage: widget.productImage,
           productPrice: widget.productPrice,
+          replyToId: _replyToMessage?['id']?.toString(),
         );
+        setState(() => _replyToMessage = null);
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de l\'envoi de l\'audio')));
       }
     } catch (e) {
       setState(() => _isUploading = false);
-      debugPrint("Error sending audio: $e");
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
     }
   }
 
@@ -590,6 +589,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   void _showSendCashSheet(BuildContext context) {
     final amountController = TextEditingController();
+    final noteController = TextEditingController(); // Added note controller
     String selectedCurrency = 'USD';
     bool isSending = false;
 
@@ -640,11 +640,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           children: [
                             const Text(
                               'Envoyer du cash',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'CreatoDisplay', color: Colors.black87),
                             ),
                             Text(
                               'vers ${widget.otherName}',
-                              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                              style: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontFamily: 'CreatoDisplay'),
+                            ),
+                            const SizedBox(height: 4),
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final walletState = ref.watch(walletProvider);
+                                return Text(
+                                  'Solde: ${walletState.balance.toStringAsFixed(0)} FC',
+                                  style: const TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.w600, fontFamily: 'CreatoDisplay'),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -700,12 +710,32 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 16),
+
+                  // Comment field
+                  TextField(
+                    controller: noteController,
+                    style: const TextStyle(fontFamily: 'CreatoDisplay', fontSize: 16, color: Colors.black87),
+                    decoration: InputDecoration(
+                      hintText: 'Commentaire de commande (Optionnel)',
+                      hintStyle: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontFamily: 'CreatoDisplay'),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      prefixIcon: Icon(Icons.notes, color: Colors.grey.shade600),
+                    ),
+                  ),
 
                   if (selectedCurrency == 'FC')
-                    Text(
-                      'Sera converti en USD automatiquement',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Sera converti en USD automatiquement',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontFamily: 'CreatoDisplay'),
+                      ),
                     ),
 
                   const SizedBox(height: 24),
@@ -735,20 +765,29 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               'receiverId': widget.otherId,
                               'amount': amount,
                               'currency': selectedCurrency,
+                              if (noteController.text.trim().isNotEmpty) 'note': noteController.text.trim(),
                             },
                           );
 
                           if (response.statusCode == 200) {
                             Navigator.pop(ctx);
+                            
+                            // Refresh wallet
+                            ref.read(walletProvider.notifier).loadWalletData();
 
                             // Send a special chat message for the transfer
                             final displayAmount = selectedCurrency == 'USD'
                                 ? '\$${amount.toStringAsFixed(2)}'
                                 : '${amount.toStringAsFixed(0)} FC';
+                            
+                            String messageContent = '💸 Envoi de $displayAmount';
+                            if (noteController.text.trim().isNotEmpty) {
+                              messageContent += '\nNote: ${noteController.text.trim()}';
+                            }
 
                             final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
                             controller.sendMessage(
-                              content: '💸 Envoi de $displayAmount',
+                              content: messageContent,
                               productId: widget.productId,
                               productName: widget.productName,
                               productImage: widget.productImage,

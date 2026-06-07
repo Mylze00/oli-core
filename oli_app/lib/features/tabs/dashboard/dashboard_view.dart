@@ -33,11 +33,13 @@ import 'dashboard_product_distribution.dart';
 
 class MainDashboardView extends ConsumerStatefulWidget {
   final VoidCallback? onSwitchToMarket;
+  final VoidCallback? onSwitchToProfile;
   final VoidCallback? onBecameVisible;
 
   const MainDashboardView({
     super.key,
     this.onSwitchToMarket,
+    this.onSwitchToProfile,
     this.onBecameVisible,
   });
 
@@ -456,9 +458,13 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
 
     final featuredNotifier = ref.read(featuredProductsProvider.notifier);
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: Stack(
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'CreatoDisplay-Medium'),
+      ),
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        body: Stack(
         children: [
           // ── Contenu principal scrollable ──
           OliRefreshIndicator(
@@ -481,6 +487,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   allProducts: allProductsForSearch,
                   verifiedShopsProducts: verifiedShopsProducts,
                   isScrolled: _isScrolled,
+                  onSwitchToProfile: widget.onSwitchToProfile,
                 ),
 
                 // 2. Quick Actions (épinglée)
@@ -524,7 +531,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                         subtitle: 'Inspiration pour vous',
                         products: deduplicatedSelection,
                         badgeText: 'NEW',
-                        badgeColor: Colors.tealAccent.shade700,
+                        badgeColor: const Color(0xFF40C4FF),
                         searchKeyword: cachedSelectionKeyword,
                         onProductTap: _navigateToProduct,
                       ),
@@ -702,6 +709,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
           ],
         ],
       ),
+    ),
     );
   }
 }

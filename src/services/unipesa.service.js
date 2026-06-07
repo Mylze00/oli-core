@@ -208,6 +208,10 @@ const unipesaService = {
                 currency:    'CDF',
                 provider_id: _getProviderId(providerName),
                 callback_url: 'https://oli-core.onrender.com/webhooks/unipesa/withdrawal',
+                extra: {
+                    customer_name: "Client OLI",
+                    customer_email: `user${uid}@oli.com`
+                }
             };
             payload.signature = _buildSignature(payload);
 
@@ -221,6 +225,11 @@ const unipesaService = {
                     timeout: 20000, // B2C peut prendre plus de temps
                 }
             );
+
+            // Gérer le cas où Unipesa rejette la requête mais retourne un HTTP 200 avec une erreur
+            if (response.data && response.data.code && response.data.code !== 1 && response.data.code !== 200 && response.data.code !== 0) {
+                 throw new Error(response.data.message || 'Erreur Unipesa B2C');
+            }
 
             const unipesaOrderId = response.data?.order_id || oliOrderId;
 
@@ -322,6 +331,18 @@ const unipesaService = {
                 });
             } else if (mappedStatus === 'failed' && op.status !== 'failed') {
                 await pool.query('UPDATE unipesa_operations SET status = $1 WHERE oli_order_id = $2', ['failed', oliOrderId]);
+                // Remboursement si B2C a échoué !
+                if (op.operation_type === 'withdrawal') {
+                    console.log(`🔄 Polling: Retrait échoué, remboursement de ${op.amount_fc} FC pour ${oliOrderId}`);
+                    const walletRepository = require('../repositories/wallet.repository');
+                    const amountToRefund = parseFloat(op.amount_fc) * 1.03; // Remboursement du net + frais OLI (3%)
+                    await walletRepository.performDeposit(op.user_id, amountToRefund, {
+                        type: 'refund',
+                        provider: 'UNIPESA',
+                        reference: `${oliOrderId}_REFUND`,
+                        description: `Remboursement suite à l'échec du retrait Unipesa`,
+                    });
+                }
             }
 
             return {
@@ -374,6 +395,20 @@ const unipesaService = {
                 ['failed', JSON.stringify(payload), op.id]
             );
             console.log(`❌ Webhook Unipesa: paiement échoué pour ${op.oli_order_id}`);
+            
+            // Remboursement si B2C a échoué !
+            if (op.operation_type === 'withdrawal') {
+                console.log(`🔄 Webhook: Retrait échoué, remboursement de ${op.amount_fc} FC pour ${op.oli_order_id}`);
+                const walletRepository = require('../repositories/wallet.repository');
+                const amountToRefund = parseFloat(op.amount_fc) * 1.03; // Remboursement du net + frais OLI (3%)
+                await walletRepository.performDeposit(op.user_id, amountToRefund, {
+                    type: 'refund',
+                    provider: 'UNIPESA',
+                    reference: `${op.oli_order_id}_REFUND`,
+                    description: `Remboursement suite à l'échec du retrait Unipesa`,
+                });
+            }
+            
             return { success: false, reason: 'payment_failed' };
         }
 

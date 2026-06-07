@@ -79,7 +79,7 @@ class SocketService {
     });
 
     // --- WebRTC Incoming Call ---
-    _socket!.on('webrtc_call_initiate', (data) {
+    _socket!.on('webrtc_call_incoming', (data) {
       if (data is Map) {
         debugPrint("📞 APPEL ENTRANT REÇU: $data");
         final context = globalNavigatorKey.currentContext;
@@ -102,14 +102,31 @@ class SocketService {
     });
 
     _socket!.on('webrtc_call_accept', (data) => _onCallAccepted(data));
+    // The server relays 'webrtc_call_accepted' now
+    _socket!.on('webrtc_call_accepted', (data) => _onCallAccepted(data));
     _socket!.on('webrtc_call_reject', (data) => _onCallRejected(data));
+    _socket!.on('webrtc_call_rejected', (data) => _onCallRejected(data));
     _socket!.on('webrtc_call_cancel', (data) => _onCallCancelled(data));
+    _socket!.on('webrtc_call_cancelled', (data) => _onCallCancelled(data));
+    _socket!.on('webrtc_call_ended', (data) => _onCallEnded(data));
+
+    // WebRTC Signaling
+    _socket!.on('webrtc_offer', (data) => _onWebrtcOffer(data));
+    _socket!.on('webrtc_answer', (data) => _onWebrtcAnswer(data));
+    _socket!.on('webrtc_ice_candidate', (data) => _onWebrtcIceCandidate(data));
   }
 
   // Callbacks spécifiques pour l'appel (peuvent être enregistrés par CallScreen)
   Function(Map<String, dynamic>)? _callAcceptHandler;
   Function(Map<String, dynamic>)? _callRejectHandler;
   Function(Map<String, dynamic>)? _callCancelHandler;
+  Function(Map<String, dynamic>)? _callEndHandler;
+  
+  // WebRTC Signaling callbacks
+  Function(Map<String, dynamic>)? _webrtcOfferHandler;
+  Function(Map<String, dynamic>)? _webrtcAnswerHandler;
+  Function(Map<String, dynamic>)? _webrtcIceCandidateHandler;
+
 
   VoidCallback onCallAccepted(Function(Map<String, dynamic>) callback) {
     _callAcceptHandler = callback;
@@ -123,6 +140,23 @@ class SocketService {
     _callCancelHandler = callback;
     return () => _callCancelHandler = null;
   }
+  VoidCallback onCallEnded(Function(Map<String, dynamic>) callback) {
+    _callEndHandler = callback;
+    return () => _callEndHandler = null;
+  }
+  
+  VoidCallback onWebrtcOffer(Function(Map<String, dynamic>) callback) {
+    _webrtcOfferHandler = callback;
+    return () => _webrtcOfferHandler = null;
+  }
+  VoidCallback onWebrtcAnswer(Function(Map<String, dynamic>) callback) {
+    _webrtcAnswerHandler = callback;
+    return () => _webrtcAnswerHandler = null;
+  }
+  VoidCallback onWebrtcIceCandidate(Function(Map<String, dynamic>) callback) {
+    _webrtcIceCandidateHandler = callback;
+    return () => _webrtcIceCandidateHandler = null;
+  }
 
   void _onCallAccepted(dynamic data) {
     if (_callAcceptHandler != null && data is Map) _callAcceptHandler!(Map<String, dynamic>.from(data));
@@ -132,6 +166,18 @@ class SocketService {
   }
   void _onCallCancelled(dynamic data) {
     if (_callCancelHandler != null && data is Map) _callCancelHandler!(Map<String, dynamic>.from(data));
+  }
+  void _onCallEnded(dynamic data) {
+    if (_callEndHandler != null && data is Map) _callEndHandler!(Map<String, dynamic>.from(data));
+  }
+  void _onWebrtcOffer(dynamic data) {
+    if (_webrtcOfferHandler != null && data is Map) _webrtcOfferHandler!(Map<String, dynamic>.from(data));
+  }
+  void _onWebrtcAnswer(dynamic data) {
+    if (_webrtcAnswerHandler != null && data is Map) _webrtcAnswerHandler!(Map<String, dynamic>.from(data));
+  }
+  void _onWebrtcIceCandidate(dynamic data) {
+    if (_webrtcIceCandidateHandler != null && data is Map) _webrtcIceCandidateHandler!(Map<String, dynamic>.from(data));
   }
 
   // Callbacks séparés pour messages et statuts (#9)

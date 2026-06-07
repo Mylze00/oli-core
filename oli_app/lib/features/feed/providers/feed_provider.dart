@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../models/feed_model.dart';
 import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../config/api_config.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../../../core/services/hive_cache_service.dart';
@@ -142,7 +144,7 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
     }
   }
 
-  Future<bool> createPost(String content, {File? mediaFile, String? mediaType}) async {
+  Future<bool> createPost(String content, {XFile? mediaFile, String? mediaType}) async {
     try {
       final storage = SecureStorageService();
       final token = await storage.getToken();
@@ -151,10 +153,11 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
       dynamic data;
 
       if (mediaFile != null) {
+        final bytes = await mediaFile.readAsBytes();
         data = FormData.fromMap({
           'content': content,
           'media_type': mediaType ?? 'image',
-          'media': await MultipartFile.fromFile(mediaFile.path),
+          'media': MultipartFile.fromBytes(bytes, filename: mediaFile.name),
         });
       } else {
         data = {'content': content, 'media_type': 'text'};
