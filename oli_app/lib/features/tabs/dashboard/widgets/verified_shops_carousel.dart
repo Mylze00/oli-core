@@ -31,9 +31,10 @@ class VerifiedShopsCarousel extends ConsumerWidget {
                   Text(
                     "Boutiques Vérifiées",
                     style: TextStyle(
+                      fontFamily: 'CreatoDisplay',
                       color: textColor,
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -70,6 +71,7 @@ class VerifiedShopsCarousel extends ConsumerWidget {
                       Text(
                         "Voir tout",
                         style: TextStyle(
+                          fontFamily: 'CreatoDisplay',
                           color: textColor,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -112,7 +114,7 @@ class VerifiedShopsCarousel extends ConsumerWidget {
                              : null,
                         ),
                         child: shop.logoUrl == null 
-                            ? Center(child: Text(shop.name[0], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.black)))
+                            ? Center(child: Text(shop.name[0], style: TextStyle(fontFamily: 'CreatoDisplay', fontWeight: FontWeight.w500, fontSize: 24, color: Colors.black)))
                             : null,
                       ),
                       const SizedBox(height: 4),
@@ -122,6 +124,7 @@ class VerifiedShopsCarousel extends ConsumerWidget {
                         textAlign: TextAlign.center,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
+                            fontFamily: 'CreatoDisplay',
                             color: textColor, fontSize: 11, fontWeight: FontWeight.w500),
                       ),
                     ],

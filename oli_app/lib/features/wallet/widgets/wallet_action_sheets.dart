@@ -969,18 +969,42 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
     {'value': 'orange', 'label': 'Orange', 'color': Color(0xFFF97316)},
     {'value': 'mpesa', 'label': 'M-Pesa', 'color': Color(0xFF22C55E)},
     {'value': 'airtel', 'label': 'Airtel', 'color': Color(0xFFEF4444)},
+    {'value': 'africell', 'label': 'Africell', 'color': Color(0xFFA855F7)},
   ];
 
   @override
   void initState() {
     super.initState();
+    _phoneCtrl.addListener(() {
+      _detectProvider(_phoneCtrl.text);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authState = ref.read(authControllerProvider);
       final phone = authState.userData?['phone'] ?? '';
       if (phone.isNotEmpty) {
         _phoneCtrl.text = phone;
+        _detectProvider(phone);
       }
     });
+  }
+
+  void _detectProvider(String phone) {
+    String clean = phone.replaceAll(RegExp(r'\D'), '');
+    if (clean.startsWith('243')) clean = clean.substring(3);
+    if (clean.startsWith('0')) clean = clean.substring(1);
+    
+    if (clean.length >= 2) {
+      String prefix = clean.substring(0, 2);
+      if (['81', '82', '83'].contains(prefix)) {
+        if (_provider != 'mpesa') setState(() => _provider = 'mpesa');
+      } else if (['99', '97', '98'].contains(prefix)) {
+        if (_provider != 'airtel') setState(() => _provider = 'airtel');
+      } else if (['84', '85', '89'].contains(prefix)) {
+        if (_provider != 'orange') setState(() => _provider = 'orange');
+      } else if (['90', '80', '88', '86'].contains(prefix)) {
+        if (_provider != 'africell') setState(() => _provider = 'africell');
+      }
+    }
   }
 
   @override

@@ -12,7 +12,19 @@ class MyApp extends ConsumerWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: isDarkMode ? ThemeData.dark() : ThemeData.light(),
+      theme: isDarkMode
+          ? ThemeData.dark().copyWith(
+              textTheme: ThemeData.dark().textTheme.apply(
+                fontFamily: 'CreatoDisplay',
+                fontWeightDelta: 0,
+              ),
+            )
+          : ThemeData.light().copyWith(
+              textTheme: ThemeData.light().textTheme.apply(
+                fontFamily: 'CreatoDisplay',
+                fontWeightDelta: 0,
+              ),
+            ),
       home: const HomePage(),
     );
   }

@@ -122,7 +122,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         decoration: BoxDecoration(color: Colors.blue.withOpacity(0.15), shape: BoxShape.circle),
                         child: const Icon(Icons.storefront, color: Colors.blue),
                       ),
-                      title: Text('Vendre un produit', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                      title: Text('Vendre un produit', style: TextStyle(fontFamily: 'CreatoDisplay', fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
                       onTap: () {
                         Navigator.pop(context);
                         _openPublishPage();
@@ -135,7 +135,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), shape: BoxShape.circle),
                         child: const Icon(Icons.video_library, color: Colors.red),
                       ),
-                      title: Text('Publier une vidéo', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                      title: Text('Publier une vidéo', style: TextStyle(fontFamily: 'CreatoDisplay', fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePostPage()));
@@ -148,7 +148,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         decoration: BoxDecoration(color: Colors.green.withOpacity(0.15), shape: BoxShape.circle),
                         child: const Icon(Icons.dynamic_feed, color: Colors.green),
                       ),
-                      title: Text('Publier sur Fil', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                      title: Text('Publier sur Fil', style: TextStyle(fontFamily: 'CreatoDisplay', fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePostPage()));
@@ -172,10 +172,10 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return Theme(
       data: Theme.of(context).copyWith(
-        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'CreatoDisplay-Medium'),
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'CreatoDisplay'),
       ),
       child: DefaultTextStyle(
-        style: DefaultTextStyle.of(context).style.copyWith(fontFamily: 'CreatoDisplay-Medium'),
+        style: DefaultTextStyle.of(context).style.copyWith(fontFamily: 'CreatoDisplay'),
         child: Scaffold(
           backgroundColor: isDark ? Colors.black : const Color(0xFFD9D9D9),
           extendBody: true,
@@ -338,9 +338,10 @@ class _NavTabItem extends StatelessWidget {
             Text(
               item.label,
               style: TextStyle(
+                fontFamily: 'CreatoDisplay',
                 color: color,
                 fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ],
@@ -372,6 +373,7 @@ class _Badge extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
+          fontFamily: 'CreatoDisplay',
           color: Colors.white,
           fontSize: 9,
           fontWeight: FontWeight.bold,

@@ -336,28 +336,57 @@ const unipesaService = {
                 { headers: { 'Content-Type': 'application/json' }, timeout: 8000 }
             );
 
-            const apiStatus = response.data?.status;
-            // status Unipesa: 1 = succès, 0 = pending, -1 = échoué
-            const mappedStatus = apiStatus === 1 ? 'success'
-                : apiStatus === -1 ? 'failed'
-                : 'pending';
+            const apiStatus = parseInt(response.data?.status);
+            
+            let mappedStatus = 'pending';
+            if (apiStatus === 2) {
+                mappedStatus = 'success';
+            } else if (apiStatus === 3 || apiStatus === 4) {
+                mappedStatus = 'failed';
+            }
 
             // AUTO-RÉPARATION SI LE WEBHOOK A ÉTÉ MANQUÉ
             if (mappedStatus === 'success' && op.status !== 'success') {
                 console.log(`🔄 Polling: Webhook manqué détecté. Force la validation pour ${oliOrderId}`);
-                await unipesaService.processWebhook({
-                    order_id: oliOrderId,
-                    status: 1,
-                    amount: op.amount_fc
-                });
+                // On met à jour le statut en base
+                await pool.query('UPDATE unipesa_operations SET status = $1, confirmed_at = NOW() WHERE oli_order_id = $2', ['success', oliOrderId]);
+                
+                // Si c'est un retrait, on met à jour wallet_transactions
+                if (op.operation_type === 'withdrawal') {
+                    await pool.query(
+                        `UPDATE wallet_transactions 
+                         SET status = 'completed', description = description || ' [Confirmé par Unipesa Polling]'
+                         WHERE reference = $1`,
+                        [oliOrderId]
+                    );
+                } else {
+                    // Si c'est un dépôt, on doit simuler le webhook C2B correctement
+                    const fakePayload = {
+                        order_id: oliOrderId,
+                        status: 2,
+                        amount: op.amount_fc,
+                        currency: 'CDF'
+                    };
+                    const unipesaController = require('../controllers/unipesa.controller');
+                    // Simuler l'appel à handleDeposit avec un faux req/res
+                    const req = { body: fakePayload, app: { get: () => null } };
+                    const res = { status: () => ({ json: () => {} }) };
+                    // Bypass signature for auto-repair
+                    fakePayload.signature = _buildSignature(fakePayload);
+                    unipesaController.handleDeposit(req, res).catch(e => console.error("Auto-repair deposit error", e));
+                }
             } else if (mappedStatus === 'failed' && op.status !== 'failed') {
                 await pool.query('UPDATE unipesa_operations SET status = $1 WHERE oli_order_id = $2', ['failed', oliOrderId]);
                 // Remboursement si B2C a échoué !
                 if (op.operation_type === 'withdrawal') {
                     console.log(`🔄 Polling: Retrait échoué, remboursement de ${op.amount_fc} FC pour ${oliOrderId}`);
+                    
+                    const amountUSD = (parseFloat(op.amount_fc) / (process.env.FC_TO_USD || 2800)); // Fallback ou config
+                    // Le retrait déduit 105% (5% de frais). On rembourse 105%.
+                    const refundAmount = parseFloat(op.amount_fc) * 1.05;
+                    
                     const walletRepository = require('../repositories/wallet.repository');
-                    const amountToRefund = parseFloat(op.amount_fc) * 1.03; // Remboursement du net + frais OLI (3%)
-                    await walletRepository.performDeposit(op.user_id, amountToRefund, {
+                    await walletRepository.performDeposit(op.user_id, refundAmount, {
                         type: 'refund',
                         provider: 'UNIPESA',
                         reference: `${oliOrderId}_REFUND`,

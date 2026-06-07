@@ -98,8 +98,9 @@ class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with Si
                        const SizedBox(width: 8),
                        Text("Super Offres",
                            style: TextStyle(
+                               fontFamily: 'CreatoDisplay',
                                color: isDark ? Colors.white : Colors.blue[900],
-                               fontWeight: FontWeight.bold,
+                               fontWeight: FontWeight.w500,
                                fontSize: 18,
                                shadows: const [BoxShadow(color: Colors.black26, blurRadius: 4)])),
                     ],
@@ -107,6 +108,7 @@ class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with Si
                   const SizedBox(height: 2),
                   Text("Les plus populaires du moment",
                       style: TextStyle(
+                          fontFamily: 'CreatoDisplay',
                           color: isDark ? Colors.white : Colors.blue[800],
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
@@ -147,7 +149,7 @@ class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with Si
                             priceColor: const Color(0xFFFFD700),
                             badgeText: "FLASH",
                             badgeColor: Colors.red,
-                            subtitleWidget: Text("Low price", style: TextStyle(color: Colors.grey[500], fontSize: 10)),
+                            subtitleWidget: Text("Low price", style: TextStyle(fontFamily: 'CreatoDisplay', color: Colors.grey[500], fontSize: 10, fontWeight: FontWeight.w500)),
                           ),
                         );
                       },

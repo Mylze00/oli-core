@@ -168,19 +168,20 @@ exports.handleWithdrawal = async (req, res) => {
                 [payload.description || 'Echec retrait', JSON.stringify(payload), orderId]
             );
 
-            // FORMAT OFFICIEL : WD-{userId}-{ts} (tirets) — aligné avec wallet.service et unipesa.service
             const match = orderId.match(/^WD-(\d+)-\d+/);
             if (match) {
                 const userId = parseInt(match[1]);
                 const amount = parseFloat(payload.amount) || 0;
                 const currency = payload.currency || 'USD';
-                const amountUSD = currency === 'CDF' ? (amount / FC_TO_USD) : amount;
+                
+                // Le wallet OLI est en FC
+                const amountFC = currency === 'CDF' ? amount : (amount * FC_TO_USD);
 
-                // Le montant de payload est le net. On avait débité 105%.
-                const refundAmount = amountUSD * 1.05;
-                const feeToReverse = amountUSD * 0.05;
+                // Le montant de payload est le net. On avait débité 105% du montant FC
+                const refundAmount = amountFC * 1.05;
+                const feeToReverse = amountFC * 0.05;
 
-                console.warn(`↩️ Retrait échoué — Remboursement user ${userId} : +${refundAmount} USD`);
+                console.warn(`↩️ Retrait échoué — Remboursement user ${userId} : +${refundAmount} FC`);
 
                 // 1. Rembourser le client (105%)
                 await walletRepository.performDeposit(userId, refundAmount, {

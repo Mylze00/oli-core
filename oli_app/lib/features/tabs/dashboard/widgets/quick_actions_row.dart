@@ -77,9 +77,10 @@ class QuickActionsRow extends ConsumerWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
+                  fontFamily: 'CreatoDisplay',
                   color: isDark ? Colors.white : Colors.black87,
                   fontSize: 10,
-                  fontWeight: FontWeight.normal)
+                  fontWeight: FontWeight.w500)
             ),
           ],
         ),
@@ -120,9 +121,10 @@ class QuickActionsRow extends ConsumerWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
+                  fontFamily: 'CreatoDisplay',
                   color: isDark ? Colors.white : Colors.black87,
                   fontSize: 10,
-                  fontWeight: FontWeight.normal),
+                  fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -161,9 +163,10 @@ class QuickActionsRow extends ConsumerWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
+                  fontFamily: 'CreatoDisplay',
                   color: isDark ? Colors.white : Colors.black87,
                   fontSize: 10,
-                  fontWeight: FontWeight.bold), // Bold for Live
+                  fontWeight: FontWeight.w500), // Bold for Live
             ),
           ],
         ),

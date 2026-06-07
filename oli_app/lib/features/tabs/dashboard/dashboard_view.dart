@@ -546,8 +546,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                     sliver: SliverToBoxAdapter(
                       child: Text('Découverte',
                           style: TextStyle(
+                              fontFamily: 'CreatoDisplay',
                               color: textColor,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w500,
                               fontSize: 16)),
                     ),
                   ),
@@ -573,8 +574,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   sliver: SliverToBoxAdapter(
                     child: Text('Top Classement',
                         style: TextStyle(
+                            fontFamily: 'CreatoDisplay',
                             color: textColor,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w500,
                             fontSize: 18)),
                   ),
                 ),
@@ -626,8 +628,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                             Text(
                               sectionTitles[s],
                               style: TextStyle(
+                                fontFamily: 'CreatoDisplay',
                                 color: textColor,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w500,
                                 fontSize: 17,
                               ),
                             ),

@@ -144,12 +144,14 @@ class _LoginPageState extends ConsumerState<LoginPage>
     if (digits.length >= 2) {
       final prefix = digits.substring(0, 2);
 
-      if (['97', '99'].contains(prefix)) {
+      if (['97', '99', '98'].contains(prefix)) {
         detectedOperator = 'Airtel';
-      } else if (['81', '82'].contains(prefix)) {
+      } else if (['81', '82', '83'].contains(prefix)) {
         detectedOperator = 'Vodacom';
       } else if (['84', '85', '89'].contains(prefix)) {
         detectedOperator = 'Orange';
+      } else if (['90', '80', '88', '86'].contains(prefix)) {
+        detectedOperator = 'Africell';
       } else if (isComplete) {
         prefixError = true;
         if (!_hasPrefixError) _triggerShake();
@@ -161,6 +163,21 @@ class _LoginPageState extends ConsumerState<LoginPage>
       _hasPrefixError = prefixError;
       _isValid = isComplete && detectedOperator != null;
     });
+  }
+
+  String _getOperatorIcon(String operatorName) {
+    switch (operatorName.toLowerCase()) {
+      case 'vodacom':
+        return 'assets/images/operators/mpesa.png';
+      case 'airtel':
+        return 'assets/images/operators/airtel_money.png';
+      case 'orange':
+        return 'assets/images/operators/orange_money.png';
+      case 'africell':
+        return 'assets/images/operators/afrimoney.png';
+      default:
+        return 'assets/images/operators/mpesa.png';
+    }
   }
 
   @override
@@ -325,17 +342,27 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                     ),
                                   )
                                 : _operator != null
-                                    ? Text(
-                                        'Opérateur : $_operator',
-                                        key: ValueKey(_operator),
-                                        style: TextStyle(
-                                          color: const Color.fromRGBO(255, 255, 255, 0.9),
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                                    ? Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Image.asset(
+                                            _getOperatorIcon(_operator!),
+                                            height: 24,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Opérateur : $_operator',
+                                            key: ValueKey(_operator),
+                                            style: const TextStyle(
+                                              color: Color.fromRGBO(255, 255, 255, 0.9),
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
                                       )
                                     : const SizedBox(
-                                        height: 18,
+                                        height: 24,
                                         key: ValueKey('empty'),
                                       ),
                           ),
