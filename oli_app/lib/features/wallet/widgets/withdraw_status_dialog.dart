@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../config/api_config.dart';
@@ -14,8 +14,10 @@ enum DepositStatus { pending, success, failed }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Fonction utilitaire â€” afficher le popup de statut de dÃ©pÃ´t
+// ——————————————————————————————————————————————————————————————————————————————————————————————————
+// Fonction utilitaire — afficher le popup de statut de dépôt
 // Usage: showWithdrawStatusDialog(context, ref, orderId: '...', amountFC: 1000)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——————————————————————————————————————————————————————————————————————————————————————————————————
 Future<void> showWithdrawStatusDialog({
   required BuildContext context,
   required WidgetRef ref,
@@ -34,9 +36,9 @@ Future<void> showWithdrawStatusDialog({
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——————————————————————————————————————————————————————————————————————————————————————————————————
 // Widget principal du popup
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——————————————————————————————————————————————————————————————————————————————————————————————————
 class WithdrawStatusDialog extends ConsumerStatefulWidget {
   final String orderId;
   final double amountFC;
@@ -56,9 +58,10 @@ class WithdrawStatusDialog extends ConsumerStatefulWidget {
 class _WithdrawStatusDialogState extends ConsumerState<WithdrawStatusDialog>
     with TickerProviderStateMixin {
   DepositStatus _status = DepositStatus.pending;
+
   Timer? _pollingTimer;
   int _attempts = 0;
-  static const int _maxAttempts = 24; // 24 Ã— 5s = 2 minutes max
+  static const int _maxAttempts = 24; // 24 × 5s = 2 minutes max
 
   // Animations
   late AnimationController _dotController;
@@ -75,7 +78,7 @@ class _WithdrawStatusDialogState extends ConsumerState<WithdrawStatusDialog>
       duration: const Duration(milliseconds: 600),
     )..repeat(reverse: true);
 
-    // Animation de zoom pour succÃ¨s/Ã©chec
+    // Animation de zoom pour succès/échec
     _scaleController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -110,7 +113,8 @@ class _WithdrawStatusDialogState extends ConsumerState<WithdrawStatusDialog>
 
     try {
       final dio = widget.ref.read(dioProvider);
-      final response = await dio.get(ApiConfig.unipesaStatus(widget.orderId));
+      final cacheBuster = DateTime.now().millisecondsSinceEpoch;
+      final response = await dio.get('${ApiConfig.unipesaStatus(widget.orderId)}?t=$cacheBuster');
 
       if (!mounted) return;
 
@@ -179,7 +183,11 @@ class _WithdrawStatusDialogState extends ConsumerState<WithdrawStatusDialog>
   Widget _buildContent(String amount) {
     switch (_status) {
       case DepositStatus.pending:
-        return _PendingCard(amount: amount, dotController: _dotController);
+        return _PendingCard(
+          amount: amount, 
+          dotController: _dotController,
+          onClose: () => Navigator.of(context).pop(),
+        );
       case DepositStatus.success:
         return _SuccessCard(
           amount: amount,
@@ -203,8 +211,9 @@ class _WithdrawStatusDialogState extends ConsumerState<WithdrawStatusDialog>
 class _PendingCard extends StatelessWidget {
   final String amount;
   final AnimationController dotController;
+  final VoidCallback onClose;
 
-  const _PendingCard({required this.amount, required this.dotController});
+  const _PendingCard({required this.amount, required this.dotController, required this.onClose});
 
   @override
   Widget build(BuildContext context) {
@@ -248,10 +257,29 @@ class _PendingCard extends StatelessWidget {
           _AnimatedDots(controller: dotController),
           const SizedBox(height: 16),
           Text(
-            'Validez sur votre tÃ©lÃ©phone...',
+            'Traitement en cours...',
             style: TextStyle(
               fontSize: 12,
               color: const Color(0xFF1A3A6E).withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: onClose,
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFF1A3A6E).withValues(alpha: 0.1),
+                foregroundColor: const Color(0xFF1A3A6E),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text(
+                'Réduire (en arrière-plan)',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
             ),
           ),
         ],

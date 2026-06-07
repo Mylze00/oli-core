@@ -336,6 +336,8 @@ const unipesaService = {
                 { headers: { 'Content-Type': 'application/json' }, timeout: 8000 }
             );
 
+            console.log(`🔍 Unipesa API /status pour ${oliOrderId} retourné:`, JSON.stringify(response.data));
+
             const apiStatus = parseInt(response.data?.status);
             
             let mappedStatus = 'pending';

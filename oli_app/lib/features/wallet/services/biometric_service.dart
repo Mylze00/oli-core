@@ -1,5 +1,6 @@
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Service d'authentification biométrique (empreinte / Face ID)
 class BiometricService {
@@ -7,6 +8,7 @@ class BiometricService {
 
   /// Vérifie si la biométrie est disponible sur cet appareil
   Future<bool> isAvailable() async {
+    if (kIsWeb) return false;
     try {
       return await _auth.canCheckBiometrics || await _auth.isDeviceSupported();
     } on PlatformException {

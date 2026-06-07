@@ -110,7 +110,8 @@ class _DepositStatusDialogState extends ConsumerState<DepositStatusDialog>
 
     try {
       final dio = widget.ref.read(dioProvider);
-      final response = await dio.get(ApiConfig.unipesaStatus(widget.orderId));
+      final cacheBuster = DateTime.now().millisecondsSinceEpoch;
+      final response = await dio.get('${ApiConfig.unipesaStatus(widget.orderId)}?t=$cacheBuster');
 
       if (!mounted) return;
 
