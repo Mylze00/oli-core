@@ -42,18 +42,39 @@ const TOTAL_FEE_RATE      = FEES.TOTAL_DEPOSIT_RATE;
 
 /**
  * Calcule la signature HMAC-SHA512 d'un payload Unipesa.
- * La signature est calculée sur la concaténation triée des clés=valeurs.
+ *
+ * ⚠️  RÈGLE OFFICIELLE AVADAPAY (documentation PHP) :
+ *   - Les paramètres sont inclus DANS L'ORDRE d'insertion (pas de tri alphabétique)
+ *   - Si une valeur est un objet/array imbriqué, on récursive avec le préfixe "clé."
+ *     Exemple: extra.customer_name, extra.customer_email
+ *   - Le paramètre "signature" est exclu du calcul
+ *   - L'algo est HMAC-SHA512 avec la secretKey
+ *
+ * Cela correspond exactement à la fonction PHP calculateSignature de la doc.
  */
-function _buildSignature(payload) {
-    // Ne SURTOUT PAS trier les clés ! L'ordre d'insertion doit être conservé
-    const sortedKeys = Object.keys(payload)
-        .filter(k => k !== 'signature');
+function _buildSignature(payload, prefix = '', depth = 16, currentLevel = 0) {
+    if (currentLevel >= depth) throw new Error('Signature: récursion trop profonde');
 
     let str = '';
-    for (const key of sortedKeys) {
-        str += `${key}${payload[key]}`;
+    for (const [key, value] of Object.entries(payload)) {
+        if (key === 'signature') continue;
+
+        const fullKey = prefix ? `${prefix}${key}` : key;
+
+        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            // Objet imbriqué → on recurse avec le préfixe "clé."
+            str += _buildSignature(value, `${fullKey}.`, depth, currentLevel + 1);
+        } else {
+            str += `${fullKey}${value}`;
+        }
     }
 
+    if (currentLevel > 0) {
+        // Dans la récursion, on retourne juste la chaîne partielle (pas encore le HMAC)
+        return str;
+    }
+
+    // Niveau racine : on calcule le HMAC-SHA512 sur la chaîne complète
     return crypto
         .createHmac('sha512', UNIPESA_SECRET)
         .update(str)
