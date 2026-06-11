@@ -153,10 +153,10 @@ Analyse chaque ligne et retourne STRICTEMENT un JSON ayant cette structure :
     }
   ]
 }
-Extrais uniquement les produits pertinents (max 20). 
-Pour "images_sources", retourne un tableau d'URL directes d'images (max 6). Cherche dans toutes les colonnes contenant des URLs finissant par .jpg, .png, ou les colonnes nommées image, photo, etc.
-Pour "colors" et "sizes", essaie de les déduire des titres/descriptions.
-Convertis toujours les prix CNY en format numérique. Ne retourne que le JSON valide.`;
+Extrais TOUS les produits trouvés dans le CSV (max 20). Ne filtre rien.
+Pour "images_sources", retourne un tableau d'URL directes d'images (max 6). Cherche dans toutes les colonnes contenant des URLs (notamment la colonne 'images' ou 'imageUrl' qui peut contenir plusieurs URLs séparées par des points-virgules).
+Pour "colors" et "sizes", essaie de les déduire des titres/descriptions, ou laisse vide.
+Convertis toujours les prix CNY en format numérique. Retourne STRICTEMENT un JSON valide.`;
 
                 const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",
@@ -180,6 +180,10 @@ Convertis toujours les prix CNY en format numérique. Ne retourne que le JSON va
                 const extractedData = JSON.parse(result.choices[0].message.content);
                 aiProducts = extractedData.products || [];
                 console.log("Produits extraits par l'IA :", aiProducts);
+
+                if (aiProducts.length === 0) {
+                    throw new Error("L'IA n'a trouvé aucun produit valide dans ce fichier. Vérifiez le format du CSV.");
+                }
 
                 // Upload Cloudinary pour chaque produit
                 for (let i = 0; i < aiProducts.length; i++) {

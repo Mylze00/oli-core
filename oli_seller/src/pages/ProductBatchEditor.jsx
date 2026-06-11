@@ -83,6 +83,11 @@ export default function ProductBatchEditor() {
             return;
         }
 
+        if (state.aiBatchProducts.length === 0) {
+            setGlobalError("L'IA n'a retourné aucun produit pour ce lot.");
+            return;
+        }
+
         const enriched = state.aiBatchProducts.map((prod, i) => {
             // Convertir les images AI initiales en vrais Files/Previews
             const initialFiles = [];
