@@ -329,6 +329,7 @@ app.use("/bank",   requireAuth, oliBankRoutes); // 🏦 OLI Bank — Portail Cry
 app.use("/delivery", requireAuth, deliveryRoutes);
 app.use("/delivery/apply", requireAuth, delivererApplicationRoutes);
 app.use("/chat", requireAuth, chatRoutes);
+app.use("/calls", requireAuth, callRoutes);
 
 // 🆕 Route publique pour le profil vendeur (pas besoin d'auth)
 app.get("/user/public-profile/:id", require('./controllers/user.controller').getPublicProfile);

@@ -106,12 +106,12 @@ class HomeAppBar extends ConsumerWidget {
           // Logo toujours visible
           SafeArea(
             child: Align(
-              alignment: const Alignment(-0.25, -1.0),
+              alignment: Alignment.topCenter,
               child: Padding(
                 padding: const EdgeInsets.only(top: 5.0),
                 child: Image.asset(
                   'assets/images/logo.png',
-                  height: 46,
+                  height: 42,
                 ),
               ),
             ),
@@ -151,7 +151,7 @@ class HomeAppBar extends ConsumerWidget {
                   isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
                   key: ValueKey(isDark),
                   color: isDark ? Colors.white : Colors.black87,
-                  size: 22,
+                  size: 24,
                 ),
               ),
               onPressed: () => ref.read(themeProvider.notifier).toggleTheme(),
@@ -167,7 +167,7 @@ class HomeAppBar extends ConsumerWidget {
               children: [
                 IconButton(
                   icon: Icon(Icons.notifications_outlined,
-                      color: isDark ? Colors.white : Colors.black87, size: 26),
+                      color: isDark ? Colors.white : Colors.black87, size: 24),
                   onPressed: () {
                     Navigator.push(
                       context,

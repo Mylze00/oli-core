@@ -377,11 +377,11 @@ class _LoginPageState extends ConsumerState<LoginPage>
                             onPressed: (_isValid && !authState.isLoading)
                                 ? () async {
                                     final phone = _phoneController.text;
-                                    final otpCode = await ref
+                                    final success = await ref
                                         .read(authControllerProvider.notifier)
                                         .sendOtp(phone);
 
-                                    if (otpCode != null && mounted) {
+                                    if (success && mounted) {
                                       Navigator.push(
                                         context,
                                         PageRouteBuilder(
@@ -393,7 +393,6 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                               secondaryAnimation) {
                                             return OtpPage(
                                               phone: phone,
-                                              otpCode: otpCode,
                                             );
                                           },
                                           transitionsBuilder: (context,

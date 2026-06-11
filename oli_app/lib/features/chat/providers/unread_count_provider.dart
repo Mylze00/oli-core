@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
 import '../../../core/storage/secure_storage_service.dart';
+import '../../../core/services/hive_cache_service.dart';
 
 /// Retourne le nombre total de messages non lus (somme de toutes les conversations)
 /// Poll toutes les 20 secondes en arrière-plan.
@@ -22,6 +23,19 @@ class UnreadCountNotifier extends StateNotifier<int> {
       final token = await _storage.getToken();
       if (token == null) return;
 
+      // --- CACHE OFFLINE-FIRST ---
+      if (state == 0) {
+        try {
+          final cachedData = HiveCacheService.getCache('unread_count_cache');
+          if (cachedData != null) {
+            final count = int.tryParse(cachedData.toString()) ?? 0;
+            if (count != state) state = count;
+          }
+        } catch (e) {
+          debugPrint('⚠️ Erreur lecture cache unread count: $e');
+        }
+      }
+
       final uri = Uri.parse(ApiConfig.chatConversations);
       final res = await http.get(uri, headers: {
         'Authorization': 'Bearer $token',
@@ -33,7 +47,10 @@ class UnreadCountNotifier extends StateNotifier<int> {
           0,
           (sum, conv) => sum + (int.tryParse(conv['unread_count'].toString()) ?? 0),
         );
-        if (total != state) state = total;
+        if (total != state) {
+          state = total;
+          HiveCacheService.setCache('unread_count_cache', total.toString());
+        }
       }
     } catch (e) {
       debugPrint('UnreadCount fetch error: $e');
