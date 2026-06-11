@@ -1,5 +1,6 @@
 const { OpenAI } = require('openai');
 const cloudinary = require('cloudinary').v2;
+require('../config/upload');
 
 const analyzeProductImage = async (req, res) => {
     try {

@@ -147,7 +147,7 @@ Analyse chaque ligne et retourne STRICTEMENT un JSON ayant cette structure :
       "category": "industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, ou other",
       "product_type": "clothing, shoes, accessories, electronics, furniture, ou other",
       "brand": "Marque si présente, sinon null",
-      "image_url_source": "Url directe de l'image (imageUrl) si présente dans le CSV, sinon null"
+      "image_url_source": "Url directe de l'image (cherche toute colonne qui contient une URL finissant par .jpg, .png, ou nommée image, imageUrl, photo, etc.). Obligatoire si présente."
     }
   ]
 }
@@ -174,13 +174,16 @@ Extrais uniquement les produits pertinents (max 20 si le CSV est très long). Co
                 const result = await response.json();
                 const extractedData = JSON.parse(result.choices[0].message.content);
                 aiProducts = extractedData.products || [];
+                console.log("Produits extraits par l'IA :", aiProducts);
 
                 // Upload Cloudinary pour chaque produit
                 for (let i = 0; i < aiProducts.length; i++) {
                     const prod = aiProducts[i];
-                    if (prod.image_url_source) {
+                    if (prod.image_url_source && prod.image_url_source.trim() !== "") {
+                        console.log(`Tentative d'upload de l'image pour ${prod.name}: ${prod.image_url_source}`);
                         try {
                             const uploadRes = await productAPI.uploadImageFromUrl(prod.image_url_source);
+                            console.log("Réponse upload:", uploadRes);
                             if (uploadRes.success && uploadRes.secure_url) {
                                 const imgRes = await fetch(uploadRes.secure_url);
                                 const blob = await imgRes.blob();
@@ -191,10 +194,14 @@ Extrais uniquement les produits pertinents (max 20 si le CSV est très long). Co
                                 });
                                 generatedBase64Images.push(b64);
                                 prod.aiImageIndex = generatedBase64Images.length - 1;
+                            } else {
+                                console.warn("Upload backend failed for", prod.image_url_source);
                             }
                         } catch (e) {
-                            console.warn("Upload image échoué pour", prod.image_url_source);
+                            console.error("Erreur upload Cloudinary/Backend", e);
                         }
+                    } else {
+                        console.warn(`Aucune image trouvée par l'IA pour ${prod.name}`);
                     }
                 }
 
