@@ -10,6 +10,7 @@ import '../feed/presentation/feed_tab_view.dart';
 import '../../config/api_config.dart';
 import '../../core/user/user_provider.dart';
 import '../../core/storage/secure_storage_service.dart';
+import 'calls_page.dart';
 
 // Provider pour les conversations migré vers inbox_providers.dart pour le cache offline-first
 
@@ -220,8 +221,9 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                         label: 'Appels',
                         isDark: isDark,
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Historique des appels bientôt disponible")),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const CallsPage()),
                           );
                         },
                       ),
