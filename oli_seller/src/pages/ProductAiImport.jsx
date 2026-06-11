@@ -147,11 +147,16 @@ Analyse chaque ligne et retourne STRICTEMENT un JSON ayant cette structure :
       "category": "industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, ou other",
       "product_type": "clothing, shoes, accessories, electronics, furniture, ou other",
       "brand": "Marque si présente, sinon null",
-      "image_url_source": "Url directe de l'image (cherche toute colonne qui contient une URL finissant par .jpg, .png, ou nommée image, imageUrl, photo, etc.). Obligatoire si présente."
+      "colors": ["Couleur1", "Couleur2"],
+      "sizes": ["Taille1", "Taille2"],
+      "images_sources": ["URL1.jpg", "URL2.jpg"]
     }
   ]
 }
-Extrais uniquement les produits pertinents (max 20 si le CSV est très long). Convertis toujours les prix CNY en format numérique. Ne retourne que le JSON valide.`;
+Extrais uniquement les produits pertinents (max 20). 
+Pour "images_sources", retourne un tableau d'URL directes d'images (max 6). Cherche dans toutes les colonnes contenant des URLs finissant par .jpg, .png, ou les colonnes nommées image, photo, etc.
+Pour "colors" et "sizes", essaie de les déduire des titres/descriptions.
+Convertis toujours les prix CNY en format numérique. Ne retourne que le JSON valide.`;
 
                 const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",
@@ -179,26 +184,44 @@ Extrais uniquement les produits pertinents (max 20 si le CSV est très long). Co
                 // Upload Cloudinary pour chaque produit
                 for (let i = 0; i < aiProducts.length; i++) {
                     const prod = aiProducts[i];
-                    if (prod.image_url_source && prod.image_url_source.trim() !== "") {
-                        console.log(`Tentative d'upload de l'image pour ${prod.name}: ${prod.image_url_source}`);
-                        try {
-                            const uploadRes = await productAPI.uploadImageFromUrl(prod.image_url_source);
-                            console.log("Réponse upload:", uploadRes);
-                            if (uploadRes.success && uploadRes.secure_url) {
-                                const imgRes = await fetch(uploadRes.secure_url);
-                                const blob = await imgRes.blob();
-                                const reader = new FileReader();
-                                const b64 = await new Promise(res => {
-                                    reader.onloadend = () => res(reader.result);
-                                    reader.readAsDataURL(blob);
-                                });
-                                generatedBase64Images.push(b64);
-                                prod.aiImageIndex = generatedBase64Images.length - 1;
-                            } else {
-                                console.warn("Upload backend failed for", prod.image_url_source);
+                    prod.aiImageIndex = -1;
+                    prod.additionalImageIndexes = [];
+
+                    let urlsToFetch = [];
+                    if (prod.images_sources && Array.isArray(prod.images_sources)) {
+                        urlsToFetch = prod.images_sources.slice(0, 6); // Max 6 images
+                    } else if (prod.image_url_source && prod.image_url_source.trim() !== "") {
+                        urlsToFetch = [prod.image_url_source];
+                    }
+
+                    if (urlsToFetch.length > 0) {
+                        for (const url of urlsToFetch) {
+                            if (!url || url.trim() === "") continue;
+                            console.log(`Tentative d'upload de l'image pour ${prod.name}: ${url}`);
+                            try {
+                                const uploadRes = await productAPI.uploadImageFromUrl(url);
+                                if (uploadRes.success && uploadRes.secure_url) {
+                                    const imgRes = await fetch(uploadRes.secure_url);
+                                    const blob = await imgRes.blob();
+                                    const reader = new FileReader();
+                                    const b64 = await new Promise(res => {
+                                        reader.onloadend = () => res(reader.result);
+                                        reader.readAsDataURL(blob);
+                                    });
+                                    generatedBase64Images.push(b64);
+                                    const newIndex = generatedBase64Images.length - 1;
+                                    
+                                    if (prod.aiImageIndex === -1) {
+                                        prod.aiImageIndex = newIndex;
+                                    } else {
+                                        prod.additionalImageIndexes.push(newIndex);
+                                    }
+                                } else {
+                                    console.warn("Upload backend failed for", url);
+                                }
+                            } catch (e) {
+                                console.error("Erreur upload Cloudinary/Backend", e);
                             }
-                        } catch (e) {
-                            console.error("Erreur upload Cloudinary/Backend", e);
                         }
                     } else {
                         console.warn(`Aucune image trouvée par l'IA pour ${prod.name}`);
@@ -341,7 +364,8 @@ IMPORTANT: Le nombre d'éléments dans "products" DOIT EXACTEMENT CORRESPONDRE a
                     sizes: validatedSizes,
                     product_type: productType,
                     variant_images: prod.variant_images || [],
-                    aiImageIndex: index
+                    aiImageIndex: prod.aiImageIndex !== undefined ? prod.aiImageIndex : index,
+                    additionalImageIndexes: prod.additionalImageIndexes || []
                 };
             });
 

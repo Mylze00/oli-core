@@ -84,17 +84,27 @@ export default function ProductBatchEditor() {
         }
 
         const enriched = state.aiBatchProducts.map((prod, i) => {
-            // Convertir l'image AI initiale en un vrai File/Preview
-            const aiB64 = state.aiImages[prod.aiImageIndex ?? i];
+            // Convertir les images AI initiales en vrais Files/Previews
             const initialFiles = [];
             const initialPreviews = [];
-            if (aiB64) {
-                const f = base64ToFileUtil(aiB64, i);
-                if (f) {
-                    initialFiles.push(f);
-                    initialPreviews.push(URL.createObjectURL(f));
+
+            const indexes = [
+                prod.aiImageIndex !== undefined ? prod.aiImageIndex : i,
+                ...(prod.additionalImageIndexes || [])
+            ];
+
+            indexes.forEach((idx, imgCounter) => {
+                if (idx !== -1 && idx !== undefined) {
+                    const aiB64 = state.aiImages[idx];
+                    if (aiB64) {
+                        const f = base64ToFileUtil(aiB64, `${i}-${imgCounter}`);
+                        if (f) {
+                            initialFiles.push(f);
+                            initialPreviews.push(URL.createObjectURL(f));
+                        }
+                    }
                 }
-            }
+            });
 
             return {
                 ...prod,
