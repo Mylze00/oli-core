@@ -23,16 +23,7 @@ class _SuperOffresPageState extends ConsumerState<SuperOffresPage>
   late AnimationController _headerAnimController;
   late Animation<double> _headerFadeAnimation;
 
-  final Map<String, String> _categories = {
-    "Tout": "",
-    "Électronique": "electronics",
-    "Mode": "fashion",
-    "Maison": "home",
-    "Beauté": "beauty",
-    "Sports": "sports",
-    "Véhicules": "vehicles",
-    "Jouets": "toys",
-    "Alimentation": "food",
+  final Map<String, String> _categories = {'Tout': '', 'Électronique': 'electronics', 'Mode': 'fashion', 'Maison': 'home', 'Alimentation': 'food', 'Beauté': 'beauty', 'Industrie': 'industry', 'Sports': 'sports', 'Outils': 'tools', 'Construction': 'construction', 'Autres': 'other', 'Véhicules': 'vehicles', 'Jouets': 'toys', 'Sécurité': 'security', 'Jardin': 'garden', 'Bébé': 'baby', 'Bureau': 'office', 'Animaux': 'pets', 'Santé': 'health'
   };
 
   @override

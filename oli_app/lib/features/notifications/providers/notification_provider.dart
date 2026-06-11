@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../../config/api_config.dart';
 import '../../../core/router/network/dio_provider.dart';
+import '../../chat/socket_service.dart';
 import '../models/notification_model.dart';
 
 /// État des notifications
@@ -40,6 +42,24 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
 
   NotificationNotifier(this._ref) : super(NotificationState()) {
     fetchNotifications();
+    
+    // Ecouter les notifications en direct pour mettre à jour la pastille rouge via FCM
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.data['oli_notification_type'] != 'incoming_call') {
+        fetchUnreadCount();
+      }
+    });
+
+    // Ecouter les notifications en direct via Socket.IO
+    _ref.read(socketServiceProvider).onNotification((data) {
+      try {
+        final notification = NotificationModel.fromJson(data);
+        addNotification(notification);
+      } catch (e) {
+        debugPrint('❌ Erreur parsing notification via socket: $e');
+        fetchUnreadCount();
+      }
+    });
   }
 
   Dio get _dio => _ref.read(dioProvider);

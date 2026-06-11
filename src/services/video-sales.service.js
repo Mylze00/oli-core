@@ -175,6 +175,28 @@ class VideoSalesService {
                 'UPDATE video_sales SET likes_count = likes_count + 1 WHERE id = $1',
                 [videoId]
             );
+
+            // -- MONÉTISATION : 1 FC PAR J'AIME --
+            try {
+                // Trouver le propriétaire de la vidéo
+                const ownerRes = await pool.query('SELECT user_id FROM video_sales WHERE id = $1', [videoId]);
+                if (ownerRes.rows.length > 0) {
+                    const ownerId = ownerRes.rows[0].user_id;
+                    // Ne pas se récompenser soi-même
+                    if (ownerId != userId) {
+                        const walletRepository = require('../repositories/wallet.repository');
+                        await walletRepository.performDeposit(ownerId, 1, {
+                            type: 'reward',
+                            provider: 'LIVE_SHOPPING',
+                            reference: `LIKE_${videoId}_${userId}_${Date.now()}`,
+                            description: `Récompense de 1 FC pour un J'aime sur votre vidéo`
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('⚠️ Erreur monétisation like:', err.message);
+            }
+
             return { liked: true };
         }
     }

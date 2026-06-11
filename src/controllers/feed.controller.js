@@ -130,6 +130,8 @@ exports.getComments = async (req, res) => {
             SELECT 
                 c.id, 
                 c.content, 
+                c.media_url,
+                c.media_type,
                 c.created_at,
                 u.name AS author_name,
                 u.avatar_url AS author_avatar
@@ -156,19 +158,30 @@ exports.addComment = async (req, res) => {
     try {
         const userId = req.user.id;
         const postId = req.params.id;
-        const { content } = req.body;
+        let { content, media_type } = req.body;
+        let media_url = null;
 
-        if (!content || content.trim() === '') {
+        // Si un fichier a été uploadé (via Cloudinary ou local)
+        if (req.file) {
+            media_url = req.file.path || `/uploads/${req.file.filename}`;
+            if (req.file.mimetype.startsWith('video/')) {
+                media_type = 'video';
+            } else if (req.file.mimetype.startsWith('image/')) {
+                media_type = 'image';
+            }
+        }
+
+        if ((!content || content.trim() === '') && !media_url) {
             return res.status(400).json({ error: 'Le commentaire ne peut pas être vide' });
         }
 
         const query = `
-            INSERT INTO feed_comments (post_id, user_id, content)
-            VALUES ($1, $2, $3)
-            RETURNING id, content, created_at
+            INSERT INTO feed_comments (post_id, user_id, content, media_url, media_type)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, content, media_url, media_type, created_at
         `;
         
-        const result = await db.query(query, [postId, userId, content.trim()]);
+        const result = await db.query(query, [postId, userId, content ? content.trim() : null, media_url, media_type || 'text']);
         
         res.status(201).json({
             success: true,

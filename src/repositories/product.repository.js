@@ -28,6 +28,8 @@ class ProductRepository {
     }
 
     async findBranded(adminPhone, limit = 50) {
+        // [FIX #6] TABLESAMPLE remplace ORDER BY RANDOM() — élimine le full-scan
+        // SYSTEM(30) = ~30% des blocs (statistiquement suffisant pour limit 50)
         const query = `
             SELECT p.*, 
                    u.name as seller_name, 
@@ -39,13 +41,12 @@ class ProductRepository {
                    s.name as shop_name, 
                    s.is_verified as shop_verified,
                    p.subcategory
-            FROM products p 
+            FROM products p TABLESAMPLE SYSTEM(30)
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE u.phone = $1
               AND p.status = 'active'
               AND COALESCE(p.brand_certified, FALSE) = TRUE
-            ORDER BY RANDOM()
             LIMIT $2
         `;
         const result = await pool.query(query, [adminPhone, limit]);
@@ -53,7 +54,7 @@ class ProductRepository {
     }
 
     async findTopSellers(limit) {
-        // Widget "Super Offres" : uniquement les produits publiés par l'admin Oli, en aléatoire
+        // [FIX #6] TABLESAMPLE remplace ORDER BY RANDOM() — widget "Super Offres"
         const query = `
             SELECT p.*, 
                    u.name as seller_name, 
@@ -64,12 +65,11 @@ class ProductRepository {
                    u.has_certified_shop as seller_has_certified_shop,
                    s.name as shop_name, 
                    s.is_verified as shop_verified
-            FROM products p 
+            FROM products p TABLESAMPLE SYSTEM(20)
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE p.status = 'active'
               AND u.is_admin = TRUE
-            ORDER BY RANDOM()
             LIMIT $1
         `;
         const result = await pool.query(query, [limit]);
@@ -78,6 +78,7 @@ class ProductRepository {
 
 
     async findVerifiedShopsProducts(adminPhone, limit) {
+        // [FIX #6] TABLESAMPLE remplace ORDER BY RANDOM()
         const query = `
             SELECT p.*, 
                    u.name as seller_name, 
@@ -90,7 +91,7 @@ class ProductRepository {
                    s.is_verified as shop_verified,
                    s.logo_url as shop_logo,
                    p.express_delivery_price
-            FROM products p 
+            FROM products p TABLESAMPLE SYSTEM(25)
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE p.status = 'active'
@@ -101,7 +102,6 @@ class ProductRepository {
                   OR u.account_type = 'entreprise'
                   OR u.has_certified_shop = TRUE
               )
-            ORDER BY RANDOM()
             LIMIT $1
         `;
         const result = await pool.query(query, [limit, adminPhone]);
@@ -110,17 +110,17 @@ class ProductRepository {
 
 
     async findGoodDeals(limit) {
+        // [FIX #6] TABLESAMPLE remplace ORDER BY RANDOM()
         const query = `
             SELECT p.*, 
                    u.name as seller_name, 
                    u.avatar_url as seller_avatar, 
                    s.name as shop_name
-            FROM products p 
+            FROM products p TABLESAMPLE SYSTEM(20)
             JOIN users u ON p.seller_id = u.id
             LEFT JOIN shops s ON p.shop_id = s.id
             WHERE p.status = 'active'
               AND p.is_good_deal = TRUE
-            ORDER BY RANDOM()
             LIMIT $1
         `;
         const result = await pool.query(query, [limit]);
@@ -357,10 +357,13 @@ class ProductRepository {
         return rows[0];
     }
 
-    async findBySeller(sellerId) {
+    async findBySeller(sellerId, limit = 50, offset = 0) {
+        // [FIX #9] Pagination ajoutée — évite un fetch complet pour les vendeurs avec 500+ produits
+        const safeLimit  = Math.min(parseInt(limit)  || 50, 200);
+        const safeOffset = parseInt(offset) || 0;
         const result = await pool.query(
-            "SELECT * FROM products WHERE seller_id = $1 ORDER BY created_at DESC",
-            [sellerId]
+            "SELECT * FROM products WHERE seller_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+            [sellerId, safeLimit, safeOffset]
         );
         return result.rows;
     }

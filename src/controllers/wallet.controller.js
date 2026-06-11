@@ -326,11 +326,22 @@ exports.resolveRecipient = async (req, res) => {
         if (!identifier) {
             return res.status(400).json({ success: false, error: 'Identifier is required' });
         }
-        
+        let cleanIdentifier = identifier.trim();
+        // Si l'identifiant commence par un espace (cas classique du '+' parsé en espace dans les query params URL)
+        // on le remplace par un '+'
+        if (identifier.startsWith(' ')) {
+            cleanIdentifier = '+' + identifier.trim();
+        } else if (!cleanIdentifier.startsWith('+')) {
+            // Optionnel: On peut aussi rajouter le + s'il est manquant et que c'est un numéro (commence par 243 par ex)
+            if (cleanIdentifier.startsWith('243')) {
+                cleanIdentifier = '+' + cleanIdentifier;
+            }
+        }
+
         const pool = require('../config/db');
         const { rows } = await pool.query(
-            'SELECT id, name, phone FROM users WHERE phone = $1',
-            [identifier]
+            'SELECT id, name, phone FROM users WHERE phone = $1 OR phone = $2',
+            [identifier, cleanIdentifier]
         );
         
         if (rows.length > 0) {

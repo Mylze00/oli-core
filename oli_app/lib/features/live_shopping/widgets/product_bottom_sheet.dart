@@ -40,7 +40,10 @@ class _ProductBottomSheetState extends State<ProductBottomSheet> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ProductDetailsPage(product: product),
+              builder: (_) => ProductDetailsPage(
+                product: product,
+                originVideoId: widget.video.id.toString(),
+              ),
             ),
           );
         }

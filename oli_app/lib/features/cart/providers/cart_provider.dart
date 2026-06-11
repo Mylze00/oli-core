@@ -18,6 +18,7 @@ class CartItem {
   final String deliveryMethod;
   final bool isSelected;
   final bool isCertified; // Vendeur/boutique certifié
+  final String? originVideoId;
 
   CartItem({
     required this.productId,
@@ -31,6 +32,7 @@ class CartItem {
     this.deliveryMethod = 'Standard',
     this.isSelected = true,
     this.isCertified = false,
+    this.originVideoId,
   });
 
   double get total => (price * quantity) + deliveryPrice;
@@ -47,6 +49,7 @@ class CartItem {
     String? deliveryMethod,
     bool? isSelected,
     bool? isCertified,
+    String? originVideoId,
   }) {
     return CartItem(
       productId: productId ?? this.productId,
@@ -60,6 +63,7 @@ class CartItem {
       deliveryMethod: deliveryMethod ?? this.deliveryMethod,
       isSelected: isSelected ?? this.isSelected,
       isCertified: isCertified ?? this.isCertified,
+      originVideoId: originVideoId ?? this.originVideoId,
     );
   }
 
@@ -70,6 +74,7 @@ class CartItem {
     quantity: quantity,
     imageUrl: imageUrl,
     sellerName: sellerName,
+    originVideoId: originVideoId,
   );
 
   Map<String, dynamic> toJson() => {
@@ -84,6 +89,7 @@ class CartItem {
     'deliveryMethod': deliveryMethod,
     'isSelected': isSelected,
     'isCertified': isCertified,
+    'originVideoId': originVideoId,
   };
 
   factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
@@ -98,6 +104,7 @@ class CartItem {
     deliveryMethod: json['deliveryMethod'] ?? 'Standard',
     isSelected: json['isSelected'] ?? true,
     isCertified: json['isCertified'] ?? false,
+    originVideoId: json['originVideoId'],
   );
 }
 

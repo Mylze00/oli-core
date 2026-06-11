@@ -8,7 +8,7 @@ import 'package:dropdown_search/dropdown_search.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../../../config/api_config.dart';
 import '../../../core/storage/secure_storage_service.dart';
-// video_compress removed — package no longer in pubspec
+import 'package:video_compress/video_compress.dart';
 
 /// Page d'upload de vidéo de vente
 class VideoUploadPage extends ConsumerStatefulWidget {
@@ -97,21 +97,33 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         request.fields['product_id'] = _selectedProductId!;
       }
 
-      // -- COMPRESSION DE LA VIDÉO (environ 85% de réduction) --
-      // On simule une progression au début
+      // -- COMPRESSION DE LA VIDÉO (environ 80% de réduction) --
       setState(() => _uploadProgress = 0.1);
 
-      // VideoCompress removed — skipping compression, using original file directly
+      final mediaInfo = await VideoCompress.compressVideo(
+        _videoFile!.path,
+        quality: VideoQuality.LowQuality, // Compression agressive
+        deleteOrigin: false, // Garder l'original sur l'appareil
+        includeAudio: true,
+      );
 
       setState(() => _uploadProgress = 0.4);
 
       // Si la compression réussit, on prend le fichier compressé, sinon l'original
-      final videoBytes = await _videoFile!.readAsBytes();
+      List<int> videoBytes;
+      String filename = _videoFile!.name;
+      
+      if (mediaInfo != null && mediaInfo.file != null) {
+        videoBytes = await mediaInfo.file!.readAsBytes();
+        filename = mediaInfo.file!.path.split('/').last;
+      } else {
+        videoBytes = await _videoFile!.readAsBytes();
+      }
 
       request.files.add(http.MultipartFile.fromBytes(
         'video',
         videoBytes,
-        filename: _videoFile!.name,
+        filename: filename,
       ));
 
       setState(() => _uploadProgress = 0.6);
@@ -347,8 +359,8 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                         ),
                         dropdownDecoratorProps: DropDownDecoratorProps(
                           dropdownSearchDecoration: InputDecoration(
-                            hintText: 'Choisir un produit (optionnel)',
-                            hintStyle: const TextStyle(color: Colors.white30),
+                            hintText: 'Choisir un produit (Vidéo Simple sans produit si vide)',
+                            hintStyle: const TextStyle(color: Colors.white60),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,

@@ -210,15 +210,28 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
     }
   }
 
-  Future<Map<String, dynamic>?> addComment(int postId, String content) async {
+  Future<Map<String, dynamic>?> addComment(int postId, String content, {XFile? mediaFile, String? mediaType}) async {
     try {
       final storage = SecureStorageService();
       final token = await storage.getToken();
       
       final dio = Dio();
+      dynamic data;
+
+      if (mediaFile != null) {
+        final bytes = await mediaFile.readAsBytes();
+        data = FormData.fromMap({
+          'content': content,
+          'media_type': mediaType ?? 'image',
+          'media': MultipartFile.fromBytes(bytes, filename: mediaFile.name),
+        });
+      } else {
+        data = {'content': content};
+      }
+
       final response = await dio.post(
         '${ApiConfig.baseUrl}/api/feed/$postId/comments',
-        data: {'content': content},
+        data: data,
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/theme_provider.dart';
@@ -22,7 +23,7 @@ class QuickActionsRow extends ConsumerWidget {
       padding: const EdgeInsets.all(12.0),
       child: Row(
         children: [
-          _buildQuickActionCard(context, isDark, "Catégorie", Icons.grid_view, Colors.orange, () {
+          _buildAnimatedCategoryActionCard(context, isDark, "Catégorie", () {
               if (onCategoryTap != null) {
                 onCategoryTap!();
               } else {
@@ -49,6 +50,32 @@ class QuickActionsRow extends ConsumerWidget {
     );
   }
 
+  Widget _buildAnimatedCategoryActionCard(BuildContext context, bool isDark, String title, VoidCallback? onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap ?? () {},
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _AnimatedCategoryIcon(isDark: isDark),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontFamily: 'CreatoDisplay',
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildQuickActionCard(BuildContext context, bool isDark, String title, IconData icon, Color color, VoidCallback? onTap) {
     return Expanded(
       child: GestureDetector(
@@ -63,8 +90,8 @@ class QuickActionsRow extends ConsumerWidget {
                     ? Colors.white.withOpacity(0.05)
                     : Colors.black.withOpacity(0.06),
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: isDark ? Colors.black : Colors.white, 
+                border: isDark ? null : Border.all(
+                  color: Colors.white, 
                   width: 1.5
                 ),
               ),
@@ -102,8 +129,8 @@ class QuickActionsRow extends ConsumerWidget {
                     ? Colors.white.withOpacity(0.05)
                     : Colors.black.withOpacity(0.06),
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: isDark ? Colors.black : Colors.white, 
+                border: isDark ? null : Border.all(
+                  color: Colors.white, 
                   width: 1.5
                 ),
               ),
@@ -215,14 +242,88 @@ class _LivePulseIconState extends State<_LivePulseIcon> with SingleTickerProvide
             ? Colors.white.withOpacity(0.05)
             : Colors.black.withOpacity(0.06),
         shape: BoxShape.circle,
-        border: Border.all(
-          color: widget.isDark ? Colors.black : Colors.white, 
+        border: widget.isDark ? null : Border.all(
+          color: Colors.white, 
           width: 1.5
         ),
       ),
       child: ScaleTransition(
         scale: _scaleAnimation,
         child: const Icon(Icons.live_tv, color: Colors.redAccent, size: 24),
+      ),
+    );
+  }
+}
+
+class _AnimatedCategoryIcon extends StatefulWidget {
+  final bool isDark;
+  const _AnimatedCategoryIcon({required this.isDark});
+
+  @override
+  State<_AnimatedCategoryIcon> createState() => _AnimatedCategoryIconState();
+}
+
+class _AnimatedCategoryIconState extends State<_AnimatedCategoryIcon> {
+  int _currentIndex = 0;
+  Timer? _timer;
+
+  final List<IconData> _categoryIcons = [
+    Icons.grid_view,
+    Icons.phone_android,
+    Icons.checkroom,
+    Icons.chair,
+    Icons.restaurant,
+    Icons.face,
+    Icons.sports_soccer,
+    Icons.directions_car,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentIndex = (_currentIndex + 1) % _categoryIcons.length;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: widget.isDark
+            ? Colors.white.withOpacity(0.05)
+            : Colors.black.withOpacity(0.06),
+        shape: BoxShape.circle,
+        border: widget.isDark ? null : Border.all(
+          color: Colors.white, 
+          width: 1.5
+        ),
+      ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 600),
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(scale: animation, child: child),
+          );
+        },
+        child: Icon(
+          _categoryIcons[_currentIndex],
+          key: ValueKey<int>(_currentIndex),
+          color: Colors.orange,
+          size: 24,
+        ),
       ),
     );
   }

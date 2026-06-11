@@ -413,6 +413,11 @@ export const productAPI = {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
         return response.data;
+    },
+
+    uploadImageFromUrl: async (imageUrl) => {
+        const response = await api.post('/api/ai/upload-url', { imageUrl });
+        return response.data;
     }
 };
 

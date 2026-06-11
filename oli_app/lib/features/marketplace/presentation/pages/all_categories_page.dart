@@ -69,21 +69,29 @@ class AllCategoriesPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             child: Column(
               children: [
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: hasImage ? Colors.transparent : const Color(0xFFF5F5F5), // Pas de fond si image (fond blanc de l'image)
-                      borderRadius: BorderRadius.circular(24),
-                      // Ombre subtile si pas d'image, ou aucune si image (effet flat 3D)
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.black12,
+                      width: 1,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
                     child: hasImage
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(24),
-                          child: Image.asset(cat['image'], fit: BoxFit.contain)
-                        )
-                      : Center(
-                          child: Icon(cat['icon'], size: 35, color: Colors.grey[700]),
-                        ),
+                      ? Image.asset(cat['image'], fit: BoxFit.contain)
+                      : Icon(cat['icon'], size: 30, color: Colors.grey[700]),
                   ),
                 ),
                 const SizedBox(height: 12),

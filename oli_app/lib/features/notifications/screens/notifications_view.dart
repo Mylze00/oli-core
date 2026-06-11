@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/notification_provider.dart';
 import '../models/notification_model.dart';
 
+import '../../chat/conversations_page.dart';
+import '../../wallet/screens/wallet_screen.dart';
+
+
 class NotificationsView extends ConsumerWidget {
   const NotificationsView({super.key});
 
@@ -240,7 +244,7 @@ class NotificationsView extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              notification.relativeTime,
+              notification.formattedDateTime,
               style: const TextStyle(
                 color: Colors.white38,
                 fontSize: 11,
@@ -264,9 +268,15 @@ class NotificationsView extends ConsumerWidget {
             ref.read(notificationProvider.notifier).markAsRead(notification.id);
           }
 
-          // TODO: Navigation selon le type de notification
-          // Par exemple, si type='message', naviguer vers la conversation
-          // Si type='order', naviguer vers la commande, etc.
+          if (notification.type == 'message') {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const ConversationsPage()));
+          } else if (notification.type == 'payment' || notification.type == 'wallet') {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen()));
+          } else {
+             ScaffoldMessenger.of(context).showSnackBar(
+               SnackBar(content: Text('Détails : ${notification.body}'))
+             );
+          }
         },
       ),
     );

@@ -32,7 +32,9 @@ class NotificationModel {
       data: json['data'] as Map<String, dynamic>?,
       isRead: json['is_read'] ?? false,
       createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      updatedAt: json['updated_at'] != null 
+          ? DateTime.parse(json['updated_at']) 
+          : DateTime.parse(json['created_at']),
     );
   }
 
@@ -109,5 +111,15 @@ class NotificationModel {
     } else {
       return '${createdAt.day}/${createdAt.month}/${createdAt.year}';
     }
+  }
+
+  /// Obtenir la date et l'heure formatées
+  String get formattedDateTime {
+    final day = createdAt.day.toString().padLeft(2, '0');
+    final month = createdAt.month.toString().padLeft(2, '0');
+    final year = createdAt.year.toString();
+    final hour = createdAt.hour.toString().padLeft(2, '0');
+    final minute = createdAt.minute.toString().padLeft(2, '0');
+    return '${day}/${month}/${year} à ${hour}:${minute}';
   }
 }

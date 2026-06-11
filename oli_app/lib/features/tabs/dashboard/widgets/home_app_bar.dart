@@ -106,9 +106,9 @@ class HomeAppBar extends ConsumerWidget {
           // Logo toujours visible
           SafeArea(
             child: Align(
-              alignment: Alignment.topCenter,
+              alignment: const Alignment(-0.25, -1.0),
               child: Padding(
-                padding: const EdgeInsets.only(top: 10.0),
+                padding: const EdgeInsets.only(top: 5.0),
                 child: Image.asset(
                   'assets/images/logo.png',
                   height: 46,

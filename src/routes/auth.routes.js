@@ -6,12 +6,13 @@ const express = require("express");
 const authController = require("../controllers/auth.controller");
 const { requireAuth } = require("../middlewares/auth.middleware");
 const { avatarUpload } = require("../config/upload");
+const { otpSendLimiter, otpVerifyLimiter } = require("../middlewares/rate-limiter.middleware");
 
 const router = express.Router();
 
-// --- Auth Publique ---
-router.post("/send-otp", authController.sendOtp);
-router.post("/verify-otp", authController.verifyOtp);
+// --- Auth Publique --- [SÉCU: Rate limitée contre le brute-force]
+router.post("/send-otp",   otpSendLimiter,   authController.sendOtp);
+router.post("/verify-otp", otpVerifyLimiter, authController.verifyOtp);
 
 // --- Auth Requise ---
 router.post("/update-profile", requireAuth, authController.updateProfile);

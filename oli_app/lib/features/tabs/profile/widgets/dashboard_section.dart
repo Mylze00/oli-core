@@ -10,6 +10,7 @@ import '../../../shop/screens/publish_article_page.dart';
 import '../../../shop/screens/my_shops_screen.dart';
 import '../../../wallet/screens/wallet_screen.dart';
 import '../../../notifications/screens/notifications_view.dart';
+import '../../../notifications/providers/notification_provider.dart';
 import '../../../settings/screens/settings_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,6 +225,7 @@ class _BuyerGrid extends StatelessWidget {
   @override
   Widget build(BuildContext wCtx) {
     final ordersAsync = ref.watch(ordersProvider);
+    final notificationState = ref.watch(notificationProvider);
 
     int total = 0;
     int inProgress = 0;
@@ -274,6 +276,8 @@ class _BuyerGrid extends StatelessWidget {
       _DashItem(
         icon: Icons.notifications_outlined,
         label: 'Alertes',
+        count: notificationState.unreadCount,
+        countColor: Colors.red,
         onTap: () => Navigator.push(context,
             MaterialPageRoute(builder: (_) => const NotificationsView())),
       ),

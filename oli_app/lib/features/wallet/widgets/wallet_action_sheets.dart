@@ -216,8 +216,8 @@ class RecevoirSheet extends ConsumerWidget {
     final authState = ref.watch(authControllerProvider);
     final phone = authState.userData?['phone'] ?? '';
     final name = authState.userData?['name'] ?? 'Utilisateur';
-    // QR data : Format sécurisé contenant uniquement l'identifiant
-    final qrData = 'oli://pay?id=$phone';
+    // QR data : Format sécurisé contenant uniquement l'identifiant (encodé pour préserver le +)
+    final qrData = 'oli://pay?id=${Uri.encodeComponent(phone)}';
 
     return _DarkSheet(
       title: 'Recevoir de l\'argent',
@@ -372,10 +372,12 @@ class HistoriqueSheet extends ConsumerWidget {
                         : Icons.arrow_upward_rounded;
                     final sign = isCredit ? '+' : '-';
 
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                      child: Row(
-                        children: [
+                    return InkWell(
+                      onTap: () => _showTxDetail(context, tx, color, icon, sign),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                        child: Row(
+                          children: [
                           Container(
                             width: 38,
                             height: 38,
@@ -425,29 +427,138 @@ class HistoriqueSheet extends ConsumerWidget {
                                 ),
                               ),
                               Container(
-                                margin: const EdgeInsets.only(top: 3),
+                                margin: const EdgeInsets.only(top: 4),
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
+                                    horizontal: 6, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: _statusColor(tx.status).withOpacity(0.15),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text(
-                                  _statusLabel(tx.status),
-                                  style: TextStyle(
-                                    color: _statusColor(tx.status),
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (tx.status == 'pending')
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 4),
+                                        child: SizedBox(width: 8, height: 8, child: CircularProgressIndicator(color: _statusColor(tx.status), strokeWidth: 1.5)),
+                                      )
+                                    else if (tx.status == 'completed')
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 4),
+                                        child: Icon(Icons.check_circle_rounded, size: 10, color: _statusColor(tx.status)),
+                                      )
+                                    else if (tx.status == 'failed')
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 4),
+                                        child: Icon(Icons.cancel_rounded, size: 10, color: _statusColor(tx.status)),
+                                      ),
+                                    Text(
+                                      _statusLabel(tx.status),
+                                      style: TextStyle(
+                                        color: _statusColor(tx.status),
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
+              ),
+    );
+  }
+
+  void _showTxDetail(BuildContext context, dynamic tx, Color color, IconData icon, String sign) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _DarkSheet(
+        title: 'Détails de l\'opération',
+        icon: Icons.receipt_long_rounded,
+        iconColor: color,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 48),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '$sign ${tx.amount.toStringAsFixed(0)} FC',
+              style: TextStyle(color: color, fontSize: 32, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _statusColor(tx.status).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (tx.status == 'pending')
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: _statusColor(tx.status), strokeWidth: 2)),
+                    )
+                  else if (tx.status == 'completed')
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(Icons.check_circle_rounded, size: 14, color: _statusColor(tx.status)),
+                    )
+                  else if (tx.status == 'failed')
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(Icons.cancel_rounded, size: 14, color: _statusColor(tx.status)),
+                    ),
+                  Text(
+                    _statusLabel(tx.status),
+                    style: TextStyle(color: _statusColor(tx.status), fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            _buildDetailRow('Type d\'opération', _txLabel(tx.type)),
+            _buildDetailRow('Description', tx.description.isNotEmpty ? tx.description : 'Aucune description'),
+            _buildDetailRow('Fournisseur / Méthode', tx.provider ?? 'N/A'),
+            _buildDetailRow('Référence interne', tx.reference ?? 'N/A'),
+            _buildDetailRow('Date', _formatDate(tx.createdAt)),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -971,6 +1082,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
   String _provider = 'orange';
   bool _isLoading = false;
   String? _error;
+  bool _isUSD = false;
 
   final _providers = [
     {'value': 'orange', 'label': 'Orange', 'color': Color(0xFFF97316)},
@@ -1022,18 +1134,19 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
   }
 
   Future<void> _submit() async {
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.'));
-    if (amount == null || amount <= 0) {
+    final amountInput = double.tryParse(_amountCtrl.text.replaceAll(',', '.'));
+    if (amountInput == null || amountInput <= 0) {
       setState(() => _error = 'Montant invalide');
       return;
     }
+    final amountFC = _isUSD ? amountInput * 2300 : amountInput;
     if (_phoneCtrl.text.trim().isEmpty) {
       setState(() => _error = 'Numéro Mobile Money requis');
       return;
     }
 
     final confirmed = await biometricService.authenticate(
-      reason: 'Confirmer ${widget.buttonLabel} de ${amount.toStringAsFixed(0)} FC',
+      reason: 'Confirmer ${widget.buttonLabel} de ${amountFC.toStringAsFixed(0)} FC',
     );
     if (!confirmed) {
       setState(() => _error = 'Authentification annulée');
@@ -1042,7 +1155,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
 
     setState(() { _isLoading = true; _error = null; });
     
-    final ok = await widget.onSubmit(amount, _provider, _phoneCtrl.text.trim());
+    final ok = await widget.onSubmit(amountFC, _provider, _phoneCtrl.text.trim());
     setState(() => _isLoading = false);
 
     if (mounted) {
@@ -1064,8 +1177,8 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
   @override
   Widget build(BuildContext context) {
     final maxH = MediaQuery.of(context).size.height * 0.9;
-    const currencySymbol = 'FC';
-    const hintCurrency = 'FC';
+    final currencySymbol = _isUSD ? '\$' : 'FC';
+    final hintCurrency = _isUSD ? 'USD' : 'FC';
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -1168,7 +1281,45 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
                       const SizedBox(height: 20),
                       
                       // Montant
-                      Text('Montant', style: TextStyle(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Montant', style: TextStyle(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w600)),
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              _isUSD = !_isUSD;
+                              _amountCtrl.clear();
+                            }),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE2E8F0).withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: _isUSD ? const Color(0xFF1E7DBA) : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text('\$', style: TextStyle(color: _isUSD ? Colors.white : const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: !_isUSD ? const Color(0xFF1E7DBA) : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text('FC', style: TextStyle(color: !_isUSD ? Colors.white : const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
                       TextField(
                         controller: _amountCtrl,
@@ -1191,12 +1342,23 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
                         ),
                       ),
                       
+                      // Légende FC si USD
+                      if (_isUSD && _amountCtrl.text.isNotEmpty && double.tryParse(_amountCtrl.text.replaceAll(',', '.')) != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0, left: 4.0),
+                          child: Text(
+                            '≈ ${(double.parse(_amountCtrl.text.replaceAll(',', '.')) * 2300).toStringAsFixed(0)} FC',
+                            style: const TextStyle(color: Color(0xFF1E7DBA), fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      
                       // Frais preview
                       if (_amountCtrl.text.isNotEmpty && double.tryParse(_amountCtrl.text.replaceAll(',', '.')) != null)
                         Builder(builder: (context) {
-                          final amt = double.parse(_amountCtrl.text.replaceAll(',', '.'));
-                          final fee = amt * 0.05;
-                          final total = amt + fee;
+                          final amountInput = double.parse(_amountCtrl.text.replaceAll(',', '.'));
+                          final amtFC = _isUSD ? amountInput * 2300 : amountInput;
+                          final fee = amtFC * 0.05;
+                          final total = amtFC + fee;
                           final isDeposit = widget.buttonLabel.toLowerCase().contains('recharger');
                           return Padding(
                             padding: const EdgeInsets.only(top: 12),
@@ -1213,7 +1375,7 @@ class _MobileMoneyFormState extends ConsumerState<_MobileMoneyForm> {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       const Text('Montant demandé :', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-                                      Text('${amt.toStringAsFixed(0)} FC', style: const TextStyle(color: Color(0xFF103652), fontSize: 13, fontWeight: FontWeight.w700)),
+                                      Text('${amtFC.toStringAsFixed(0)} FC', style: const TextStyle(color: Color(0xFF103652), fontSize: 13, fontWeight: FontWeight.w700)),
                                     ],
                                   ),
                                   const SizedBox(height: 8),

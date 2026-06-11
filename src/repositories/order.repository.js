@@ -53,9 +53,9 @@ async function createOrder(userId, items, deliveryAddress, paymentMethod, delive
     // Ajouter les items
     for (const item of items) {
       await client.query(`
-        INSERT INTO order_items (order_id, product_id, product_name, product_image_url, product_price, quantity, seller_name)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [order.id, item.productId, item.productName, item.imageUrl, item.price, item.quantity, item.sellerName]);
+        INSERT INTO order_items (order_id, product_id, product_name, product_image_url, product_price, quantity, seller_name, origin_video_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [order.id, item.productId, item.productName, item.imageUrl, item.price, item.quantity, item.sellerName, item.originVideoId || null]);
     }
 
     await client.query('COMMIT');
@@ -72,7 +72,11 @@ async function createOrder(userId, items, deliveryAddress, paymentMethod, delive
 /**
  * Récupérer toutes les commandes d'un utilisateur
  */
-async function getOrdersByUser(userId) {
+async function getOrdersByUser(userId, limit = 50, offset = 0) {
+  // [FIX #9] Pagination ajoutée — évite un fetch complet pour les gros comptes
+  const safeLimit  = Math.min(parseInt(limit)  || 50, 100); // Max 100
+  const safeOffset = parseInt(offset) || 0;
+
   const ordersResult = await pool.query(`
     SELECT o.*, 
            json_agg(json_build_object(
@@ -89,7 +93,8 @@ async function getOrdersByUser(userId) {
     WHERE o.user_id = $1
     GROUP BY o.id
     ORDER BY o.created_at DESC
-  `, [userId]);
+    LIMIT $2 OFFSET $3
+  `, [userId, safeLimit, safeOffset]);
 
   return ordersResult.rows;
 }

@@ -78,6 +78,7 @@ class OrderItem {
   final double price;
   final int quantity;
   final String? sellerName;
+  final String? originVideoId;
 
   OrderItem({
     this.id,
@@ -87,6 +88,7 @@ class OrderItem {
     required this.price,
     required this.quantity,
     this.sellerName,
+    this.originVideoId,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -98,6 +100,7 @@ class OrderItem {
       price: double.tryParse(json['price']?.toString() ?? '0') ?? 0,
       quantity: json['quantity'] ?? 1,
       sellerName: json['sellerName'] ?? json['seller_name'],
+      originVideoId: json['originVideoId'] ?? json['origin_video_id'],
     );
   }
 
@@ -108,6 +111,7 @@ class OrderItem {
     'price': price,
     'quantity': quantity,
     'sellerName': sellerName,
+    'originVideoId': originVideoId,
   };
 
   double get total => price * quantity;

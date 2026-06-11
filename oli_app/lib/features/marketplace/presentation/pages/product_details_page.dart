@@ -33,7 +33,8 @@ import '../../../shop/screens/edit_product_page.dart';
 import '../widgets/market_product_card.dart'; // Import pour les produits similaires
 class ProductDetailsPage extends ConsumerStatefulWidget {
   final Product product;
-  const ProductDetailsPage({super.key, required this.product});
+  final String? originVideoId;
+  const ProductDetailsPage({super.key, required this.product, this.originVideoId});
   @override
   ConsumerState<ProductDetailsPage> createState() => _ProductDetailsPageState();
 }
@@ -149,6 +150,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       sellerId: p.sellerId,
       deliveryPrice: _selectedShipping?.cost ?? 0.0,
       deliveryMethod: _selectedShipping?.label ?? 'Standard',
+      originVideoId: widget.originVideoId,
     );
     
     ref.read(cartProvider.notifier).addItem(cartItem);
@@ -193,6 +195,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       sellerId: p.sellerId,
       deliveryPrice: _selectedShipping?.cost ?? p.deliveryPrice,
       deliveryMethod: _selectedShipping?.label ?? 'Standard',
+      originVideoId: widget.originVideoId,
     );
     
     Navigator.push(

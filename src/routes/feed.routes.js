@@ -20,6 +20,6 @@ router.post('/:id/like', requireAuth, feedController.toggleLike);
 router.get('/:id/comments', feedController.getComments);
 
 // Ajouter un commentaire à une publication
-router.post('/:id/comments', requireAuth, feedController.addComment);
+router.post('/:id/comments', requireAuth, genericUpload.single('media'), feedController.addComment);
 
 module.exports = router;

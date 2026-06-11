@@ -71,6 +71,9 @@ class SocketService {
     // Ecoute des messages entrants
     _socket!.on('new_message', (data) => _onMessageReceived(data));
     
+    // Ecoute des notifications entrantes
+    _socket!.on('new_notification', (data) => _onNotificationReceived(data));
+    
     // Ecoute des changements de statut (online/offline) — handler séparé (#9)
     // Ecoute des changements de statut (online/offline) — handler séparé (#9)
     _socket!.on('user_status', (data) {
@@ -88,7 +91,7 @@ class SocketService {
             context,
             MaterialPageRoute(
               builder: (_) => CallScreen(
-                otherId: data['callerId']?.toString() ?? '',
+                otherId: data['fromId']?.toString() ?? data['callerId']?.toString() ?? '',
                 otherName: data['callerName']?.toString() ?? 'Utilisateur',
                 otherAvatarUrl: data['callerAvatar']?.toString(),
                 isVideoCall: data['type'] == 'video',
@@ -183,6 +186,7 @@ class SocketService {
   // Callbacks séparés pour messages et statuts (#9)
   Function(Map<String, dynamic>)? _messageHandler;
   Function(Map<String, dynamic>)? _statusHandler;
+  Function(Map<String, dynamic>)? _notificationHandler;
 
   /// Enregistrer un callback pour les messages reçus
   VoidCallback onMessage(Function(Map<String, dynamic>) callback) {
@@ -194,6 +198,12 @@ class SocketService {
   VoidCallback onUserStatus(Function(Map<String, dynamic>) callback) {
     _statusHandler = callback;
     return () => _statusHandler = null;
+  }
+  
+  /// Enregistrer un callback pour les notifications
+  VoidCallback onNotification(Function(Map<String, dynamic>) callback) {
+    _notificationHandler = callback;
+    return () => _notificationHandler = null;
   }
   
   // Generic handler for other events
@@ -218,6 +228,12 @@ class SocketService {
   void _onStatusChanged(dynamic data) {
     if (_statusHandler != null && data is Map) {
       _statusHandler!(Map<String, dynamic>.from(data));
+    }
+  }
+
+  void _onNotificationReceived(dynamic data) {
+    if (_notificationHandler != null && data is Map) {
+      _notificationHandler!(Map<String, dynamic>.from(data));
     }
   }
 

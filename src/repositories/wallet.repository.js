@@ -281,6 +281,15 @@ const walletRepository = {
         return res.rows[0];
     },
 
+    /**
+     * Insère une ligne dans wallet_transactions.
+     * @param {object} client    - Client PostgreSQL (dans une transaction)
+     * @param {object} txData    - { userId, type, amount, balanceBefore, balanceAfter, provider, reference, description }
+     *
+     * [FIX #7] balanceBefore est maintenant passé explicitement par le caller.
+     * L'ancien calcul (balanceAfter - txData.amount) était incorrect pour les débits
+     * où amount est négatif, produisant un balance_before erroné dans l'historique.
+     */
     async _insertTx(client, txData) {
         await client.query(`
             INSERT INTO wallet_transactions
@@ -288,8 +297,9 @@ const walletRepository = {
                  currency, provider, reference, description, status)
             VALUES ($1,$2,$3,$4,$5,'FC',$6,$7,$8,'completed')
         `, [
-            txData.userId, txData.type, txData.amount, 
-            txData.balanceAfter - txData.amount, txData.balanceAfter,
+            txData.userId, txData.type, txData.amount,
+            txData.balanceBefore,   // [FIX] Passé explicitement — ne jamais recalculer
+            txData.balanceAfter,
             txData.provider, txData.reference, txData.description
         ]);
     }

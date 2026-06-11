@@ -46,7 +46,7 @@ const FEES = {
 // ─────────────────────────────────────────────────────────────────────────────
 // TAUX DE CHANGE — Valeur de secours uniquement (utiliser exchange-rate.service en prod)
 // ─────────────────────────────────────────────────────────────────────────────
-const FC_TO_USD_FALLBACK = parseFloat(process.env.FC_TO_USD_FALLBACK || "2800");
+const FC_TO_USD_FALLBACK = parseFloat(process.env.FC_TO_USD_FALLBACK || "2300");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // URLs

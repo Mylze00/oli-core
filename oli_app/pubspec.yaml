@@ -109,6 +109,7 @@ flutter:
     - assets/images/operators/
     - assets/images/bandes/
     - assets/translations/
+    - assets/sounds/
 
   fonts:
     - family: CreatoDisplay

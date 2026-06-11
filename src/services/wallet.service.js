@@ -90,6 +90,7 @@ class WalletService {
                 userId: 0,
                 type: 'credit',
                 amount: amount,
+                balanceBefore: parseFloat(sysWallet.balance), // [FIX #7]
                 balanceAfter: newBalance,
                 provider: 'SYSTEM_FEE',
                 reference,
@@ -387,7 +388,7 @@ class WalletService {
             await client.query(`UPDATE users SET wallet = $1 WHERE id = $2`, [newSenderBalance, senderId]);
             await walletRepository._insertTx(client, {
                 walletId: senderWallet.id, userId: senderId, type: 'transfer',
-                amount: -totalDebit, balanceAfter: newSenderBalance,
+                amount: -totalDebit, balanceBefore: senderBalance, balanceAfter: newSenderBalance, // [FIX #7]
                 provider: 'P2P', reference,
                 description: `Envoi à ${receiverName} (frais ${feeAmount} FC inclus)`,
             });
@@ -400,7 +401,7 @@ class WalletService {
             await client.query(`UPDATE users SET wallet = $1 WHERE id = $2`, [newReceiverBalance, receiverId]);
             await walletRepository._insertTx(client, {
                 walletId: receiverWallet.id, userId: receiverId, type: 'transfer',
-                amount, balanceAfter: newReceiverBalance,
+                amount, balanceBefore: parseFloat(receiverWallet.balance), balanceAfter: newReceiverBalance, // [FIX #7]
                 provider: 'P2P', reference,
                 description: `Reçu de ${senderName}`,
             });

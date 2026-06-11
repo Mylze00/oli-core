@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:video_compress/video_compress.dart';
 import '../../providers/feed_provider.dart';
 
 class FeedCommentsBottomSheet extends ConsumerStatefulWidget {
@@ -16,6 +19,9 @@ class _FeedCommentsBottomSheetState extends ConsumerState<FeedCommentsBottomShee
   List<Map<String, dynamic>> _comments = [];
   bool _isLoading = true;
   bool _isPosting = false;
+  XFile? _selectedMedia;
+  String? _selectedMediaType;
+  bool _isCompressing = false;
 
   @override
   void initState() {
@@ -33,18 +39,64 @@ class _FeedCommentsBottomSheetState extends ConsumerState<FeedCommentsBottomShee
     }
   }
 
+  Future<void> _pickMedia() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickMedia();
+
+    if (pickedFile != null) {
+      setState(() {
+        _selectedMedia = pickedFile;
+        // Determine type loosely by extension or mime
+        final path = pickedFile.path.toLowerCase();
+        if (path.endsWith('.mp4') || path.endsWith('.mov') || path.endsWith('.avi')) {
+          _selectedMediaType = 'video';
+        } else {
+          _selectedMediaType = 'image';
+        }
+      });
+
+      // Compress video if it's a video
+      if (_selectedMediaType == 'video') {
+        setState(() => _isCompressing = true);
+        try {
+          final info = await VideoCompress.compressVideo(
+            pickedFile.path,
+            quality: VideoQuality.MediumQuality,
+            deleteOrigin: false,
+          );
+          if (info != null && info.file != null) {
+            setState(() {
+              _selectedMedia = XFile(info.file!.path);
+            });
+          }
+        } catch (e) {
+          debugPrint("Video compression error: $e");
+        } finally {
+          setState(() => _isCompressing = false);
+        }
+      }
+    }
+  }
+
   Future<void> _postComment() async {
     final text = _commentController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && _selectedMedia == null) return;
 
     setState(() { _isPosting = true; });
 
-    final newComment = await ref.read(feedProvider.notifier).addComment(widget.postId, text);
+    final newComment = await ref.read(feedProvider.notifier).addComment(
+      widget.postId, 
+      text,
+      mediaFile: _selectedMedia,
+      mediaType: _selectedMediaType,
+    );
     
     if (mounted) {
       setState(() { _isPosting = false; });
       if (newComment != null) {
         _commentController.clear();
+        _selectedMedia = null;
+        _selectedMediaType = null;
         setState(() {
           _comments.add(newComment);
         });
@@ -111,11 +163,76 @@ class _FeedCommentsBottomSheetState extends ConsumerState<FeedCommentsBottomShee
                               : null,
                         ),
                         title: Text(comment['author_name'] ?? 'Utilisateur', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(comment['content'] ?? ''),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (comment['content'] != null && comment['content'].toString().isNotEmpty)
+                              Text(comment['content']),
+                            if (comment['media_url'] != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: comment['media_type'] == 'video'
+                                    ? Container(
+                                        height: 150,
+                                        width: double.infinity,
+                                        color: Colors.black12,
+                                        alignment: Alignment.center,
+                                        child: const Icon(Icons.play_circle_fill, size: 40, color: Colors.white70),
+                                      )
+                                    : Image.network(
+                                        comment['media_url'],
+                                        height: 150,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                      ),
+                                ),
+                              ),
+                          ],
+                        ),
                       );
                     },
                   ),
           ),
+          
+          // Preview of selected media
+          if (_selectedMedia != null)
+            Container(
+              padding: const EdgeInsets.all(8.0),
+              alignment: Alignment.centerLeft,
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: _selectedMediaType == 'video' 
+                      ? Container(
+                          width: 80, height: 80, color: Colors.black26, 
+                          child: const Icon(Icons.videocam, color: Colors.white)
+                        )
+                      : Image.file(File(_selectedMedia!.path), width: 80, height: 80, fit: BoxFit.cover),
+                  ),
+                  Positioned(
+                    top: -10,
+                    right: -10,
+                    child: IconButton(
+                      icon: const Icon(Icons.cancel, color: Colors.red),
+                      onPressed: () => setState(() {
+                        _selectedMedia = null;
+                        _selectedMediaType = null;
+                      }),
+                    ),
+                  ),
+                  if (_isCompressing)
+                    const Positioned.fill(
+                      child: Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
           // Input
           Padding(
             padding: const EdgeInsets.all(8.0),
@@ -130,6 +247,11 @@ class _FeedCommentsBottomSheetState extends ConsumerState<FeedCommentsBottomShee
                         borderRadius: BorderRadius.circular(24),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      prefixIcon: IconButton(
+                        icon: const Icon(Icons.camera_alt_outlined),
+                        onPressed: _pickMedia,
+                        tooltip: "Joindre une photo ou vidéo",
+                      ),
                     ),
                     maxLines: null,
                     textInputAction: TextInputAction.send,

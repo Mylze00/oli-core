@@ -1,4 +1,5 @@
 const { OpenAI } = require('openai');
+const cloudinary = require('cloudinary').v2;
 
 const analyzeProductImage = async (req, res) => {
     try {
@@ -71,6 +72,31 @@ Tu dois répondre STRICTEMENT et UNIQUEMENT avec un objet JSON valide, sans bali
     }
 };
 
+const uploadImageFromUrl = async (req, res) => {
+    try {
+        const { imageUrl } = req.body;
+        if (!imageUrl) {
+            return res.status(400).json({ error: 'Aucune URL d\'image fournie.' });
+        }
+
+        const result = await cloudinary.uploader.upload(imageUrl, {
+            folder: 'products'
+        });
+
+        res.json({
+            success: true,
+            secure_url: result.secure_url
+        });
+    } catch (error) {
+        console.error('Erreur Cloudinary Upload:', error);
+        res.status(500).json({
+            error: 'Erreur lors du téléchargement de l\'image vers Cloudinary.',
+            details: error.message
+        });
+    }
+};
+
 module.exports = {
-    analyzeProductImage
+    analyzeProductImage,
+    uploadImageFromUrl
 };

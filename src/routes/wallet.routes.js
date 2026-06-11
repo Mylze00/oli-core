@@ -28,6 +28,7 @@
 const express          = require('express');
 const router           = express.Router();
 const walletController = require('../controllers/wallet.controller');
+const { walletOperationLimiter } = require('../middlewares/rate-limiter.middleware');
 
 // ─── GET /api/wallet/balance ─────────────────────────────────────────────────
 // Solde actuel du wallet de l'utilisateur connecté.
@@ -60,7 +61,7 @@ router.get('/status/:orderId', walletController.getPaymentStatus);
 //                 → POST Unipesa C2B → PUSH USSD téléphone → status "pending"
 //
 // Le crédit du wallet OLI est effectué APRÈS réception du webhook Unipesa.
-router.post('/deposit', walletController.deposit);
+router.post('/deposit', walletOperationLimiter, walletController.deposit);
 
 // ─── POST /api/wallet/deposit-card ───────────────────────────────────────────
 // Recharge via Carte bancaire (Equity/Ecobank — non disponible actuellement)
@@ -76,7 +77,7 @@ router.post('/deposit-card', walletController.depositCard);
 // Flux interne  : walletService.withdraw() → débit immédiat wallet
 //                 → unipesaService.initiateWithdrawal() → B2C Unipesa
 //                 → push fonds vers téléphone
-router.post('/withdraw', walletController.withdraw);
+router.post('/withdraw', walletOperationLimiter, walletController.withdraw);
 
 // ─── GET /api/wallet/resolve-recipient ───────────────────────────────────────
 // Résoudre un utilisateur par son numéro de téléphone ou email

@@ -24,7 +24,7 @@ class AutoRefreshAvatar extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
+          border: Border.all(color: Colors.white, width: 1),
           color: Colors.grey[800],
         ),
         child: Icon(fallbackIcon, color: Colors.white, size: size * 0.6),
@@ -48,7 +48,7 @@ class AutoRefreshAvatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(color: Colors.white, width: 1),
       ),
       child: ClipOval(
         child: _buildImageWidget(finalUrl),

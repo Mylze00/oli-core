@@ -34,7 +34,7 @@ const paymentRoutes = require("./routes/payment.routes"); // 💳 Routes Paiemen
 const webhookRoutes = require("./routes/webhook.routes"); // 🔔 Webhooks (Unipesa)
 const oliBankRoutes = require("./routes/oli_bank.routes"); // 🏦 OLI Bank — Portail Cryptographique
 const unipesaRoutes = require("./routes/unipesa.routes"); // 💰 Dépôts Mobile Money C2B/B2C — Unipesa
-const { requireAuth, optionalAuth } = require("./middlewares/auth.middleware");
+const { requireAuth, optionalAuth, requireRole } = require("./middlewares/auth.middleware");
 const oliSessionMiddleware = require("./middlewares/oli_session.middleware"); // 📊 Session Tracking
 
 const app = express();
@@ -216,19 +216,16 @@ io.on('connection', (socket) => {
 // --- MIDDLEWARES GÉNÉRAUX ---
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (mobile apps, curl, etc)
+        // Requêtes sans origine : apps mobiles, Postman, curl — autorisées
         if (!origin) return callback(null, true);
-        
-        // Allow all Vercel deployments (including preview URLs)
-        if (origin.endsWith('.vercel.app')) {
-            return callback(null, true);
-        }
 
+        // [SÉCU] Whitelist stricte : seuls les domaines explicitement listés sont acceptés.
+        // Les domaines Vercel autorisés (admin, seller) sont dans config.ALLOWED_ORIGINS (config/index.js).
+        // NE PAS utiliser *.vercel.app : cela permettrait à n'importe quelle app Vercel d'accéder à l'API.
         if (config.ALLOWED_ORIGINS.includes('*') || config.ALLOWED_ORIGINS.includes(origin)) {
             callback(null, true);
         } else {
             console.error(`❌ CORS blocked origin: ${origin}`);
-            console.error(`   Allowed origins: ${JSON.stringify(config.ALLOWED_ORIGINS)}`);
             callback(new Error(`CORS not allowed for origin: ${origin}`));
         }
     },
@@ -273,10 +270,10 @@ app.use("/auth", authRoutes);
 app.use("/products", optionalAuth, productsRoutes);
 app.use("/api/price-strategy", require('./routes/price-strategy.routes')); // 💰 Stratégie prix
 
-// 🤖 Worker prix - routes de contrôle
+// 🤖 Worker prix - routes de contrôle [SÉCU: admin uniquement]
 const priceWorker = require('./services/price-worker');
-app.get('/api/price-worker/stats', (req, res) => res.json(priceWorker.getStats()));
-app.post('/api/price-worker/run', async (req, res) => {
+app.get('/api/price-worker/stats', requireAuth, requireRole('admin'), (req, res) => res.json(priceWorker.getStats()));
+app.post('/api/price-worker/run', requireAuth, requireRole('admin'), async (req, res) => {
     try {
         const stats = await priceWorker.runPriceAnalysis({ manual: true });
         res.json({ success: true, stats });
@@ -302,11 +299,11 @@ app.use("/addresses", requireAuth, require('./routes/address.routes'));
 app.use("/notifications", requireAuth, require('./routes/notifications.routes')); // 🔔 Notifications
 app.use("/device-tokens", requireAuth, require('./routes/device-tokens.routes')); // 📱 Tokens FCM
 
-// 🆕 Routes pour l'architecture utilisateur unifiée
-app.use("/api/identity", require('./routes/identity.routes'));
-app.use("/api/verification", require('./routes/verification.routes'));
-app.use("/api/behavior", require('./routes/behavior.routes'));
-app.use("/api/trust-score", require('./routes/trust-score.routes'));
+// 🆕 Routes pour l'architecture utilisateur unifiée [SÉCU: auth requise]
+app.use("/api/identity", requireAuth, require('./routes/identity.routes'));
+app.use("/api/verification", requireAuth, require('./routes/verification.routes'));
+app.use("/api/behavior", requireAuth, require('./routes/behavior.routes'));
+app.use("/api/trust-score", requireAuth, require('./routes/trust-score.routes'));
 app.use("/api/exchange-rate", require('./routes/exchange-rate.routes')); // 💱 Taux de change
 app.use("/api/delivery-methods", require('./routes/delivery-methods.routes')); // 🚚 Méthodes de livraison
 app.use("/delivery-methods", require('./routes/delivery-methods.routes'));      // 🔁 Alias sans /api (compat frontend)
@@ -330,7 +327,10 @@ app.use('/search', require('./routes/search.routes')); // Recherche visuelle
 app.use("/setup", require("./routes/setup.routes")); // Utility route for migration
 app.use("/services", require("./routes/services.routes")); // ✨ Services dynamiques (Public)
 app.use("/support", requireAuth, require("./routes/support.routes")); // 🎫 Support tickets utilisateur
-app.use("/api/debug", require("./routes/debug.routes")); // 🐞 Debug DB Schema (Temporary)
+// [SÉCU] Route debug : admin uniquement — NE JAMAIS exposer publiquement
+if (process.env.NODE_ENV !== 'production') {
+    app.use("/api/debug", requireAuth, requireRole('admin'), require("./routes/debug.routes"));
+} // En production : route désactivée
 app.use("/api/ai", require("./routes/ai.routes")); // 🧠 Import IA (Analyse vision)
 app.use("/api/n8n", require("./routes/n8n.routes")); // 🤖 n8n Import Automatique Produits Chinois
 

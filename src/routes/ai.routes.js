@@ -23,4 +23,7 @@ const upload = multer({
 // Route POST /api/ai/analyze-screenshot
 router.post('/analyze-screenshot', requireAuth, upload.single('image'), aiController.analyzeProductImage);
 
+// Route POST /api/ai/upload-url
+router.post('/upload-url', requireAuth, aiController.uploadImageFromUrl);
+
 module.exports = router;

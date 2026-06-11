@@ -30,18 +30,20 @@ const CATEGORY_DICT = {
             'sono', 'jbl', 'harman', 'bose', 'sony wh', 'airpods', 'earbuds',
             'subwoofer', 'ampli', 'amplificateur', 'home theater', 'home cinéma',
             'dvd', 'soundbar', 'hifi', 'hi-fi', 'radio', 'fm', 'stereo',
-            'microphone', 'micro', 'karaoke', 'karaoke',
+            'microphone', 'micro', 'karaoke', 'audio', 'sound',
         ],
         climatisation: [
             'climatiseur', 'climatisation', 'clim', 'ac', 'inverter', 'btu', 'split',
             'cassette', 'gainable', 'armoire frigorifique', 'vmc', 'pompe à chaleur',
-            'ventilateur', 'ventilo', 'fan', 'purificateur d\'air',
+            'ventilateur', 'ventilo', 'fan', 'purificateur d\'air', 'air conditioner',
         ],
         electromenager: [
             'réfrigérateur', 'refrigerateur', 'frigo', 'congélateur', 'congelateur',
-            'lave-linge', 'machine à laver', 'lave linge', 'sèche-linge', 'seche linge',
-            'lave-vaisselle', 'four', 'micro-onde', 'micro onde', 'cuisinière', 'cuisiniere',
-            'plaque', 'hotte', 'aspirateur', 'robot ménager', 'mixeur', 'blender',
+            'freezer', 'ref', 'gn-', 'gr-', 'gc-', 'lave-linge', 'machine à laver', 
+            'lave linge', 'sèche-linge', 'seche linge', 'wm', 'dryer', 'washer',
+            'lave-vaisselle', 'four', 'micro-onde', 'micro onde', 'microwave', 'oven',
+            'cuisinière', 'cuisiniere', 'cooker', 'plaque', 'hotte', 'aspirateur', 
+            'robot ménager', 'mixeur', 'blender', 'air fryer',
             'cafetière', 'bouilloire', 'grille-pain', 'fer à repasser', 'pressing',
             'generatrice', 'groupe électrogène', 'groupe electrogene', 'onduleur', 'ups',
         ],
@@ -471,8 +473,9 @@ function categorizeByName(name, description = '') {
         for (const [subcat, keywords] of Object.entries(subcats)) {
             let score = 0;
             for (const kw of keywords) {
-                // Correspondance exacte de mot-clé (y compris multi-mots)
-                if (text.includes(kw)) {
+                // Correspondance exacte de mot-clé (y compris multi-mots) via regex pour éviter "audi" dans "audio"
+                const kwRegex = new RegExp('\\b' + kw.replace(/[-/\\\\^$*+?.()|[\\]{}]/g, '\\\\$&') + '\\b', 'i');
+                if (kwRegex.test(text)) {
                     // Bonus si le mot-clé est une marque ou terme long (> 4 caractères)
                     const bonus = kw.length >= 5 ? 3 : (kw.length >= 3 ? 2 : 1);
                     score += bonus;

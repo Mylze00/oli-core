@@ -9,6 +9,7 @@ import '../../../settings/screens/settings_page.dart';
 import '../../../../config/api_config.dart';
 import 'package:oli_app/features/tabs/profile/screens/verification_landing_page.dart';
 import 'avatar_preview_dialog.dart';
+import '../../../../core/providers/location_provider.dart';
 
 class ProfileHeader extends ConsumerWidget {
   final Map<String, dynamic> user;
@@ -22,23 +23,47 @@ class ProfileHeader extends ConsumerWidget {
         // Top Bar (Location Badge aligned to right)
         Align(
           alignment: Alignment.centerRight,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.location_on, color: Colors.white, size: 14),
-                SizedBox(width: 4),
-                Text(
-                  "Kinshasa", 
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+          child: Consumer(
+            builder: (context, ref, child) {
+              final locationAsync = ref.watch(userLocationProvider);
+              final defaultAddr = ref.watch(defaultAddressProvider);
+              final fallbackCity = defaultAddr?.ville ?? user['city']?.toString() ?? "Kinshasa";
+
+              String displayText = fallbackCity;
+              if (locationAsync is AsyncData && locationAsync.value != null) {
+                final parts = locationAsync.value!.split(',');
+                displayText = parts.last.trim(); // Get just the city/town part for the badge
+              }
+
+              return GestureDetector(
+                onTap: () => ref.refresh(userLocationProvider), // Permet de rafraîchir en cliquant
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (locationAsync is AsyncLoading)
+                        const SizedBox(
+                          width: 14, 
+                          height: 14, 
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
+                        )
+                      else
+                        const Icon(Icons.location_on, color: Colors.white, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        displayText.isEmpty ? "Kinshasa" : displayText, 
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ),
         

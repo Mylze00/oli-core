@@ -878,29 +878,68 @@ class OrderService {
      */
     async _creditSellersForOrder(orderId) {
         const itemsResult = await pool.query(
-            `SELECT p.seller_id, SUM(oi.product_price * oi.quantity) as seller_total
+            `SELECT p.seller_id, oi.product_price, oi.quantity, oi.origin_video_id, vs.user_id AS video_creator_id
              FROM order_items oi
              JOIN products p ON oi.product_id::integer = p.id
-             WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL
-             GROUP BY p.seller_id`,
+             LEFT JOIN video_sales vs ON oi.origin_video_id = vs.id
+             WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL`,
             [orderId]
         );
 
         if (itemsResult.rows.length === 0) {
-            console.log(`   ⚠️ Aucun vendeur trouvé pour commande #${orderId}`);
+            console.log(`   ⚠️ Aucun item vendeur trouvé pour commande #${orderId}`);
             return;
         }
 
+        const sellerTotals = {};
+        const videoCreatorTotals = {};
+
         for (const row of itemsResult.rows) {
             const sellerId = row.seller_id;
-            const amount = parseFloat(row.seller_total);
+            const itemTotal = parseFloat(row.product_price) * parseInt(row.quantity);
+            
+            let sellerAmount = itemTotal;
+            
+            // Commission affiliation vidéo (2%)
+            if (row.origin_video_id && row.video_creator_id) {
+                const creatorId = row.video_creator_id;
+                // Ne pas payer la commission si le créateur de la vidéo est le vendeur lui-même
+                if (creatorId != sellerId) {
+                    const commission = itemTotal * 0.02;
+                    sellerAmount -= commission; // Déduit du vendeur
+                    
+                    if (!videoCreatorTotals[creatorId]) videoCreatorTotals[creatorId] = 0;
+                    videoCreatorTotals[creatorId] += commission;
+                }
+            }
 
+            if (!sellerTotals[sellerId]) sellerTotals[sellerId] = 0;
+            sellerTotals[sellerId] += sellerAmount;
+        }
+
+        // Payer les vendeurs
+        for (const [sellerId, amount] of Object.entries(sellerTotals)) {
             if (amount <= 0) continue;
-
             try {
                 await walletService.creditSeller(sellerId, amount, orderId);
             } catch (err) {
                 console.error(`⚠️ Erreur crédit vendeur #${sellerId} pour commande #${orderId}:`, err.message);
+            }
+        }
+
+        // Payer les créateurs de vidéos (Affiliation 2%)
+        for (const [creatorId, amount] of Object.entries(videoCreatorTotals)) {
+            if (amount <= 0) continue;
+            try {
+                const walletRepository = require('../repositories/wallet.repository');
+                await walletRepository.performDeposit(creatorId, amount, {
+                    type: 'reward',
+                    provider: 'LIVE_SHOPPING',
+                    reference: `AFFILIATION_${orderId}_${creatorId}_${Date.now()}`,
+                    description: `Commission d'affiliation vidéo (2%) sur la commande #${orderId}`
+                });
+            } catch (err) {
+                console.error(`⚠️ Erreur crédit affiliation vidéo #${creatorId} pour commande #${orderId}:`, err.message);
             }
         }
     }

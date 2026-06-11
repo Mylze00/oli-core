@@ -55,14 +55,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   final ScrollController _scrollController = ScrollController();
 
   // ── Catégories ───────────────────────────────────────────────────────────
-  final Map<String, String> _categories = {
-    'Tout': '', 'Industrie': 'industry', 'Maison': 'home',
-    'Véhicules': 'vehicles', 'Mode': 'fashion', 'Électronique': 'electronics',
-    'Sports': 'sports', 'Beauté': 'beauty', 'Jouets': 'toys',
-    'Santé': 'health', 'Construction': 'construction', 'Outils': 'tools',
-    'Bureau': 'office', 'Jardin': 'garden', 'Animaux': 'pets',
-    'Bébé': 'baby', 'Alimentation': 'food', 'Sécurité': 'security',
-    'Autres': 'other',
+  final Map<String, String> _categories = {'Tout': '', 'Électronique': 'electronics', 'Mode': 'fashion', 'Maison': 'home', 'Alimentation': 'food', 'Beauté': 'beauty', 'Industrie': 'industry', 'Sports': 'sports', 'Outils': 'tools', 'Construction': 'construction', 'Autres': 'other', 'Véhicules': 'vehicles', 'Jouets': 'toys', 'Sécurité': 'security', 'Jardin': 'garden', 'Bébé': 'baby', 'Bureau': 'office', 'Animaux': 'pets', 'Santé': 'health'
   };
   bool _showCategories = false;
   bool _isScrolled = false;

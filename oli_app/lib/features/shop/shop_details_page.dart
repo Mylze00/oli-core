@@ -71,11 +71,7 @@ class _ShopDetailsPageContentState extends ConsumerState<_ShopDetailsPageContent
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
-  final Map<String, String> _categories = {
-    "Tout": "",
-    "Nouveautés": "new",
-    "Populaire": "popular",
-    "Promotions": "promo",
+  final Map<String, String> _categories = {'Tout': '', 'Électronique': 'electronics', 'Mode': 'fashion', 'Maison': 'home', 'Alimentation': 'food', 'Beauté': 'beauty', 'Industrie': 'industry', 'Sports': 'sports', 'Outils': 'tools', 'Construction': 'construction', 'Autres': 'other', 'Véhicules': 'vehicles', 'Jouets': 'toys', 'Sécurité': 'security', 'Jardin': 'garden', 'Bébé': 'baby', 'Bureau': 'office', 'Animaux': 'pets', 'Santé': 'health'
   };
 
   @override

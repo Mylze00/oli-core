@@ -91,6 +91,23 @@ class _CallScreenState extends ConsumerState<CallScreen>
     if (!widget.isIncoming) {
       _startOutgoingCall();
     }
+
+    _playRingtone();
+  }
+
+  Future<void> _playRingtone() async {
+    try {
+      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+      if (widget.isIncoming) {
+        // Sonnerie d'appel entrant
+        await _audioPlayer.play(AssetSource('sounds/ringtone.mp3'));
+      } else {
+        // Tonalité d'attente (calling)
+        await _audioPlayer.play(AssetSource('sounds/calling.mp3'));
+      }
+    } catch (e) {
+      debugPrint("Erreur lecture sonnerie (vérifiez que les fichiers ringtone.mp3 et calling.mp3 existent dans assets/sounds/) : $e");
+    }
   }
 
   Future<void> _initRenderers() async {
@@ -222,9 +239,14 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
   Future<void> _acceptCall() async {
     setState(() => _isCallActive = true);
-    _audioPlayer.stop();
+    await _audioPlayer.stop();
     _pulseController.stop();
     _slideController.stop();
+
+    if (widget.isVideoCall) {
+      setState(() => _isSpeakerOn = true);
+      Helper.setSpeakerphoneOn(true);
+    }
     
     // Notify peer
     ref.read(socketServiceProvider).emit('webrtc_call_accept', {

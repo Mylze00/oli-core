@@ -1,25 +1,39 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Image as ImageIcon, Wand2, UploadCloud, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, Wand2, UploadCloud, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
 import { productAPI } from '../services/api';
 
 export default function ProductAiImport() {
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
     const [files, setFiles] = useState([]);
+    const [csvFile, setCsvFile] = useState(null);
     const [previewUrls, setPreviewUrls] = useState([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState(null);
 
     const handleFileChange = (e) => {
-        const selectedFiles = Array.from(e.target.files).filter(f => f.type.startsWith('image/')).slice(0, 5);
-        if (selectedFiles.length > 0) {
-            setFiles(selectedFiles);
-            setPreviewUrls(selectedFiles.map(f => URL.createObjectURL(f)));
+        const selectedFiles = Array.from(e.target.files);
+        if (selectedFiles.length === 0) return;
+
+        const firstFile = selectedFiles[0];
+        if (firstFile.name.toLowerCase().endsWith('.csv')) {
+            setCsvFile(firstFile);
+            setFiles([]);
+            setPreviewUrls([]);
+            setError(null);
+            return;
+        }
+
+        const imageFiles = selectedFiles.filter(f => f.type.startsWith('image/')).slice(0, 5);
+        if (imageFiles.length > 0) {
+            setFiles(imageFiles);
+            setCsvFile(null);
+            setPreviewUrls(imageFiles.map(f => URL.createObjectURL(f)));
             setError(null);
         } else {
-            setError("Veuillez sélectionner au moins une image valide (max 5).");
+            setError("Veuillez sélectionner des images valides (max 5) ou un fichier CSV.");
         }
     };
 
@@ -31,13 +45,26 @@ export default function ProductAiImport() {
     const handleDrop = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const droppedFiles = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')).slice(0, 5);
-        if (droppedFiles.length > 0) {
-            setFiles(droppedFiles);
-            setPreviewUrls(droppedFiles.map(f => URL.createObjectURL(f)));
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        if (droppedFiles.length === 0) return;
+
+        const firstFile = droppedFiles[0];
+        if (firstFile.name.toLowerCase().endsWith('.csv')) {
+            setCsvFile(firstFile);
+            setFiles([]);
+            setPreviewUrls([]);
+            setError(null);
+            return;
+        }
+
+        const imageFiles = droppedFiles.filter(f => f.type.startsWith('image/')).slice(0, 5);
+        if (imageFiles.length > 0) {
+            setFiles(imageFiles);
+            setCsvFile(null);
+            setPreviewUrls(imageFiles.map(f => URL.createObjectURL(f)));
             setError(null);
         } else {
-            setError("Veuillez déposer des images valides (max 5).");
+            setError("Veuillez déposer des images valides (max 5) ou un fichier CSV.");
         }
     };
 
@@ -83,109 +110,159 @@ export default function ProductAiImport() {
     };
 
     const handleAnalyze = async () => {
-        if (files.length === 0) return;
+        if (files.length === 0 && !csvFile) return;
 
         try {
             setIsAnalyzing(true);
             setProgress(0);
             setError(null);
 
-            // Simulation de progression UX
             const progressInterval = setInterval(() => {
                 setProgress(p => (p < 90 ? p + Math.floor(Math.random() * 10) + 5 : p));
             }, 500);
 
             const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
             if (!apiKey) {
-                setError("Clé API OpenRouter manquante dans l'environnement Frontend.");
+                setError("Clé API OpenRouter manquante dans l'environnement.");
+                setIsAnalyzing(false);
+                clearInterval(progressInterval);
                 return;
             }
 
-            const base64Images = await Promise.all(files.map(f => fileToBase64(f)));
-            const imageMessages = base64Images.map(b64 => ({ type: "image_url", image_url: { url: b64 } }));
+            let aiProducts = [];
+            let generatedBase64Images = [];
 
-            const systemPrompt = `Tu es un expert mondial en e-commerce, spécialiste du sourcing depuis la Chine (Taobao, 1688, Alibaba) vers l'Afrique. 
-Analyse attentivement ces captures d'écran. Chaque image représente potentiellement un produit différent.
-Retourne STRICTEMENT et UNIQUEMENT un objet JSON valide, sans balises markdown, avec la structure suivante :
+            if (csvFile) {
+                // LOGIQUE CSV
+                const text = await csvFile.text();
+                const systemPromptCsv = `Tu es un expert en e-commerce. Tu vas recevoir un CSV contenant des produits bruts.
+Analyse chaque ligne et retourne STRICTEMENT un JSON ayant cette structure :
+{
+  "products": [
+    {
+      "name": "Titre traduit en français très commercial",
+      "description": "Description de vente percutante en français",
+      "price_cny": prix_numerique_extrait,
+      "weight_kg": 0.5,
+      "category": "industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, ou other",
+      "product_type": "clothing, shoes, accessories, electronics, furniture, ou other",
+      "brand": "Marque si présente, sinon null",
+      "image_url_source": "Url directe de l'image (imageUrl) si présente dans le CSV, sinon null"
+    }
+  ]
+}
+Extrais uniquement les produits pertinents (max 20 si le CSV est très long). Convertis toujours les prix CNY en format numérique. Ne retourne que le JSON valide.`;
+
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-4o-mini",
+                        response_format: { type: "json_object" },
+                        messages: [
+                            { role: "system", content: systemPromptCsv },
+                            { role: "user", content: `Voici le CSV :\n${text}` }
+                        ]
+                    })
+                });
+
+                if (!response.ok) throw new Error("Erreur IA lors de la lecture du CSV.");
+                
+                const result = await response.json();
+                const extractedData = JSON.parse(result.choices[0].message.content);
+                aiProducts = extractedData.products || [];
+
+                // Upload Cloudinary pour chaque produit
+                for (let i = 0; i < aiProducts.length; i++) {
+                    const prod = aiProducts[i];
+                    if (prod.image_url_source) {
+                        try {
+                            const uploadRes = await productAPI.uploadImageFromUrl(prod.image_url_source);
+                            if (uploadRes.success && uploadRes.secure_url) {
+                                const imgRes = await fetch(uploadRes.secure_url);
+                                const blob = await imgRes.blob();
+                                const reader = new FileReader();
+                                const b64 = await new Promise(res => {
+                                    reader.onloadend = () => res(reader.result);
+                                    reader.readAsDataURL(blob);
+                                });
+                                generatedBase64Images.push(b64);
+                                prod.aiImageIndex = generatedBase64Images.length - 1;
+                            }
+                        } catch (e) {
+                            console.warn("Upload image échoué pour", prod.image_url_source);
+                        }
+                    }
+                }
+
+            } else {
+                // LOGIQUE IMAGES
+                generatedBase64Images = await Promise.all(files.map(f => fileToBase64(f)));
+                const imageMessages = generatedBase64Images.map(b64 => ({ type: "image_url", image_url: { url: b64 } }));
+
+                const systemPromptImg = `Tu es un expert mondial en e-commerce. Analyse ces captures d'écran et retourne STRICTEMENT un JSON valide :
 {
   "products": [
     {
       "name": "Traduis le nom du produit en français très commercial. Max 10 mots.",
-      "description": "Description de vente PERCUTANTE en français avec accroche et liste de caractéristiques. Minimum 3 phrases.",
-      "specifications": "SPECIFICATIONS TECHNIQUES FONCTIONNELLES OBLIGATOIRES en français. Format : 4 à 8 lignes, une par ligne, '• Clé : Valeur'. Concentre-toi UNIQUEMENT sur les caractéristiques techniques fonctionnelles : processeur, RAM, stockage, connectivité (WiFi/Bluetooth), résolution, capacité batterie, tension/ampérage, protocoles supportés, matière du boîtier, compatibilité système, certifications (CE/RoHS). INTERDIT d'inclure : poids, dimensions physiques, couleur ou variantes de taille (ces infos sont déjà dans d'autres champs). Exemple pour écouteurs : '• Codec audio : AAC, SBC\\n• Autonomie : 6h + 24h boîtier\\n• Bluetooth : 5.3\\n• Réduction de bruit : Oui (ANC)\\n• Résistance : IPX4'. Adapte les critères selon le type d'article.",
+      "description": "Description de vente PERCUTANTE en français avec accroche et caractéristiques.",
+      "specifications": "Spécifications techniques...",
       "price_cny": montant_numerique,
       "weight_kg": poids_numerique,
-      "category": "Choisis EXACTEMENT UNE clé: industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, other",
+      "category": "industry, home, vehicles, fashion, electronics, sports, beauty, toys, health, construction, tools, office, garden, pets, baby, food, security, other",
       "colors": ["Noir", "Blanc"],
       "sizes": ["M", "L"],
-      "brand": "Marque visible sur l'image (OBLIGATOIRE si présente visible, sinon null)",
+      "brand": "Marque visible sur l'image ou null",
       "condition": "new",
-      "product_type": "Identifie le type PRÉCIS: 'clothing' (vêtements/t-shirts/pantalons/robes), 'shoes' (chaussures/sandales/bottes/baskets), 'accessories' (sacs/ceintures/bijoux), 'electronics', 'furniture', 'other'",
-      "variant_images": [
-        {
-          "label": "Nom court de la variante visible (ex: 'Noir mat', 'Rouge vif', 'Version Pro')",
-          "variant_type": "color ou model ou style",
-          "description": "Courte description de ce qui distingue visuellement cette variante"
-        }
-      ]
+      "product_type": "clothing, shoes, accessories, electronics, furniture, other",
+      "variant_images": []
     }
   ]
 }
+IMPORTANT: Le nombre d'éléments dans "products" DOIT EXACTEMENT CORRESPONDRE au nombre d'images. Index 0 = image 1, etc.`;
 
-RÈGLES CRITIQUES POUR LES TAILLES/SIZES:
-- Pour les CHAUSSURES/SANDALES/BOTTES (product_type: "shoes"): Utilise UNIQUEMENT des pointures numériques ["36", "37", "38", "39", "40", "41", "42", "43", "44", "45"]
-- Pour les VÊTEMENTS (product_type: "clothing"): Utilise UNIQUEMENT les tailles ["XS", "S", "M", "L", "XL", "XXL"]
-- Pour les ACCESSOIRES/ÉLECTRONIQUE: Utilise ["Unique"] ou tailles spécifiques visibles (ex: "128GB", "256GB")
-- NE MÉLANGE JAMAIS les tailles de vêtements (M, L, XL) avec des chaussures
-- VÉRIFIE que product_type et sizes sont cohérents
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-4o-mini",
+                        response_format: { type: "json_object" },
+                        messages: [
+                            { role: "system", content: systemPromptImg },
+                            {
+                                role: "user",
+                                content: [
+                                    { type: "text", text: "Analyse ces images de produit et fournis les informations globales en JSON." },
+                                    ...imageMessages
+                                ]
+                            }
+                        ]
+                    })
+                });
 
-IMPORTANT VARIANTES VISUELLES (variant_images):
-- Regarde ATTENTIVEMENT la capture d'écran pour identifier les variantes visibles (couleurs, modèles, styles)
-- Chaque petite image/thumbnail de variante sur la page produit = 1 entrée dans variant_images
-- Si tu vois des pastilles de couleur ou des miniatures de variantes, liste-les TOUTES
-- Si aucune variante n'est visible, retourne un tableau vide []
-
-IMPORTANT MARQUE: Si une marque est clairement visible sur le produit ou l'emballage, tu DOIS la renseigner. C'est essentiel pour la confiance client.
-
-IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT CORRESPONDRE au nombre d'images fournies. L'index 0 = première image, l'index 1 = deuxième image, etc.`;
-
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${apiKey}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    model: "gpt-4o-mini",
-                    response_format: { type: "json_object" },
-                    messages: [
-                        { role: "system", content: systemPrompt },
-                        {
-                            role: "user",
-                            content: [
-                                { type: "text", text: "Analyse ces images de produit et fournis les informations globales en JSON." },
-                                ...imageMessages
-                            ]
-                        }
-                    ]
-                })
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error?.message || "Erreur lors de l'appel à OpenRouter");
+                if (!response.ok) throw new Error("Erreur IA sur les images.");
+                const result = await response.json();
+                const extractedData = JSON.parse(result.choices[0].message.content);
+                aiProducts = extractedData.products || [];
+                
+                // Mappage index IA avec Base64
+                aiProducts.forEach((p, idx) => {
+                    p.aiImageIndex = idx;
+                });
             }
-
-            const result = await response.json();
-            const extractedData = JSON.parse(result.choices[0].message.content);
-            const aiProducts = extractedData.products || [];
 
             // --- Logique de Calcul des prix et du fret pour chaque produit ---
             const freightConfig = {
                 aerien: { prix_par_kg: 24, delai_jours: '10 jours (fret aérien)', methodId: 'oli_standard' },
                 maritime: { prix_par_m3: 700, delai_jours: '60 jours (fret maritime)', methodId: 'maritime' },
                 CNY_to_USD: 0.138,
-                marge: 0.43
+                marge: 0.35 // Marge de 35% comme demandée
             };
 
             const enrichedBatchProducts = aiProducts.map((prod, index) => {
@@ -268,7 +345,7 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
             navigate('/products/new/batch', {
                 state: {
                     aiBatchProducts: enrichedBatchProducts,
-                    aiImages: base64Images
+                    aiImages: generatedBase64Images
                 }
             });
             // PAS D'ACTION SUR LE STATE ICI
@@ -311,7 +388,7 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                 )}
 
                 <div
-                    className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${previewUrls.length > 0 ? 'border-purple-300 bg-purple-50' : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'}`}
+                    className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${(previewUrls.length > 0 || csvFile) ? 'border-purple-300 bg-purple-50' : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'}`}
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onClick={() => !isAnalyzing && fileInputRef.current?.click()}
@@ -320,12 +397,22 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                         type="file"
                         ref={fileInputRef}
                         className="hidden"
-                        accept="image/*"
+                        accept="image/*,.csv"
                         multiple
                         onChange={handleFileChange}
                     />
 
-                    {previewUrls.length > 0 ? (
+                    {csvFile ? (
+                        <div className="flex flex-col items-center py-6">
+                            <FileText size={48} className="text-purple-500 mb-4" />
+                            <h3 className="text-lg font-semibold text-gray-900">
+                                {csvFile.name}
+                            </h3>
+                            <p className="text-sm text-gray-500 mt-2">
+                                Prêt pour l'analyse et le téléchargement des images via Cloudinary.
+                            </p>
+                        </div>
+                    ) : previewUrls.length > 0 ? (
                         <div className="flex flex-col items-center">
                             <div className="flex flex-wrap justify-center gap-4 mb-4">
                                 {previewUrls.map((url, idx) => (
@@ -346,7 +433,7 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                                 Déposez vos captures ici (Max 5)
                             </h3>
                             <p className="text-gray-500 text-sm mb-4">
-                                PNG, JPG ou WEBP (Max. 5 MB)
+                                PNG, JPG, WEBP (Max 5) ou fichier .CSV
                             </p>
                             <button className="px-6 py-2 bg-purple-100 text-purple-700 font-medium rounded-lg hover:bg-purple-200 transition-colors">
                                 Parcourir les fichiers
@@ -358,8 +445,8 @@ IMPORTANT: Le nombre d'éléments dans le tableau "products" DOIT EXACTEMENT COR
                 <div className="mt-8 flex justify-end">
                     <button
                         onClick={handleAnalyze}
-                        disabled={files.length === 0 || isAnalyzing}
-                        className={`px-8 py-3 rounded-xl font-bold flex flex-col items-center gap-2 transition-all w-full md:w-auto ${(files.length === 0 || isAnalyzing) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'}`}
+                        disabled={(files.length === 0 && !csvFile) || isAnalyzing}
+                        className={`px-8 py-3 rounded-xl font-bold flex flex-col items-center gap-2 transition-all w-full md:w-auto ${((files.length === 0 && !csvFile) || isAnalyzing) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'}`}
                     >
                         {isAnalyzing ? (
                             <div className="flex flex-col items-center w-full min-w-[220px]">

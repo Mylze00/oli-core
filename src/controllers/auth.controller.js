@@ -21,15 +21,16 @@ exports.sendOtp = async (req, res) => {
             return res.status(400).json({ error: "Format de numéro invalide" });
         }
 
-        console.log("📩 SEND OTP:", cleanPhone);
         const { user, otpCode } = await otpService.sendOtp(cleanPhone);
 
-        // ⚡ Afficher le code en réponse pour les tests
-        console.log(`✅ OTP GÉNÉRÉ: ${otpCode} pour ${cleanPhone}`);
+        // [SÉCU] Le code OTP est uniquement visible dans les logs serveur (jamais renvoyé au client)
+        // En développement : consultez les logs du serveur pour voir le code
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`📩 [DEV ONLY] OTP pour ${cleanPhone} : ${otpCode}`);
+        }
 
         return res.json({
             message: "Code OTP envoyé",
-            otp: otpCode,  // 👈 Retourner le code pour les tests
             user: {
                 id: user.id,
                 phone: user.phone
