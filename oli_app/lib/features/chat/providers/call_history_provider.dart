@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../config/api_config.dart';
 import '../../../core/user/user_provider.dart';
+import '../../../core/router/network/dio_provider.dart';
 
 final callHistoryProvider = StateNotifierProvider<CallHistoryNotifier, AsyncValue<List<dynamic>>>((ref) {
   return CallHistoryNotifier(ref);

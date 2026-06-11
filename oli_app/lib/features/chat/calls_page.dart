@@ -164,10 +164,10 @@ class _CallsPageState extends ConsumerState<CallsPage> {
               MaterialPageRoute(
                 builder: (context) => CallScreen(
                   isIncoming: false,
-                  callerName: otherName,
-                  callerAvatar: otherAvatar ?? '',
-                  callerId: otherId,
-                  callType: type,
+                  otherName: otherName,
+                  otherAvatarUrl: otherAvatar ?? '',
+                  otherId: otherId,
+                  isVideoCall: type == 'video',
                 ),
               ),
             );
