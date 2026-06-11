@@ -208,6 +208,50 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                 ),
                 const SizedBox(height: 10),
 
+                // NOUVEAU : Boutons d'action rapides (Appels, Contacts, Communautés)
+                if (_selectedIndex == 0) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildActionButton(
+                        icon: Icons.phone,
+                        iconColor: Colors.white,
+                        iconBgColor: Colors.green,
+                        label: 'Appels',
+                        isDark: isDark,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Historique des appels bientôt disponible")),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _buildActionButton(
+                        icon: Icons.person,
+                        iconColor: Colors.white,
+                        iconBgColor: Colors.blue,
+                        label: 'Contacts',
+                        isDark: isDark,
+                        onTap: _pickContact, // Rend le bouton fonctionnel avec la sélection de contact existante
+                      ),
+                      const SizedBox(width: 8),
+                      _buildActionButton(
+                        icon: Icons.groups,
+                        iconColor: Colors.white,
+                        iconBgColor: Colors.green, // D'après la capture
+                        label: 'Communautés',
+                        isDark: isDark,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Communautés bientôt disponibles")),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
                 // Filter bar
                 SizedBox(
                   height: 34,
@@ -458,16 +502,54 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           ),
         ],
       ),
-      floatingActionButton: _selectedIndex == 0
-          ? Padding(
-              padding: const EdgeInsets.only(bottom: 72),
-              child: FloatingActionButton(
-                onPressed: _pickContact,
-                backgroundColor: theme.primaryColor,
-                child: const Icon(Icons.person_add, color: Colors.white),
+      floatingActionButton: null, // Le FloatingActionButton a été remplacé par le bouton "Contacts" en haut
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+    required String label,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[200],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconColor, size: 16),
               ),
-            )
-          : null, // Le FloatingActionButton du Fil est géré dans FeedTabView
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
