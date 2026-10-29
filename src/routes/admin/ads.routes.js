@@ -4,12 +4,6 @@ const adRepo = require('../../repositories/ad.repository');
 const { genericUpload } = require('../../config/upload');
 
 /**
- * GET /admin/ads
- * Liste toutes les pubs (admin)
- */
-// ...
-
-/**
  * POST /admin/ads/upload
  * Uploader une image de pub
  */
@@ -24,9 +18,6 @@ router.post('/upload', genericUpload.single('image'), (req, res) => {
         // Si stockage local (pas Cloudinary), construire l'URL complète
         if (!imageUrl.startsWith('http')) {
             const baseUrl = `${req.protocol}://${req.get('host')}`;
-            // req.file.path est ex: "uploads/products/xyz.jpg" (dépend config upload.js)
-            // upload.js utilise "uploads/" comme base, mais faut vérifier le path retourné
-            // Sur Windows, path peut avoir des backslashes.
             const cleanPath = req.file.path.replace(/\\/g, '/');
             imageUrl = `${baseUrl}/${cleanPath}`;
         }
@@ -39,8 +30,8 @@ router.post('/upload', genericUpload.single('image'), (req, res) => {
 });
 
 /**
- * POST /admin/ads
- * Créer une nouvelle pub
+ * GET /admin/ads
+ * Liste toutes les pubs (admin view: actives + inactives, avec ordre)
  */
 router.get('/', async (req, res) => {
     try {
@@ -58,13 +49,67 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     try {
-        const { image_url, title, link_url } = req.body;
+        const { image_url, title, link_url, display_order, is_active } = req.body;
         if (!image_url) return res.status(400).json({ error: 'Image requise' });
 
-        const newAd = await adRepo.create({ image_url, title, link_url });
+        const newAd = await adRepo.create({ image_url, title, link_url, display_order, is_active });
         res.status(201).json(newAd);
     } catch (err) {
         console.error('Erreur POST /admin/ads:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * PUT /admin/ads/:id
+ * Modifier une pub existante
+ */
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { image_url, title, link_url, display_order, is_active } = req.body;
+
+        const updated = await adRepo.update(id, { image_url, title, link_url, display_order, is_active });
+        if (!updated) return res.status(404).json({ error: 'Pub introuvable' });
+        res.json(updated);
+    } catch (err) {
+        console.error('Erreur PUT /admin/ads/:id:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * PATCH /admin/ads/reorder
+ * Réordonner les publicités (batch update)
+ * Body: { orders: [{ id: 1, order: 0 }, { id: 2, order: 1 }] }
+ */
+router.patch('/reorder', async (req, res) => {
+    try {
+        const { orders } = req.body;
+        if (!Array.isArray(orders)) {
+            return res.status(400).json({ error: 'Format invalide (orders doit être une liste)' });
+        }
+
+        await adRepo.updateOrder(orders);
+        res.json({ message: 'Ordre mis à jour avec succès' });
+    } catch (err) {
+        console.error('Erreur PATCH /admin/ads/reorder:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+/**
+ * PATCH /admin/ads/:id/status
+ * Activer / Désactiver une pub
+ */
+router.patch('/:id/status', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { is_active } = req.body;
+        const updated = await adRepo.toggleActive(id, is_active);
+        res.json(updated);
+    } catch (err) {
+        console.error('Erreur PATCH /admin/ads/:id/status:', err);
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });
@@ -81,22 +126,6 @@ router.delete('/:id', async (req, res) => {
         res.json({ message: 'Pub supprimée' });
     } catch (err) {
         console.error('Erreur DELETE /admin/ads/:id:', err);
-        res.status(500).json({ error: 'Erreur serveur' });
-    }
-});
-
-/**
- * PATCH /admin/ads/:id/status
- * Activer/Désactiver une pub
- */
-router.patch('/:id/status', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { is_active } = req.body;
-        const updated = await adRepo.toggleActive(id, is_active);
-        res.json(updated);
-    } catch (err) {
-        console.error('Erreur PATCH /admin/ads/:id/status:', err);
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });

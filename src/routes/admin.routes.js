@@ -20,6 +20,7 @@ const disputesRoutes = require('./admin/disputes.routes');
 const shopsRoutes = require('./admin/shops.routes');
 const requestsRoutes = require('./admin/requests.routes');
 const servicesRoutes = require('./admin/services.routes');
+const adsRoutes = require('./admin/ads.routes'); // 📢 Publicités
 const supportRoutes = require('./admin/support.routes'); // 🆕
 const databaseRoutes = require('./admin/database.routes'); // 🗄️ Gestion DB
 const deliveryRoutes = require('./admin/delivery.routes'); // 🚚 Livreurs
@@ -34,6 +35,7 @@ router.use('/disputes', disputesRoutes);
 router.use('/shops', shopsRoutes);
 router.use('/requests', requestsRoutes);
 router.use('/services', servicesRoutes);
+router.use('/ads', adsRoutes); // 📢 Publicités
 router.use('/verifications', require('./admin/verifications.routes'));
 router.use('/support', supportRoutes); // 🆕
 router.use('/database', databaseRoutes); // 🗄️ Gestion DB
