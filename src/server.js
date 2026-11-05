@@ -355,6 +355,7 @@ app.use("/user", requireAuth, userRoutes);
 app.use("/addresses", requireAuth, require('./routes/address.routes'));
 app.use("/notifications", requireAuth, require('./routes/notifications.routes')); // 🔔 Notifications
 app.use("/device-tokens", requireAuth, require('./routes/device-tokens.routes')); // 📱 Tokens FCM
+app.use("/contacts", requireAuth, require('./routes/contacts.routes')); // 👥 Synchronisation des contacts (invitation)
 
 // 🆕 Routes pour l'architecture utilisateur unifiée [SÉCU: auth requise]
 app.use("/api/identity", requireAuth, require('./routes/identity.routes'));
