@@ -44,6 +44,17 @@ const app = express();
 // Render place l'app derrière un proxy : sans cela, req.ip est l'IP du proxy pour
 // tous les utilisateurs et les limiteurs de débit (OTP, retrait) deviennent globaux.
 app.set('trust proxy', 1);
+
+// Diagnostic compte examinateur (Google Play) : n'affiche JAMAIS les valeurs,
+// seulement la présence, la longueur et la présence d'espaces ou de sauts de ligne.
+(function logReviewConfig() {
+    const describe = (name) => {
+        const v = process.env[name];
+        if (v === undefined) return `${name} : ABSENTE`;
+        return `${name} : présente, longueur ${v.length}, espace/saut de ligne ${/\s/.test(v) ? 'OUI (problème)' : 'non'}`;
+    };
+    console.log(`[CONFIG] ${describe('REVIEW_PHONE')} | ${describe('REVIEW_OTP')}`);
+})();
 const server = http.createServer(app);
 
 // --- SOCKET.IO CONFIG ---
