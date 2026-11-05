@@ -8,6 +8,16 @@ function generateOtp() {
 }
 
 /**
+ * Compte réservé aux examinateurs Google Play.
+ * Actif uniquement si REVIEW_PHONE et REVIEW_OTP sont définis dans le .env.
+ * Ne s'applique qu'à ce numéro exact.
+ */
+function isReviewAccount(phone) {
+  const { REVIEW_PHONE, REVIEW_OTP } = process.env;
+  return Boolean(REVIEW_PHONE && REVIEW_OTP) && phone === REVIEW_PHONE;
+}
+
+/**
  * Envoie l'OTP (Logique de création/mise à jour utilisateur et stockage du code)
  */
 async function sendOtp(phone, expiresMinutes = 5) {
@@ -20,17 +30,21 @@ async function sendOtp(phone, expiresMinutes = 5) {
     }
 
     // 2. Générer le code et la date d'expiration
-    const otpCode = generateOtp();
-    const expiresAt = new Date(Date.now() + expiresMinutes * 60 * 1000);
+    const review = isReviewAccount(phone);
+    const otpCode = review ? process.env.REVIEW_OTP : generateOtp();
+    const ttl = review ? 60 : expiresMinutes; // plus de temps pour les examinateurs
+    const expiresAt = new Date(Date.now() + ttl * 60 * 1000);
 
     // 3. Sauvegarder en base de données via le repository
     await userRepo.saveOtp(user.id, otpCode, expiresAt);
 
     // ✅ Logs pour le débogage
-    console.log(`✅ [OTP] Code généré: ${otpCode} pour ${phone}`);
+    console.log(
+      `✅ [OTP] Code généré: ${review ? "(compte examinateur)" : otpCode} pour ${phone}`
+    );
     console.log(`⏱️ [OTP] Expire à: ${expiresAt.toLocaleTimeString()}`);
 
-    return { user, otpCode };  // 👈 Retourner le code aussi
+    return { user, otpCode }; // 👈 Retourner le code aussi
   } catch (error) {
     console.error("[OTP SERVICE] Erreur dans sendOtp:", error);
     throw error;
@@ -53,7 +67,7 @@ async function verifyOtp(phone, otpCode) {
     }
 
     // 2. Nettoyer l'OTP (SANS marquer comme vérifié automatiquement)
-    // La vérification (badge) sera accordée par l'admin manuellement  
+    // La vérification (badge) sera accordée par l'admin manuellement
     await userRepo.clearOtp(user.id);
 
     console.log(`[OTP SERVICE] ✅ Vérification réussie pour : ${phone}`);
