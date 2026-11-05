@@ -40,6 +40,10 @@ const oliSessionMiddleware = require("./middlewares/oli_session.middleware"); //
 const pool = require("./config/db");
 
 const app = express();
+
+// Render place l'app derrière un proxy : sans cela, req.ip est l'IP du proxy pour
+// tous les utilisateurs et les limiteurs de débit (OTP, retrait) deviennent globaux.
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // --- SOCKET.IO CONFIG ---
