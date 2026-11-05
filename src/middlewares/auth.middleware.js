@@ -18,10 +18,21 @@ async function isAccountActive(userId) {
     const hit = accountCache.get(key);
     if (hit && Date.now() - hit.at < ACCOUNT_CACHE_TTL_MS) return hit.active;
 
-    const { rows } = await pool.query(
-        "SELECT deleted_at FROM users WHERE id = $1",
-        [userId]
-    );
+    let rows;
+    try {
+        ({ rows } = await pool.query(
+            "SELECT deleted_at FROM users WHERE id = $1",
+            [userId]
+        ));
+    } catch (err) {
+        // Colonne absente (migration 044 pas encore appliquée) : on ne bloque pas
+        // toutes les routes authentifiées ; le contrôle de suppression est désactivé.
+        if (err.code === "42703") {
+            console.warn("[AUTH] users.deleted_at absent : contrôle de suppression ignoré (migration 044 à appliquer).");
+            return true;
+        }
+        throw err;
+    }
     const active = rows.length > 0 && !rows[0].deleted_at;
     accountCache.set(key, { active, at: Date.now() });
     return active;
