@@ -1,0 +1,110 @@
+Politique de confidentialité d’Oli
+Application Oli (identifiant Android : com.oli.apprdc) · Dernière mise à jour : 5 novembre 2026
+
+Oli est une application congolaise qui réunit dans un seul endroit la messagerie, l’achat et la vente, le paiement par mobile money, le paiement de factures et la livraison. Cette page explique quelles données nous collectons, pourquoi, avec qui nous les partageons et comment vous gardez le contrôle.
+
+En créant un compte ou en utilisant Oli, vous acceptez cette politique. Si vous n’êtes pas d’accord, n’utilisez pas l’application.
+
+Qui est responsable de vos données
+Données que nous collectons
+Pourquoi nous les utilisons
+Avec qui nous les partageons
+Paiements et code PIN
+Autorisations demandées sur votre téléphone
+Durée de conservation
+Sécurité
+Vos droits et suppression du compte
+Mineurs
+Transferts hors de la RDC
+Modifications de cette politique
+Nous contacter
+1. Qui est responsable de vos données
+Le responsable du traitement est PIXEL G SARL, Kinshasa, République démocratique du Congo. Pour toute question : pixelgraphicsarl@gmail.com.
+
+2. Données que nous collectons
+Données que vous nous donnez
+Numéro de téléphone : c’est votre identifiant. Nous détectons votre pays grâce à l’indicatif et vous envoyons un code de vérification (OTP) par SMS.
+Profil : nom ou pseudonyme, photo, et, pour les vendeurs, nom de la boutique, description et informations de vérification pour obtenir le badge vendeur.
+Annonces et boutiques : produits, photos, prix, catégories, localisation de vente, stock, commandes.
+Messages (Oli Chat) : textes, notes vocales, images et vidéos que vous envoyez, ainsi que vos groupes de discussion.
+Lives de vente : vidéo, audio et commentaires diffusés pendant un live.
+Adresses de livraison et informations nécessaires pour livrer vos commandes.
+Données générées par votre usage
+Transactions : achats, ventes, dépôts, retraits, solde et historique du portefeuille Oli, paiements de factures (SNEL, REGIDESO, internet).
+Localisation : approximative pour les filtres par zone ; précise et en continu uniquement pour les livreurs, pendant qu’ils effectuent une livraison, afin de suivre la commande.
+Récompenses et parrainage : points, lives réalisés, ventes, codes de parrainage.
+Notes et avis sur les vendeurs et les livreurs.
+Données techniques
+Modèle de téléphone, version d’Android ou d’iOS, langue, identifiant d’installation de l’application.
+Jeton de notifications (Firebase Cloud Messaging).
+Rapports de plantage et données de performance.
+Adresse IP et journaux de sécurité (tentatives de connexion, détection de fraude).
+3. Pourquoi nous les utilisons
+Créer et sécuriser votre compte, vous garder connecté (sessions longue durée) et éviter des codes OTP répétés.
+Faire fonctionner la marketplace, les boutiques, les lives, la messagerie, la livraison et le portefeuille.
+Traiter vos paiements, dépôts et retraits, et vous envoyer des confirmations.
+Prévenir la fraude, les faux comptes, le multi-comptes abusif et les abus du programme de parrainage.
+Calculer et attribuer vos points de récompense.
+Vous envoyer des notifications utiles (commande, paiement, message, livraison). Vous pouvez les désactiver dans les paramètres de votre téléphone.
+Améliorer l’application, corriger les bugs et mesurer son usage.
+Afficher des publicités ou des boutiques sponsorisées dans l’application, lorsque cette fonction est active.
+Respecter nos obligations légales et répondre aux demandes des autorités compétentes.
+Nous ne vendons pas vos données personnelles.
+
+4. Avec qui nous les partageons
+Destinataire	Pourquoi
+Autres utilisateurs	Votre profil public, vos annonces, vos avis et vos messages envoyés aux personnes concernées. Un acheteur et un vendeur voient ce qu’il faut pour finaliser la commande.
+Livreurs	Adresse et contact nécessaires à la livraison de votre commande ; vous voyez en retour leur position pendant la course.
+Opérateurs mobile money et banques (Orange Money, M-Pesa, Airtel Money, cartes bancaires locales)	Exécuter les dépôts, paiements et retraits.
+Fournisseurs de services publics et télécoms (SNEL, REGIDESO, Orange, Airtel, Vodacom)	Transmettre le paiement de vos factures.
+Google / Firebase	Notifications push, rapports de plantage, mesure d’audience et services techniques associés.
+Hébergeurs et stockage de fichiers	Stocker la base de données, les photos, vidéos et fichiers audio.
+Prestataire d’envoi de SMS	Envoyer votre code de vérification.
+Autorités	Uniquement lorsque la loi l’exige ou pour protéger des droits, la sécurité ou prévenir une fraude.
+Ces prestataires ne peuvent utiliser vos données que pour fournir leur service à Oli, ou selon leurs propres règles lorsqu’ils agissent en leur nom propre (par exemple un opérateur mobile money).
+
+5. Paiements et code PIN
+Votre code PIN mobile money est saisi dans l’interface de paiement de votre opérateur. Oli ne voit pas et ne stocke jamais votre code PIN. Oli ne conserve pas les numéros complets de carte bancaire : ils sont traités par le prestataire de paiement. Nous gardons uniquement l’historique nécessaire (montant, date, statut, référence de transaction, numéro de portefeuille).
+
+6. Autorisations demandées sur votre téléphone
+Appareil photo et microphone : photos de produits, messages vocaux, vidéos, lives.
+Photos, fichiers et médias : joindre des images ou vidéos à une annonce ou un message.
+Localisation : filtrer les produits par zone et, pour les livreurs, suivre une livraison.
+Notifications : vous alerter des commandes, paiements et messages.
+Accès Internet : indispensable au fonctionnement.
+Vous pouvez retirer chaque autorisation à tout moment dans les paramètres du téléphone. Certaines fonctions ne marcheront alors plus.
+
+7. Durée de conservation
+Données de compte et de profil : tant que votre compte est actif, puis supprimées après la clôture du compte, sous réserve de ce qui suit.
+Données de transactions et de paiement : conservées pendant la durée exigée par la réglementation financière et comptable applicable, puis supprimées ou anonymisées.
+Messages : conservés tant que la conversation existe ; supprimés après suppression du compte ou de la conversation.
+Position des livreurs : conservée uniquement le temps nécessaire au suivi et à la résolution d’éventuels litiges sur la livraison.
+Journaux de sécurité : conservés pour une durée limitée afin de lutter contre la fraude.
+8. Sécurité
+Nous protégeons vos données par le chiffrement des communications (HTTPS/TLS), des jetons de session sécurisés, un contrôle d’accès strict en interne et des systèmes de détection de fraude. Aucun système n’est infaillible : gardez votre téléphone verrouillé, ne partagez jamais vos codes OTP ni votre PIN, et prévenez-nous si vous suspectez un accès non autorisé.
+
+9. Vos droits et suppression du compte
+Vous pouvez à tout moment demander à :
+
+accéder à vos données et en obtenir une copie ;
+corriger des informations inexactes ;
+supprimer votre compte et vos données ;
+vous opposer à certains traitements ou retirer votre consentement ;
+limiter l’usage publicitaire de vos données.
+Pour supprimer votre compte : dans l’application, ouvrez Profil → Paramètres → Supprimer mon compte, ou envoyez votre demande depuis le numéro de téléphone du compte à pixelgraphicsarl@gmail.com avec pour objet « Suppression de compte Oli ». Nous traitons la demande dans un délai de 30 jours. Votre solde Oli doit d’abord être retiré ou utilisé. Certaines données peuvent être conservées si la loi nous y oblige (voir section 7).
+
+10. Mineurs
+Oli s’adresse aux personnes de 18 ans et plus. Nous ne collectons pas sciemment de données sur des enfants. Si vous pensez qu’un mineur a créé un compte, contactez-nous et nous le supprimerons.
+
+11. Transferts hors de la RDC
+Certains de nos prestataires (Google/Firebase, hébergeurs, stockage) peuvent traiter les données sur des serveurs situés hors de la République démocratique du Congo. Nous choisissons des prestataires offrant des garanties de sécurité appropriées et nous nous conformons à la législation congolaise applicable en matière de protection des données et de numérique.
+
+12. Modifications de cette politique
+Nous pouvons modifier cette politique, par exemple lorsque nous ajoutons une fonctionnalité. La date de mise à jour figure en haut de la page. En cas de changement important, nous vous prévenons dans l’application.
+
+13. Nous contacter
+PIXEL G SARL
+E-mail : pixelgraphicsarl@gmail.com
+Adresse : Kinshasa, République démocratique du Congo
+
+© 2026 Oli. Tous droits réservés.
