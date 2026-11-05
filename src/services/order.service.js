@@ -374,6 +374,26 @@ class OrderService {
         if (result.rows.length === 0) throw new Error('Commande non trouvée');
         const order = result.rows[0];
 
+        // Contrôle d'accès : vendeur de la commande OU livreur assigné (delivery_orders)
+        let isSeller = false;
+        try {
+            await this._getOrderForSeller(orderId, verifierId);
+            isSeller = true;
+        } catch (_) {
+            isSeller = false;
+        }
+        let isAssignedDeliverer = false;
+        if (!isSeller) {
+            const assigned = await pool.query(
+                'SELECT 1 FROM delivery_orders WHERE order_id = $1 AND deliverer_id::text = $2::text LIMIT 1',
+                [orderId, String(verifierId)]
+            );
+            isAssignedDeliverer = assigned.rows.length > 0;
+        }
+        if (!isSeller && !isAssignedDeliverer) {
+            throw new Error('Accès non autorisé : seul le vendeur ou le livreur assigné peut valider le pickup');
+        }
+
         if (!['processing', 'ready'].includes(order.status)) {
             throw new Error("La commande doit être au statut 'processing' pour valider le pickup");
         }

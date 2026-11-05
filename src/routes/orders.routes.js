@@ -4,6 +4,7 @@
 const express = require("express");
 const router = express.Router();
 const orderController = require("../controllers/order.controller");
+const { requireRole } = require("../middlewares/auth.middleware");
 
 /**
  * POST /orders - Créer une nouvelle commande
@@ -33,7 +34,8 @@ router.get("/:id/tracking", orderController.getTracking);
 /**
  * PATCH /orders/:id/status - Mettre à jour le statut (générique)
  */
-router.patch("/:id/status", orderController.updateStatus);
+// Réservé à l'admin : le vendeur passe par /api/seller/orders/:id/status
+router.patch("/:id/status", requireRole('admin'), orderController.updateStatus);
 
 /**
  * POST /orders/:id/prepare - Vendeur: marquer en préparation

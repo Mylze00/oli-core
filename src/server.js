@@ -289,7 +289,7 @@ if (config.NODE_ENV !== 'production') {
 }
 
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json());
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } })); // rawBody : signature Stripe
 
 app.use("/webhooks", webhookRoutes);                       // 🔔 Webhooks Unipesa (public, SANS auth — sécurisé par HMAC-SHA512)
 app.use("/api/payment", require('./routes/stripe-webhook.routes')); // 🔔 Stripe Webhook (simulation)
@@ -308,7 +308,8 @@ app.use("/auth", authRoutes);
 
 
 app.use("/products", optionalAuth, productsRoutes);
-app.use("/api/price-strategy", require('./routes/price-strategy.routes')); // 💰 Stratégie prix
+// 💰 Stratégie prix — [SÉCU] admin uniquement (modifie les prix des produits)
+app.use("/api/price-strategy", requireAuth, requireRole('admin'), require('./routes/price-strategy.routes'));
 
 // 🤖 Worker prix - routes de contrôle [SÉCU: admin uniquement]
 const priceWorker = require('./services/price-worker');
@@ -452,6 +453,19 @@ if (process.env.NODE_ENV !== 'test') {
                 ADD COLUMN IF NOT EXISTS promo_price NUMERIC(10, 2);
             `);
             console.log('✅ [MIGRATION] Colonnes is_good_deal/promo_price vérifiées.');
+
+            // Migration 044 — suppression de compte (colonne nullable, idempotente)
+            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL`);
+            console.log('✅ [MIGRATION] Colonne users.deleted_at vérifiée.');
+
+            // Migration 045 — préférences de notification (valeurs par défaut, idempotente)
+            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB NOT NULL DEFAULT '{"push": true, "email": true, "sms": false}'::jsonb`);
+            console.log('✅ [MIGRATION] Colonne users.notification_prefs vérifiée.');
+
+            // Migration 046 — verrou de règlement Unipesa (anti-rejeu des webhooks)
+            await pool.query(`ALTER TABLE unipesa_operations ADD COLUMN IF NOT EXISTS settled_at TIMESTAMP NULL`);
+            await pool.query(`UPDATE unipesa_operations SET settled_at = COALESCE(confirmed_at, NOW()) WHERE status IN ('success','failed') AND settled_at IS NULL`);
+            console.log('✅ [MIGRATION] Verrou de règlement unipesa_operations.settled_at vérifié.');
 
             // 🏦 Migration 039 — OLI Bank Portail Cryptographique
             const fs = require('fs');

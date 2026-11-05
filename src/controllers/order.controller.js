@@ -85,6 +85,19 @@ exports.pay = async (req, res) => {
         const orderId = parseInt(req.params.id);
         const { paymentMethod } = req.body;
         const io = req.app.get('io');
+        // Contrôle d'accès : seul l'acheteur peut régler sa commande (sinon 404 pour ne pas révéler l'existence)
+        const pool = require('../config/db');
+        const { rows } = await pool.query(
+            'SELECT user_id, payment_status FROM orders WHERE id = $1',
+            [orderId]
+        );
+        if (rows.length === 0 || Number(rows[0].user_id) !== Number(req.user.id)) {
+            return res.status(404).json({ error: "Commande non trouvée" });
+        }
+        if (rows[0].payment_status === 'completed') {
+            return res.status(409).json({ error: "Commande déjà payée" });
+        }
+
         const order = await orderService.simulatePayment(orderId, paymentMethod, io);
         res.json({ message: "Paiement effectué", order });
     } catch (error) {
@@ -140,6 +153,9 @@ exports.verifyPickup = async (req, res) => {
         res.json({ message: "Pickup validé, colis en route", order });
     } catch (error) {
         console.error("Erreur verifyPickup:", error);
+        if (error.message.includes('Accès non autorisé')) {
+            return res.status(403).json({ error: error.message });
+        }
         if (error.message.includes('invalide')) {
             return res.status(400).json({ error: error.message });
         }

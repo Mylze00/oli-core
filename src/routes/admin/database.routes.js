@@ -276,27 +276,38 @@ router.get('/tables/:name/data', async (req, res) => {
 // POST /admin/database/query - Exécuter une requête SQL (SELECT uniquement)
 // ============================================================
 router.post('/query', async (req, res) => {
+    // [SÉCU C6] Console SQL : lecture seule, une seule instruction, délai maximum.
+    // Le filtre de mots-clés ne suffit pas (une requête peut enchaîner plusieurs
+    // instructions) : la transaction READ ONLY est le vrai garde-fou côté base.
+    const { sql } = req.body || {};
+
+    if (!sql || typeof sql !== 'string') {
+        return res.status(400).json({ error: 'SQL query required' });
+    }
+
+    // Une seule instruction : on retire un éventuel ';' final, puis on refuse tout autre ';'
+    const statement = sql.trim().replace(/;\s*$/, '');
+    if (statement.includes(';')) {
+        return res.status(403).json({ error: 'Une seule instruction SQL est autorisée.' });
+    }
+    if (statement.length === 0 || statement.length > 10000) {
+        return res.status(400).json({ error: 'Requête vide ou trop longue (10 000 caractères max).' });
+    }
+
+    // Seules les lectures sont autorisées
+    const head = statement.replace(/^(\s|--[^\n]*\n|\/\*[\s\S]*?\*\/)*/, '').slice(0, 10).toUpperCase();
+    if (!head.startsWith('SELECT') && !head.startsWith('WITH')) {
+        return res.status(403).json({ error: 'Seules les requêtes SELECT (ou WITH … SELECT) sont autorisées.' });
+    }
+
+    let client;
+    const startTime = Date.now();
     try {
-        const { sql } = req.body;
-
-        if (!sql || typeof sql !== 'string') {
-            return res.status(400).json({ error: 'SQL query required' });
-        }
-
-        // Sécurité : Vérifier que c'est une requête SELECT
-        const trimmed = sql.trim().toUpperCase();
-        const dangerousKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'GRANT', 'REVOKE'];
-
-        for (const keyword of dangerousKeywords) {
-            if (trimmed.startsWith(keyword)) {
-                return res.status(403).json({
-                    error: `Requêtes ${keyword} non autorisées. Seules les requêtes SELECT sont permises.`
-                });
-            }
-        }
-
-        const startTime = Date.now();
-        const result = await pool.query(sql);
+        client = await pool.connect();
+        await client.query('BEGIN READ ONLY');
+        await client.query("SET LOCAL statement_timeout = '5s'");
+        const result = await client.query(statement);
+        await client.query('COMMIT');
         const duration = Date.now() - startTime;
 
         res.json({
@@ -306,8 +317,13 @@ router.post('/query', async (req, res) => {
             duration_ms: duration,
         });
     } catch (error) {
+        if (client) {
+            try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ }
+        }
         console.error('❌ [DB Admin] Query error:', error.message);
         res.status(400).json({ error: error.message });
+    } finally {
+        if (client) client.release();
     }
 });
 
@@ -329,7 +345,7 @@ router.delete('/tables/:name/rows/:id', async (req, res) => {
         }
 
         const result = await pool.query(
-            `DELETE FROM "${name}" WHERE id = $1 RETURNING *`,
+            `DELETE FROM "${name.replace(/"/g, '""')}" WHERE id = $1 RETURNING *`,
             [id]
         );
 

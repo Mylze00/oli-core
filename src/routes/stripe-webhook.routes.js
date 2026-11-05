@@ -13,8 +13,9 @@
  */
 const express = require('express');
 const router = express.Router();
+const { verifyStripeWebhook } = require('../middlewares/stripe-signature.middleware');
 
-router.post('/webhook', express.json(), async (req, res) => {
+router.post('/webhook', verifyStripeWebhook, express.json(), async (req, res) => {
     try {
         // TODO (Production): Verify Stripe signature
         // const sig = req.headers['stripe-signature'];

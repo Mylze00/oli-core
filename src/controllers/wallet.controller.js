@@ -257,25 +257,11 @@ exports.getPaymentStatus = async (req, res) => {
 // ─── Recharge Carte bancaire ─────────────────────────────────────────────────
 
 exports.depositCard = async (req, res) => {
-    const { amount, cardNumber, expiryDate, cvv, cardholderName } = req.body;
-
-    if (!amount || parseFloat(amount) <= 0) {
-        return res.status(400).json({ success: false, error: 'Montant invalide' });
-    }
-
-    try {
-        const cardInfo = { cardNumber, expiryDate, cvv, cardholderName: cardholderName || 'Card Holder' };
-        const result   = await walletService.depositByCard(req.user.id, parseFloat(amount), cardInfo);
-        res.json({
-            success:       true,
-            message:       `Recharge de $${parseFloat(amount).toFixed(2)} par carte effectuée`,
-            newBalance:    result.balanceAfter,
-            transactionId: result.transactionId,
-        });
-    } catch (err) {
-        console.error('Erreur dépôt carte:', err.message);
-        res.status(400).json({ success: false, error: err.message });
-    }
+    // Recharge par carte désactivée : aucune donnée de carte (numéro, CVV) n'est lue ni transmise.
+    return res.status(410).json({
+        success: false,
+        error: 'La recharge par carte n\'est pas disponible. Utilisez Mobile Money.',
+    });
 };
 
 // ─── Retrait Mobile Money ────────────────────────────────────────────────────

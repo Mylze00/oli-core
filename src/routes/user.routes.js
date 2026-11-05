@@ -29,4 +29,17 @@ router.put('/update-name', userController.updateName);
  */
 router.get('/public-profile/:id', userController.getPublicProfile);
 
+/**
+ * DELETE /user/account
+ * Suppression logique du compte (requiert { confirm: 'SUPPRIMER' })
+ */
+router.delete('/account', userController.deleteAccount);
+
+/**
+ * GET / PUT /user/notification-preferences
+ * Préférences push / email / sms (persistées dans users.notification_prefs)
+ */
+router.get('/notification-preferences', userController.getNotificationPreferences);
+router.put('/notification-preferences', userController.updateNotificationPreferences);
+
 module.exports = router;

@@ -4,11 +4,38 @@
  */
 const jwt = require("jsonwebtoken");
 const { JWT_SECRET } = require("../config");
+const pool = require("../config/db");
+
+// ── Compte actif ? ─────────────────────────────────────────────────────────
+// Un compte supprimé (users.deleted_at renseigné) ne doit plus utiliser son JWT,
+// même si celui-ci est encore valide (durée de vie : 30 jours).
+// Résultat mis en cache 60 s pour ne pas ajouter une requête SQL à chaque appel.
+const ACCOUNT_CACHE_TTL_MS = 60 * 1000;
+const accountCache = new Map(); // userId -> { active, at }
+
+async function isAccountActive(userId) {
+    const key = String(userId);
+    const hit = accountCache.get(key);
+    if (hit && Date.now() - hit.at < ACCOUNT_CACHE_TTL_MS) return hit.active;
+
+    const { rows } = await pool.query(
+        "SELECT deleted_at FROM users WHERE id = $1",
+        [userId]
+    );
+    const active = rows.length > 0 && !rows[0].deleted_at;
+    accountCache.set(key, { active, at: Date.now() });
+    return active;
+}
+
+/** À appeler après une suppression de compte (effet immédiat sur ce processus). */
+function invalidateAccountCache(userId) {
+    accountCache.delete(String(userId));
+}
 
 /**
  * Middleware obligatoire - Bloque si pas de token valide
  */
-const requireAuth = (req, res, next) => {
+const requireAuth = async (req, res, next) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
 
@@ -19,6 +46,20 @@ const requireAuth = (req, res, next) => {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
+
+        try {
+            const active = await isAccountActive(decoded.id);
+            if (!active) {
+                return res.status(401).json({
+                    error: "Compte supprimé ou introuvable",
+                    code: "ACCOUNT_DELETED",
+                });
+            }
+        } catch (dbErr) {
+            console.error("[AUTH] Vérification du compte impossible:", dbErr.message);
+            return res.status(503).json({ error: "Service temporairement indisponible" });
+        }
+
         console.log(`[AUTH] User identifié (Mandatory): ${decoded.id} (${decoded.phone})`);
         next();
     } catch (err) {
@@ -90,5 +131,6 @@ module.exports = {
     requireAuth,
     optionalAuth,
     requireRole,
+    invalidateAccountCache,
     authenticateToken: requireAuth,
 };

@@ -381,19 +381,10 @@ const unipesaService = {
                 await pool.query('UPDATE unipesa_operations SET status = $1 WHERE oli_order_id = $2', ['failed', oliOrderId]);
                 // Remboursement si B2C a échoué !
                 if (op.operation_type === 'withdrawal') {
-                    console.log(`🔄 Polling: Retrait échoué, remboursement de ${op.amount_fc} FC pour ${oliOrderId}`);
-                    
-                    const amountUSD = (parseFloat(op.amount_fc) / (process.env.FC_TO_USD || 2800)); // Fallback ou config
-                    // Le retrait déduit 105% (5% de frais). On rembourse 105%.
-                    const refundAmount = parseFloat(op.amount_fc) * 1.05;
-                    
-                    const walletRepository = require('../repositories/wallet.repository');
-                    await walletRepository.performDeposit(op.user_id, refundAmount, {
-                        type: 'refund',
-                        provider: 'UNIPESA',
-                        reference: `${oliOrderId}_REFUND`,
-                        description: `Remboursement suite à l'échec du retrait Unipesa`,
-                    });
+                    console.log(`🔄 Polling: Retrait échoué, règlement du remboursement pour ${oliOrderId}`);
+                    // Même règlement unique que le webhook (anti double remboursement)
+                    const settlement = require('./unipesa-settlement.service');
+                    await settlement.settleWithdrawalFailure(oliOrderId, op.user_id);
                 }
             }
 
@@ -517,11 +508,24 @@ const unipesaService = {
      * @returns {boolean}
      */
     verifyWebhookSignature(body) {
-        const receivedSignature = body.signature;
-        if (!receivedSignature) return false;
+        // Sans secret configuré, la signature serait calculable par n'importe qui : rejet.
+        if (!UNIPESA_SECRET) {
+            console.error('[UNIPESA] UNIPESA_SECRET_KEY absent : webhook rejeté.');
+            return false;
+        }
+        if (!body || typeof body.signature !== 'string' || !body.signature) return false;
 
-        const expectedSignature = _buildSignature(body);
-        return receivedSignature.toLowerCase() === expectedSignature.toLowerCase();
+        let expected;
+        try {
+            expected = _buildSignature(body).toLowerCase();
+        } catch (e) {
+            return false;
+        }
+        const received = body.signature.toLowerCase();
+        const a = Buffer.from(received);
+        const b = Buffer.from(expected);
+        if (a.length !== b.length) return false;
+        return crypto.timingSafeEqual(a, b);
     },
 };
 

@@ -1,21 +1,20 @@
-const walletRepository = require('../repositories/wallet.repository');
-const pool = require('../config/db');
 const unipesaService = require('../services/unipesa.service');
-const { FEES, FC_TO_USD_FALLBACK } = require('../config/index'); // [P1.4]
-
-const FC_TO_USD = FC_TO_USD_FALLBACK; // Depuis config — plus de hardcode
-const STATUS    = { SUCCESS: 2, FAILED: 3, PENDING: 1 };
-
+const settlement = require('../services/unipesa-settlement.service');
 
 /**
  * Contrôleur Webhooks Unipesa
  *
- * Endpoints attendus :
+ * Endpoints (publics, sécurisés par signature HMAC-SHA512) :
  *  POST /webhooks/unipesa/deposit    — Confirmation C2B (client → OLI)
  *  POST /webhooks/unipesa/withdrawal — Confirmation B2C (OLI → client)
+ *
+ * Règles :
+ *  - Signature vérifiée AVANT toute réponse ou traitement : sans signature valide → 403.
+ *  - Montants pris dans unipesa_operations (jamais dans le webhook).
+ *  - Règlement une seule fois (settled_at) : un rejeu ne crédite ni ne rembourse à nouveau.
  */
 
-// Codes de statut Unipesa
+// Codes de statut Unipesa utilisés par le webhook
 const UNIPESA_CODES = {
     INITIATED:   0,
     IN_PROGRESS: 1,
@@ -26,199 +25,95 @@ const UNIPESA_CODES = {
 
 /**
  * Webhook : Confirmation de dépôt (C2B)
- * Le client a validé le paiement Mobile Money → on crédite son Wallet OLI
  */
 exports.handleDeposit = async (req, res) => {
+    const payload = req.body || {};
+
+    if (!unipesaService.verifyWebhookSignature(payload)) {
+        console.warn('🚫 Webhook Unipesa C2B rejeté : signature invalide ou absente.');
+        return res.status(403).json({ error: 'Signature invalide' });
+    }
+
+    // Réponse immédiate à Unipesa (évite les retries) ; le traitement suit
+    res.status(200).json({ received: true });
+
     try {
-        const payload = req.body;
-        console.log('📨 Webhook Unipesa C2B reçu:', JSON.stringify(payload));
-
-        // 1. Vérification de la signature AVANT tout traitement
-        if (!unipesaService.verifyWebhookSignature(payload)) {
-            console.warn('⚠️ Signature Unipesa invalide — Webhook rejeté (BYPASS TEMPORAIRE POUR TEST).');
-            // return res.status(403).json({ error: 'Signature invalide' });
-        }
-
-        // 2. [FIX B6] Répondre 200 immédiatement à Unipesa pour éviter les retries.
-        //    Le traitement se fait en fire-and-forget SÉCURISÉ ci-dessous.
-        res.status(200).json({ received: true });
-
-        // 3. Traiter uniquement les statuts SUCCESS (2)
         if (parseInt(payload.status) !== UNIPESA_CODES.SUCCESS) {
-            console.log(`ℹ️ Unipesa C2B — Statut non-terminal (${payload.status}), ignoré.`);
+            console.log(`ℹ️ Unipesa C2B — statut non terminal (${payload.status}), ignoré.`);
             return;
         }
 
-        const orderId  = payload.order_id;
-        const amount   = parseFloat(payload.amount) || 0;
-        const currency = payload.currency || 'USD';
-
-        if (!orderId || amount <= 0) {
-            console.error('❌ Webhook C2B Unipesa invalide: orderId ou montant manquant');
-            return;
-        }
-
-        // 4. Retrouver l'utilisateur via la référence
-        // FORMAT OFFICIEL : DEP-{userId}-{ts} ou WD-{userId}-{ts} (TIRETS)
-        // Le regex accepte les tirets uniquement — format standardisé depuis wallet.service et unipesa.service
-        const match = orderId.match(/^(DEP|CARD|WD)-(\d+)-\d+/);
+        // Référence attendue : DEP-<userId>-<ts> (ou CARD-<userId>-<ts>)
+        const orderId = String(payload.order_id || '');
+        const match = orderId.match(/^(DEP|CARD)-(\d+)-\d+$/);
         if (!match) {
-            console.error(`❌ Format de référence non reconnu: ${orderId} (attendu: DEP-userId-ts ou WD-userId-ts)`);
+            console.error(`❌ Référence Unipesa non reconnue: ${orderId}`);
             return;
         }
-        const userId = parseInt(match[2]);
+        const userId = parseInt(match[2], 10);
 
-        // 5. Vérifier l'idempotence — éviter le double crédit
-        const existing = await pool.query(
-            `SELECT status FROM wallet_transactions WHERE reference = $1 AND type = 'deposit'`,
-            [orderId]
-        );
-        if (existing.rows.length > 0) {
-            console.log(`ℹ️ Webhook déjà traité pour ${orderId} — ignoré (idempotence).`);
+        const result = await settlement.settleDeposit(orderId, userId);
+
+        if (result.status !== 'credited') {
+            console.warn(`ℹ️ Dépôt ${orderId} non crédité : ${result.status}`);
             return;
         }
 
-        // 6. Créditer le Wallet OLI (le wallet est en FC)
-        // [P1.4] Taux de frais depuis config centralisée
-        const TOTAL_FEE_RATE = FEES.TOTAL_DEPOSIT_RATE; // 6% (3% OLI + 3% Unipesa)
-        // Le webhook reçoit le montant BRUT demandé (ex: 1060 FC)
-        // Pour retrouver le net (ex: 1000 FC) : net = brut / (1 + 0.06)
-        const netAmount = amount / (1 + TOTAL_FEE_RATE);
-        const feeAmount = amount - netAmount;
+        console.log(`✅ Wallet crédité: user #${result.userId} → +${result.netFC.toFixed(2)} FC (frais: ${result.feeFC.toFixed(2)} FC)`);
 
-        console.log(`💰 Crédit Wallet OLI : user ${userId} → +${netAmount.toFixed(2)} FC net (${amount} ${currency} brut, ${(TOTAL_FEE_RATE * 100)}% frais)`);
-
-        // Crédit au client (montant net)
-        await walletRepository.performDeposit(userId, netAmount, {
-            type:        'deposit',
-            provider:    'UNIPESA',
-            reference:   orderId,
-            description: `Recharge Mobile Money confirmée (${payload.provider_id || currency}) — ${amount} ${currency} brut`,
-        });
-
-        // Mettre à jour l'état dans unipesa_operations pour que le polling fonctionne
-        await pool.query(
-            `UPDATE unipesa_operations 
-             SET status = 'success', confirmed_at = NOW(), webhook_payload = $1
-             WHERE oli_order_id = $2 OR unipesa_order_id = $2`,
-            [JSON.stringify(payload), orderId]
-        );
-
-        // Crédit des frais à la Banque OLI (user 0)
-        if (feeAmount > 0) {
-            const walletService = require('../services/wallet.service');
-            await walletService._creditSystemWallet(
-                feeAmount,
-                `${orderId}_FEE`,
-                `Frais 6% recharge C2B (User #${userId}) — ${amount} ${currency}`
-            );
-        }
-
-        console.log(`✅ Wallet crédité: user #${userId} → +${netAmount.toFixed(2)} FC (frais: ${feeAmount.toFixed(2)} FC → Banque OLI)`);
-
-        // Notifier le client via Socket.io et FCM pour débloquer l'app Flutter
+        // Notifier le client (socket + FCM) pour débloquer l'app
         try {
             const notifService = require('../services/notification.service');
             await notifService.send(
-                userId, 
-                'wallet_deposit', 
-                `Recharge réussie !`, 
-                `Votre dépôt de ${amount} FC a été confirmé.`, 
-                { orderId: orderId, amount: amount, netAmount: netAmount, status: 'success' },
+                result.userId,
+                'wallet_deposit',
+                'Recharge réussie !',
+                `Votre dépôt de ${result.grossFC} FC a été confirmé.`,
+                { orderId, amount: result.grossFC, netAmount: result.netFC, status: 'success' },
                 req.app ? req.app.get('io') : null
             );
-            console.log(`📡 Notification de succès envoyée au user #${userId}`);
         } catch (e) {
-            console.error('Erreur notification dépôt:', e);
+            console.error('Erreur notification dépôt:', e.message);
         }
-
     } catch (err) {
-        // La réponse 200 a déjà été envoyée — on logue seulement l'erreur
-        console.error('❌ Erreur traitement webhook handleDeposit:', err.message, err.stack);
+        // La réponse 200 est déjà envoyée : on journalise seulement
+        console.error('❌ Erreur traitement webhook handleDeposit:', err.message);
     }
 };
 
 /**
- * Webhook : Confirmation de retrait (B2C)
- * Unipesa confirme que le client a reçu ses fonds Mobile Money
+ * Webhook : Confirmation ou échec de retrait (B2C)
  */
 exports.handleWithdrawal = async (req, res) => {
+    const payload = req.body || {};
+
+    if (!unipesaService.verifyWebhookSignature(payload)) {
+        console.warn('🚫 Webhook Unipesa B2C rejeté : signature invalide ou absente.');
+        return res.status(403).json({ error: 'Signature invalide' });
+    }
+
+    res.status(200).json({ received: true });
+
     try {
-        const payload = req.body;
-        console.log('📨 Webhook Unipesa B2C reçu:', JSON.stringify(payload));
-
-        // 1. Vérification de la signature
-        if (!unipesaService.verifyWebhookSignature(payload)) {
-            console.warn('⚠️ Signature Unipesa invalide — Webhook rejeté (BYPASS TEMPORAIRE POUR TEST).');
-            // return res.status(403).json({ error: 'Signature invalide' });
+        const orderId = String(payload.order_id || '');
+        const match = orderId.match(/^WD-(\d+)-\d+$/);
+        if (!match) {
+            console.error(`❌ Référence de retrait non reconnue: ${orderId}`);
+            return;
         }
+        const userId = parseInt(match[1], 10);
+        const status = parseInt(payload.status, 10);
 
-        // 2. Répondre immédiatement.
-        res.status(200).json({ received: true });
-
-        const orderId = payload.order_id;
-        const status  = parseInt(payload.status);
-
-        // 3. Si le décaissement a ÉCHOUÉ (status 3), on rembourse le wallet
         if (status === UNIPESA_CODES.FAILED || status === UNIPESA_CODES.CANCELLED) {
-            await pool.query(
-                `UPDATE unipesa_operations 
-                 SET status = 'failed', error_message = $1, webhook_payload = $2
-                 WHERE oli_order_id = $3 OR unipesa_order_id = $3`,
-                [payload.description || 'Echec retrait', JSON.stringify(payload), orderId]
-            );
-
-            const match = orderId.match(/^WD-(\d+)-\d+/);
-            if (match) {
-                const userId = parseInt(match[1]);
-                const amount = parseFloat(payload.amount) || 0;
-                const currency = payload.currency || 'USD';
-                
-                // Le wallet OLI est en FC
-                const amountFC = currency === 'CDF' ? amount : (amount * FC_TO_USD);
-
-                // Le montant de payload est le net. On avait débité 105% du montant FC
-                const refundAmount = amountFC * 1.05;
-                const feeToReverse = amountFC * 0.05;
-
-                console.warn(`↩️ Retrait échoué — Remboursement user ${userId} : +${refundAmount} FC`);
-
-                // 1. Rembourser le client (105%)
-                await walletRepository.performDeposit(userId, refundAmount, {
-                    type:        'refund',
-                    provider:    'UNIPESA',
-                    reference:   `${orderId}_REFUND`,
-                    description: `Remboursement : échec du retrait Unipesa (statut ${status})`,
-                });
-
-                // 2. Annuler les frais de la Banque OLI (débit silencieux)
-                try {
-                    await pool.query(`UPDATE wallets SET balance = balance - $1 WHERE user_id = 0`, [feeToReverse]);
-                    await pool.query(`UPDATE users SET wallet = wallet - $1 WHERE id = 0`, [feeToReverse]);
-                } catch (e) {
-                    console.error('Erreur reverse fee System Bank:', e);
-                }
-            }
+            const result = await settlement.settleWithdrawalFailure(orderId, userId);
+            console.log(`↩️ Retrait ${orderId} en échec : ${result.status}`);
             return;
         }
 
-        // 4. Si SUCCÈS, on met juste à jour le statut en base de données (le débit avait déjà été fait)
         if (status === UNIPESA_CODES.SUCCESS) {
-            console.log(`✅ Retrait Unipesa confirmé : ${orderId}`);
-            await pool.query(
-                `UPDATE wallet_transactions 
-                 SET status = 'completed', description = description || ' [Confirmé par Unipesa]'
-                 WHERE reference = $1`,
-                [orderId]
-            );
-            await pool.query(
-                `UPDATE unipesa_operations 
-                 SET status = 'success', confirmed_at = NOW(), webhook_payload = $1
-                 WHERE oli_order_id = $2 OR unipesa_order_id = $2`,
-                [JSON.stringify(payload), orderId]
-            );
+            const result = await settlement.settleWithdrawalSuccess(orderId, userId);
+            console.log(`✅ Retrait Unipesa confirmé : ${orderId} (${result.status})`);
         }
-
     } catch (err) {
         console.error('Erreur handleWithdrawal Unipesa:', err.message);
     }

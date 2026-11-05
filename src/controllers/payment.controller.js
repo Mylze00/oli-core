@@ -62,7 +62,8 @@ exports.handleWebhook = async (req, res) => {
                     return res.json({ received: true, success: true, orderId, result });
                 } catch (err) {
                     console.error(`❌ Erreur mise à jour commande #${orderId}:`, err.message, err.stack);
-                    return res.json({ received: true, success: false, orderId, error: err.message, stack: err.stack });
+                    console.error('Erreur paiement webhook:', err.message);
+                    return res.status(500).json({ received: true, success: false, orderId });
                 }
             } else {
                 console.warn("⚠️ Pas d'orderId dans les métadonnées du paiement");

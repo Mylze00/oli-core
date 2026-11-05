@@ -18,11 +18,9 @@ const isAdmin = async (req, res, next) => {
 
         const user = rows[0];
 
-        // Vérification stricte: Flag DB OU Numéro Master
-        const MASTER_PHONE = '+243827088682';
-        const isMaster = user.phone && user.phone.includes('827088682'); // Check souple ou strict
-
-        if (user.is_admin || isMaster) {
+        // [SÉCU C7] Droits admin uniquement via le flag en base (plus de correspondance
+        // par sous-chaîne sur le numéro de téléphone)
+        if (user.is_admin === true) {
             next();
         } else {
             return res.status(403).json({ message: "Accès refusé. Réservé aux administrateurs." });

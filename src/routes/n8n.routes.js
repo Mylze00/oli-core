@@ -5,17 +5,27 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { JWT_SECRET } = require('../config');
 const productService = require('../services/product.service');
 
 // ─── Middleware : Vérification clé secrète n8n ─────────────────────────────
 // Sécurité légère : le workflow n8n envoie une clé secrète dans le header
 // Plus simple qu'un JWT pour un service interne
+// [SÉCU C7] Aucune valeur de repli : sans N8N_WEBHOOK_SECRET configuré, la route refuse tout.
 const n8nAuth = (req, res, next) => {
-    const secretKey = req.headers['x-n8n-secret'];
-    const expected = process.env.N8N_WEBHOOK_SECRET || 'oli_n8n_secret_2024';
+    const expected = process.env.N8N_WEBHOOK_SECRET;
+    if (!expected) {
+        console.error('[N8N] N8N_WEBHOOK_SECRET non configuré : accès refusé.');
+        return res.status(503).json({ error: 'Intégration n8n non configurée' });
+    }
 
-    if (secretKey !== expected) {
+    const provided = String(req.headers['x-n8n-secret'] || '');
+    const a = Buffer.from(provided);
+    const b = Buffer.from(expected);
+    const valid = a.length === b.length && crypto.timingSafeEqual(a, b);
+
+    if (!valid) {
         console.warn('[N8N] Tentative d\'accès non autorisée:', req.ip);
         return res.status(401).json({ error: 'Clé secrète n8n invalide' });
     }
@@ -26,7 +36,11 @@ const n8nAuth = (req, res, next) => {
 const loadAdminUser = async (req, res, next) => {
     try {
         const db = require('../config/db');
-        const ADMIN_PHONE = process.env.ADMIN_PHONE || '+243827088682';
+        // [SÉCU C7] Pas de numéro de repli : ADMIN_PHONE doit être configuré
+        const ADMIN_PHONE = process.env.ADMIN_PHONE;
+        if (!ADMIN_PHONE) {
+            return res.status(503).json({ error: 'ADMIN_PHONE non configuré' });
+        }
         const result = await db.query(
             'SELECT id, phone, is_admin, is_seller FROM users WHERE phone = $1 AND is_admin = true LIMIT 1',
             [ADMIN_PHONE]
