@@ -12,6 +12,18 @@ exports.getFeatured = async (req, res) => {
     }
 };
 
+exports.getDiscoverRandom = async (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit) || 64, 200);
+        const userId = req.user ? req.user.id : null;
+        const products = await productService.getDiscoverRandomProducts(userId, limit);
+        res.json(products);
+    } catch (err) {
+        console.error("Erreur GET /products/discover-random:", err);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+};
+
 exports.getTopSellers = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 10;

@@ -78,6 +78,20 @@ class ProductService {
         return products.map(p => this._formatProduct(p));
     }
 
+    /**
+     * Top Classement personnalisé : tirage aléatoire hors habitudes de l'utilisateur.
+     * @param {number|null} userId - null pour un visiteur anonyme
+     */
+    async getDiscoverRandomProducts(userId, limit = 64) {
+        const ADMIN_PHONE = '+243827088682';
+        const products = await productRepository.findDiscoverRandom(ADMIN_PHONE, userId, limit);
+        return products.map(p => {
+            const formatted = this._formatProduct(p);
+            formatted.isFeatured = true;
+            return formatted;
+        });
+    }
+
     async getTopSellers(limit = 50) {
         const products = await productRepository.findTopSellers(limit);
         return products.map(p => this._formatProduct(p));

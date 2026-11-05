@@ -43,6 +43,13 @@ router.get('/branded', productController.getBranded);
 router.get('/top-sellers', productController.getTopSellers);
 
 /**
+ * GET /products/discover-random?limit=64
+ * Top Classement personnalisé : tirage aléatoire hors habitudes de l'utilisateur
+ * (req.user est peuplé par optionalAuth monté dans server.js)
+ */
+router.get('/discover-random', productController.getDiscoverRandom);
+
+/**
  * GET /products/verified-shops
  * Produits des grands magasins vérifiés
  */
