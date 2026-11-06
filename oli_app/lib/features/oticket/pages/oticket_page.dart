@@ -432,9 +432,9 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
                       ),
                       const Spacer(),
                       Text(
-                        e.remaining > 0 ? '${e.remaining} place(s)' : 'Complet',
+                        e.placesLabel,
                         style: TextStyle(
-                            color: e.remaining > 0 ? Colors.white54 : Colors.redAccent, fontSize: 11),
+                            color: e.soldOut ? Colors.redAccent : Colors.white54, fontSize: 11),
                       ),
                     ],
                   ),
@@ -486,8 +486,10 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
                           style: TextStyle(color: Colors.white54))
                     else
                       ...types.map((t) {
-                        final remaining =
-                            int.tryParse((t['remaining'] ?? 0).toString()) ?? 0;
+                        final unlimited = t['unlimited'] == true;
+                        final remaining = unlimited
+                            ? 1
+                            : (int.tryParse((t['remaining'] ?? 0).toString()) ?? 0);
                         final price =
                             double.tryParse((t['price_fc'] ?? 0).toString()) ?? 0;
                         return ListTile(
@@ -495,7 +497,9 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
                           title: Text(t['name'].toString(),
                               style: const TextStyle(color: Colors.white, fontSize: 14)),
                           subtitle: Text(
-                            remaining > 0 ? '$remaining disponible(s)' : 'Épuisé',
+                            unlimited
+                                ? 'Places disponibles'
+                                : (remaining > 0 ? '$remaining place(s) disponible(s)' : 'Épuisé'),
                             style: TextStyle(
                                 color: remaining > 0 ? Colors.white38 : Colors.redAccent,
                                 fontSize: 11),

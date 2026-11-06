@@ -34,6 +34,7 @@ function Ticketing() {
 
     const [form, setForm] = useState(EMPTY_FORM);
     const [uploading, setUploading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [organizers, setOrganizers] = useState([]);
     const [editId, setEditId] = useState(null);
     const [showForm, setShowForm] = useState(false);
@@ -74,6 +75,8 @@ function Ticketing() {
 
     const submitEvent = async (ev) => {
         ev.preventDefault();
+        if (submitting) return; // évite les publications en double
+        setSubmitting(true);
         try {
             const payload = {
                 ...form,
@@ -89,6 +92,8 @@ function Ticketing() {
             load();
         } catch (err) {
             alert(err.response?.data?.error || "Erreur lors de l'enregistrement");
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -329,8 +334,9 @@ function Ticketing() {
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg">
-                            {editId ? 'Enregistrer' : 'Créer'}
+                        <button type="submit" disabled={submitting}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                            {submitting ? 'Enregistrement…' : (editId ? 'Enregistrer' : 'Créer')}
                         </button>
                         <button type="button" onClick={() => { setShowForm(false); setEditId(null); }}
                             className="px-4 py-2 rounded-lg border">Annuler</button>
@@ -371,7 +377,15 @@ function Ticketing() {
                                         <td className="p-3">{(e.event_date || '').substring(0, 10)} {e.event_time || ''}</td>
                                         <td className="p-3">{e.location}</td>
                                         <td className="p-3"><span className={`px-2 py-1 rounded-full text-xs ${st.cls}`}>{st.text}</span></td>
-                                        <td className="p-3">{e.tickets_sold}{e.capacity > 0 ? ` / ${e.capacity}` : ''}</td>
+                                        <td className="p-3">
+                                            {e.tickets_sold}{e.capacity > 0 ? ` / ${e.capacity}` : ''}
+                                            {e.capacity > 0 && (
+                                                <div className="text-xs text-gray-500">
+                                                    {Math.max(e.capacity - e.tickets_sold, 0)} place(s) restante(s)
+                                                </div>
+                                            )}
+                                            {e.capacity === 0 && <div className="text-xs text-gray-500">illimité</div>}
+                                        </td>
                                         <td className="p-3 font-medium">{fc(e.revenue_fc)}</td>
                                         <td className="p-3">
                                             <div className="flex gap-2">

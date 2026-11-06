@@ -27,7 +27,9 @@ router.get('/events', async (req, res) => {
             SELECT e.id, e.title, e.subtitle, e.category, e.event_date, e.event_time,
                    e.location, e.image_url, e.is_free,
                    COALESCE(MIN(tt.price_fc), 0)                         AS min_price_fc,
-                   COALESCE(SUM(tt.quantity_total - tt.quantity_sold), 0)::int AS remaining
+                   COUNT(tt.id)::int                                     AS type_count,
+                   COALESCE(bool_or(tt.quantity_total = 0), FALSE)       AS has_unlimited,
+                   COALESCE(SUM(GREATEST(tt.quantity_total - tt.quantity_sold, 0)), 0)::int AS remaining
               FROM events e
               LEFT JOIN event_ticket_types tt ON tt.event_id = e.id
              WHERE e.status = 'published' ${catFilter}
@@ -53,7 +55,8 @@ router.get('/events/:id', async (req, res) => {
 
         const types = await pool.query(`
             SELECT id, name, price_fc, quantity_total, quantity_sold,
-                   (quantity_total - quantity_sold) AS remaining
+                   (quantity_total = 0) AS unlimited,
+                   GREATEST(quantity_total - quantity_sold, 0) AS remaining
               FROM event_ticket_types WHERE event_id = $1 ORDER BY price_fc DESC
         `, [req.params.id]);
 

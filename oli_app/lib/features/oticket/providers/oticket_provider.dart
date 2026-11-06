@@ -16,6 +16,8 @@ class OEvent {
   final String? imageUrl;
   final double minPriceFC;
   final int remaining;
+  final bool hasUnlimited;
+  final int typeCount;
 
   const OEvent({
     required this.id,
@@ -28,7 +30,18 @@ class OEvent {
     this.imageUrl,
     required this.minPriceFC,
     required this.remaining,
+    this.hasUnlimited = false,
+    this.typeCount = 0,
   });
+
+  /// Texte des places : « illimité », nombre restant, ou « Complet ».
+  String get placesLabel {
+    if (typeCount == 0) return 'Bientôt en vente';
+    if (hasUnlimited) return 'Places disponibles';
+    return remaining > 0 ? '$remaining place(s)' : 'Complet';
+  }
+
+  bool get soldOut => typeCount > 0 && !hasUnlimited && remaining <= 0;
 
   factory OEvent.fromJson(Map<String, dynamic> j) => OEvent(
         id: (j['id'] as num).toInt(),
@@ -41,6 +54,8 @@ class OEvent {
         imageUrl: j['image_url']?.toString(),
         minPriceFC: double.tryParse((j['min_price_fc'] ?? 0).toString()) ?? 0,
         remaining: int.tryParse((j['remaining'] ?? 0).toString()) ?? 0,
+        hasUnlimited: j['has_unlimited'] == true,
+        typeCount: int.tryParse((j['type_count'] ?? 0).toString()) ?? 0,
       );
 }
 
