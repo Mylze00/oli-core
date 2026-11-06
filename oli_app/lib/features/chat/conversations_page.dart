@@ -2,8 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
+import '../contacts/screens/contacts_invite_page.dart';
 import 'chat_page.dart';
 import 'socket_service.dart';
 import 'providers/inbox_providers.dart';
@@ -59,40 +58,6 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
       socketService.onMessage((data) {
         ref.read(inboxConversationsProvider.notifier).fetchConversations();
       });
-    }
-  }
-
-  Future<void> _pickContact() async {
-    // 1. Demander la permission
-    if (await Permission.contacts.request().isGranted) {
-      try {
-        final contact = await FlutterContacts.openExternalPick();
-        if (contact != null) {
-          debugPrint("Contact sélectionné: ${contact.displayName}");
-          
-          final phone = contact.phones.isNotEmpty ? contact.phones.first.number : null;
-          if (phone != null) {
-             // Ici on pourrait appeler une fonction pour chercher l'utilisateur par téléphone
-             // _checkUserByPhone(phone);
-             ScaffoldMessenger.of(context).showSnackBar(
-               SnackBar(content: Text("Contact sélectionné: ${contact.displayName} ($phone)")),
-             );
-          } else {
-             ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text("Ce contact n'a pas de numéro de téléphone")),
-             );
-          }
-        }
-      } catch (e) {
-        debugPrint("Erreur contacts: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text("Erreur lors de la sélection: $e")),
-        );
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Permission contacts refusée")),
-      );
     }
   }
 
@@ -230,7 +195,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                         iconBgColor: Colors.blue,
                         label: 'Contacts',
                         isDark: isDark,
-                        onTap: _pickContact, // Rend le bouton fonctionnel avec la sélection de contact existante
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactsInvitePage())), // Trouver mes contacts (invitation par lien)
                       ),
                       const SizedBox(width: 8),
                       _buildActionButton(
