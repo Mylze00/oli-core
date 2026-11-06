@@ -25,7 +25,7 @@ router.get('/events', async (req, res) => {
 
         const { rows } = await pool.query(`
             SELECT e.id, e.title, e.subtitle, e.category, e.event_date, e.event_time,
-                   e.location, e.image_url,
+                   e.location, e.image_url, e.is_free,
                    COALESCE(MIN(tt.price_fc), 0)                         AS min_price_fc,
                    COALESCE(SUM(tt.quantity_total - tt.quantity_sold), 0)::int AS remaining
               FROM events e
@@ -97,35 +97,38 @@ router.post('/purchase', requireAuth, async (req, res) => {
             return res.status(409).json({ error: `Plus que ${remaining} billet(s) disponible(s)` });
         }
 
-        // 2. Débit du wallet, sous verrou
+        // 2. Paiement — ignoré pour une réservation gratuite (prix 0)
         const total = parseFloat(type.price_fc) * qty;
-        const wallet = await walletRepository._getOrCreateWallet(req.user.id, client);
-        if (wallet.is_frozen) {
-            await client.query('ROLLBACK');
-            return res.status(403).json({ error: 'Votre wallet est gelé' });
-        }
-        const before = parseFloat(wallet.balance);
-        if (before < total) {
-            await client.query('ROLLBACK');
-            return res.status(402).json({
-                error: `Solde insuffisant : ${total.toFixed(0)} FC requis, ${before.toFixed(0)} FC disponibles`,
+        let after = null;
+        if (total > 0) {
+            const wallet = await walletRepository._getOrCreateWallet(req.user.id, client);
+            if (wallet.is_frozen) {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: 'Votre wallet est gelé' });
+            }
+            const before = parseFloat(wallet.balance);
+            if (before < total) {
+                await client.query('ROLLBACK');
+                return res.status(402).json({
+                    error: `Solde insuffisant : ${total.toFixed(0)} FC requis, ${before.toFixed(0)} FC disponibles`,
+                });
+            }
+            after = before - total;
+            const reference = `TICKET_${type.event_id}_${req.user.id}_${Date.now()}`;
+
+            await client.query('UPDATE wallets SET balance = $1 WHERE id = $2', [after, wallet.id]);
+            await client.query('UPDATE users SET wallet = $1 WHERE id = $2', [after, req.user.id]);
+            await walletRepository._insertTx(client, {
+                userId: req.user.id,
+                type: 'payment',
+                amount: -total,
+                balanceBefore: before,
+                balanceAfter: after,
+                provider: 'O_TICKET',
+                reference,
+                description: `${qty} billet(s) — ${type.event_title} (${type.name})`,
             });
         }
-        const after = before - total;
-        const reference = `TICKET_${type.event_id}_${req.user.id}_${Date.now()}`;
-
-        await client.query('UPDATE wallets SET balance = $1 WHERE id = $2', [after, wallet.id]);
-        await client.query('UPDATE users SET wallet = $1 WHERE id = $2', [after, req.user.id]);
-        await walletRepository._insertTx(client, {
-            userId: req.user.id,
-            type: 'payment',
-            amount: -total,
-            balanceBefore: before,
-            balanceAfter: after,
-            provider: 'O_TICKET',
-            reference,
-            description: `${qty} billet(s) — ${type.event_title} (${type.name})`,
-        });
 
         // 3. Émission des billets
         const tickets = [];
@@ -185,6 +188,8 @@ router.get('/organizer/events', requireAuth, async (req, res) => {
               FROM events e
               LEFT JOIN event_tickets t ON t.event_id = e.id
              WHERE e.organizer_id = $1
+                OR EXISTS (SELECT 1 FROM event_organizers o
+                            WHERE o.event_id = e.id AND o.user_id = $1)
              GROUP BY e.id
              ORDER BY e.event_date DESC
              LIMIT 100
@@ -223,8 +228,15 @@ router.post('/validate', requireAuth, async (req, res) => {
         }
         const ticket = tRes.rows[0];
 
-        // Autorisation : organisateur de l'événement, ou admin
-        const isOrganizer = Number(ticket.organizer_id) === Number(req.user.id);
+        // Autorisation : organisateur principal, organisateur déclaré, ou admin
+        let isOrganizer = Number(ticket.organizer_id) === Number(req.user.id);
+        if (!isOrganizer) {
+            const org = await client.query(
+                'SELECT 1 FROM event_organizers WHERE event_id = $1 AND user_id = $2 LIMIT 1',
+                [ticket.event_id, req.user.id]
+            );
+            isOrganizer = org.rows.length > 0;
+        }
         if (!isOrganizer && req.user.is_admin !== true) {
             await client.query('ROLLBACK');
             return res.status(403).json({ result: 'forbidden', message: "Vous n'organisez pas cet événement" });

@@ -19,6 +19,7 @@ const TICKET_STATUS_LABEL = {
 const EMPTY_FORM = {
     title: '', subtitle: '', category: 'concert', event_date: '',
     event_time: '', location: '', image_url: '', status: 'draft',
+    is_free: false, organizer_phones: '', single_price_fc: '', single_quantity: '',
 };
 
 const fc = (n) => `${Number(n || 0).toLocaleString('fr-CD')} FC`;
@@ -32,6 +33,8 @@ function Ticketing() {
     const [error, setError] = useState(null);
 
     const [form, setForm] = useState(EMPTY_FORM);
+    const [uploading, setUploading] = useState(false);
+    const [organizers, setOrganizers] = useState([]);
     const [editId, setEditId] = useState(null);
     const [showForm, setShowForm] = useState(false);
 
@@ -72,8 +75,16 @@ function Ticketing() {
     const submitEvent = async (ev) => {
         ev.preventDefault();
         try {
-            if (editId) await api.put(`/admin/ticketing/events/${editId}`, form);
-            else await api.post('/admin/ticketing/events', form);
+            const payload = {
+                ...form,
+                organizer_phones: form.organizer_phones
+                    .split(/[,;\n]/).map(p => p.trim()).filter(Boolean),
+            };
+            const res = editId
+                ? await api.put(`/admin/ticketing/events/${editId}`, payload)
+                : await api.post('/admin/ticketing/events', payload);
+            const invalid = res.data?.invalid_phones;
+            if (invalid?.length) alert(`Numéro(s) ignoré(s) : ${invalid.join(', ')}`);
             setForm(EMPTY_FORM); setEditId(null); setShowForm(false);
             load();
         } catch (err) {
@@ -81,15 +92,45 @@ function Ticketing() {
         }
     };
 
-    const editEvent = (e) => {
+    const editEvent = async (e) => {
         setEditId(e.id);
+        try {
+            const res = await api.get(`/admin/ticketing/events/${e.id}/organizers`);
+            setOrganizers(res.data);
+        } catch { setOrganizers([]); }
         setForm({
             title: e.title || '', subtitle: e.subtitle || '', category: e.category || 'concert',
             event_date: e.event_date ? e.event_date.substring(0, 10) : '',
             event_time: e.event_time || '', location: e.location || '',
             image_url: e.image_url || '', status: e.status || 'draft',
+            is_free: e.is_free === true,
+            organizer_phones: '', single_price_fc: '', single_quantity: '',
         });
         setShowForm(true);
+    };
+
+    const uploadImage = async (file) => {
+        if (!file) return;
+        setUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append('image', file);
+            const res = await api.post('/admin/ticketing/upload', fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            setForm(f => ({ ...f, image_url: res.data.url }));
+        } catch (err) {
+            alert(err.response?.data?.error || 'Téléversement impossible');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const removeOrganizer = async (id) => {
+        try {
+            await api.delete(`/admin/ticketing/organizers/${id}`);
+            setOrganizers(organizers.filter(o => o.id !== id));
+        } catch { alert('Retrait impossible'); }
     };
 
     const setStatus = async (id, status) => {
@@ -216,7 +257,76 @@ function Ticketing() {
                         <Field label="Date *" type="date" value={form.event_date} onChange={v => setForm({ ...form, event_date: v })} required />
                         <Field label="Heure" placeholder="20:00" value={form.event_time} onChange={v => setForm({ ...form, event_time: v })} />
                         <Field label="Lieu *" value={form.location} onChange={v => setForm({ ...form, location: v })} required />
-                        <Field label="Image (URL)" value={form.image_url} onChange={v => setForm({ ...form, image_url: v })} />
+
+                        {/* Affiche de l'événement */}
+                        <div>
+                            <label className="block text-sm text-gray-600 mb-1">Affiche de l'événement</label>
+                            <div className="flex items-center gap-3">
+                                <input type="file" accept="image/*"
+                                    onChange={e => uploadImage(e.target.files?.[0])}
+                                    className="text-sm" />
+                                {uploading && <span className="text-xs text-gray-500">Envoi…</span>}
+                                {form.image_url && !uploading && (
+                                    <img src={form.image_url} alt="" className="h-10 w-16 object-cover rounded" />
+                                )}
+                            </div>
+                            <input type="text" placeholder="…ou coller une URL d'image"
+                                value={form.image_url}
+                                onChange={e => setForm({ ...form, image_url: e.target.value })}
+                                className="w-full border rounded-lg px-3 py-2 mt-2 text-sm" />
+                        </div>
+
+                        {/* Organisateurs : ce sont eux qui scanneront les billets */}
+                        <div className="md:col-span-2">
+                            <label className="block text-sm text-gray-600 mb-1">
+                                Téléphone(s) des organisateurs
+                                <span className="text-gray-400"> — ils se connecteront avec ce numéro pour scanner les billets</span>
+                            </label>
+                            <input type="text"
+                                placeholder="+243810000001, +243820000002"
+                                value={form.organizer_phones}
+                                onChange={e => setForm({ ...form, organizer_phones: e.target.value })}
+                                className="w-full border rounded-lg px-3 py-2" />
+                            {organizers.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {organizers.map(o => (
+                                        <span key={o.id} className="text-xs bg-gray-100 rounded-full px-3 py-1 flex items-center gap-2">
+                                            {o.name || o.phone}
+                                            <button type="button" onClick={() => removeOrganizer(o.id)}
+                                                className="text-red-500">✕</button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Tarification */}
+                        <div className="md:col-span-2 border-t pt-4">
+                            <label className="flex items-center gap-2 text-sm text-gray-700 mb-3">
+                                <input type="checkbox" checked={form.is_free}
+                                    onChange={e => setForm({ ...form, is_free: e.target.checked })} />
+                                Événement gratuit (sur réservation, aucun paiement)
+                            </label>
+                            {!form.is_free && !editId && (
+                                <div className="flex flex-wrap gap-3 items-end">
+                                    <Field label="Prix unique (FC)" type="number" small
+                                        value={form.single_price_fc}
+                                        onChange={v => setForm({ ...form, single_price_fc: v })} />
+                                    <Field label="Places" type="number" small
+                                        value={form.single_quantity}
+                                        onChange={v => setForm({ ...form, single_quantity: v })} />
+                                    <p className="text-xs text-gray-500 pb-2">
+                                        Laissez vide pour définir plusieurs catégories (Carré Or, Standard…)
+                                        après la création, avec l'icône billet.
+                                    </p>
+                                </div>
+                            )}
+                            {editId && (
+                                <p className="text-xs text-gray-500">
+                                    Les tarifs se modifient avec l'icône billet de la liste.
+                                </p>
+                            )}
+                        </div>
                     </div>
                     <div className="flex gap-2">
                         <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg">
@@ -254,7 +364,9 @@ function Ticketing() {
                                     <tr key={e.id} className="border-t hover:bg-gray-50">
                                         <td className="p-3">
                                             <div className="font-medium">{e.title}</div>
-                                            <div className="text-xs text-gray-500">{e.category}</div>
+                                            <div className="text-xs text-gray-500">
+                                                {e.category}{e.is_free ? ' · gratuit' : ''}
+                                            </div>
                                         </td>
                                         <td className="p-3">{(e.event_date || '').substring(0, 10)} {e.event_time || ''}</td>
                                         <td className="p-3">{e.location}</td>

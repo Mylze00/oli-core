@@ -13,12 +13,54 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../../config/db');
 const walletRepository = require('../../repositories/wallet.repository');
+const userRepository = require('../../repositories/user.repository');
+const { genericUpload } = require('../../config/upload');
 
 const router = express.Router();
 
 const EVENT_STATUSES = ['draft', 'published', 'cancelled', 'finished'];
 const CATEGORIES = ['concert', 'cinema', 'sport', 'conference', 'festival', 'autre'];
 const TICKET_STATUSES = ['valid', 'used', 'cancelled', 'refunded'];
+
+/** Normalise un numéro en format international (RDC par défaut). */
+function normalizePhone(raw) {
+    if (typeof raw !== 'string') return null;
+    let s = raw.replace(/[\s\-().]/g, '');
+    if (s.startsWith('00')) s = '+' + s.slice(2);
+    if (s.startsWith('0') && !s.startsWith('+')) s = '+243' + s.slice(1);
+    return /^\+[1-9]\d{7,14}$/.test(s) ? s : null;
+}
+
+/**
+ * Enregistre les organisateurs d'un événement à partir de leurs numéros.
+ * Un numéro sans compte Oli en crée un : l'organisateur se connectera
+ * ensuite avec ce numéro pour scanner les billets.
+ * Renvoie { saved: [...], invalid: [...] }.
+ */
+async function setOrganizers(eventId, phones) {
+    const saved = [];
+    const invalid = [];
+    const list = Array.isArray(phones) ? phones : [];
+
+    for (const raw of list) {
+        const phone = normalizePhone(String(raw || ''));
+        if (!phone) { if (String(raw || '').trim()) invalid.push(String(raw)); continue; }
+        let user = await userRepository.findByPhone(phone);
+        if (!user) user = await userRepository.createUser(phone);
+        await pool.query(
+            `INSERT INTO event_organizers (event_id, user_id, phone)
+             VALUES ($1,$2,$3) ON CONFLICT (event_id, user_id) DO NOTHING`,
+            [eventId, user.id, phone]
+        );
+        saved.push({ id: user.id, phone, name: user.name || null });
+    }
+
+    // Le premier organisateur reste la référence dans events.organizer_id
+    if (saved.length) {
+        await pool.query('UPDATE events SET organizer_id = $2 WHERE id = $1', [eventId, saved[0].id]);
+    }
+    return { saved, invalid };
+}
 
 // ─── Statistiques globales ───────────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
@@ -81,19 +123,40 @@ router.get('/events', async (req, res) => {
 // ─── Créer un événement ──────────────────────────────────────────────────────
 router.post('/events', async (req, res) => {
     try {
-        const { title, subtitle, category, event_date, event_time, location, image_url, organizer_id, status } = req.body || {};
+        const {
+            title, subtitle, category, event_date, event_time, location, image_url,
+            organizer_id, status, is_free, organizer_phones,
+            single_price_fc, single_quantity,
+        } = req.body || {};
         if (!title || !event_date || !location) {
             return res.status(400).json({ error: 'Titre, date et lieu sont obligatoires' });
         }
         const cat = CATEGORIES.includes(category) ? category : 'concert';
         const st = EVENT_STATUSES.includes(status) ? status : 'draft';
+        const free = is_free === true || is_free === 'true';
 
         const { rows } = await pool.query(`
-            INSERT INTO events (title, subtitle, category, event_date, event_time, location, image_url, organizer_id, status)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
+            INSERT INTO events (title, subtitle, category, event_date, event_time, location, image_url, organizer_id, status, is_free)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
         `, [title, subtitle || null, cat, event_date, event_time || null, location,
-            image_url || null, organizer_id || null, st]);
-        res.status(201).json(rows[0]);
+            image_url || null, organizer_id || null, st, free]);
+        const event = rows[0];
+
+        // Organisateurs (numéros de téléphone) : ce sont eux qui scanneront les billets
+        const organizers = await setOrganizers(event.id, organizer_phones);
+
+        // Tarif unique : une seule catégorie créée automatiquement
+        const price = free ? 0 : parseFloat(single_price_fc);
+        if (free || Number.isFinite(price)) {
+            const qty = parseInt(single_quantity, 10);
+            await pool.query(`
+                INSERT INTO event_ticket_types (event_id, name, price_fc, quantity_total)
+                VALUES ($1,$2,$3,$4)
+            `, [event.id, free ? 'Entrée libre' : 'Standard', free ? 0 : price,
+                Number.isInteger(qty) && qty > 0 ? qty : 0]);
+        }
+
+        res.status(201).json({ ...event, organizers: organizers.saved, invalid_phones: organizers.invalid });
     } catch (err) {
         console.error('❌ [Billetterie] création événement:', err.message);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -103,19 +166,25 @@ router.post('/events', async (req, res) => {
 // ─── Modifier un événement ───────────────────────────────────────────────────
 router.put('/events/:id', async (req, res) => {
     try {
-        const { title, subtitle, category, event_date, event_time, location, image_url, organizer_id, status } = req.body || {};
+        const { title, subtitle, category, event_date, event_time, location, image_url,
+                organizer_id, status, is_free, organizer_phones } = req.body || {};
         if (!title || !event_date || !location) {
             return res.status(400).json({ error: 'Titre, date et lieu sont obligatoires' });
         }
+        if (Array.isArray(organizer_phones)) {
+            await setOrganizers(req.params.id, organizer_phones);
+        }
         const { rows } = await pool.query(`
             UPDATE events SET title=$2, subtitle=$3, category=$4, event_date=$5, event_time=$6,
-                              location=$7, image_url=$8, organizer_id=$9,
-                              status = COALESCE($10, status), updated_at = NOW()
+                              location=$7, image_url=$8, organizer_id=COALESCE($9, organizer_id),
+                              status = COALESCE($10, status),
+                              is_free = COALESCE($11, is_free), updated_at = NOW()
              WHERE id = $1 RETURNING *
         `, [req.params.id, title, subtitle || null,
             CATEGORIES.includes(category) ? category : 'concert',
             event_date, event_time || null, location, image_url || null, organizer_id || null,
-            EVENT_STATUSES.includes(status) ? status : null]);
+            EVENT_STATUSES.includes(status) ? status : null,
+            typeof is_free === 'boolean' ? is_free : null]);
         if (!rows.length) return res.status(404).json({ error: 'Événement introuvable' });
         res.json(rows[0]);
     } catch (err) {
@@ -382,6 +451,63 @@ router.post('/events/:id/issue', async (req, res) => {
         res.status(500).json({ error: 'Erreur serveur' });
     } finally {
         client.release();
+    }
+});
+
+// ─── Organisateurs d'un événement ────────────────────────────────────────────
+router.get('/events/:id/organizers', async (req, res) => {
+    try {
+        const { rows } = await pool.query(`
+            SELECT o.id, o.user_id, COALESCE(o.phone, u.phone) AS phone, u.name
+              FROM event_organizers o
+              JOIN users u ON u.id = o.user_id
+             WHERE o.event_id = $1 ORDER BY o.id
+        `, [req.params.id]);
+        res.json(rows);
+    } catch (err) {
+        console.error('❌ [Billetterie] organisateurs:', err.message);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+router.post('/events/:id/organizers', async (req, res) => {
+    try {
+        const phones = req.body?.phones ?? [req.body?.phone];
+        const result = await setOrganizers(req.params.id, phones);
+        if (!result.saved.length) {
+            return res.status(400).json({ error: 'Numéro invalide', invalid: result.invalid });
+        }
+        res.status(201).json(result);
+    } catch (err) {
+        console.error('❌ [Billetterie] ajout organisateur:', err.message);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+router.delete('/organizers/:id', async (req, res) => {
+    try {
+        const { rowCount } = await pool.query('DELETE FROM event_organizers WHERE id = $1', [req.params.id]);
+        if (!rowCount) return res.status(404).json({ error: 'Organisateur introuvable' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ [Billetterie] retrait organisateur:', err.message);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+// ─── Téléversement de l'affiche de l'événement ───────────────────────────────
+router.post('/upload', genericUpload.single('image'), (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'Aucun fichier fourni' });
+        let imageUrl = req.file.path;
+        if (!imageUrl.startsWith('http')) {
+            const baseUrl = `${req.protocol}://${req.get('host')}`;
+            imageUrl = `${baseUrl}/${req.file.path.replace(/\\/g, '/')}`;
+        }
+        res.json({ url: imageUrl });
+    } catch (err) {
+        console.error('❌ [Billetterie] téléversement:', err.message);
+        res.status(500).json({ error: "Téléversement impossible" });
     }
 });
 

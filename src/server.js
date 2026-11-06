@@ -527,6 +527,11 @@ if (process.env.NODE_ENV !== 'test') {
                 await pool.query(fsTick.readFileSync(tickPath, 'utf8'));
                 console.log('✅ [MIGRATION] Tables billetterie vérifiées.');
             }
+            const orgPath = pathTick.join(__dirname, 'migrations', '048_event_organizers.sql');
+            if (fsTick.existsSync(orgPath)) {
+                await pool.query(fsTick.readFileSync(orgPath, 'utf8'));
+                console.log('✅ [MIGRATION] Organisateurs d\'événement vérifiés.');
+            }
 
             // 🏦 Migration 039 — OLI Bank Portail Cryptographique
             const fs = require('fs');
