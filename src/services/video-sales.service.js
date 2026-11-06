@@ -184,7 +184,7 @@ class VideoSalesService {
                     const ownerId = ownerRes.rows[0].user_id;
                     // Ne pas se récompenser soi-même
                     if (ownerId != userId) {
-                        // [FIN C1] Une seule récompense par (compte, vidéo) : pas de récompense
+                        // [FIN C1] Une seule récompense par (compte, vidéo, sans plafond journalier) : pas de récompense
                         // en cas de unlike puis de nouveau like.
                         const alreadyRewarded = await pool.query(
                             `SELECT 1 FROM wallet_transactions
@@ -192,17 +192,8 @@ class VideoSalesService {
                              LIMIT 1`,
                             [ownerId, `LIKE_${videoId}_${userId}_`]
                         );
-                        // Plafond journalier par créateur (récompenses « J'aime » uniquement)
-                        const dailyCap = parseFloat(process.env.VIDEO_LIKE_DAILY_CAP_FC) || 50;
-                        const todayRes = await pool.query(
-                            `SELECT COALESCE(SUM(amount), 0) AS total FROM wallet_transactions
-                             WHERE user_id = $1 AND type = 'reward' AND starts_with(reference, 'LIKE_')
-                               AND created_at > NOW() - INTERVAL '1 day'`,
-                            [ownerId]
-                        );
-                        const todayTotal = parseFloat(todayRes.rows[0].total);
-
-                        if (alreadyRewarded.rows.length === 0 && todayTotal + 1 <= dailyCap) {
+                        // Pas de plafond : décision métier. Seul l'anti-doublon ci-dessus s'applique.
+                        if (alreadyRewarded.rows.length === 0) {
                             const walletRepository = require('../repositories/wallet.repository');
                             await walletRepository.performDeposit(ownerId, 1, {
                                 type: 'reward',
