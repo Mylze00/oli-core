@@ -446,8 +446,11 @@ class _ActionBtn extends StatelessWidget {
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFFB0C8DC),
+              style: TextStyle(
+                // Lisible sur fond clair comme sur fond sombre
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFFB0C8DC)
+                    : const Color(0xFF2B4A63),
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.2,

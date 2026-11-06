@@ -126,9 +126,15 @@ class _GlassToggle extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
       height: 32,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.black.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.08),
+            width: 1),
       ),
       child: Row(
         children: [
@@ -194,13 +200,21 @@ class _ToggleItem extends StatelessWidget {
               Icon(
                 icon,
                 size: 14,
-                color: isActive ? Colors.white : Colors.white54,
+                color: isActive
+                    ? Colors.white
+                    : (Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white54
+                        : const Color(0xFF5B6B7C)),
               ),
               const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
-                  color: isActive ? Colors.white : Colors.white54,
+                  color: isActive
+                      ? Colors.white
+                      : (Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white54
+                          : const Color(0xFF5B6B7C)),
                   fontWeight:
                       isActive ? FontWeight.w700 : FontWeight.w500,
                   fontSize: 13,
@@ -473,17 +487,23 @@ class _DashIconWidgetState extends State<_DashIconWidget>
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.10),
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.10)
+                              : Colors.black.withValues(alpha: 0.04),
                           borderRadius: BorderRadius.circular(11),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.18),
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white.withValues(alpha: 0.18)
+                                : Colors.black.withValues(alpha: 0.10),
                             width: 1,
                           ),
                         ),
                         child: Icon(
                           item.icon,
                           size: 18,
-                          color: Colors.white.withOpacity(0.88),
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.88)
+                              : const Color(0xFF1E7DBA),
                         ),
                       ),
                     ),
@@ -543,7 +563,9 @@ class _DashIconWidgetState extends State<_DashIconWidget>
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white.withOpacity(0.80),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white.withValues(alpha: 0.80)
+                      : const Color(0xFF2B3A4A),
                   height: 1.3,
                 ),
               ),
