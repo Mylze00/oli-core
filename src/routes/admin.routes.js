@@ -25,6 +25,7 @@ const supportRoutes = require('./admin/support.routes'); // 🆕
 const databaseRoutes = require('./admin/database.routes'); // 🗄️ Gestion DB
 const deliveryRoutes = require('./admin/delivery.routes'); // 🚚 Livreurs
 const financesRoutes = require('./admin/finances.routes'); // 💰 Finances
+const ticketingRoutes = require('./admin/ticketing.routes'); // 🎟️ Billetterie O-Ticket
 
 // Montage des routes
 router.use('/stats', statsRoutes);
@@ -41,6 +42,7 @@ router.use('/support', supportRoutes); // 🆕
 router.use('/database', databaseRoutes); // 🗄️ Gestion DB
 router.use('/delivery', deliveryRoutes); // 🚚 Livreurs
 router.use('/finances', financesRoutes); // 💰 Finances
+router.use('/ticketing', ticketingRoutes); // 🎟️ Billetterie
 
 
 // Route de test

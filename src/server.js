@@ -419,6 +419,7 @@ app.use("/ads", require("./routes/ads.routes")); // 📢 Publicités publiques
 app.use('/search', require('./routes/search.routes')); // Recherche visuelle
 app.use("/setup", require("./routes/setup.routes")); // Utility route for migration
 app.use("/services", require("./routes/services.routes")); // ✨ Services dynamiques (Public)
+app.use("/tickets", require("./routes/tickets.routes")); // 🎟️ Billetterie O-Ticket (public + auth)
 app.use("/support", requireAuth, require("./routes/support.routes")); // 🎫 Support tickets utilisateur
 // [SÉCU] Route debug : admin uniquement — NE JAMAIS exposer publiquement
 if (process.env.NODE_ENV !== 'production') {
@@ -517,6 +518,15 @@ if (process.env.NODE_ENV !== 'test') {
             await pool.query(`ALTER TABLE unipesa_operations ADD COLUMN IF NOT EXISTS settled_at TIMESTAMP NULL`);
             await pool.query(`UPDATE unipesa_operations SET settled_at = COALESCE(confirmed_at, NOW()) WHERE status IN ('success','failed') AND settled_at IS NULL`);
             console.log('✅ [MIGRATION] Verrou de règlement unipesa_operations.settled_at vérifié.');
+
+            // Migration 047 — billetterie O-Ticket (tables nouvelles, idempotente)
+            const fsTick = require('fs');
+            const pathTick = require('path');
+            const tickPath = pathTick.join(__dirname, 'migrations', '047_ticketing.sql');
+            if (fsTick.existsSync(tickPath)) {
+                await pool.query(fsTick.readFileSync(tickPath, 'utf8'));
+                console.log('✅ [MIGRATION] Tables billetterie vérifiées.');
+            }
 
             // 🏦 Migration 039 — OLI Bank Portail Cryptographique
             const fs = require('fs');

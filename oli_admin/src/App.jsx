@@ -12,13 +12,13 @@ import Shops from './pages/Shops';
 import Requests from './pages/Requests';
 import AdsManager from './pages/AdsManager';
 import ServicesManager from './pages/ServicesManager'; // ✨ Services
+import Ticketing from './pages/Ticketing'; // 🎟️
 import Support from './pages/Support'; // 🆕 Support
 import Verifications from './pages/Verifications'; // 🆕 Certifications
 import ProductRequests from './pages/ProductRequests'; // 📦 Demandes produit
 import DatabaseManager from './pages/DatabaseManager'; // 🗄️ Gestion DB
 import Delivery from './pages/Delivery'; // 🚚 Livreurs
 import Finances from './pages/Finances';
-import FinancesWallet from './pages/FinancesWallet'; // 💰 Finances
 import PriceWorker from './pages/PriceWorker'; // 🤖 Worker Prix
 import ProductComparator from './pages/ProductComparator'; // 🔍 Comparateur Prix
 
@@ -41,12 +41,12 @@ function App() {
             <Route path="/disputes" element={<Disputes />} />
             <Route path="/ads" element={<AdsManager />} />
             <Route path="/services" element={<ServicesManager />} />
+            <Route path="/ticketing" element={<Ticketing />} /> {/* 🎟️ Billetterie */}
             <Route path="/support" element={<Support />} /> {/* 🆕 */}
             <Route path="/verifications" element={<Verifications />} /> {/* 🆕 */}
             <Route path="/database" element={<DatabaseManager />} /> {/* 🗄️ */}
             <Route path="/delivery" element={<Delivery />} /> {/* 🚚 */}
             <Route path="/finances" element={<Finances />} /> {/* 💰 */}
-            <Route path="/finances-wallet" element={<FinancesWallet />} /> 
             <Route path="/price-worker" element={<PriceWorker />} /> {/* 🤖 */}
             <Route path="/product-comparator" element={<ProductComparator />} /> {/* 🔍 */}
           </Route>
