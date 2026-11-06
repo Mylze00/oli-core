@@ -25,9 +25,8 @@ const walletRepository = {
             'SELECT balance FROM wallets WHERE user_id = $1',
             [parseInt(userId)]
         );
-        if (!res.rows.length) {
-            throw new Error(`Wallet introuvable pour user #${userId}`);
-        }
+        // Pas de wallet encore créé (aucun mouvement) : solde 0, sans écriture en base
+        if (!res.rows.length) return 0;
         return parseFloat(res.rows[0].balance);
     },
 
@@ -40,8 +39,9 @@ const walletRepository = {
             'SELECT * FROM wallets WHERE user_id = $1',
             [parseInt(userId)]
         );
+        // Pas de wallet encore créé (aucun mouvement) : wallet vide, sans écriture en base
         if (!res.rows.length) {
-            throw new Error(`Wallet introuvable pour user #${userId}`);
+            return { user_id: parseInt(userId), balance: 0, currency: 'FC', is_frozen: false };
         }
         const w = res.rows[0];
         return { ...w, balance: parseFloat(w.balance) };
