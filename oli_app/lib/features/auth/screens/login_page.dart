@@ -444,7 +444,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                   Padding(
                     padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
                     child: Text(
-                      'Simple, Rapide, Sûr',
+                      'Plus mieux, tout en un clic',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: 'LetterMagic',

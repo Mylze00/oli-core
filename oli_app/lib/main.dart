@@ -202,16 +202,16 @@ class _SplashWrapperState extends State<SplashWrapper>
       ),
     );
 
-    // Délai minimal d'affichage du branding (1.5 seconde)
-    Future.delayed(const Duration(milliseconds: 1500), () {
+    // Respiration du logo pendant 3 secondes avant l'explosion
+    Future.delayed(const Duration(milliseconds: 3000), () {
       if (mounted) {
         _minDelayPassed = true;
         _checkAndTriggerTransition();
       }
     });
 
-    // Sécurité maximale : après 4.5 secondes, on débloque quoi qu'il arrive
-    Future.delayed(const Duration(milliseconds: 4500), () {
+    // Sécurité maximale : après 6 secondes, on débloque quoi qu'il arrive
+    Future.delayed(const Duration(milliseconds: 6000), () {
       if (mounted && !_isTransitioning) {
         _triggerZoomAndExit();
       }
@@ -319,14 +319,22 @@ class _SplashWrapperState extends State<SplashWrapper>
                         child: child,
                       );
                     },
-                    child: const Text(
-                      'Simple, Rapide, Sûr',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'LetterMagic',
-                        fontSize: 24,
-                        color: Color.fromRGBO(255, 255, 255, 0.8),
-                        letterSpacing: 1.2,
+                    // FittedBox : le slogan s'adapte aux écrans étroits sans déborder
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Plus mieux, tout en un clic',
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontFamily: 'LetterMagic',
+                            fontSize: 24,
+                            color: Color.fromRGBO(255, 255, 255, 0.8),
+                            letterSpacing: 1.2,
+                          ),
+                        ),
                       ),
                     ),
                   ),
