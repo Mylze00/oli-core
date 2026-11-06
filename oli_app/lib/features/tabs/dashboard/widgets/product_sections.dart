@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../../utils/price_color.dart';
 import '../../../marketplace/presentation/pages/product_details_page.dart';
 import '../../../../models/product_model.dart';
 import 'product_card_common.dart';
 import '../pages/verified_shops_products_page.dart';
-import '../../../marketplace/presentation/widgets/market_product_card.dart';
 import '../../../../providers/exchange_rate_provider.dart';
+import '../../../../utils/cloudinary_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ── Couleurs cycliques pour les bordures des cercles ──────────────────────────
@@ -14,6 +15,20 @@ const List<Color> _circleBorderColors = [
   Color(0xFF34C759), // vert
   Color(0xFFFFCC00), // jaune
 ];
+
+/// Nom de marque raccourci : 10 caractères maximum, pour éviter que les
+/// colonnes de la section « À la une » ne se chevauchent.
+String _shortBrand(String? brand) {
+  final b = (brand ?? '').trim();
+  if (b.isEmpty) return 'Original';
+  return b.length <= 10 ? b : '${b.substring(0, 10)}…';
+}
+
+/// Assombrit une couleur vive pour qu'elle reste lisible sur fond clair.
+Color _darken(Color c, [double amount = 0.32]) {
+  final hsl = HSLColor.fromColor(c);
+  return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
+}
 
 /// Widget "À la une" — produits circulaires avec Branding (brandCertified)
 class BrandedCircleSection extends ConsumerWidget {
@@ -45,8 +60,10 @@ class BrandedCircleSection extends ConsumerWidget {
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : const Color(0xFF1A1F2E),
                   fontWeight: FontWeight.bold,
                   fontSize: 17,
                 ),
@@ -56,7 +73,7 @@ class BrandedCircleSection extends ConsumerWidget {
         ),
         // ── Carrousel horizontal ───────────────────────────────────────────
         SizedBox(
-          height: 170,
+          height: 150,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -64,6 +81,10 @@ class BrandedCircleSection extends ConsumerWidget {
             itemBuilder: (context, i) {
               final product = products[i];
               final borderColor = _circleBorderColors[i % _circleBorderColors.length];
+              // Thème clair : texte sombre et couleur de prix assombrie pour rester lisible
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final nameColor = isDark ? Colors.white : const Color(0xFF1A1F2E);
+              final priceColor = isDark ? borderColor : _darken(borderColor);
 
               // Prix formaté
               final priceUsd = double.tryParse(product.price) ?? 0.0;
@@ -119,8 +140,9 @@ class BrandedCircleSection extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          fontFamily: 'CreatoDisplay',
+                          color: nameColor,
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                         ),
@@ -130,14 +152,17 @@ class BrandedCircleSection extends ConsumerWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: borderColor.withOpacity(0.18),
+                          color: isDark
+                              ? borderColor.withValues(alpha: 0.18)
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: borderColor, width: 1),
+                          border: Border.all(color: priceColor, width: 1),
                         ),
                         child: Text(
                           formattedPrice,
                           style: TextStyle(
-                            color: borderColor,
+                            fontFamily: 'CreatoDisplay',
+                            color: priceColor,
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                           ),
@@ -150,14 +175,18 @@ class BrandedCircleSection extends ConsumerWidget {
                           children: [
                             const Icon(Icons.verified_rounded, color: Color(0xFFFF8C00), size: 9),
                             const SizedBox(width: 2),
-                            Text(
-                              product.brandDisplayName?.isNotEmpty == true
-                                  ? product.brandDisplayName!
-                                  : 'Original',
-                              style: const TextStyle(
-                                color: Color(0xFFFF8C00),
-                                fontSize: 9,
-                                fontWeight: FontWeight.w600,
+                            Flexible(
+                              child: Text(
+                                // 10 caractères maximum : évite le chevauchement entre colonnes
+                                _shortBrand(product.brandDisplayName),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: false,
+                                style: const TextStyle(
+                                  color: Color(0xFFFF8C00),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -434,44 +463,145 @@ class VerifiedShopProductsSection extends StatelessWidget {
   }
 }
 
+/// Grille du Top Classement : toujours 2 colonnes, cartes au style « marketplace » (2 par ligne).
+/// La hauteur des cellules est calculée depuis la largeur de l'écran pour que
+/// le visuel reste carré et que le bloc texte (74 px) ne déborde jamais.
 class TopRankingGrid extends StatelessWidget {
   final List<Product> products;
+  /// Conservé pour compatibilité d'appel : la grille est forcée à 2 colonnes.
   final int crossAxisCount;
   final double childAspectRatio;
   /// Index global du premier produit de ce chunk dans la liste totale du classement
   final int startIndex;
 
-  /// Positions (1-indexées) où afficher l'animation badge note
-  static const Set<int> rankingPositions = {1, 5, 15, 22, 35, 50};
+  static const int columns = 2;
+  static const double gutter = 8;
+  static const double textBlockHeight = 58;
 
   const TopRankingGrid({
-    super.key, 
+    super.key,
     required this.products,
-    this.crossAxisCount = 3,
-    this.childAspectRatio = 0.75,
+    this.crossAxisCount = 2,
+    this.childAspectRatio = 0.7,
     this.startIndex = 0,
   });
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    // Padding horizontal du SliverPadding (8 + 8) et espace entre les colonnes
+    final cellWidth = (screenWidth - 16 - gutter) / columns;
+    final aspect = cellWidth / (cellWidth + textBlockHeight);
+
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       sliver: SliverGrid(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          childAspectRatio: childAspectRatio,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
+          crossAxisCount: columns,
+          childAspectRatio: aspect,
+          crossAxisSpacing: gutter,
+          mainAxisSpacing: 10,
         ),
         delegate: SliverChildBuilderDelegate(
           (context, index) {
-             if (products.isEmpty) return Container(color: Colors.grey[900]);
-            final product = products[index];
-            final globalPos = startIndex + index + 1; // 1-indexé
-            final showBadge = rankingPositions.contains(globalPos);
-            return MarketProductCard(product: product, showRatingAnimation: showBadge, hideSellerOverlay: true);
+            if (products.isEmpty) return Container(color: Colors.grey[900]);
+            return TopRankingProductCard(product: products[index]);
           },
-          childCount: products.isEmpty ? 6 : products.length,
+          childCount: products.isEmpty ? columns : products.length,
+        ),
+      ),
+    );
+  }
+}
+
+/// Carte produit du Top Classement (style 2 colonnes) :
+/// visuel carré · titre sur 1 ligne · boutique en rouge (+ avatar) · prix rouge · nombre vendu.
+class TopRankingProductCard extends ConsumerWidget {
+  final Product product;
+
+  const TopRankingProductCard({super.key, required this.product});
+
+  static const Color _priceBlue = Color(0xFF64B5F6); // bleu clair (un ton plus clair)
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final titleColor = isDark ? Colors.white : Colors.black87;
+    ref.watch(exchangeRateProvider);
+    final priceUsd = double.tryParse(product.price) ?? 0.0;
+    final formattedPrice = ref
+        .read(exchangeRateProvider.notifier)
+        .formatProductPrice(priceUsd);
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product)),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Visuel carré
+            AspectRatio(
+              aspectRatio: 1,
+              child: product.images.isNotEmpty
+                  ? Image.network(
+                      CloudinaryHelper.card(product.images.first),
+                      fit: BoxFit.cover,
+                      cacheWidth: 540, // décodage à la résolution servie (540 px)
+                      errorBuilder: (_, __, ___) => Container(
+                        color: isDark ? Colors.grey[900] : Colors.grey[200],
+                        child: const Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+                    )
+                  : Container(
+                      color: isDark ? Colors.grey[900] : Colors.grey[200],
+                      child: const Icon(Icons.image, color: Colors.grey),
+                    ),
+            ),
+            // Bloc texte (hauteur fixe)
+            SizedBox(
+              height: TopRankingGrid.textBlockHeight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'CreatoDisplay',
+                        color: titleColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      formattedPrice,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'CreatoDisplay',
+                        color: productPriceColor(context),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

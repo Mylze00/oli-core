@@ -6,8 +6,13 @@ import '../../../config/api_config.dart';
 import '../../../core/user/user_provider.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../../../core/storage/biometric_service.dart';
+import '../../../core/services/hive_cache_service.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../../tabs/profile/screens/identity_verification_page.dart';
+import 'package:dio/dio.dart';
+import '../../../core/router/network/dio_provider.dart';
+import '../../auth/providers/auth_controller.dart';
+import '../../auth/screens/login_page.dart';
 
 /// Page "Paramètres"
 class SettingsPage extends ConsumerStatefulWidget {
@@ -29,6 +34,45 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void initState() {
     super.initState();
     _loadBiometricSettings();
+    _loadNotificationPrefs();
+  }
+
+  /// Charge les préférences de notification enregistrées côté serveur.
+  Future<void> _loadNotificationPrefs() async {
+    try {
+      final res = await ref.read(dioProvider).get(ApiConfig.userNotificationPrefs);
+      final data = res.data as Map<String, dynamic>;
+      if (!mounted) return;
+      setState(() {
+        _notificationsEnabled = data['push'] == true;
+        _emailNotifications = data['email'] == true;
+        _smsNotifications = data['sms'] == true;
+      });
+    } catch (_) {
+      // Hors ligne : on garde les valeurs par défaut
+    }
+  }
+
+  /// Enregistre une préférence immédiatement. En cas d'échec, revient à la valeur précédente.
+  Future<void> _setNotificationPref(
+    String key,
+    bool value,
+    bool previous,
+    void Function(bool) apply,
+  ) async {
+    setState(() => apply(value));
+    try {
+      await ref.read(dioProvider).put(
+        ApiConfig.userNotificationPrefs,
+        data: {key: value},
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => apply(previous));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Préférence non enregistrée, réessayez.')),
+      );
+    }
   }
 
   Future<void> _loadBiometricSettings() async {
@@ -198,7 +242,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 secondary: const Icon(Icons.notifications_outlined, color: Colors.blueAccent),
                 title: const Text('Notifications push', style: TextStyle(color: Colors.white, fontSize: 15)),
                 value: _notificationsEnabled,
-                onChanged: (v) => setState(() => _notificationsEnabled = v),
+                onChanged: (v) => _setNotificationPref('push', v, _notificationsEnabled, (x) { _notificationsEnabled = x; }),
                 activeColor: Colors.blueAccent,
               ),
               _buildDivider(),
@@ -206,7 +250,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 secondary: const Icon(Icons.mail_outline, color: Colors.orange),
                 title: const Text('Notifications email', style: TextStyle(color: Colors.white, fontSize: 15)),
                 value: _emailNotifications,
-                onChanged: (v) => setState(() => _emailNotifications = v),
+                onChanged: (v) => _setNotificationPref('email', v, _emailNotifications, (x) { _emailNotifications = x; }),
                 activeColor: Colors.blueAccent,
               ),
               _buildDivider(),
@@ -214,7 +258,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 secondary: const Icon(Icons.sms_outlined, color: Colors.green),
                 title: const Text('Notifications SMS', style: TextStyle(color: Colors.white, fontSize: 15)),
                 value: _smsNotifications,
-                onChanged: (v) => setState(() => _smsNotifications = v),
+                onChanged: (v) => _setNotificationPref('sms', v, _smsNotifications, (x) { _smsNotifications = x; }),
                 activeColor: Colors.blueAccent,
               ),
             ]),
@@ -285,9 +329,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _buildListTile(
               icon: Icons.cached,
               title: 'Vider le cache',
-              onTap: () {
+              onTap: () async {
+                await HiveCacheService.clearAll();
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cache vidé')),
+                  const SnackBar(content: Text('Cache local vidé')),
                 );
               },
             ),
@@ -371,129 +417,144 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (context, setDialogState) => Dialog(
           backgroundColor: const Color(0xFF1A1A1A),
-          title: const Text('Modifier le profil', style: TextStyle(color: Colors.white)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Nom complet (Privé)',
-                    labelStyle: const TextStyle(color: Colors.grey),
-                    filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          insetPadding: const EdgeInsets.all(20),
+          child: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Modifier profil', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 32),
+                  TextField(
+                    controller: usernameController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      hintText: 'Pseudo (Public)',
+                      hintStyle: TextStyle(color: Colors.white),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: usernameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Nom d\'utilisateur (Public)',
-                    prefixText: '@',
-                    prefixStyle: const TextStyle(color: Colors.white70),
-                    labelStyle: const TextStyle(color: Colors.grey),
-                    filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: nameController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      hintText: 'Noms complet (Privé)',
+                      hintStyle: TextStyle(color: Colors.white),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: cityController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Ville',
-                    labelStyle: const TextStyle(color: Colors.grey),
-                    filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: cityController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      hintText: 'Adresse de Livraison',
+                      hintStyle: TextStyle(color: Colors.white),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: bioController,
-                  style: const TextStyle(color: Colors.white),
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    labelText: 'Bio',
-                    labelStyle: const TextStyle(color: Colors.grey),
-                    filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: bioController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      hintText: '',
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 40),
+                  Center(
+                    child: SizedBox(
+                      width: 160,
+                      height: 40,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2AA81A),
+                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                        ),
+                        onPressed: isLoading ? null : () async {
+                          final newName = nameController.text.trim();
+                          final newUsername = usernameController.text.trim();
+                          final newCity = cityController.text.trim();
+                          final newBio = bioController.text.trim();
+          
+                          if (newName.isEmpty && newUsername.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Veuillez remplir au moins un nom ou pseudo'), backgroundColor: Colors.red),
+                            );
+                            return;
+                          }
+                          
+                          setDialogState(() => isLoading = true);
+                          
+                          try {
+                            final token = await SecureStorageService().getToken();
+                            final response = await http.post(
+                              Uri.parse('${ApiConfig.baseUrl}/auth/update-profile'),
+                              headers: {
+                                'Content-Type': 'application/json',
+                                if (token != null) 'Authorization': 'Bearer $token',
+                              },
+                              body: jsonEncode({
+                                'name': newName.isNotEmpty ? newName : null,
+                                'username': newUsername.isNotEmpty ? newUsername : null,
+                                'bio': newBio.isNotEmpty ? newBio : null,
+                                'city': newCity.isNotEmpty ? newCity : null,
+                              }),
+                            );
+                            
+                            if (response.statusCode == 200) {
+                              Navigator.pop(dialogContext);
+                              ref.invalidate(userProvider);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Profil mis à jour !'), backgroundColor: Colors.green),
+                              );
+                            } else {
+                              final error = jsonDecode(response.body)['error'] ?? 'Erreur inconnue';
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Erreur: $error'), backgroundColor: Colors.red),
+                              );
+                            }
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Erreur réseau: $e'), backgroundColor: Colors.red),
+                            );
+                          } finally {
+                            setDialogState(() => isLoading = false);
+                          }
+                        },
+                        child: isLoading 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Validé', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: isLoading ? null : () => Navigator.pop(dialogContext), 
-              child: const Text('Annuler')
-            ),
-            ElevatedButton(
-              onPressed: isLoading ? null : () async {
-                final newName = nameController.text.trim();
-                final newUsername = usernameController.text.trim();
-                final newCity = cityController.text.trim();
-                final newBio = bioController.text.trim();
-
-                if (newName.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Le nom ne peut pas être vide'), backgroundColor: Colors.red),
-                  );
-                  return;
-                }
-                
-                setDialogState(() => isLoading = true);
-                
-                try {
-                  final token = await SecureStorageService().getToken();
-                  final response = await http.post(
-                    Uri.parse('${ApiConfig.baseUrl}/auth/update-profile'),
-                    headers: {
-                      'Content-Type': 'application/json',
-                      if (token != null) 'Authorization': 'Bearer $token',
-                    },
-                    body: jsonEncode({
-                      'name': newName,
-                      'username': newUsername.isNotEmpty ? newUsername : null,
-                      'bio': newBio.isNotEmpty ? newBio : null,
-                      'city': newCity.isNotEmpty ? newCity : null,
-                    }),
-                  );
-                  
-                  if (response.statusCode == 200) {
-                    Navigator.pop(dialogContext);
-                    ref.invalidate(userProvider);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Profil mis à jour !'), backgroundColor: Colors.green),
-                    );
-                  } else {
-                    final error = jsonDecode(response.body)['error'] ?? 'Erreur inconnue';
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Erreur: $error'), backgroundColor: Colors.red),
-                    );
-                  }
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Erreur réseau: $e'), backgroundColor: Colors.red),
-                  );
-                } finally {
-                  setDialogState(() => isLoading = false);
-                }
-              },
-              child: isLoading 
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Enregistrer'),
-            ),
-          ],
         ),
+      ),
       ),
     );
   }
@@ -591,23 +652,73 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void _showDeleteAccountDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
         title: const Text('Supprimer le compte', style: TextStyle(color: Colors.red)),
         content: const Text(
-          'Cette action est irréversible. Toutes vos données seront supprimées.',
+          'Cette action est irréversible. Vos informations personnelles seront effacées. '
+          'Vos commandes et transactions passées sont conservées de façon anonyme '
+          'pour nos obligations légales et comptables.',
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annuler'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _deleteAccount();
+            },
             child: const Text('Supprimer'),
           ),
         ],
       ),
     );
+  }
+
+  /// Appelle DELETE /user/account puis déconnecte et renvoie à l'écran de connexion.
+  /// Si la suppression est bloquée (solde, commande en cours…), affiche les raisons.
+  Future<void> _deleteAccount() async {
+    try {
+      final dio = ref.read(dioProvider);
+      await dio.delete(
+        ApiConfig.userAccount,
+        data: {'confirm': 'SUPPRIMER'},
+      );
+
+      await ref.read(authControllerProvider.notifier).logout();
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (route) => false,
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final List<String> reasons = (data is Map && data['reasons'] is List)
+          ? (data['reasons'] as List).map((r) => r.toString()).toList()
+          : const [];
+      final String message = reasons.isNotEmpty
+          ? reasons.join('\n')
+          : (data is Map && data['error'] != null
+              ? data['error'].toString()
+              : 'Erreur réseau. Veuillez réessayer.');
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text('Suppression impossible', style: TextStyle(color: Colors.white)),
+          content: Text(message, style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          ],
+        ),
+      );
+    }
   }
 }
 

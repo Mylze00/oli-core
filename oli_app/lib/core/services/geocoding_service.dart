@@ -3,7 +3,9 @@ import 'package:http/http.dart' as http;
 
 /// Service pour convertir les coordonnées GPS en noms de lieux lisibles
 class GeocodingService {
-  // Cache pour éviter les appels répétés
+  // Bug #13 fix: Cache limité à 200 entrées pour éviter la fuite mémoire
+  // lors de sessions longues avec de nombreuses coordonnées GPS distinctes.
+  static const int _maxCacheSize = 200;
   static final Map<String, String> _cache = {};
   
   /// Convertit des coordonnées GPS en nom de lieu
@@ -87,8 +89,12 @@ class GeocodingService {
           locationName = parts.take(2).join(',').trim();
         }
         
-        // Sauvegarder dans le cache
+        // Bug #13 fix: Limiter la taille du cache avant d'ajouter une nouvelle entrée
         if (locationName.isNotEmpty) {
+          if (_cache.length >= _maxCacheSize) {
+            // Supprimer la plus ancienne entrée (première clé insérée)
+            _cache.remove(_cache.keys.first);
+          }
           _cache[coordinates] = locationName;
           return locationName;
         }

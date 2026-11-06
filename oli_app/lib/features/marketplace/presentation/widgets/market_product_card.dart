@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../utils/price_color.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
 import '../../../../widgets/verification_badge.dart';
@@ -301,7 +302,7 @@ class MarketProductCard extends ConsumerWidget {
                 children: [
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      const style = TextStyle(color: Colors.white, fontSize: 10, height: 1.2);
+                      const style = TextStyle(fontFamily: 'CreatoDisplay', color: Colors.white, fontSize: 10, height: 1.2, fontWeight: FontWeight.w500);
                       final tp = TextPainter(
                         text: TextSpan(text: product.name, style: style),
                         maxLines: 2,
@@ -361,7 +362,7 @@ class MarketProductCard extends ConsumerWidget {
                            children: [
                              Text(
                                formattedDiscount,
-                               style: const TextStyle(color: Color(0xFFFF9500), fontWeight: FontWeight.bold, fontSize: 16.5) // Augmenté de 10% (15 -> 16.5)
+                               style: const TextStyle(fontFamily: 'CreatoDisplay', color: Color(0xFFFF9500), fontWeight: FontWeight.bold, fontSize: 16.5) // Augmenté de 10% (15 -> 16.5)
                              ),
                              const SizedBox(width: 4),
                              Text(
@@ -378,7 +379,7 @@ class MarketProductCard extends ConsumerWidget {
                       
                       return Text(
                         formattedPrice,
-                        style: const TextStyle(color: Color(0xFF7CADFF), fontWeight: FontWeight.bold, fontSize: 16.5) // Augmenté de 10% (15 -> 16.5)
+                        style: TextStyle(fontFamily: 'CreatoDisplay', color: productPriceColor(context), fontWeight: FontWeight.bold, fontSize: 16.5) // Augmenté de 10% (15 -> 16.5)
                       );
                     },
                   ),

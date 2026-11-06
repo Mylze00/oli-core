@@ -124,7 +124,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final chatState = ref.watch(chatControllerProvider(widget.otherId));
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final bgImage = isDark ? "assets/images/chat_bg_new.png" : "assets/images/chat_bg_new blanc.png";
+    // Utiliser bgd.jpg comme arrière-plan
+    final bgImage = "assets/images/bgd.jpg";
 
     // Écouteur pour scroll automatique lors de nouveaux messages
     ref.listen(chatControllerProvider(widget.otherId), (previous, next) {
@@ -255,10 +256,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       ),
       body: Container(
         decoration: BoxDecoration(
+          color: isDark ? Colors.black : Colors.white,
           image: DecorationImage(
             image: AssetImage(bgImage),
             fit: BoxFit.cover,
-            opacity: isDark ? 0.1 : 0.8, // Plus visible en mode clair si nécessaire, ou ajustable
+            opacity: isDark ? 0.2 : 0.4, // Transparence pour que ce soit subtil
           ),
         ),
         child: Column(

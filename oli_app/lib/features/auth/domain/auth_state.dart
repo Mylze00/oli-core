@@ -1,23 +1,8 @@
-class AuthState {
-  final bool isLoading;
-  final String? error;
-  final bool isAuthenticated;
+// Bug #2 fix: Ce fichier est un doublon de la classe AuthState définie dans
+// features/auth/providers/auth_controller.dart. Il est conservé pour la
+// compatibilité mais redirige vers la vraie définition.
+//
+// ⚠️ NE PAS utiliser ce fichier directement. Importer toujours depuis :
+// package:oli_app/features/auth/providers/auth_controller.dart
 
-  const AuthState({
-    this.isLoading = false,
-    this.error,
-    this.isAuthenticated = false,
-  });
-
-  AuthState copyWith({
-    bool? isLoading,
-    String? error,
-    bool? isAuthenticated,
-  }) {
-    return AuthState(
-      isLoading: isLoading ?? this.isLoading,
-      error: error,
-      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
-    );
-  }
-}
+export '../providers/auth_controller.dart' show AuthState;

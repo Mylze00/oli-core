@@ -5,9 +5,10 @@ import 'product_sections.dart'; // TopRankingGrid + BrandedCircleSection
 /// Helper pour construire la section "Top Classement" de la page d'accueil.
 ///
 /// Utilise un motif visuel répétitif :
-///   - 6 produits en grille 3 colonnes
-///   - 2 produits en grille 2 colonnes (avec label "Focus")
-///   - 1 bannière promotionnelle
+///   - 8 produits en grille 2 colonnes (4 lignes)
+///   - 1 bannière promotionnelle ou section « Original »
+///
+/// Le label « Focus » a été supprimé.
 class RankingSectionHelper {
   RankingSectionHelper._(); // Non-instanciable
 
@@ -69,67 +70,20 @@ class RankingSectionHelper {
     // Titres rotatifs pour les sections brandées
     const brandedTitles = ['À la une', 'Branding Original', 'Produit Original'];
     const brandedSliceSize = 6; // produits par slot
+    const productsPerBlock = 8; // 4 lignes de 2 produits, puis une bannière
 
     while (index < allProducts.length) {
-      // ── Bloc 3 colonnes (6 produits) ──
-      final chunk3Cols = allProducts.skip(index).take(6).toList();
-      if (chunk3Cols.isNotEmpty) {
+      // ── Bloc grille : 8 produits, toujours 2 par ligne (4 lignes) ──
+      final chunk = allProducts.skip(index).take(productsPerBlock).toList();
+      if (chunk.isNotEmpty) {
         final chunkStart = index;
-        index += chunk3Cols.length;
+        index += chunk.length;
+        slivers.add(const SliverPadding(padding: EdgeInsets.only(top: 8)));
         slivers.add(TopRankingGrid(
-          products: chunk3Cols,
-          crossAxisCount: 3,
-          childAspectRatio: 0.75,
+          products: chunk,
+          crossAxisCount: TopRankingGrid.columns,
           startIndex: chunkStart,
         ));
-      }
-
-      // ── Bloc 2 colonnes (2 produits) avec label ──
-      if (index < allProducts.length) {
-        final chunk2Cols = allProducts.skip(index).take(2).toList();
-        if (chunk2Cols.isNotEmpty) {
-          // Déduire un mot-clé contextuel depuis le 1er produit
-          final firstProduct = chunk2Cols.first;
-          final words = firstProduct.name.split(' ');
-          String focusWord = words.isNotEmpty ? words.first : '';
-          if (words.length > 1 &&
-              (focusWord.length <= 2 || stopWords.contains(focusWord))) {
-            focusWord = words[1];
-          }
-
-          if (focusWord.length > 2) {
-            slivers.add(SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              sliver: SliverToBoxAdapter(
-                child: Row(
-                  children: [
-                    Container(width: 4, height: 16, color: Colors.blueAccent),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Focus : $focusWord',
-                      style: TextStyle(
-                        color: textColor.withOpacity(0.9),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ));
-          }
-
-          slivers.add(const SliverPadding(padding: EdgeInsets.only(top: 8)));
-          final chunkStart2 = index;
-          index += chunk2Cols.length;
-          slivers.add(TopRankingGrid(
-            products: chunk2Cols,
-            crossAxisCount: 2,
-            childAspectRatio: 0.85,
-            startIndex: chunkStart2,
-          ));
-          slivers.add(const SliverPadding(padding: EdgeInsets.only(top: 8)));
-        }
       }
 
       // ── Slot : BrandedCircleSection remplace TOUTE bannière bleue (bg_color) ──
@@ -164,12 +118,16 @@ class RankingSectionHelper {
       if (isEmptyContent && bgImg != null) {
         slivers.add(SliverToBoxAdapter(
           child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Image.asset(
                 bgImg,
-                fit: BoxFit.contain,
+                fit: BoxFit.fill,
               ),
             ),
           ),

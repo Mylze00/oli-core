@@ -123,17 +123,6 @@ class ProfileAndWalletPage extends ConsumerWidget {
               const SizedBox(height: 20),
 
               // 4. RÉCEMMENT CONSULTÉS
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    "RÉCEMMENT CONSULTÉS",
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
               const VisitedProductsSection(),
               const SizedBox(height: 30),
             ],

@@ -109,7 +109,7 @@ class _DepositStatusDialogState extends ConsumerState<DepositStatusDialog>
     _attempts++;
 
     try {
-      final dio = widget.ref.read(dioProvider);
+      final dio = ref.read(dioProvider);
       final cacheBuster = DateTime.now().millisecondsSinceEpoch;
       final response = await dio.get('${ApiConfig.unipesaStatus(widget.orderId)}?t=$cacheBuster');
 
@@ -129,11 +129,11 @@ class _DepositStatusDialogState extends ConsumerState<DepositStatusDialog>
 
         try {
           // Rafraîchir le solde du wallet
-          await widget.ref.read(walletProvider.notifier).loadWalletData();
+          await ref.read(walletProvider.notifier).loadWalletData();
           
           // Retour haptique et son
           HapticFeedback.mediumImpact();
-          AudioPlayer().play(AssetSource('images/kaching.mp3'));
+          await AudioPlayer().play(AssetSource('images/kaching.mp3'));
         } catch (e) {
           debugPrint('Erreur lors des effets de succès: $e');
         }

@@ -42,6 +42,7 @@ class _DiscoveryCarouselState extends State<DiscoveryCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (widget.products.isEmpty) return const SizedBox();
     final product = widget.products[_currentIndex];
 
@@ -58,9 +59,13 @@ class _DiscoveryCarouselState extends State<DiscoveryCarousel> {
           child: Container(
             key: ValueKey<String>(product.id), // Clé unique pour l'animation
             decoration: BoxDecoration(
-              color: const Color(0xFF2C2C2C),
+              color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.08),
+              ),
             ),
             padding: const EdgeInsets.all(8),
             child: Row(
@@ -70,7 +75,12 @@ class _DiscoveryCarouselState extends State<DiscoveryCarousel> {
                   borderRadius: BorderRadius.circular(8),
                   child: product.images.isNotEmpty 
                      ? Image.network(product.images.first, width: 100, height: 100, fit: BoxFit.cover)
-                     : Container(width: 100, height: 100, color: Colors.grey[800], child: const Icon(Icons.image)),
+                     : Container(
+                         width: 100,
+                         height: 100,
+                         color: isDark ? Colors.grey[800] : Colors.grey[200],
+                         child: Icon(Icons.image,
+                             color: isDark ? Colors.white38 : Colors.black26)),
                 ),
                 const SizedBox(width: 12),
                 // Infos Produit
@@ -92,7 +102,10 @@ class _DiscoveryCarouselState extends State<DiscoveryCarousel> {
                         product.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF1A1F2E),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
                       ),
                       const SizedBox(height: 4),
                       Consumer(
@@ -104,7 +117,10 @@ class _DiscoveryCarouselState extends State<DiscoveryCarousel> {
                           final priceUsd = double.tryParse(product.price) ?? 0.0;
                           return Text(
                             exchangeNotifier.formatProductPrice(priceUsd), 
-                            style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 16)
+                            style: TextStyle(
+                                color: isDark ? Colors.orange : const Color(0xFFD97706),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16)
                           );
                         }
                       ),
@@ -112,7 +128,8 @@ class _DiscoveryCarouselState extends State<DiscoveryCarousel> {
                   ),
                 ),
                 // Icône Arrow
-                Icon(Icons.arrow_forward_ios, color: Colors.grey[600], size: 14),
+                Icon(Icons.arrow_forward_ios,
+                    color: isDark ? Colors.grey[600] : Colors.grey[500], size: 14),
                 const SizedBox(width: 4),
               ],
             ),

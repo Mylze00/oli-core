@@ -32,8 +32,9 @@ class CloudinaryHelper {
     return '${before}c_fill,w_$width,h_$height,q_auto,f_auto/$afterUpload';
   }
 
-  /// Returns a card-optimized image URL — 50% quality to save data (for product cards)
-  static String card(String url, {int width = 130, int height = 130}) {
+  /// Returns a card-optimized image URL for product cards.
+  /// 540 px (≈ 3 × 180 px logiques) et qualité q_80 : rendu net sur écrans haute densité.
+  static String card(String url, {int width = 540, int height = 540}) {
     if (!url.contains('cloudinary.com')) return url;
     final uploadIndex = url.indexOf('/upload/');
     if (uploadIndex == -1) return url;
@@ -42,7 +43,7 @@ class CloudinaryHelper {
       return url;
     }
     final before = url.substring(0, uploadIndex + 8);
-    return '${before}c_fill,w_$width,h_$height,q_50,f_auto/$afterUpload';
+    return '${before}c_fill,w_$width,h_$height,q_80,f_auto/$afterUpload';
   }
 
   /// Returns a medium-quality image URL (for product detail pages, etc.)

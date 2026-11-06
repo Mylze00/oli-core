@@ -1,14 +1,17 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
-import '../../../../providers/exchange_rate_provider.dart';
 import '../../../marketplace/providers/market_provider.dart';
 import '../../../marketplace/presentation/pages/product_details_page.dart';
-import '../../../marketplace/presentation/widgets/market_product_card.dart';
-import '../../../../app/theme/theme_provider.dart';
+import '../../../../providers/exchange_rate_provider.dart';
 import '../../../../utils/cloudinary_helper.dart';
 
-/// Super Offres Page — Produits les plus visités
+const String _kFontFamily = 'CreatoDisplay';
+
+/// Page « Top du classement » — produits des grands magasins locaux vérifiés.
+/// Disposition : en-tête, catégorie, onglets (comme la maquette « Top du classement »),
+/// grille 2 colonnes avec badge « Vérifié » (comme la maquette « Grands Magasins »), teinte bleue.
 class SuperOffresPage extends ConsumerStatefulWidget {
   const SuperOffresPage({super.key});
 
@@ -16,551 +19,345 @@ class SuperOffresPage extends ConsumerStatefulWidget {
   ConsumerState<SuperOffresPage> createState() => _SuperOffresPageState();
 }
 
-class _SuperOffresPageState extends ConsumerState<SuperOffresPage>
-    with SingleTickerProviderStateMixin {
-  String _sortBy = 'views'; // 'views', 'price_asc', 'price_desc', 'recent'
-  String _selectedCategory = 'Tout';
-  late AnimationController _headerAnimController;
-  late Animation<double> _headerFadeAnimation;
+class _SuperOffresPageState extends ConsumerState<SuperOffresPage> {
+  // Palette bleue
+  static const Color _bgTop = Color(0xFF0A1A33);
+  static const Color _bgBottom = Color(0xFF060D1A);
+  static const Color _card = Color(0xFF0F2140);
+  static const Color _accent = Color(0xFF1E88E5);
+  static const Color _priceBlue = Color(0xFF64B5F6);
+  static const Color _muted = Color(0xFF8FA6C8);
 
-  final Map<String, String> _categories = {'Tout': '', 'Électronique': 'electronics', 'Mode': 'fashion', 'Maison': 'home', 'Alimentation': 'food', 'Beauté': 'beauty', 'Industrie': 'industry', 'Sports': 'sports', 'Outils': 'tools', 'Construction': 'construction', 'Autres': 'other', 'Véhicules': 'vehicles', 'Jouets': 'toys', 'Sécurité': 'security', 'Jardin': 'garden', 'Bébé': 'baby', 'Bureau': 'office', 'Animaux': 'pets', 'Santé': 'health'
-  };
+  int _selectedTabIndex = 0; // 0 Tous, 1 Ventes à la Une, 2 Les plus populaires
+  String _selectedCategory = 'Toutes les catégories';
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _headerAnimController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-    _headerFadeAnimation = CurvedAnimation(
-      parent: _headerAnimController,
-      curve: Curves.easeOut,
-    );
-    _headerAnimController.forward();
-  }
+  final List<String> _categories = [
+    'Toutes les catégories',
+    'Électronique',
+    'Mode',
+    'Maison',
+    'Alimentation',
+  ];
 
   @override
   void dispose() {
-    _headerAnimController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  List<Product> _sortAndFilter(List<Product> products) {
-    var filtered = List<Product>.from(products);
+  // Mélange mis en cache tant que la source ne change pas (évite un ordre qui bouge à chaque clic)
+  List<Product>? _diversifiedCache;
+  List<Product>? _diversifiedFrom;
 
-    // Filter by category
-    if (_selectedCategory != 'Tout') {
-      final catKey = _categories[_selectedCategory] ?? '';
-      if (catKey.isNotEmpty) {
-        filtered = filtered
-            .where((p) => p.category?.toLowerCase() == catKey.toLowerCase())
-            .toList();
+  /// Produits de boutiques certifiées, tirés au hasard et répartis entre les magasins :
+  /// un produit par magasin à tour de rôle, dans un ordre aléatoire.
+  List<Product> _diversified(List<Product> source) {
+    if (identical(source, _diversifiedFrom) && _diversifiedCache != null) {
+      return _diversifiedCache!;
+    }
+    final rnd = Random();
+    var certified = source.where((p) => p.shopVerified).toList();
+    if (certified.isEmpty) certified = List<Product>.from(source);
+
+    final byStore = <String, List<Product>>{};
+    for (final p in certified) {
+      final key = p.shopId ?? p.shopName ?? p.sellerId;
+      byStore.putIfAbsent(key, () => <Product>[]).add(p);
+    }
+    for (final group in byStore.values) {
+      group.shuffle(rnd);
+    }
+    final stores = byStore.keys.toList()..shuffle(rnd);
+
+    final out = <Product>[];
+    for (var i = 0; ; i++) {
+      var added = false;
+      for (final store in stores) {
+        final group = byStore[store]!;
+        if (i < group.length) {
+          out.add(group[i]);
+          added = true;
+        }
       }
+      if (!added) break;
     }
 
-    // Sort
-    switch (_sortBy) {
-      case 'views':
-        filtered.sort((a, b) => b.viewCount.compareTo(a.viewCount));
-        break;
-      case 'price_asc':
-        filtered.sort((a, b) {
-          final pa = double.tryParse(a.price) ?? 0;
-          final pb = double.tryParse(b.price) ?? 0;
-          return pa.compareTo(pb);
-        });
-        break;
-      case 'price_desc':
-        filtered.sort((a, b) {
-          final pa = double.tryParse(a.price) ?? 0;
-          final pb = double.tryParse(b.price) ?? 0;
-          return pb.compareTo(pa);
-        });
-        break;
-      case 'recent':
-        filtered.sort((a, b) {
-          final da = a.createdAt ?? DateTime(2000);
-          final db = b.createdAt ?? DateTime(2000);
-          return db.compareTo(da);
-        });
-        break;
+    _diversifiedFrom = source;
+    _diversifiedCache = out;
+    return out;
+  }
+
+  List<Product> _filter(List<Product> source) {
+    var list = List<Product>.from(_diversified(source));
+
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      list = list.where((p) => p.name.toLowerCase().contains(query)).toList();
     }
 
-    return filtered;
+    if (_selectedCategory != 'Toutes les catégories') {
+      list = list.where((p) => (p.category ?? '').toLowerCase().contains(_selectedCategory.toLowerCase())).toList();
+    }
+
+    switch (_selectedTabIndex) {
+      case 1:
+        list.sort((a, b) => (b.createdAt ?? DateTime(2000)).compareTo(a.createdAt ?? DateTime(2000)));
+        break;
+      case 2:
+        list.sort((a, b) => b.viewCount.compareTo(a.viewCount));
+        break;
+    }
+    return list;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = ref.watch(themeProvider);
-    final backgroundColor = isDark ? Colors.black : Colors.grey[100];
-    final textColor = isDark ? Colors.white : Colors.black;
-    final topProducts = ref.watch(topSellersProvider);
+    final shopProducts = ref.watch(verifiedShopsProductsProvider);
+    final products = _filter(shopProducts);
 
-    final sortedProducts = _sortAndFilter(topProducts);
-
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: CustomScrollView(
-        slivers: [
-          // ── HEADER ──
-          SliverAppBar(
-            expandedHeight: 180,
-            pinned: true,
-            backgroundColor: Colors.black,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
-              onPressed: () => Navigator.pop(context),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Background fire image
-                  Image.asset(
-                    'assets/images/fire_bg.png',
-                    fit: BoxFit.cover,
-                  ),
-                  // Dark overlay
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.6),
-                          Colors.black.withOpacity(0.9),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Title content
-                  FadeTransition(
-                    opacity: _headerFadeAnimation,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.local_fire_department,
-                                  color: Colors.orangeAccent, size: 32),
-                              const SizedBox(width: 10),
-                              const Text(
-                                "Super Offres",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 26,
-                                  shadows: [
-                                    Shadow(color: Colors.black54, blurRadius: 8)
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "${sortedProducts.length} produits les plus populaires",
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              collapseMode: CollapseMode.parallax,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: _kFontFamily),
+      ),
+      child: Scaffold(
+        backgroundColor: _bgBottom,
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [_bgTop, _bgBottom],
+              stops: [0.0, 0.35],
             ),
           ),
-
-          // ── SORT & FILTER BAR ──
-          SliverToBoxAdapter(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              color: isDark ? const Color(0xFF0A0A0A) : Colors.white,
-              child: Column(
-                children: [
-                  // Sort chips
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildSortChip('🔥 Plus vus', 'views', isDark),
-                        _buildSortChip('💰 Prix ↑', 'price_asc', isDark),
-                        _buildSortChip('💎 Prix ↓', 'price_desc', isDark),
-                        _buildSortChip('🆕 Récents', 'recent', isDark),
-                      ],
-                    ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                _buildCategoryPicker(),
+                _buildTabs(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('${products.length} produits',
+                        style: const TextStyle(color: _muted, fontSize: 12)),
                   ),
-                  const SizedBox(height: 8),
-                  // Category chips
-                  SizedBox(
-                    height: 34,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _categories.length,
-                      itemBuilder: (context, index) {
-                        final label = _categories.keys.elementAt(index);
-                        final isSelected = label == _selectedCategory;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedCategory = label),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? Colors.orangeAccent
-                                    : (isDark
-                                        ? const Color(0xFF2C2C2C)
-                                        : Colors.grey[200]),
-                                borderRadius: BorderRadius.circular(16),
-                                border: isSelected
-                                    ? null
-                                    : Border.all(
-                                        color: isDark
-                                            ? Colors.white.withOpacity(0.1)
-                                            : Colors.grey.withOpacity(0.3)),
-                              ),
-                              child: Text(
-                                label,
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? Colors.white
-                                      : (isDark
-                                          ? Colors.white70
-                                          : Colors.black87),
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                Expanded(child: _buildGrid(products, shopProducts.isEmpty)),
+              ],
             ),
           ),
+        ),
+      ),
+    );
+  }
 
-          // ── PRODUCT COUNT ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${sortedProducts.length} résultat${sortedProducts.length > 1 ? 's' : ''}',
-                    style: TextStyle(
-                        color: textColor.withOpacity(0.5), fontSize: 12),
-                  ),
-                  if (_selectedCategory != 'Tout')
-                    GestureDetector(
-                      onTap: () => setState(() => _selectedCategory = 'Tout'),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.clear, size: 14, color: Colors.orangeAccent),
-                          SizedBox(width: 4),
-                          Text('Effacer',
-                              style: TextStyle(
-                                  color: Colors.orangeAccent, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+            onPressed: () => Navigator.of(context).maybePop(),
           ),
-
-          // ── PRODUCTS GRID ──
-          if (sortedProducts.isEmpty)
-            SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.local_fire_department,
-                        size: 48, color: textColor.withOpacity(0.2)),
-                    const SizedBox(height: 16),
-                    Text('Aucune super offre trouvée',
-                        style: TextStyle(color: textColor, fontSize: 16)),
-                  ],
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  childAspectRatio: 0.62,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final product = sortedProducts[index];
-                    return _SuperOfferProductCard(
-                      product: product,
-                      rank: _sortBy == 'views' ? index + 1 : null,
-                    );
-                  },
-                  childCount: sortedProducts.length,
-                ),
-              ),
-            ),
-
-          const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+          Expanded(
+            child: _isSearching
+                ? TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    style: const TextStyle(color: Colors.white),
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      hintText: 'Rechercher un produit…',
+                      hintStyle: TextStyle(color: _muted),
+                      border: InputBorder.none,
+                    ),
+                  )
+                : const Text(
+                    'Top du classement',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+          ),
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search_rounded, color: Colors.white),
+            onPressed: () => setState(() {
+              _isSearching = !_isSearching;
+              if (!_isSearching) _searchController.clear();
+            }),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSortChip(String label, String value, bool isDark) {
-    final isSelected = _sortBy == value;
+  Widget _buildCategoryPicker() {
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: () => setState(() => _sortBy = value),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: PopupMenuButton<String>(
+        onSelected: (v) => setState(() => _selectedCategory = v),
+        color: _card,
+        itemBuilder: (_) => _categories
+            .map((c) => PopupMenuItem<String>(
+                  value: c,
+                  child: Text(c, style: const TextStyle(color: Colors.white)),
+                ))
+            .toList(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFFFF6B35)
-                : (isDark ? const Color(0xFF1E1E1E) : Colors.grey[200]),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFFFF6B35).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    )
-                  ]
-                : null,
+            color: _card,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: _accent.withValues(alpha: 0.4)),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected
-                  ? Colors.white
-                  : (isDark ? Colors.white70 : Colors.black87),
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              fontSize: 13,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_selectedCategory, style: const TextStyle(color: Colors.white, fontSize: 13)),
+              const SizedBox(width: 6),
+              const Icon(Icons.keyboard_arrow_down_rounded, color: _priceBlue, size: 18),
+            ],
           ),
         ),
       ),
     );
   }
+
+  Widget _buildTabs() {
+    const labels = ['Tous', 'Ventes à la Une', 'Les plus populaires'];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(24)),
+        child: Row(
+          children: List.generate(labels.length, (i) {
+            final selected = i == _selectedTabIndex;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _selectedTabIndex = i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected ? _accent : Colors.transparent,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    labels[i],
+                    style: TextStyle(
+                      color: selected ? Colors.white : _muted,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGrid(List<Product> products, bool stillLoading) {
+    if (products.isEmpty) {
+      return Center(
+        child: Text(
+          stillLoading ? 'Chargement des grands magasins…' : 'Aucun produit trouvé',
+          style: const TextStyle(color: _muted),
+        ),
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.62,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: products.length,
+      itemBuilder: (context, index) => _ShopProductCard(product: products[index]),
+    );
+  }
 }
 
-/// Product card with optional ranking badge and view count
-class _SuperOfferProductCard extends ConsumerWidget {
+/// Carte produit : visuel (qualité accueil), badge « Vérifié », nom, prix bleu, boutique.
+class _ShopProductCard extends ConsumerWidget {
   final Product product;
-  final int? rank;
-
-  const _SuperOfferProductCard({
-    required this.product,
-    this.rank,
-  });
+  const _ShopProductCard({required this.product});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final exchangeState = ref.watch(exchangeRateProvider);
-    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+    ref.watch(exchangeRateProvider);
+    final price = ref
+        .read(exchangeRateProvider.notifier)
+        .formatProductPrice(double.tryParse(product.price) ?? 0.0);
+    final shopLabel = (product.shopName != null && product.shopName!.isNotEmpty)
+        ? product.shopName!
+        : 'Boutique Entreprise';
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => ProductDetailsPage(product: product)),
-        );
-      },
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product)),
+      ),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
+          color: _SuperOffresPageStyle.card,
           borderRadius: BorderRadius.circular(12),
-          border: rank != null && rank! <= 3
-              ? Border.all(
-                  color: rank == 1
-                      ? Colors.amber
-                      : (rank == 2
-                          ? Colors.grey[400]!
-                          : Colors.orange[700]!),
-                  width: 1.5)
-              : null,
+          border: Border.all(color: const Color(0xFF1E88E5).withValues(alpha: 0.2)),
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image section
             Expanded(
-              child: ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(12)),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Product image with lazy loading
-                    product.images.isEmpty
-                        ? Container(
-                            color: const Color(0xFF2C2C2C),
-                            child: const Center(
-                                child: Icon(Icons.image,
-                                    size: 36, color: Colors.grey)),
-                          )
-                        : Image.network(
-                            CloudinaryHelper.small(product.images[0]),
-                            fit: BoxFit.cover,
-                            frameBuilder: (context, child, frame,
-                                wasSynchronouslyLoaded) {
-                              if (wasSynchronouslyLoaded) return child;
-                              return AnimatedOpacity(
-                                opacity: frame == null ? 0.0 : 1.0,
-                                duration: const Duration(milliseconds: 400),
-                                curve: Curves.easeOut,
-                                child: child,
-                              );
-                            },
-                            loadingBuilder:
-                                (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                color: const Color(0xFF1A1A1A),
-                                child: Center(
-                                  child: SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.grey[700],
-                                      value: loadingProgress
-                                                  .expectedTotalBytes !=
-                                              null
-                                          ? loadingProgress
-                                                  .cumulativeBytesLoaded /
-                                              loadingProgress
-                                                  .expectedTotalBytes!
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                            errorBuilder: (ctx, err, stack) => const Center(
-                                child: Icon(Icons.broken_image,
-                                    size: 28, color: Colors.grey)),
-                          ),
-
-                    // Rank badge (top 3)
-                    if (rank != null && rank! <= 3)
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: rank == 1
-                                ? Colors.amber
-                                : (rank == 2
-                                    ? Colors.grey[400]
-                                    : Colors.orange[700]),
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(12),
-                              bottomRight: Radius.circular(8),
-                            ),
-                          ),
-                          child: Text(
-                            rank == 1
-                                ? '🥇 #1'
-                                : (rank == 2 ? '🥈 #2' : '🥉 #3'),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  product.images.isEmpty
+                      ? const Center(child: Icon(Icons.image, size: 36, color: Colors.grey))
+                      : Image.network(
+                          CloudinaryHelper.card(product.images.first),
+                          fit: BoxFit.cover,
+                          cacheWidth: 540,
+                          errorBuilder: (_, __, ___) =>
+                              const Center(child: Icon(Icons.broken_image, size: 28, color: Colors.grey)),
                         ),
-                      )
-                    else if (rank != null)
-                      Positioned(
-                        top: 4,
-                        left: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '#$rank',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF22C55E),
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(12),
+                          bottomLeft: Radius.circular(8),
                         ),
                       ),
-
-                    // View count badge
-                    if (product.viewCount > 0)
-                      Positioned(
-                        bottom: 4,
-                        right: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.65),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.visibility,
-                                  size: 10, color: Colors.white70),
-                              const SizedBox(width: 3),
-                              Text(
-                                _formatViewCount(product.viewCount),
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.verified, size: 10, color: Colors.white),
+                          SizedBox(width: 2),
+                          Text('Vérifié', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                        ],
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
-
-            // Product info
             Padding(
-              padding: const EdgeInsets.all(6.0),
+              padding: const EdgeInsets.all(8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -568,18 +365,29 @@ class _SuperOfferProductCard extends ConsumerWidget {
                     product.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 10, height: 1.2),
+                    style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.2),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    price,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _SuperOffresPageStyle.priceBlue, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(height: 3),
-                  Text(
-                    exchangeNotifier.formatProductPrice(
-                        double.tryParse(product.price) ?? 0.0),
-                    style: const TextStyle(
-                      color: Color(0xFFFFD700),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
+                  Row(
+                    children: [
+                      const Icon(Icons.store, size: 10, color: _SuperOffresPageStyle.muted),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          shopLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: _SuperOffresPageStyle.muted, fontSize: 10),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -589,11 +397,11 @@ class _SuperOfferProductCard extends ConsumerWidget {
       ),
     );
   }
+}
 
-  String _formatViewCount(int count) {
-    if (count >= 1000) {
-      return '${(count / 1000).toStringAsFixed(1)}k';
-    }
-    return count.toString();
-  }
+/// Couleurs partagées par la carte (la carte est hors de la classe de page).
+class _SuperOffresPageStyle {
+  static const Color card = Color(0xFF0F2140);
+  static const Color priceBlue = Color(0xFF64B5F6);
+  static const Color muted = Color(0xFF8FA6C8);
 }

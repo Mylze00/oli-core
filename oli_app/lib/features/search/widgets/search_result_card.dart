@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/price_color.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../models/product_model.dart';
@@ -111,6 +112,7 @@ class SearchResultCard extends ConsumerWidget {
                         Text(
                           product.name,
                           style: const TextStyle(
+                            fontFamily: 'CreatoDisplay',
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                             color: Colors.black87,
@@ -147,6 +149,7 @@ class SearchResultCard extends ConsumerWidget {
                           Text(
                             formattedPrice,
                             style: const TextStyle(
+                              fontFamily: 'CreatoDisplay',
                               fontSize: 12,
                               color: Colors.grey,
                               decoration: TextDecoration.lineThrough,
@@ -161,6 +164,7 @@ class SearchResultCard extends ConsumerWidget {
                               currency: exchangeState.selectedCurrency,
                             ),
                             style: const TextStyle(
+                              fontFamily: 'CreatoDisplay',
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFFFF9500),
@@ -169,10 +173,11 @@ class SearchResultCard extends ConsumerWidget {
                         ] else
                           Text(
                             formattedPrice,
-                            style: const TextStyle(
+                            style: TextStyle(
+                              fontFamily: 'CreatoDisplay',
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E7DBA),
+                              color: productPriceColor(context),
                             ),
                           ),
                       ],

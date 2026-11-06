@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../orders/providers/orders_provider.dart';
 import '../../../orders/screens/purchases_page.dart';
+import '../../../user/providers/favorites_provider.dart';
 import '../../../favorites/screens/favorites_page.dart';
 import '../../../sales/providers/seller_orders_provider.dart';
 import '../../../sales/screens/my_sales_page.dart';
@@ -226,6 +227,8 @@ class _BuyerGrid extends StatelessWidget {
   Widget build(BuildContext wCtx) {
     final ordersAsync = ref.watch(ordersProvider);
     final notificationState = ref.watch(notificationProvider);
+    // Badge = nombre réel de favoris (aucun badge s'il n'y en a pas)
+    final favoritesCount = ref.watch(favoritesProvider).length;
 
     int total = 0;
     int inProgress = 0;
@@ -256,7 +259,7 @@ class _BuyerGrid extends StatelessWidget {
         count: inProgress,
         countColor: const Color(0xFFF59E0B),
         onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const PurchasesPage())),
+            MaterialPageRoute(builder: (_) => const PurchasesPage(initialFilter: PurchaseFilter.inProgress))),
       ),
       _DashItem(
         icon: Icons.check_circle_outline,
@@ -264,12 +267,13 @@ class _BuyerGrid extends StatelessWidget {
         count: delivered,
         countColor: const Color(0xFF22C55E),
         onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const PurchasesPage())),
+            MaterialPageRoute(builder: (_) => const PurchasesPage(initialFilter: PurchaseFilter.delivered))),
       ),
       _DashItem(
         icon: Icons.favorite_border_rounded,
         label: 'Mes Favoris',
-        heartBadge: true,
+        count: favoritesCount,
+        countColor: Colors.redAccent,
         onTap: () => Navigator.push(context,
             MaterialPageRoute(builder: (_) => const FavoritesPage())),
       ),

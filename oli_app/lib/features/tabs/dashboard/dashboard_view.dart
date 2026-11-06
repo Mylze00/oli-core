@@ -25,6 +25,7 @@ import 'widgets/discovery_carousel.dart';
 import 'widgets/horizontal_product_section.dart';
 import 'widgets/product_sections.dart'; // VerifiedShopProductsSection
 import 'widgets/ranking_section.dart';
+import 'providers/discover_random_provider.dart'; // Top Classement personnalisé (tirage aléatoire)
 import '../../marketplace/presentation/widgets/market_product_card.dart';
 
 // Logique métier extraite
@@ -441,9 +442,13 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     // On prend jusqu'à 18 produits (3 slots de 6)
     final deduplicatedBranded = removeDuplicatesAndTrack(brandedProducts, 18);
     
-    // 6. Top Classement
-    final fullRankingList =
-        cachedRankingList.isNotEmpty ? cachedRankingList : cachedSuperOffers;
+    // 6. Top Classement : tirage aléatoire personnalisé côté serveur
+    //    (hors habitudes de l'utilisateur). Repli local si l'appel échoue.
+    final discoverRandom =
+        ref.watch(discoverRandomProvider).valueOrNull ?? const <Product>[];
+    final fullRankingList = discoverRandom.isNotEmpty
+        ? discoverRandom
+        : (cachedRankingList.isNotEmpty ? cachedRankingList : cachedSuperOffers);
     final deduplicatedRanking = removeDuplicatesAndTrack(fullRankingList, _rankingMaxCount);
     
     // 7. Produits restants (5 sections en bas)
@@ -453,7 +458,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
 
     return Theme(
       data: Theme.of(context).copyWith(
-        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'CreatoDisplay-Medium'),
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'CreatoDisplay'),
       ),
       child: Scaffold(
         backgroundColor: backgroundColor,
@@ -465,6 +470,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
               await ref
                   .read(featuredProductsProvider.notifier)
                   .fetchFeaturedProducts();
+              // Nouveau tirage du Top Classement
+              ref.invalidate(discoverRandomProvider);
               setState(() {
                 _anonLoadedCount = _anonBatchSize;
                 resetDistribution();
@@ -508,8 +515,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                 SliverToBoxAdapter(
                   child: Container(
                     margin: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    height: 221,
+                        horizontal: 12, vertical: 8),
                     child: AdsCarousel(ads: ref.watch(adsProvider)),
                   ),
                 ),
@@ -578,12 +584,12 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                     deduplicatedRanking, textColor,
                     brandedProducts: deduplicatedBranded),
 
-                const SliverPadding(padding: EdgeInsets.only(bottom: 16)),
+                const SliverPadding(padding: EdgeInsets.only(bottom: 4)),
 
-                // ── 5 sections nommées avec layout 6-2-3 ───
+                // ── 5 sections nommées (grille 2 par ligne) ───
                 ...List.generate(_anonSectionCount, (s) {
                   const sectionTitles = [
-                    'Meilleures choix pour vous',
+                    'Meilleurs choix pour vous',
                     'Tendances du moment',
                     'Récemment ajoutés',
                     'Les mieux notés',
@@ -608,11 +614,10 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                       .toList();
                   if (sectionProducts.isEmpty) return const <Widget>[];
 
-                  final sw = MediaQuery.of(context).size.width;
                   return [
                     // Titre de la section
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
                       sliver: SliverToBoxAdapter(
                         child: Row(
                           children: [
@@ -631,8 +636,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                         ),
                       ),
                     ),
-                    // Grille 6-2-3
-                    _buildSection6x2x3Sliver(sectionProducts, sw),
+                    // Grille 2 produits par ligne (même disposition que le Top Classement)
+                    TopRankingGrid(products: sectionProducts, startIndex: 0),
                     const SliverPadding(padding: EdgeInsets.only(bottom: 4)),
                   ];
                 }).expand((x) => x),

@@ -109,4 +109,34 @@ class SecureStorageService {
       debugPrint("❌ Erreur SecureStorage Delete: $e");
     }
   }
+
+  /// 🔹 VÉRIFIER SI L'ONBOARDING EST COMPLÉTÉ
+  Future<bool> isOnboardingCompleted(String phone) async {
+    final key = 'onboarding_completed_$phone';
+    if (_useFallback) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(key) ?? false;
+    }
+    try {
+      final val = await _secureStorage.read(key: key);
+      return val == 'true';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// 🔹 DÉFINIR L'ONBOARDING COMME COMPLÉTÉ
+  Future<void> setOnboardingCompleted(String phone) async {
+    final key = 'onboarding_completed_$phone';
+    if (_useFallback) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, true);
+    } else {
+      try {
+        await _secureStorage.write(key: key, value: 'true');
+      } catch (e) {
+        debugPrint("❌ Erreur SecureStorage setOnboardingCompleted: $e");
+      }
+    }
+  }
 }

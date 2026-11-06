@@ -4,8 +4,12 @@ import '../providers/notification_provider.dart';
 import '../models/notification_model.dart';
 
 import '../../chat/conversations_page.dart';
+import '../../chat/calls_page.dart';
+import '../../orders/screens/purchases_page.dart';
 import '../../wallet/screens/wallet_screen.dart';
 
+
+const String _kFontFamily = 'CreatoDisplay';
 
 class NotificationsView extends ConsumerWidget {
   const NotificationsView({super.key});
@@ -17,10 +21,15 @@ class NotificationsView extends ConsumerWidget {
     final isLoading = notificationState.isLoading;
     final error = notificationState.error;
 
-    return Scaffold(
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: _kFontFamily),
+      ),
+      child: Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text("Notifications", style: TextStyle(color: Colors.white)),
+        title: const Text("Notifications",
+            style: TextStyle(color: Colors.white, fontFamily: _kFontFamily)),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -85,6 +94,7 @@ class NotificationsView extends ConsumerWidget {
                         },
                       ),
                     ),
+      ),
     );
   }
 
@@ -157,15 +167,24 @@ class NotificationsView extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.notifications_none,
-            size: 80,
-            color: Colors.blueAccent.withOpacity(0.5),
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF3B30),
+              borderRadius: BorderRadius.circular(21),
+            ),
+            child: const Icon(
+              Icons.notifications_rounded,
+              size: 46,
+              color: Colors.white,
+            ),
           ),
           const SizedBox(height: 20),
           const Text(
             "Pas de notifications",
             style: TextStyle(
+              fontFamily: _kFontFamily,
               color: Colors.white54,
               fontSize: 16,
               fontWeight: FontWeight.w500,
@@ -205,23 +224,27 @@ class NotificationsView extends ConsumerWidget {
         tileColor: notification.isRead
             ? Colors.transparent
             : const Color(0xFF1E1E1E),
+        // Pastille style iOS : glyphe blanc sur carré arrondi coloré
         leading: Container(
-          width: 50,
-          height: 50,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
-            color: _getColorByType(notification.type).withOpacity(0.2),
-            shape: BoxShape.circle,
+            color: notification.iconColor,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: [
+              BoxShadow(
+                color: notification.iconColor.withValues(alpha: 0.35),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          child: Center(
-            child: Text(
-              notification.icon,
-              style: const TextStyle(fontSize: 24),
-            ),
-          ),
+          child: Icon(notification.iconData, color: Colors.white, size: 24),
         ),
         title: Text(
           notification.title,
           style: TextStyle(
+            fontFamily: _kFontFamily,
             color: Colors.white,
             fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
             fontSize: 14,
@@ -236,6 +259,7 @@ class NotificationsView extends ConsumerWidget {
             Text(
               notification.body,
               style: const TextStyle(
+                fontFamily: _kFontFamily,
                 color: Colors.white70,
                 fontSize: 13,
               ),
@@ -246,6 +270,7 @@ class NotificationsView extends ConsumerWidget {
             Text(
               notification.formattedDateTime,
               style: const TextStyle(
+                fontFamily: _kFontFamily,
                 color: Colors.white38,
                 fontSize: 11,
               ),
@@ -263,40 +288,56 @@ class NotificationsView extends ConsumerWidget {
                 ),
               ),
         onTap: () {
-          // Marquer comme lue si non-lue
+          // Marquer comme lue dès l'ouverture
           if (!notification.isRead) {
             ref.read(notificationProvider.notifier).markAsRead(notification.id);
           }
-
-          if (notification.type == 'message') {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ConversationsPage()));
-          } else if (notification.type == 'payment' || notification.type == 'wallet') {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen()));
-          } else {
-             ScaffoldMessenger.of(context).showSnackBar(
-               SnackBar(content: Text('Détails : ${notification.body}'))
-             );
-          }
+          _openTarget(context, notification);
         },
       ),
     );
   }
 
-  /// Obtenir la couleur selon le type
-  Color _getColorByType(String type) {
-    switch (type) {
+  /// Ouvre l'écran correspondant au type de notification.
+  void _openTarget(BuildContext context, NotificationModel notification) {
+    Widget? target;
+    switch (notification.type) {
       case 'message':
-        return Colors.blue;
+        target = const ConversationsPage();
+        break;
+      case 'call':
+        target = const CallsPage();
+        break;
+      case 'wallet':
+      case 'wallet_deposit':
+      case 'payment':
+        target = const WalletScreen();
+        break;
       case 'order':
-        return Colors.orange;
-      case 'offer':
-        return Colors.purple;
-      case 'announcement':
-        return Colors.red;
-      case 'system':
-        return Colors.grey;
+        target = const PurchasesPage();
+        break;
       default:
-        return Colors.blue;
+        target = null;
     }
+
+    final screen = target;
+    if (screen != null) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+      return;
+    }
+
+    // Types sans écran dédié (annonce, système) : le détail s'affiche sur place
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(notification.title, style: const TextStyle(color: Colors.white)),
+        content: Text(notification.body, style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer')),
+        ],
+      ),
+    );
   }
+
 }

@@ -15,6 +15,7 @@ class ApiConfig {
   static const String products = '$baseUrl/products';
   static const String productsFeatured = '$baseUrl/products/featured';
   static const String productsTopSellers = '$baseUrl/products/top-sellers';
+  static const String productsDiscoverRandom = '$baseUrl/products/discover-random';
   static const String productsVerifiedShops = '$baseUrl/products/verified-shops';
   static const String productsGoodDeals = '$baseUrl/products/good-deals';
   static const String productsBranded = '$baseUrl/products/branded';
@@ -66,6 +67,8 @@ class ApiConfig {
   static const String userProfile = '$baseUrl/auth/profile';
   static const String authUploadAvatar = '$baseUrl/auth/upload-avatar';
   static const String userUpdateName = '$baseUrl/user/update-name';
+  static const String userNotificationPrefs = '$baseUrl/user/notification-preferences';
+  static const String userAccount = '$baseUrl/user/account';
   static const String userAvatar = '$baseUrl/auth/avatar';
   static const String userAddresses = '$baseUrl/auth/addresses';
   // --- Support ---

@@ -157,25 +157,24 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
 
   /// Marquer une notification comme lue
   Future<void> markAsRead(int id) async {
+    // Marquage immédiat à l'écran : la notification est considérée comme lue
+    // dès le clic, sans attendre le réseau.
+    final wasUnread = state.notifications.any((n) => n.id == id && !n.isRead);
+    if (!wasUnread) return;
+
+    state = state.copyWith(
+      notifications: state.notifications
+          .map((n) => n.id == id ? n.copyWith(isRead: true) : n)
+          .toList(),
+      unreadCount: state.unreadCount > 0 ? state.unreadCount - 1 : 0,
+    );
+
+    // Puis synchronisation serveur (l'état local est conservé en cas d'échec ;
+    // le serveur fait foi au prochain chargement).
     try {
       await _dio.put('${ApiConfig.notifications}/$id/read');
-
-      // Mise à jour locale
-      final updatedNotifications = state.notifications.map((n) {
-        if (n.id == id && !n.isRead) {
-          return n.copyWith(isRead: true);
-        }
-        return n;
-      }).toList();
-
-      final newUnreadCount = state.unreadCount > 0 ? state.unreadCount - 1 : 0;
-
-      state = state.copyWith(
-        notifications: updatedNotifications,
-        unreadCount: newUnreadCount,
-      );
     } catch (e) {
-      debugPrint('❌ Erreur markAsRead: $e');
+      debugPrint('❌ Erreur markAsRead (sera resynchronisé): $e');
     }
   }
 

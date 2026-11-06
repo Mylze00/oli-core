@@ -76,9 +76,14 @@ class SocketService {
     
     // Ecoute des changements de statut (online/offline) — handler séparé (#9)
     // Ecoute des changements de statut (online/offline) — handler séparé (#9)
-    _socket!.on('user_status', (data) {
+    _socket!.on('user_online', (data) {
        debugPrint("👤 Statut utilisateur changé: $data");
        _onStatusChanged(data);
+    });
+
+    // Ecoute des indicateurs de frappe (typing)
+    _socket!.on('user_typing', (data) {
+       _onUserTyping(data);
     });
 
     // --- WebRTC Incoming Call ---
@@ -187,6 +192,7 @@ class SocketService {
   Function(Map<String, dynamic>)? _messageHandler;
   Function(Map<String, dynamic>)? _statusHandler;
   Function(Map<String, dynamic>)? _notificationHandler;
+  Function(Map<String, dynamic>)? _typingHandler;
 
   /// Enregistrer un callback pour les messages reçus
   VoidCallback onMessage(Function(Map<String, dynamic>) callback) {
@@ -204,6 +210,12 @@ class SocketService {
   VoidCallback onNotification(Function(Map<String, dynamic>) callback) {
     _notificationHandler = callback;
     return () => _notificationHandler = null;
+  }
+  
+  /// Enregistrer un callback pour l'indicateur de frappe
+  VoidCallback onUserTyping(Function(Map<String, dynamic>) callback) {
+    _typingHandler = callback;
+    return () => _typingHandler = null;
   }
   
   // Generic handler for other events
@@ -234,6 +246,12 @@ class SocketService {
   void _onNotificationReceived(dynamic data) {
     if (_notificationHandler != null && data is Map) {
       _notificationHandler!(Map<String, dynamic>.from(data));
+    }
+  }
+
+  void _onUserTyping(dynamic data) {
+    if (_typingHandler != null && data is Map) {
+      _typingHandler!(Map<String, dynamic>.from(data));
     }
   }
 

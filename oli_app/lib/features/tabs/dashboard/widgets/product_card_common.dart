@@ -55,7 +55,7 @@ class DashboardProductCard extends ConsumerWidget {
                         CloudinaryHelper.card(product.images.first),
                         fit: BoxFit.cover,
                         width: double.infinity,
-                        cacheWidth: 130,
+                        cacheWidth: 540,
                         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
                           if (wasSynchronouslyLoaded) return child;
                           return AnimatedOpacity(
@@ -126,6 +126,7 @@ class DashboardProductCard extends ConsumerWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
+                      fontFamily: 'CreatoDisplay',
                       color: cardColor == Colors.white
                           ? Colors.black87
                           : Colors.white70,
@@ -145,6 +146,7 @@ class DashboardProductCard extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
+                          fontFamily: 'CreatoDisplay',
                           color: priceColor,
                           fontWeight: FontWeight.bold,
                           fontSize: priceFontSize,
@@ -270,10 +272,11 @@ class _SellerRatingBadgeState extends State<SellerRatingBadge>
         const SizedBox(width: 2),
         Flexible(
           child: Text(
-            label.isStar ? '${label.text}' : label.text,
+            label.text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
+              fontFamily: 'CreatoDisplay',
               color: label.color,
               fontSize: 8,
               fontWeight: FontWeight.bold,

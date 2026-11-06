@@ -4,7 +4,6 @@ import '../../../../models/product_model.dart';
 import '../../../../app/theme/theme_provider.dart';
 import '../../../../providers/exchange_rate_provider.dart';
 import '../../../../utils/cloudinary_helper.dart';
-import '../../../marketplace/presentation/pages/market_view.dart';
 
 /// Widget réutilisable pour afficher une section horizontale de produits
 /// avec titre, sous-titre, badge et scroll horizontal.
@@ -41,8 +40,6 @@ class HorizontalProductSection extends ConsumerWidget {
     final subtitleColor = isDark ? Colors.white54 : Colors.grey.shade500;
     final containerBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
     final containerBorderColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
-    final chevronBgColor = isDark ? Colors.white12 : Colors.grey.shade200;
-    final chevronIconColor = isDark ? Colors.white70 : Colors.grey.shade600;
     final productNameColor = isDark ? Colors.white70 : Colors.grey.shade600;
     final priceColor = isDark ? badgeColor : const Color(0xFFFF6B6B); // Coral red
 
@@ -81,27 +78,6 @@ class HorizontalProductSection extends ConsumerWidget {
                       style:
                           TextStyle(color: subtitleColor, fontSize: 11)),
                 ],
-              ),
-              GestureDetector(
-                onTap: () {
-                  final keyword =
-                      searchKeyword ?? title.replaceFirst('Sélection : ', '');
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            MarketView(initialSearchQuery: keyword)),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: chevronBgColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.arrow_forward_ios,
-                      color: chevronIconColor, size: 12),
-                ),
               ),
             ],
           ),

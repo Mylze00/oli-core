@@ -222,40 +222,67 @@ class _OliBottomNav extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(40),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              height: 68,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Ombre portée externe
+            Container(
               decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.black.withOpacity(0.50)
-                    : Colors.white.withOpacity(0.88),
                 borderRadius: BorderRadius.circular(40),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.black.withOpacity(0.30)
-                      : Colors.black.withOpacity(0.08),
-                  width: 1,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
+                    spreadRadius: -5,
+                  )
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(40),
+                child: BackdropFilter(
+                  // Flou très intense typique d'Apple
+                  filter: ImageFilter.blur(sigmaX: 40.0, sigmaY: 40.0),
+                  child: Container(
+                    height: 72,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(40),
+                      color: isDark ? Colors.black.withOpacity(0.25) : Colors.white.withOpacity(0.35),
+                      // L'effet "reflet de verre" sur le dessus
+                      border: Border.all(
+                        width: 1.0,
+                        color: isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.6),
+                      ),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withOpacity(isDark ? 0.15 : 0.4),
+                          Colors.white.withOpacity(isDark ? 0.02 : 0.1),
+                          Colors.black.withOpacity(isDark ? 0.1 : 0.0),
+                        ],
+                        stops: const [0.0, 0.5, 1.0],
+                      ),
+                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: items.map((item) {
+                      if (item.isSell) {
+                        return _SellButton(label: item.label, onTap: () => onTap(item.barIndex));
+                      }
+                      final isSelected = item.pageIndex == currentIndex;
+                      return _NavTabItem(
+                        item: item,
+                        isSelected: isSelected,
+                        onTap: () => onTap(item.barIndex),
+                      );
+                    }).toList(),
+                  ),
+                  ),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: items.map((item) {
-                  if (item.isSell) {
-                    return _SellButton(label: item.label, onTap: () => onTap(item.barIndex));
-                  }
-                  final isSelected = item.pageIndex == currentIndex;
-                  return _NavTabItem(
-                    item: item,
-                    isSelected: isSelected,
-                    onTap: () => onTap(item.barIndex),
-                  );
-                }).toList(),
-              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -306,16 +333,32 @@ class _NavTabItem extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
+          // Si sélectionné, on applique un effet de "pill" interne en verre
           color: isSelected
               ? (isDarkNav
-                  ? Colors.white.withOpacity(0.12)
-                  : Colors.black.withOpacity(0.08))
+                  ? Colors.white.withOpacity(0.15)
+                  : Colors.black.withOpacity(0.06))
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(30),
+          border: isSelected
+              ? Border.all(
+                  color: isDarkNav ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.4),
+                  width: 0.5,
+                )
+              : Border.all(color: Colors.transparent, width: 0.5),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: isDarkNav ? Colors.black26 : Colors.black12,
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : [],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

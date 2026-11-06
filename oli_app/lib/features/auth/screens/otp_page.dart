@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/auth_controller.dart';
 import 'package:oli_app/features/home/home_page.dart';
+import 'welcome_policy_page.dart';
+import '../../../core/storage/secure_storage_service.dart';
 
 class OtpPage extends ConsumerStatefulWidget {
   final String phone;
@@ -82,7 +84,15 @@ class _OtpPageState extends ConsumerState<OtpPage>
 
     if (otp.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: const Text('Entrez le code')),
+        const SnackBar(content: Text('Entrez le code')),
+      );
+      return;
+    }
+
+    // Bug #12 fix: Valider que le code OTP a bien 6 chiffres avant d'envoyer
+    if (otp.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Le code doit contenir 6 chiffres')),
       );
       return;
     }
@@ -97,11 +107,26 @@ class _OtpPageState extends ConsumerState<OtpPage>
     if (!mounted) return;
 
     if (success) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => HomePage()),
-        (_) => false,
-      );
+      final storage = ref.read(secureStorageProvider);
+      final isCompleted = await storage.isOnboardingCompleted(widget.phone);
+
+      if (!mounted) return;
+
+      if (!isCompleted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => WelcomePolicyPage(phone: widget.phone),
+          ),
+          (_) => false,
+        );
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+          (_) => false,
+        );
+      }
     } else {
       final error = ref.read(authControllerProvider).error;
       if (error != null) {

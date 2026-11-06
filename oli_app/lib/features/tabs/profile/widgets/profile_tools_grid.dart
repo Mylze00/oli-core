@@ -7,6 +7,7 @@ import '../../../../app/theme/theme_provider.dart';
 import '../../../settings/screens/settings_page.dart';
 import '../../../bank/screens/bank_portal_screen.dart';
 import '../../../auth/providers/auth_controller.dart';
+import '../../../auth/screens/login_page.dart';
 
 class ProfileToolsGrid extends ConsumerWidget {
   final Color cardColor;
@@ -166,9 +167,38 @@ class ProfileToolsGrid extends ConsumerWidget {
           width: double.infinity,
           height: 50,
           child: ElevatedButton.icon(
-            onPressed: () {
-              // Appeler la fonction logout() qui va supprimer le token et rediriger
-              ref.read(authControllerProvider.notifier).logout();
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text("Déconnexion"),
+                  content: const Text("Êtes-vous sûr de vouloir vous déconnecter ?"),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text("Annuler"),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text(
+                        "Se déconnecter",
+                        style: TextStyle(color: Colors.redAccent),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                // Déconnexion complète (FCM, stockage local, reset de l'état auth)
+                await ref.read(authControllerProvider.notifier).logout();
+                if (context.mounted) {
+                  Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (route) => false,
+                  );
+                }
+              }
             },
             icon: const Icon(Icons.logout, color: Colors.white),
             label: const Text(

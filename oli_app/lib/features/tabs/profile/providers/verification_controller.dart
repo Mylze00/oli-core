@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../../config/api_config.dart';
 import '../../../auth/providers/auth_controller.dart';
-import '../../../../core/storage/secure_storage_service.dart';
+import '../../../../core/router/network/dio_provider.dart';
 
 final verificationControllerProvider = StateNotifierProvider<VerificationController, AsyncValue<void>>((ref) {
   return VerificationController(ref);
@@ -26,11 +26,8 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
   }) async {
     state = const AsyncValue.loading();
     try {
-      final dio = Dio();
-      final storage = SecureStorageService();
-      final token = await storage.getToken();
-
-      dio.options.headers['Authorization'] = 'Bearer $token';
+      // Bug #3 fix: Use dioProvider (token auto + timeout configured)
+      final dio = ref.read(dioProvider);
 
       // Préparer le multipart form avec bytes (compatible web + mobile)
       final formMap = <String, dynamic>{
@@ -77,12 +74,8 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
   /// Vérifier l'état de la demande en cours
   Future<Map<String, dynamic>?> checkRequestStatus() async {
     try {
-      final dio = Dio();
-      final storage = SecureStorageService();
-      final token = await storage.getToken();
-
-      dio.options.headers['Authorization'] = 'Bearer $token';
-
+      // Bug #3 fix: Use dioProvider (token auto + timeout configured)
+      final dio = ref.read(dioProvider);
       final response = await dio.get('${ApiConfig.baseUrl}/api/subscription/request/status');
 
       if (response.statusCode == 200) {
@@ -98,11 +91,8 @@ class VerificationController extends StateNotifier<AsyncValue<void>> {
   Future<bool> upgradePlan(String plan, String paymentMethod) async {
     state = const AsyncValue.loading();
     try {
-      final dio = Dio();
-      final storage = SecureStorageService();
-      final token = await storage.getToken();
-
-      dio.options.headers['Authorization'] = 'Bearer $token';
+      // Bug #3 fix: Use dioProvider (token auto + timeout configured)
+      final dio = ref.read(dioProvider);
 
       final response = await dio.post(
         '${ApiConfig.baseUrl}/api/subscription/upgrade',

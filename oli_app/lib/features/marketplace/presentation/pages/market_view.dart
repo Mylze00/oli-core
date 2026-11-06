@@ -6,9 +6,7 @@ import '../../../../models/product_model.dart';
 import '../../../../providers/exchange_rate_provider.dart';
 import '../../providers/market_provider.dart';
 import '../pages/product_details_page.dart';
-import '../widgets/market_product_card.dart';
 import '../widgets/market_spotlight_carousel.dart';
-import '../widgets/market_secondhand_carousel.dart';
 import '../../../../app/theme/theme_provider.dart';
 import '../../../tabs/dashboard/widgets/verified_shops_carousel.dart';
 import '../../../tabs/dashboard/widgets/product_sections.dart';
@@ -187,14 +185,16 @@ class _MarketViewState extends ConsumerState<MarketView> {
           final filtered = _filterProducts(allProducts);
 
           // Sections — filtered est déjà mélangé et diversifié
-          final recentProducts = filtered.take(8).toList();
-          final allGridProducts = filtered.length > 8 ? filtered.skip(8).toList() : <Product>[];
-          // 3 produits avant Spotlight, puis Seconde Main après le 9e (3+6)
-          final gridBefore = allGridProducts.take(3).toList();
-          final gridAfterAll = allGridProducts.length > 3 ? allGridProducts.skip(3).toList() : <Product>[];
-          // Seconde Main s'insère après 6 produits du gridAfter (3+6 = 9e produit)
-          final gridAfterA = gridAfterAll.take(6).toList();
-          final gridAfterB = gridAfterAll.length > 6 ? gridAfterAll.skip(6).toList() : <Product>[];
+          // Affichage toujours par paires : un produit isolé en fin de liste n'est pas affiché
+          List<Product> evenOnly(List<Product> list) =>
+              list.length.isEven ? list : list.sublist(0, list.length - 1);
+
+          final recentProducts = evenOnly(filtered.take(8).toList());
+          final allGridProducts = filtered.length > 8 ? evenOnly(filtered.skip(8).toList()) : <Product>[];
+          // 4 produits, puis À la une (Spotlight), puis le reste
+          final gridBefore = allGridProducts.take(4).toList();
+          final gridAfterA = allGridProducts.length > 4 ? allGridProducts.skip(4).toList() : <Product>[];
+          final gridAfterB = <Product>[];
 
 
 
@@ -268,69 +268,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
                       ),
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 200,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: recentProducts.length,
-                        itemBuilder: (context, index) {
-                          final product = recentProducts[index];
-                          return GestureDetector(
-                            onTap: () => _navigateToProduct(product),
-                            child: Container(
-                              width: 150,
-                              margin: const EdgeInsets.only(right: 10),
-                              child: MarketProductCard(product: product),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
+                  TopRankingGrid(products: recentProducts, startIndex: 0),
                 ],
-
-                // ── 5. SÉPARATEUR ──
-                if (allGridProducts.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: Row(
-                        children: [
-                          Container(width: 3, height: 18, decoration: BoxDecoration(color: Colors.tealAccent.shade700, borderRadius: BorderRadius.circular(2))),
-                          const SizedBox(width: 8),
-                          Text('Explorer', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(width: 8),
-                          Text('🛍️', style: TextStyle(fontSize: 14)),
-                        ],
-                      ),
-                    ),
-                  ),
 
                 // ── 6a. GRILLE PRODUITS (6 premiers) ──
                 if (gridBefore.isNotEmpty)
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        childAspectRatio: 0.65,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final product = gridBefore[index];
-                          return GestureDetector(
-                            onTap: () => _navigateToProduct(product),
-                            child: MarketProductCard(product: product),
-                          );
-                        },
-                        childCount: gridBefore.length,
-                      ),
-                    ),
-                  ),
+                  TopRankingGrid(products: gridBefore, startIndex: 0),
 
                 // ── 7. SPOTLIGHT CAROUSEL ── (produits non encore affichés)
                 if (filtered.length >= 4)
@@ -340,56 +283,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
                 // ── 6b. GRILLE (6 produits après Spotlight → total = 9) ──
                 if (gridAfterA.isNotEmpty)
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        childAspectRatio: 0.65,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final product = gridAfterA[index];
-                          return GestureDetector(
-                            onTap: () => _navigateToProduct(product),
-                            child: MarketProductCard(product: product),
-                          );
-                        },
-                        childCount: gridAfterA.length,
-                      ),
-                    ),
-                  ),
+                  TopRankingGrid(products: gridAfterA, startIndex: 0),
 
-                // ── 8. SECONDE MAIN ── après le 9e produit (3 + 6)
-                SliverToBoxAdapter(
-                  child: MarketSecondhandCarousel(products: filtered),
-                ),
 
                 // ── 6c. GRILLE (reste) ──
                 if (gridAfterB.isNotEmpty)
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        childAspectRatio: 0.65,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final product = gridAfterB[index];
-                          return GestureDetector(
-                            onTap: () => _navigateToProduct(product),
-                            child: MarketProductCard(product: product),
-                          );
-                        },
-                        childCount: gridAfterB.length,
-                      ),
-                    ),
-                  ),
+                  TopRankingGrid(products: gridAfterB, startIndex: 0),
 
                 // ── EMPTY STATE ──
                 if (filtered.isEmpty)

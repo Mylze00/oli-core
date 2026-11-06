@@ -7,9 +7,37 @@ import '../providers/orders_provider.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../widgets/order_progress_bar.dart';
 
+/// Filtres de la page « Mes Achats ».
+/// Les définitions de statut sont celles des compteurs du profil (dashboard_section.dart),
+/// pour que le nombre affiché sur la tuile corresponde à la liste filtrée.
+enum PurchaseFilter {
+  all('Toutes'),
+  inProgress('En cours'),
+  delivered('Livrées');
+
+  final String label;
+  const PurchaseFilter(this.label);
+
+  static const List<String> inProgressStatuses = ['paid', 'processing', 'shipped'];
+
+  bool matches(String status) {
+    switch (this) {
+      case PurchaseFilter.all:
+        return true;
+      case PurchaseFilter.inProgress:
+        return inProgressStatuses.contains(status);
+      case PurchaseFilter.delivered:
+        return status == 'delivered';
+    }
+  }
+}
+
 /// Page "Mes Achats" - Historique des commandes (Reel)
 class PurchasesPage extends ConsumerStatefulWidget {
-  const PurchasesPage({super.key});
+  /// Filtre sélectionné à l'ouverture (ex: « En Cours » ou « Livrées » depuis le profil).
+  final PurchaseFilter initialFilter;
+
+  const PurchasesPage({super.key, this.initialFilter = PurchaseFilter.all});
 
   @override
   ConsumerState<PurchasesPage> createState() => _PurchasesPageState();
@@ -18,10 +46,12 @@ class PurchasesPage extends ConsumerStatefulWidget {
 class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   int? _expandedOrderId;
   Timer? _pollTimer;
+  late PurchaseFilter _filter;
 
   @override
   void initState() {
     super.initState();
+    _filter = widget.initialFilter;
     // Auto-refresh toutes les 10s
     _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted) ref.invalidate(ordersProvider);
@@ -50,27 +80,81 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Erreur: $err', style: const TextStyle(color: Colors.red))),
         data: (orders) {
-          if (orders.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey.shade700),
-                  const SizedBox(height: 16),
-                  Text('Aucune commande', style: TextStyle(color: Colors.grey.shade500, fontSize: 16)),
-                ],
-              ),
-            );
-          }
+          final filtered = orders.where((o) => _filter.matches(o.status)).toList();
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: orders.length,
-            itemBuilder: (context, index) => _buildOrderCard(orders[index]),
+          return Column(
+            children: [
+              _buildFilterBar(orders),
+              Expanded(
+                child: filtered.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey.shade700),
+                            const SizedBox(height: 16),
+                            Text(
+                              _emptyMessage(),
+                              style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) => _buildOrderCard(filtered[index]),
+                      ),
+              ),
+            ],
           );
         },
       ),
     );
+  }
+
+  /// Barre de filtres avec compteur par catégorie.
+  Widget _buildFilterBar(List<Order> orders) {
+    return SizedBox(
+      height: 52,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        children: PurchaseFilter.values.map((f) {
+          final count = orders.where((o) => f.matches(o.status)).length;
+          final selected = f == _filter;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text('${f.label} ($count)'),
+              selected: selected,
+              onSelected: (_) => setState(() {
+                _filter = f;
+                _expandedOrderId = null;
+              }),
+              selectedColor: const Color(0xFF1E7DBA),
+              backgroundColor: const Color(0xFF1A1A1A),
+              labelStyle: TextStyle(
+                color: selected ? Colors.white : Colors.grey.shade400,
+                fontWeight: FontWeight.w600,
+              ),
+              side: BorderSide.none,
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  String _emptyMessage() {
+    switch (_filter) {
+      case PurchaseFilter.all:
+        return 'Aucune commande';
+      case PurchaseFilter.inProgress:
+        return 'Aucune commande en cours';
+      case PurchaseFilter.delivered:
+        return 'Aucune commande livrée';
+    }
   }
 
   Widget _buildOrderCard(Order order) {

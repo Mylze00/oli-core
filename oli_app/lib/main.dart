@@ -8,10 +8,12 @@ import 'features/home/home_page.dart';
 import 'features/auth/providers/auth_controller.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/hive_cache_service.dart';
+import 'core/services/database_helper.dart'; // SQLite
 import 'app/theme/theme_provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'features/chat/call_screen.dart';
 import 'firebase_options.dart';
+import 'core/router/network/dio_provider.dart';
 
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -38,6 +40,14 @@ void main() async {
   
   // Initialiser le cache hors-ligne
   await HiveCacheService.init(); // [CACHE]
+
+  // Initialiser la base de données SQLite (Migration SharedPreferences incluse)
+  try {
+    await DatabaseHelper.instance.database;
+  } catch (e) {
+    debugPrint('⚠️ Erreur critique initialisation SQLite : $e');
+  }
+  
   
   // Initialiser Firebase
   await Firebase.initializeApp(
@@ -65,10 +75,20 @@ void main() async {
       path: 'assets/translations',
       startLocale: const Locale('fr'),
       fallbackLocale: const Locale('fr'),
-      child: const ProviderScope(child: OliApp()),
+      child: ProviderScope(
+        // Bug #1 fix: Override forceLogoutCallbackProvider pour que dioProvider
+        // puisse déclencher la déconnexion sans dépendance circulaire.
+        overrides: [
+          forceLogoutCallbackProvider.overrideWith((ref) {
+            return () => ref.read(authControllerProvider.notifier).forceLogout();
+          }),
+        ],
+        child: const OliApp(),
+      ),
     ),
   );
 }
+
 
 class OliApp extends ConsumerWidget {
   const OliApp({super.key});
@@ -133,17 +153,22 @@ class SplashWrapper extends StatefulWidget {
 
 class _SplashWrapperState extends State<SplashWrapper>
     with TickerProviderStateMixin {
-  bool _minDelayPassed = false;
   late AnimationController _breatheCtrl;
   late Animation<double> _breatheAnim;
 
   late AnimationController _zoomCtrl;
   late Animation<double> _zoomAnim;
+  late Animation<double> _sloganOpacityAnim;
+
+  bool _minDelayPassed = false;
+  bool _isTransitioning = false;
+  bool _splashDone = false;
 
   @override
   void initState() {
     super.initState();
 
+    // 1. Effet de respiration continu (inchangé)
     _breatheCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -153,26 +178,70 @@ class _SplashWrapperState extends State<SplashWrapper>
     );
     _breatheCtrl.repeat(reverse: true);
 
+    // 2. Effet de zoom élastique : anticipation puis explosion vers l'avant (Traversée directe 3-B)
     _zoomCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 750),
     );
     _zoomAnim = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.65).chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 35.0, // Rétraction pendant ~300ms
+        tween: Tween<double>(begin: 1.0, end: 0.75).chain(CurveTween(curve: Curves.easeInOutCubic)),
+        weight: 28.0, // Phase 1 : Léger recul d'anticipation (~210ms)
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.65, end: 35.0).chain(CurveTween(curve: Curves.easeInExpo)),
-        weight: 65.0, // Zoom avant géant
+        tween: Tween<double>(begin: 0.75, end: 26.0).chain(CurveTween(curve: Curves.easeInQuart)),
+        weight: 72.0, // Phase 2 : Explosion continue vers l'avant (~540ms)
       ),
     ]).animate(_zoomCtrl);
 
-    // Attente de 3 secondes (vérification connexion arrière-plan implicite)
-    Future.delayed(const Duration(seconds: 3), () {
+    // 3. Disparition rapide du slogan dès le début de l'anticipation
+    _sloganOpacityAnim = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _zoomCtrl,
+        curve: const Interval(0.0, 0.25, curve: Curves.easeOut),
+      ),
+    );
+
+    // Délai minimal d'affichage du branding (1.5 seconde)
+    Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) {
-        _zoomCtrl.forward().then((_) {
-          if (mounted) setState(() => _minDelayPassed = true);
+        _minDelayPassed = true;
+        _checkAndTriggerTransition();
+      }
+    });
+
+    // Sécurité maximale : après 4.5 secondes, on débloque quoi qu'il arrive
+    Future.delayed(const Duration(milliseconds: 4500), () {
+      if (mounted && !_isTransitioning) {
+        _triggerZoomAndExit();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant SplashWrapper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Dès que la session finit d'être vérifiée en arrière-plan, vérifier si on peut lancer la transition
+    if (!widget.authState.isCheckingSession) {
+      _checkAndTriggerTransition();
+    }
+  }
+
+  void _checkAndTriggerTransition() {
+    if (_minDelayPassed && !widget.authState.isCheckingSession && !_isTransitioning) {
+      _triggerZoomAndExit();
+    }
+  }
+
+  void _triggerZoomAndExit() {
+    if (_isTransitioning || !mounted) return;
+    _isTransitioning = true;
+    _breatheCtrl.stop(); // Stoppe la respiration pour consacrer toute la fluidité au zoom
+
+    _zoomCtrl.forward().then((_) {
+      if (mounted) {
+        setState(() {
+          _splashDone = true;
         });
       }
     });
@@ -185,77 +254,88 @@ class _SplashWrapperState extends State<SplashWrapper>
     super.dispose();
   }
 
-  bool get _readyToLeave =>
-      _minDelayPassed && !widget.authState.isCheckingSession;
-
   @override
   Widget build(BuildContext context) {
-    if (!_readyToLeave) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            // Logo centré
-            Center(
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_breatheCtrl, _zoomCtrl]),
-                builder: (context, child) {
-                  // Si l'animation de transition (zoom) a démarré, elle prend le dessus
-                  final scale = _zoomCtrl.isAnimating || _zoomCtrl.isCompleted
-                      ? _zoomAnim.value
-                      : _breatheAnim.value;
-                  return Transform.scale(
-                    scale: scale,
-                    child: child,
-                  );
-                },
-                child: Hero(
-                  tag: 'oli_logo',
-                  child: SvgPicture.asset(
-                    'assets/images/logo - Copie (1).svg',
-                    width: 140,
-                    height: 140,
-                  ),
-                ),
-              ),
-            ),
-            // Texte en bas de page
-            Positioned(
-              bottom: 60,
-              left: 0,
-              right: 0,
-              child: AnimatedBuilder(
-                animation: _zoomCtrl,
-                builder: (context, child) {
-                  // Le texte disparait rapidement dès que le zoom démarre
-                  double opacity = 1.0 - (_zoomCtrl.value * 2.0);
-                  if (opacity < 0) opacity = 0;
-                  return Opacity(
-                    opacity: opacity,
-                    child: child,
-                  );
-                },
-                child: const Text(
-                  'Simple, Rapide, Sûr',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'LetterMagic',
-                    fontSize: 24,
-                    color: Color.fromRGBO(255, 255, 255, 0.8),
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
+    final destination = widget.authState.isAuthenticated
+        ? const HomePage()
+        : const LoginPage();
+
+    if (_splashDone) {
+      return destination;
     }
 
-    // Splash terminé
-    if (widget.authState.isAuthenticated) {
-      return const HomePage();
-    }
-    return const LoginPage();
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Pré-chargement en arrière-plan de HomePage/LoginPage PENDANT la respiration
+          // Élimine totalement le gel de 1 à 2 secondes à la fin du zoom
+          if (!widget.authState.isCheckingSession)
+            destination,
+
+          // 2. Écran Splash noir avec le logo
+          Container(
+            color: Colors.black,
+            child: Stack(
+              children: [
+                // Logo centré avec zoom continu sans jamais disparaître
+                Center(
+                  child: AnimatedBuilder(
+                    animation: Listenable.merge([_breatheCtrl, _zoomCtrl]),
+                    builder: (context, child) {
+                      final scale = _isTransitioning
+                          ? _zoomAnim.value
+                          : _breatheAnim.value;
+                      return Transform.scale(
+                        scale: scale,
+                        child: child,
+                      );
+                    },
+                    child: Hero(
+                      tag: 'oli_logo',
+                      child: SvgPicture.asset(
+                        'assets/images/logo - Copie (1).svg',
+                        width: 140,
+                        height: 140,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Slogan en bas qui s'efface immédiatement dès le début du zoom
+                Positioned(
+                  bottom: 60,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedBuilder(
+                    animation: _zoomCtrl,
+                    builder: (context, child) {
+                      final opacity = _isTransitioning
+                          ? _sloganOpacityAnim.value
+                          : 1.0;
+                      return Opacity(
+                        opacity: opacity,
+                        child: child,
+                      );
+                    },
+                    child: const Text(
+                      'Simple, Rapide, Sûr',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'LetterMagic',
+                        fontSize: 24,
+                        color: Color.fromRGBO(255, 255, 255, 0.8),
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

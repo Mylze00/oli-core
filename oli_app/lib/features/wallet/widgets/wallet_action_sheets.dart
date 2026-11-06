@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,7 +37,8 @@ class RechargerSheet extends ConsumerStatefulWidget {
 }
 
 class _RechargerSheetState extends ConsumerState<RechargerSheet> {
-  String? _method; // 'mobile' | 'card'
+  // Recharge par Mobile Money uniquement : la carte bancaire n'est pas disponible.
+  String? _method = 'mobile'; // 'mobile' (la branche 'card' est inactive)
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +106,8 @@ class RetirerSheet extends ConsumerStatefulWidget {
 }
 
 class _RetirerSheetState extends ConsumerState<RetirerSheet> {
-  String? _method;
+  // Retrait par Mobile Money uniquement : pas de retrait vers carte.
+  String? _method = 'mobile';
 
   @override
   Widget build(BuildContext context) {
@@ -781,6 +784,21 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Scanner QR pour l'envoi
 // ─────────────────────────────────────────────────────────────────────────────
+/// Extrait l'identifiant (numéro de téléphone) d'un lien QR `oli://pay?id=…`
+/// ou d'un numéro saisi directement (0812… ou +243…). Renvoie null si invalide.
+String? _identifierFrom(String typed) {
+  final uri = Uri.tryParse(typed);
+  if (uri != null && uri.scheme == 'oli') {
+    if (uri.host == 'pay') return uri.queryParameters['id']?.replaceAll(' ', '+');
+    if (uri.host == 'transfer') return uri.queryParameters['phone']?.replaceAll(' ', '+');
+    return null;
+  }
+  var s = typed.replaceAll(RegExp(r'[\s\-().]'), '');
+  if (s.startsWith('00')) s = '+${s.substring(2)}';
+  if (s.startsWith('0')) s = '+243${s.substring(1)}';
+  return RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(s) ? s : null;
+}
+
 class _TransferQrScanner extends ConsumerStatefulWidget {
   final WidgetRef ref;
   const _TransferQrScanner({required this.ref});
@@ -797,6 +815,8 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
   String? _error;
   bool _hasPermission = false;
   bool _isPermissionChecked = false;
+  bool _scanStarted = false; // Web/iOS : la caméra démarre après un tap
+  int _retry = 0; // Incrémenté pour relancer le lecteur
 
   @override
   void initState() {
@@ -805,6 +825,16 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
   }
 
   Future<void> _checkCameraPermission() async {
+    if (kIsWeb) {
+      // Sur le web, le navigateur demande l'autorisation au démarrage du lecteur
+      if (mounted) {
+        setState(() {
+          _hasPermission = true;
+          _isPermissionChecked = true;
+        });
+      }
+      return;
+    }
     final status = await Permission.camera.request();
     if (mounted) {
       setState(() {
@@ -824,22 +854,12 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
   }
 
   void _handleScannedQr(String raw) async {
+    final identifier = _identifierFrom(raw.trim());
+    if (identifier == null) {
+      setState(() => _error = 'QR code ou numéro invalide');
+      return;
+    }
     try {
-      final uri = Uri.parse(raw);
-      String? identifier;
-      
-      if (uri.scheme == 'oli' && uri.host == 'pay') {
-        identifier = uri.queryParameters['id'];
-      } else if (uri.scheme == 'oli' && uri.host == 'transfer') {
-        // Rétrocompatibilité avec les anciens QR codes
-        identifier = uri.queryParameters['phone'];
-      }
-
-      if (identifier == null || identifier.isEmpty) {
-        setState(() => _error = 'QR code invalide');
-        return;
-      }
-
       setState(() {
         _isLoading = true;
         _error = null;
@@ -929,8 +949,47 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
                 children: [
                   if (!_isPermissionChecked)
                     const CircularProgressIndicator(color: Color(0xFF7C3AED))
+                  else if (_hasPermission && kIsWeb && !_scanStarted)
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.qr_code_scanner_rounded, color: Colors.white54, size: 40),
+                        const SizedBox(height: 10),
+                        TextButton(
+                          onPressed: () => setState(() => _scanStarted = true),
+                          child: const Text('Activer la caméra', style: TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    )
                   else if (_hasPermission)
                     MobileScanner(
+                      key: ValueKey('scanner-$_retry'),
+                      errorBuilder: (context, error, child) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 40),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'Caméra indisponible. Autorisez la caméra dans le navigateur, puis réessayez, ou utilisez la saisie du numéro.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Détail : ${error.errorCode.name}',
+                                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                              ),
+                              TextButton(
+                                onPressed: () => setState(() => _retry++),
+                                child: const Text('Réessayer', style: TextStyle(color: Color(0xFF7C3AED))),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       onDetect: (capture) {
                         final List<Barcode> barcodes = capture.barcodes;
                         for (final barcode in barcodes) {
@@ -976,7 +1035,7 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
             const SizedBox(height: 12),
             // Champ manuel (fallback / dev)  
             _GlassField(
-              hint: 'Ou saisir le lien QR manuellement (dev)',
+              hint: 'Ou saisir le numéro du destinataire',
               icon: Icons.link,
               onSubmitted: _handleScannedQr,
             ),

@@ -5,6 +5,7 @@ import 'dart:async';
 import '../models/video_sale_model.dart';
 import '../providers/video_feed_provider.dart';
 import 'product_bottom_sheet.dart';
+import '../../../utils/cloudinary_helper.dart';
 
 /// Carte vidéo plein écran style TikTok
 class VideoPlayerCard extends ConsumerStatefulWidget {
@@ -321,63 +322,123 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
 
         const SizedBox(height: 12),
 
-        // Bouton d'achat lié au produit
-        if (video.productId != null)
-          GestureDetector(
-            onTap: () => _showProductSheet(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6D00),
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFF6D00).withOpacity(0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      video.productName ?? 'Voir le produit',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (video.productPrice != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '\$${video.productPrice!.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
+        // Vignette produit + bouton « Acheter » (présentation plateformes de live shopping)
+        if (video.productId != null) ...[
+          _buildProductMiniCard(),
+          const SizedBox(height: 10),
+          _buildBuyButton(),
+        ],
+      ],
+    );
+  }
+
+  /// Vignette : image du produit, nom et prix (ouvre la fiche produit au tap).
+  Widget _buildProductMiniCard() {
+    final video = widget.video;
+    final image = (video.productImages != null && video.productImages!.isNotEmpty)
+        ? video.productImages!.first
+        : null;
+    return GestureDetector(
+      onTap: _showProductSheet,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.55),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child: image == null
+                    ? const ColoredBox(
+                        color: Color(0xFF222222),
+                        child: Icon(Icons.image, color: Colors.white38),
+                      )
+                    : Image.network(
+                        CloudinaryHelper.card(image),
+                        fit: BoxFit.cover,
+                        cacheWidth: 180,
+                        errorBuilder: (_, __, ___) => const ColoredBox(
+                          color: Color(0xFF222222),
+                          child: Icon(Icons.broken_image, color: Colors.white38),
                         ),
                       ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Produit en vedette',
+                    style: TextStyle(color: Colors.white54, fontSize: 10),
+                  ),
+                  Text(
+                    video.productName ?? 'Produit',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  if (video.productPrice != null)
+                    Text(
+                      '\$${video.productPrice!.toStringAsFixed(2)}',
+                      style: const TextStyle(color: Color(0xFFFFB74D), fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                  ],
                 ],
               ),
             ),
-          ),
-      ],
+            const Icon(Icons.chevron_right_rounded, color: Colors.white70),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Bouton « Acheter » pleine largeur, ouvre la fiche d'achat.
+  Widget _buildBuyButton() {
+    final video = widget.video;
+    return GestureDetector(
+      onTap: _showProductSheet,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF6D00),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF6D00).withOpacity(0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            const Text(
+              'Acheter',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            if (video.productPrice != null) ...[
+              const SizedBox(width: 10),
+              Text(
+                '\$${video.productPrice!.toStringAsFixed(2)}',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 /// Modèle de notification
 class NotificationModel {
   final int id;
@@ -77,13 +78,18 @@ class NotificationModel {
     );
   }
 
-  /// Obtenir l'icône selon le type
+  /// Emoji — conservé pour compatibilité (FCM, anciens écrans).
   String get icon {
     switch (type) {
       case 'message':
         return '💬';
+      case 'call':
+        return '📞';
       case 'order':
         return '📦';
+      case 'wallet':
+      case 'wallet_deposit':
+        return '💰';
       case 'offer':
         return '🎉';
       case 'announcement':
@@ -92,6 +98,52 @@ class NotificationModel {
         return '⚙️';
       default:
         return '🔔';
+    }
+  }
+
+  /// Icône (style iOS : glyphe blanc sur pastille colorée arrondie).
+  IconData get iconData {
+    switch (type) {
+      case 'message':
+        return Icons.chat_bubble_rounded;
+      case 'call':
+        return Icons.phone_rounded;
+      case 'order':
+        return Icons.local_shipping_rounded;
+      case 'wallet':
+      case 'wallet_deposit':
+        return Icons.account_balance_wallet_rounded;
+      case 'offer':
+        return Icons.local_offer_rounded;
+      case 'announcement':
+        return Icons.campaign_rounded;
+      case 'system':
+        return Icons.settings_rounded;
+      default:
+        return Icons.notifications_rounded;
+    }
+  }
+
+  /// Couleur de la pastille (palette iOS).
+  Color get iconColor {
+    switch (type) {
+      case 'message':
+        return const Color(0xFF34C759); // vert iOS
+      case 'call':
+        return const Color(0xFF007AFF); // bleu iOS
+      case 'order':
+        return const Color(0xFFFF9500); // orange iOS
+      case 'wallet':
+      case 'wallet_deposit':
+        return const Color(0xFF30B0C7); // cyan iOS
+      case 'offer':
+        return const Color(0xFFAF52DE); // violet iOS
+      case 'announcement':
+        return const Color(0xFFFF3B30); // rouge iOS
+      case 'system':
+        return const Color(0xFF8E8E93); // gris iOS
+      default:
+        return const Color(0xFFFF3B30);
     }
   }
 

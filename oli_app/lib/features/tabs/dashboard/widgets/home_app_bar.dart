@@ -39,37 +39,55 @@ class HomeAppBar extends ConsumerWidget {
     return SliverAppBar(
       pinned: true,
       floating: false,
+      toolbarHeight: 76, // Augmentation pour éviter le chevauchement
       backgroundColor: isDark ? Colors.black : Colors.white,
       shadowColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      title: GestureDetector(
-        onTap: onSwitchToProfile,
-        behavior: HitTestBehavior.opaque,
+      title: Padding(
+        padding: const EdgeInsets.only(top: 20.0), // Pousse le contenu vers le bas
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            AutoRefreshAvatar(
-              avatarUrl: authState.userData?['avatar_url'],
-              size: 32,
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                authState.userData?['name'] ?? 'Utilisateur',
-                style: TextStyle(
-                color: isDark ? Colors.white : Colors.black87, fontSize: 12),
-                overflow: TextOverflow.ellipsis,
+            GestureDetector(
+              onTap: onSwitchToProfile,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AutoRefreshAvatar(
+                    avatarUrl: authState.userData?['avatar_url'],
+                    size: 32,
+                  ),
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 70),
+                    child: Text(
+                      authState.userData?['name'] ?? 'Utilisateur',
+                      style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black87, fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  // Badge de certification
+                  if (authState.userData != null && VerificationBadge.fromUser(authState.userData!) != null) ...[
+                    const SizedBox(width: 4),
+                    VerificationBadge(
+                      type: VerificationBadge.fromUser(authState.userData!)!,
+                      size: 16,
+                    ),
+                  ],
+                ],
               ),
             ),
-            // Badge de certification
-            if (authState.userData != null && VerificationBadge.fromUser(authState.userData!) != null) ...[
-              const SizedBox(width: 4),
-              VerificationBadge(
-                type: VerificationBadge.fromUser(authState.userData!)!,
-                size: 16,
+            // Le logo est maintenant dans le même conteneur que le titre et les actions pour éviter tout chevauchement
+            Expanded(
+              child: Center(
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  height: 38,
+                ),
               ),
-            ],
+            ),
           ],
         ),
       ),
@@ -103,19 +121,6 @@ class HomeAppBar extends ConsumerWidget {
               ),
             ),
           ),
-          // Logo toujours visible
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 5.0),
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  height: 42,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
       bottom: PreferredSize(
@@ -127,11 +132,11 @@ class HomeAppBar extends ConsumerWidget {
         ),
       ),
       actions: [
-        const Padding(
-          padding: EdgeInsets.only(right: 8.0),
+        Padding(
+          padding: const EdgeInsets.only(top: 20.0, right: 8.0),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: [
+            children: const [
               NetworkStatusIndicator(),
               SizedBox(width: 6),
               CurrencySelectorWidget(),
@@ -139,70 +144,76 @@ class HomeAppBar extends ConsumerWidget {
           ),
         ),
         // Bouton bascule thème clair / sombre
-        Consumer(
-          builder: (context, ref, _) {
-            final isDark = ref.watch(themeProvider);
-            return IconButton(
-              tooltip: isDark ? 'Passer en mode clair' : 'Passer en mode sombre',
-              icon: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, anim) => RotationTransition(turns: anim, child: child),
-                child: Icon(
-                  isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                  key: ValueKey(isDark),
-                  color: isDark ? Colors.white : Colors.black87,
-                  size: 24,
+        Padding(
+          padding: const EdgeInsets.only(top: 20.0),
+          child: Consumer(
+            builder: (context, ref, _) {
+              final isDark = ref.watch(themeProvider);
+              return IconButton(
+                tooltip: isDark ? 'Passer en mode clair' : 'Passer en mode sombre',
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, anim) => RotationTransition(turns: anim, child: child),
+                  child: Icon(
+                    isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                    key: ValueKey(isDark),
+                    color: isDark ? Colors.white : Colors.black87,
+                    size: 24,
+                  ),
                 ),
-              ),
-              onPressed: () => ref.read(themeProvider.notifier).toggleTheme(),
-            );
-          },
+                onPressed: () => ref.read(themeProvider.notifier).toggleTheme(),
+              );
+            },
+          ),
         ),
-        Consumer(
-          builder: (context, ref, child) {
-            final notificationState = ref.watch(notificationProvider);
-            final unreadCount = notificationState.unreadCount;
-
-            return Stack(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.notifications_outlined,
-                      color: isDark ? Colors.white : Colors.black87, size: 24),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => NotificationsView()),
-                    );
-                  },
-                ),
-                if (unreadCount > 0)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      child: Text(
-                        unreadCount > 99 ? '99+' : '$unreadCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+        Padding(
+          padding: const EdgeInsets.only(top: 20.0),
+          child: Consumer(
+            builder: (context, ref, child) {
+              final notificationState = ref.watch(notificationProvider);
+              final unreadCount = notificationState.unreadCount;
+  
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.notifications_outlined,
+                        color: isDark ? Colors.white : Colors.black87, size: 24),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => NotificationsView()),
+                      );
+                    },
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
                         ),
-                        textAlign: TextAlign.center,
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        child: Text(
+                          unreadCount > 99 ? '99+' : '$unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ],
     );

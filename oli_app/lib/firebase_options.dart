@@ -64,8 +64,8 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDQMF7DsuTE4-2TlkzA9ZC96fjIzYX3wpc', // Using web key as placeholder if iOS key is missing, usually safe for public/auth
-    appId: '1:1045211732966:ios:placeholder', // Placeholder, needs actual iOS appID if needed
+    apiKey: 'AIzaSyCEg-pb-tAD0p8L8PuZ40a8KkHwpOeb9zA', // Bug #9 fix: real iOS API key from GoogleService-Info.plist
+    appId: '1:1045211732966:ios:b48be5209032b2ea0b1427', // Bug #9 fix: real iOS appId from GoogleService-Info.plist
     messagingSenderId: '1045211732966',
     projectId: 'oli-core',
     storageBucket: 'oli-core.firebasestorage.app',

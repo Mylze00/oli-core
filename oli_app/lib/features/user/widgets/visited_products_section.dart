@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/price_color.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/visited_product_model.dart';
 import '../providers/user_activity_provider.dart';
@@ -159,10 +160,10 @@ class _VisitedProductCard extends ConsumerWidget {
                       ),
                       Text(
                         ref.read(exchangeRateProvider.notifier).formatProductPrice(product.price),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E7DBA),
+                          color: productPriceColor(context),
                         ),
                       ),
                     ],

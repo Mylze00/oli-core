@@ -68,4 +68,6 @@ class UnreadCountNotifier extends StateNotifier<int> {
 }
 
 final unreadCountProvider =
-    StateNotifierProvider<UnreadCountNotifier, int>((ref) => UnreadCountNotifier());
+    StateNotifierProvider.autoDispose<UnreadCountNotifier, int>(
+  (ref) => UnreadCountNotifier(),
+);

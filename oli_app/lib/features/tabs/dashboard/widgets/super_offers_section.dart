@@ -57,8 +57,8 @@ class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with Si
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
             color: isDark
-                ? Colors.orangeAccent.withOpacity(0.5)
-                : Colors.blue.withOpacity(0.3),
+                ? Colors.orangeAccent.withValues(alpha: 0.5)
+                : Colors.blue.withValues(alpha: 0.3),
             width: 1.5),
       ),
       child: ClipRRect(
@@ -78,9 +78,9 @@ class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with Si
                   fit: BoxFit.cover,
                   colorFilter: isDark
                       ? ColorFilter.mode(
-                          Colors.black.withOpacity(0.5), BlendMode.darken)
+                          Colors.black.withValues(alpha: 0.5), BlendMode.darken)
                       : ColorFilter.mode(
-                          Colors.white.withOpacity(0.10), BlendMode.lighten),
+                          Colors.white.withValues(alpha: 0.10), BlendMode.lighten),
                 ),
               ),
               child: Column(
@@ -92,19 +92,13 @@ class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with Si
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                           Row(
-                    children: [
-                       const FireAnimationWidget(),
-                       const SizedBox(width: 8),
-                       Text("Super Offres",
-                           style: TextStyle(
-                               fontFamily: 'CreatoDisplay',
-                               color: isDark ? Colors.white : Colors.blue[900],
-                               fontWeight: FontWeight.w500,
-                               fontSize: 18,
-                               shadows: const [BoxShadow(color: Colors.black26, blurRadius: 4)])),
-                    ],
-                  ),
+                           Text("Super Offres",
+                               style: TextStyle(
+                                   fontFamily: 'CreatoDisplay',
+                                   color: isDark ? Colors.white : Colors.blue[900],
+                                   fontWeight: FontWeight.w500,
+                                   fontSize: 18,
+                                   shadows: const [BoxShadow(color: Colors.black26, blurRadius: 4)])),
                   const SizedBox(height: 2),
                   Text("Les plus populaires du moment",
                       style: TextStyle(
@@ -125,7 +119,7 @@ class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with Si
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(Icons.arrow_forward_ios, color: Colors.grey[300], size: 14),
@@ -147,9 +141,6 @@ class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with Si
                           child: DashboardProductCard(
                             product: product,
                             priceColor: const Color(0xFFFFD700),
-                            badgeText: "FLASH",
-                            badgeColor: Colors.red,
-                            subtitleWidget: Text("Low price", style: TextStyle(fontFamily: 'CreatoDisplay', color: Colors.grey[500], fontSize: 10, fontWeight: FontWeight.w500)),
                           ),
                         );
                       },
@@ -193,7 +184,7 @@ class _SuperOffersSectionState extends ConsumerState<SuperOffersSection> with Si
                       blendMode: BlendMode.srcATop,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.0),
+                          color: Colors.white.withValues(alpha: 0.0),
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),

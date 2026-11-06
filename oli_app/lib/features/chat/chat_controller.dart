@@ -8,7 +8,10 @@ import '../../core/storage/secure_storage_service.dart';
 import '../../core/user/user_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'socket_service.dart';
-import '../../core/services/hive_cache_service.dart'; // [CACHE]
+import '../../core/services/database_helper.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
+import '../../core/services/hive_cache_service.dart'; // fallback
+import '../../core/router/network/dio_provider.dart';
 
 class ChatState {
   final bool isLoading;
@@ -66,7 +69,7 @@ class ChatController extends StateNotifier<ChatState> {
   final String? myId;
   final SocketService _socketService;
   final Ref _ref;
-  final Dio _dio = Dio();
+  Dio get _dio => _ref.read(dioProvider);
   final _storage = SecureStorageService();
   VoidCallback? _socketUnsubscribe;
   String? _productId;
@@ -133,9 +136,9 @@ class ChatController extends StateNotifier<ChatState> {
       }
 
       // Sinon, ajout normal
-      state = state.copyWith(
-        messages: [...state.messages, data],
-      );
+      final newMessages = [...state.messages, data];
+      state = state.copyWith(messages: newMessages);
+      _forceCacheUpdate(newMessages);
     }
   }
 
@@ -154,6 +157,7 @@ class ChatController extends StateNotifier<ChatState> {
       }).toList();
       
       state = state.copyWith(messages: updatedMessages);
+      _forceCacheUpdate(updatedMessages);
     }
   }
 
@@ -178,6 +182,34 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
+  void _forceCacheUpdate(List<Map<String, dynamic>> updatedMessages) async {
+    if (updatedMessages.isEmpty) return;
+    
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final batch = db.batch();
+      
+      for (var msg in updatedMessages) {
+        if (msg['id'] != null && msg['id'].toString().startsWith('temp_')) continue;
+        
+        batch.insert('messages', {
+          'message_id': msg['id']?.toString() ?? '',
+          'conversation_id': msg['conversation_id'] ?? state.conversationId,
+          'sender_id': msg['sender_id']?.toString() ?? '',
+          'receiver_id': msg['receiver_id']?.toString() ?? '',
+          'content': msg['content'] ?? '',
+          'type': msg['type'] ?? 'text',
+          'created_at': msg['created_at'] ?? '',
+          'raw_data': jsonEncode(msg),
+        }, conflictAlgorithm: sqflite.ConflictAlgorithm.replace);
+      }
+      
+      await batch.commit(noResult: true);
+    } catch (e) {
+      debugPrint('⚠️ Erreur _forceCacheUpdate SQLite: $e');
+    }
+  }
+
   Future<void> loadMessages({String? productId}) async {
     _productId = productId ?? _productId;
     
@@ -189,29 +221,35 @@ class ChatController extends StateNotifier<ChatState> {
         url += '?productId=$_productId';
       }
       
-      // [CACHE] 1. Lecture rapide du cache
-      final cacheKey = 'chat_messages_$otherUserId${_productId != null ? "_$_productId" : ""}';
-      final cachedData = HiveCacheService.getCache(cacheKey);
-      if (cachedData != null) {
-        final messages = List<Map<String, dynamic>>.from(cachedData['messages'] ?? []);
-        int? convId;
-        String? friendshipStatus;
-        int? requesterId;
-        
-        if (messages.isNotEmpty) {
-          convId = messages.first['conversation_id'];
-          friendshipStatus = messages.first['friendship_status'];
-          requesterId = messages.first['requester_id'];
-        }
-        
-        // Affichage instantané
-        state = state.copyWith(
-          isLoading: false,
-          messages: messages,
-          conversationId: convId,
-          friendshipStatus: friendshipStatus,
-          requesterId: requesterId,
+      // [CACHE] 1. Lecture rapide du cache SQLite
+      try {
+        final db = await DatabaseHelper.instance.database;
+        final maps = await db.query(
+          'messages',
+          where: '(sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)',
+          whereArgs: [myId, otherUserId, otherUserId, myId],
+          orderBy: 'created_at ASC',
         );
+        
+        if (maps.isNotEmpty) {
+          final messages = maps.map((m) {
+            final raw = jsonDecode(m['raw_data'] as String);
+            return Map<String, dynamic>.from(raw);
+          }).toList();
+          
+          int? convId;
+          if (messages.isNotEmpty) {
+            convId = messages.first['conversation_id'];
+          }
+          
+          state = state.copyWith(
+            isLoading: false,
+            messages: messages,
+            conversationId: convId,
+          );
+        }
+      } catch (e) {
+        debugPrint('⚠️ Erreur lecture SQLite messages: $e');
       }
 
       // 2. Rafraîchissement en arrière-plan
@@ -244,7 +282,7 @@ class ChatController extends StateNotifier<ChatState> {
         );
 
         // [CACHE] 3. Mise à jour silencieuse du cache
-        await HiveCacheService.setCache(cacheKey, data);
+        _forceCacheUpdate(messages);
       }
     } catch (e) {
       debugPrint('❌ Erreur loadMessages: $e');
@@ -342,12 +380,12 @@ class ChatController extends StateNotifier<ChatState> {
       if (state.conversationId == null) {
         url = '${ApiConfig.baseUrl}/chat/send';
         data = {
-          'recipientId': int.parse(otherUserId),
+          'recipientId': int.tryParse(otherUserId),
           'content': content,
           'type': type,
           'mediaUrl': mediaUrl,
           'mediaType': mediaType,
-          'productId': productId != null ? int.parse(productId) : null,
+          'productId': productId != null ? int.tryParse(productId) : null,
           'metadata': metadata,
           if (latitude != null) 'latitude': latitude,
           if (longitude != null) 'longitude': longitude,
@@ -356,7 +394,7 @@ class ChatController extends StateNotifier<ChatState> {
         url = '${ApiConfig.baseUrl}/chat/messages';
         data = {
           'conversationId': state.conversationId,
-          'recipientId': int.parse(otherUserId),
+          'recipientId': int.tryParse(otherUserId),
           'content': content,
           'type': type,
           'mediaUrl': mediaUrl,
@@ -388,8 +426,10 @@ class ChatController extends StateNotifier<ChatState> {
     } catch (e) {
       debugPrint('❌ Erreur sendMessage: $e');
       state = state.copyWith(
-        error: "Erreur d'envoi",
-        messages: state.messages.where((m) => m['id'] != tempId).toList(), // Retrait si erreur
+        // On ne met PAS de state.error global car cela remplace toute la liste des messages
+        // par l'icône d'erreur (ce qui était le bug d'UI).
+        // On se contente de retirer le message temporaire.
+        messages: state.messages.where((m) => m['id'] != tempId).toList(), 
       );
     }
   }
@@ -423,6 +463,7 @@ class ChatController extends StateNotifier<ChatState> {
       return m;
     }).toList();
     state = state.copyWith(messages: updatedMessages);
+    _forceCacheUpdate(updatedMessages);
 
     // Appel backend
     try {

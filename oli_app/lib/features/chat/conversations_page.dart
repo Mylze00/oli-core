@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
@@ -174,12 +175,8 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
             child: Column(
               children: [
                 // Search Bar
-                Container(
-                  height: 45,
-                  decoration: BoxDecoration(
-                    color: containerColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                _buildGlassContainer(
+                  borderRadius: 12,
                   child: TextField(
                     controller: _searchController,
                     style: TextStyle(color: textColor),
@@ -195,17 +192,16 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                 const SizedBox(height: 10),
 
                 // Type tabs (Privé / Market / Fil)
-                Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: containerColor,
-                    borderRadius: BorderRadius.circular(25),
+                _buildGlassContainer(
+                  borderRadius: 25,
+                  child: SizedBox(
+                    height: 40,
+                    child: Row(children: [
+                      _buildTabItem(0, 'Privé'),
+                      _buildTabItem(1, 'Market Chat'),
+                      _buildTabItem(2, 'Fil'),
+                    ]),
                   ),
-                  child: Row(children: [
-                    _buildTabItem(0, 'Privé'),
-                    _buildTabItem(1, 'Market Chat'),
-                    _buildTabItem(2, 'Fil'),
-                  ]),
                 ),
                 const SizedBox(height: 10),
 
@@ -268,13 +264,13 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                             _FilterChip(label: '...', selected: false, onTap: () {}),
                           ]
                         : [
-                            _FilterChip(label: 'Tous', icon: Icons.inbox_outlined, selected: _filter == InboxFilter.all, onTap: () => setState(() => _filter = InboxFilter.all)),
+                            _FilterChip(label: 'Tous', selected: _filter == InboxFilter.all, onTap: () => setState(() => _filter = InboxFilter.all)),
                             const SizedBox(width: 8),
-                            _FilterChip(label: 'Non lus', icon: Icons.mark_chat_unread_outlined, selected: _filter == InboxFilter.unread, onTap: () => setState(() => _filter = InboxFilter.unread)),
+                            _FilterChip(label: 'Non lus', selected: _filter == InboxFilter.unread, onTap: () => setState(() => _filter = InboxFilter.unread)),
                             const SizedBox(width: 8),
-                            _FilterChip(label: 'Favoris', icon: Icons.star_outline_rounded, selected: _filter == InboxFilter.favorites, onTap: () => setState(() => _filter = InboxFilter.favorites)),
+                            _FilterChip(label: 'Favoris', selected: _filter == InboxFilter.favorites, onTap: () => setState(() => _filter = InboxFilter.favorites)),
                             const SizedBox(width: 8),
-                            _FilterChip(label: 'Archives', icon: Icons.archive_outlined, selected: _filter == InboxFilter.archives, onTap: () => setState(() => _filter = InboxFilter.archives)),
+                            _FilterChip(label: 'Archives', selected: _filter == InboxFilter.archives, onTap: () => setState(() => _filter = InboxFilter.archives)),
                           ],
                   ),
                 ),
@@ -583,7 +579,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: isSelected ? (isDark ? Colors.grey[800] : Colors.white) : Colors.transparent,
+            color: isSelected ? (isDark ? Colors.white.withOpacity(0.2) : Colors.black.withOpacity(0.1)) : Colors.transparent,
             borderRadius: BorderRadius.circular(25),
             boxShadow: isSelected ? [
               BoxShadow(
@@ -602,6 +598,38 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassContainer({
+    required Widget child,
+    required double borderRadius,
+    EdgeInsetsGeometry? padding,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(borderRadius),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withOpacity(0.15),
+                Colors.white.withOpacity(0.02),
+              ],
+            ),
+            border: Border.all(
+              width: 1.2,
+              color: Colors.white.withOpacity(0.4),
+            ),
+          ),
+          child: child,
         ),
       ),
     );
@@ -884,3 +912,4 @@ class _FilterChip extends StatelessWidget {
     );
   }
 }
+

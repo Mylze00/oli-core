@@ -47,13 +47,26 @@ class AuthState {
 
 class AuthController extends StateNotifier<AuthState> {
   final Ref _ref;
-  final _storage = SecureStorageService();
+
+  // Bug #7 fix: Use the shared provider instead of a direct instance
+  SecureStorageService get _storage => _ref.read(secureStorageProvider);
 
   AuthController(this._ref) : super(const AuthState()) {
     checkSession();
   }
 
   Dio get _dio => _ref.read(dioProvider);
+
+  /// Bug #1 fix: Called by the Dio interceptor when a 401 is received,
+  /// forces the user back to the login screen.
+  Future<void> forceLogout() async {
+    await FcmService().removeToken();
+    state = const AuthState(
+      isAuthenticated: false,
+      isCheckingSession: false,
+      userData: null,
+    );
+  }
 
   Future<void> checkSession() async {
     try {
@@ -158,23 +171,26 @@ class AuthController extends StateNotifier<AuthState> {
   Future<bool> sendOtp(String phone) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
+      // Bug #4 fix: Add timeout to http calls
       final response = await http.post(
         Uri.parse(ApiConfig.authSendOtp),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone': phone}),
-      );
+      ).timeout(const Duration(seconds: 30));
       state = state.copyWith(isLoading: false);
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        final otpCode = data['otp']?.toString();
-        if (otpCode != null) debugPrint('📩 OTP reçu du serveur: $otpCode');
+        // Bug #5 fix: OTP code is no longer logged to console
         return true;
       }
       final data = jsonDecode(response.body);
       state = state.copyWith(isLoading: false, error: data['error'] ?? data['message'] ?? 'Erreur serveur');
       return false;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Serveur injoignable');
+    } on Exception catch (e) {
+      if (e.toString().contains('TimeoutException')) {
+        state = state.copyWith(isLoading: false, error: 'Serveur injoignable (timeout)');
+      } else {
+        state = state.copyWith(isLoading: false, error: 'Serveur injoignable');
+      }
       return false;
     }
   }
@@ -182,11 +198,12 @@ class AuthController extends StateNotifier<AuthState> {
   Future<bool> verifyOtp({required String phone, required String otpCode}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
+      // Bug #4 fix: Add timeout to http calls
       final response = await http.post(
         Uri.parse(ApiConfig.authVerifyOtp),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone': phone, 'otpCode': otpCode}),
-      );
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
