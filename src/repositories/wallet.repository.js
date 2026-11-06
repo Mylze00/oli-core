@@ -229,7 +229,7 @@ const walletRepository = {
         const res = await pool.query(`
             SELECT wt.id, wt.type, wt.amount, wt.balance_before, wt.balance_after,
                    wt.currency, wt.provider, wt.reference, wt.description,
-                   wt.status, wt.created_at, wt.metadata,
+                   wt.status, wt.created_at, wt.metadata, wt.order_id,
                    CASE
                        WHEN wt.type = 'deposit' THEN 'Recharge Mobile Money'
                        WHEN wt.type = 'withdrawal' THEN 'Retrait vers Mobile Money'

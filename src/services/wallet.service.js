@@ -53,8 +53,8 @@ class WalletService {
         return await walletRepository.getBalance(userId);
     }
 
-    async getHistory(userId, limit = 30) {
-        return await walletRepository.getHistory(userId, limit);
+    async getHistory(userId, limit = 30, offset = 0) {
+        return await walletRepository.getHistory(userId, limit, offset);
     }
 
     // ─────────────────────────────────────────────────────────────
