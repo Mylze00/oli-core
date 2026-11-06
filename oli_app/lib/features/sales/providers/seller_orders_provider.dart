@@ -197,7 +197,7 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
   Future<bool> verifyPickupCode(int orderId, String code) async {
     try {
       final response = await _dio.post(
-        '${ApiConfig.baseUrl}/api/orders/$orderId/verify-pickup',
+        '${ApiConfig.baseUrl}/orders/$orderId/verify-pickup',
         data: {'code': code},
       );
       if (response.statusCode == 200) {
@@ -216,7 +216,7 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
   Future<bool> verifyDeliveryCode(int orderId, String code) async {
     try {
       final response = await _dio.post(
-        '${ApiConfig.baseUrl}/api/orders/$orderId/verify-delivery',
+        '${ApiConfig.baseUrl}/orders/$orderId/verify-delivery',
         data: {'code': code},
       );
       if (response.statusCode == 200) {

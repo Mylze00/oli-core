@@ -271,7 +271,7 @@ class OrderService {
             }
 
             if (needsDeliverer && io) {
-                io.emit('new_delivery_available', {
+                io.to('deliverers').emit('new_delivery_available', {
                     order_id: orderId,
                     delivery_address: order.delivery_address,
                     total_amount: order.total_amount,
@@ -346,7 +346,7 @@ class OrderService {
             }
 
             if (io) {
-                io.emit('order_ready_for_pickup', {
+                io.to('deliverers').emit('order_ready_for_pickup', {
                     order_id: orderId,
                     pickup_code: pickupCode,
                     delivery_address: order.delivery_address
@@ -848,7 +848,7 @@ class OrderService {
 
             // BROADCAST POUR LIVREURS (via Socket.IO)
             if (io) {
-                io.emit('new_delivery_available', {
+                io.to('deliverers').emit('new_delivery_available', {
                     order_id: orderId,
                     delivery_id: deliveryOrder?.id,
                     delivery_address: order.delivery_address,

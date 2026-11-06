@@ -105,6 +105,17 @@ io.on('connection', (socket) => {
         console.log(`✅ Room rejointe : ${userRoom}`);
 
         io.emit('user_online', { userId, online: true });
+
+        // [CONN] Les livreurs rejoignent la room « deliverers » : les annonces de
+        // course leur sont envoyées à eux seuls, et non à tous les utilisateurs.
+        pool.query('SELECT is_deliverer FROM users WHERE id = $1', [userId])
+            .then(({ rows }) => {
+                if (rows[0] && rows[0].is_deliverer) {
+                    socket.join('deliverers');
+                    console.log(`🚚 Room rejointe : deliverers (user ${userId})`);
+                }
+            })
+            .catch(e => console.warn('[SOCKET] Vérification livreur impossible:', e.message));
     }
 
     // 3. LE JOIN MANUEL (Amélioré)
@@ -115,6 +126,31 @@ io.on('connection', (socket) => {
                 socket.join(roomName);
                 console.log(`👤 Manual Join: Room ${roomName} confirmée`);
             }
+        } else if (roomName.startsWith('order_')) {
+            // [CONN] Suivi de commande (position du livreur) : réservé à l'acheteur,
+            // au vendeur et au livreur assigné.
+            const orderId = parseInt(roomName.replace('order_', ''), 10);
+            if (!userId || !Number.isInteger(orderId)) return;
+            pool.query(
+                `SELECT 1
+                   FROM orders o
+                   LEFT JOIN order_items oi ON oi.order_id = o.id
+                   LEFT JOIN products p ON oi.product_id::integer = p.id
+                   LEFT JOIN delivery_orders d ON d.order_id = o.id
+                  WHERE o.id = $1
+                    AND ($2::int = o.user_id
+                         OR $2::int = p.seller_id
+                         OR $2::text = d.deliverer_id::text)
+                  LIMIT 1`,
+                [orderId, userId]
+            ).then(({ rows }) => {
+                if (rows.length > 0) {
+                    socket.join(roomName);
+                    console.log(`📦 Joined Order Room: ${roomName} (user ${userId})`);
+                } else {
+                    console.warn(`🚫 Join refusé sur ${roomName} pour user ${userId}`);
+                }
+            }).catch(e => console.warn('[SOCKET] Vérification commande impossible:', e.message));
         } else if (roomName.startsWith('conversation_')) {
             socket.join(roomName);
             console.log(`💬 Joined Chat Room: ${roomName}`);
