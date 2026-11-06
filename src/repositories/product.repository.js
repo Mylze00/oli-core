@@ -525,6 +525,106 @@ class ProductRepository {
         const result = await pool.query(query, [divisor, shopId]);
         return result.rows;
     }
+    /**
+     * Sélection aléatoire personnalisée pour le « Top Classement » de l'accueil.
+     *
+     * - Périmètre identique à /featured (produits actifs et vérifiés du compte admin OLI).
+     * - Utilisateur connecté : exclut les produits vus dans les 7 derniers jours
+     *   et les 3 catégories les plus consultées sur 30 jours (son « habitude »).
+     * - Si ce filtre ne fournit pas assez de produits, complète avec les autres
+     *   produits du périmètre (sans doublon), toujours dans un ordre aléatoire.
+     *
+     * @param {string} adminPhone
+     * @param {number|null} userId  - null pour un visiteur anonyme
+     * @param {number} limit
+     */
+    async findDiscoverRandom(adminPhone, userId, limit = 64) {
+        const selectCols = `
+            SELECT p.*,
+                   u.name as seller_name,
+                   u.avatar_url as seller_avatar,
+                   u.id_oli as seller_oli_id,
+                   u.is_verified as seller_is_verified,
+                   u.account_type as seller_account_type,
+                   u.has_certified_shop as seller_has_certified_shop,
+                   u.total_sales as seller_total_sales,
+                   s.name as shop_name,
+                   s.is_verified as shop_verified,
+                   p.subcategory
+            FROM products p
+            JOIN users u ON p.seller_id = u.id
+            LEFT JOIN shops s ON p.shop_id = s.id
+            WHERE u.phone = $1
+              AND p.status = 'active'
+              AND COALESCE(p.is_verified, FALSE) = TRUE`;
+
+        // Anonyme : tirage aléatoire pur
+        if (!userId) {
+            const { rows } = await pool.query(
+                `${selectCols} ORDER BY random() LIMIT $2`,
+                [adminPhone, limit]
+            );
+            return rows;
+        }
+
+        const seenRecently = `
+            p.id NOT IN (
+                SELECT v.product_id FROM user_product_views v
+                WHERE v.user_id = $3 AND v.viewed_at > NOW() - INTERVAL '7 days'
+            )`;
+
+        const habitCategories = `
+            SELECT p2.category
+            FROM user_product_views v2
+            JOIN products p2 ON p2.id = v2.product_id
+            WHERE v2.user_id = $3
+              AND v2.viewed_at > NOW() - INTERVAL '30 days'
+              AND p2.category IS NOT NULL
+            GROUP BY p2.category
+            ORDER BY COUNT(*) DESC
+            LIMIT 3`;
+
+        // 1. Tirage hors habitudes (catégories favorites) et hors vues récentes
+        const strict = await pool.query(
+            `${selectCols}
+               AND ${seenRecently}
+               AND (p.category IS NULL OR p.category NOT IN (${habitCategories}))
+             ORDER BY random()
+             LIMIT $2`,
+            [adminPhone, limit, userId]
+        );
+        let rows = strict.rows;
+
+        // 2. Complément si pas assez : hors vues récentes uniquement, sans doublon
+        if (rows.length < limit) {
+            const alreadyIds = rows.map(r => r.id);
+            const relaxed = await pool.query(
+                `${selectCols}
+                   AND ${seenRecently}
+                   AND p.id <> ALL($4::int[])
+                 ORDER BY random()
+                 LIMIT $2`,
+                [adminPhone, limit - rows.length, userId, alreadyIds.length ? alreadyIds : [0]]
+            );
+            rows = rows.concat(relaxed.rows);
+        }
+
+        // 3. Dernier recours : si tout le monde a été vu récemment, tirage libre
+        if (rows.length < limit) {
+            const alreadyIds = rows.map(r => r.id);
+            const any = await pool.query(
+                `${selectCols}
+                   AND p.id <> ALL($3::int[])
+                 ORDER BY random()
+                 LIMIT $2`,
+                [adminPhone, limit - rows.length, alreadyIds.length ? alreadyIds : [0]]
+            );
+            rows = rows.concat(any.rows);
+        }
+
+        return rows;
+    }
+
 }
 
 module.exports = new ProductRepository();
