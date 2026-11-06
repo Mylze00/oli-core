@@ -143,7 +143,7 @@ const unipesaService = {
                 customer_id: _formatPhoneForProvider(phone, providerName),
                 customer_user_id: `user-${userId}`,
                 order_id:    oliOrderId,
-                amount:      Math.round(grossFC).toString(),
+                amount:      Math.round(grossFC).toFixed(2), // doc : chaîne à deux décimales
                 currency:    'CDF', // Franc Congolais
                 provider_id: _getProviderId(providerName),
                 callback_url: 'https://oli-core.onrender.com/webhooks/unipesa/deposit',
@@ -161,6 +161,7 @@ const unipesaService = {
                 }
             );
 
+            console.log(`📥 Unipesa C2B réponse ${oliOrderId}: result=${JSON.stringify(response.data?.result ?? null)} status=${response.data?.status ?? '?'}`);
             const unipesaOrderId = response.data?.order_id || oliOrderId;
 
             // Mettre à jour avec l'ID Unipesa
@@ -225,7 +226,7 @@ const unipesaService = {
                 customer_id: _formatPhoneForProvider(phone, providerName),
                 customer_user_id: `user-${userId}`,
                 order_id:    oliOrderId,
-                amount:      Math.round(amountFC).toString(),
+                amount:      Math.round(amountFC).toFixed(2), // doc : chaîne à deux décimales
                 currency:    'CDF',
                 provider_id: _getProviderId(providerName),
                 callback_url: 'https://oli-core.onrender.com/webhooks/unipesa/withdrawal',
@@ -248,9 +249,7 @@ const unipesaService = {
             );
 
             // Gérer le cas où Unipesa rejette la requête mais retourne un HTTP 200 avec une erreur
-            if (response.data && response.data.code && response.data.code !== 1 && response.data.code !== 200 && response.data.code !== 0) {
-                 throw new Error(response.data.message || 'Erreur Unipesa B2C');
-            }
+            _assertUnipesaB2CAccepted(response.data, oliOrderId);
 
             const unipesaOrderId = response.data?.order_id || oliOrderId;
 
@@ -549,6 +548,21 @@ function _detectProvider(phone) {
 /**
  * Convertit le nom du provider en ID provider AvadaPay.
  */
+/**
+ * Journalise la réponse Unipesa B2C (sans secrets) et lève une erreur si result.code
+ * n'est pas 0 (doc : 0 = OK) : Unipesa a refusé la demande, on rembourse immédiatement.
+ */
+function _assertUnipesaB2CAccepted(data, oliOrderId) {
+    const resultCode = data?.result?.code;
+    console.log(`📥 Unipesa B2C réponse ${oliOrderId}: result=${JSON.stringify(data?.result ?? null)} status=${data?.status ?? '?'}`);
+    if (data?.confirm_type !== undefined && Number(data.confirm_type) !== 0) {
+        console.warn(`⚠️ Unipesa B2C ${oliOrderId}: confirm_type=${data.confirm_type} — confirmation requise (non implémentée).`);
+    }
+    if (resultCode !== undefined && resultCode !== null && Number(resultCode) !== 0) {
+        throw new Error(data?.result?.message || `Unipesa a refusé le décaissement (code ${resultCode})`);
+    }
+}
+
 function _getProviderId(providerName) {
     switch (providerName) {
         case 'Vodacom': return 9;
