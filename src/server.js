@@ -383,6 +383,7 @@ app.use("/ads", require("./routes/ads.routes")); // 📢 Publicités publiques
 app.use('/search', require('./routes/search.routes')); // Recherche visuelle
 app.use("/setup", require("./routes/setup.routes")); // Utility route for migration
 app.use("/services", require("./routes/services.routes")); // ✨ Services dynamiques (Public)
+app.use("/tickets", require("./routes/tickets.routes")); // 🎟️ Billetterie O-Ticket (public + auth)
 app.use("/support", requireAuth, require("./routes/support.routes")); // 🎫 Support tickets utilisateur
 // [SÉCU] Route debug : admin uniquement — NE JAMAIS exposer publiquement
 if (process.env.NODE_ENV !== 'production') {

@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
-import '../data/mock_tickets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ticket_model.dart';
+import '../providers/oticket_provider.dart';
 import '../widgets/ticket_widget.dart';
 import 'ticket_detail_page.dart';
 
-class OTicketPage extends StatefulWidget {
+class OTicketPage extends ConsumerStatefulWidget {
   const OTicketPage({super.key});
 
   @override
-  State<OTicketPage> createState() => _OTicketPageState();
+  ConsumerState<OTicketPage> createState() => _OTicketPageState();
 }
 
-class _OTicketPageState extends State<OTicketPage>
+class _OTicketPageState extends ConsumerState<OTicketPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _currentTicketIndex = 0;
 
-  List<OTicket> get _myTickets  => mockTickets;
+  // Billets réels de l'utilisateur (GET /tickets/my)
+  List<OTicket> _myTickets = const [];
   List<OTicket> get _validTickets => _myTickets.where((t) => t.isValid).toList();
   List<OTicket> get _pastTickets  => _myTickets.where((t) => !t.isValid).toList();
 
@@ -34,13 +36,20 @@ class _OTicketPageState extends State<OTicketPage>
 
   @override
   Widget build(BuildContext context) {
+    final ticketsAsync = ref.watch(myTicketsProvider);
+    _myTickets = ticketsAsync.valueOrNull ?? const [];
+
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A18),
       appBar: _buildAppBar(),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildMyTickets(),
+          ticketsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF))),
+            error: (_, __) => _buildLoadError(),
+            data: (_) => _buildMyTickets(),
+          ),
           _buildExplore(),
         ],
       ),
@@ -274,49 +283,260 @@ class _OTicketPageState extends State<OTicketPage>
     );
   }
 
-  // ── Onglet Explorer ──
+  // ── Onglet Explorer : catalogue réel des événements publiés ──
   Widget _buildExplore() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFF7C4DFF).withOpacity(0.1),
-              shape: BoxShape.circle,
+    final eventsAsync = ref.watch(oticketEventsProvider);
+
+    return eventsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF))),
+      error: (_, __) => _buildLoadError(),
+      data: (events) {
+        if (events.isEmpty) return _buildNoEvents();
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(oticketEventsProvider),
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: events.length,
+            itemBuilder: (context, i) => _buildEventCard(events[i]),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEventCard(OEvent e) {
+    return GestureDetector(
+      onTap: () => _showEventSheet(e),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF14142B),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white10),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (e.imageUrl != null && e.imageUrl!.isNotEmpty)
+              SizedBox(
+                height: 130,
+                width: double.infinity,
+                child: Image.network(
+                  e.imageUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.white10,
+                    child: const Icon(Icons.image, color: Colors.white24),
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    e.title.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 12, color: Colors.white38),
+                      const SizedBox(width: 5),
+                      Text('${e.date}  ${e.time}',
+                          style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 12, color: Colors.white38),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(e.location,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text(
+                        'dès ${e.minPriceFC.toStringAsFixed(0)} FC',
+                        style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      const Spacer(),
+                      Text(
+                        e.remaining > 0 ? '${e.remaining} place(s)' : 'Complet',
+                        style: TextStyle(
+                            color: e.remaining > 0 ? Colors.white54 : Colors.redAccent, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            child: const Icon(Icons.explore_outlined, color: Color(0xFF7C4DFF), size: 48),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Événements à venir',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Les événements seront bientôt disponibles\ndans votre ville.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13, height: 1.5),
-          ),
-          const SizedBox(height: 28),
-          OutlinedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_outlined, size: 18, color: Color(0xFF7C4DFF)),
-            label: const Text(
-              'Me notifier',
-              style: TextStyle(color: Color(0xFF7C4DFF), fontWeight: FontWeight.bold),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFF7C4DFF)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+
+  /// Feuille d'achat : catégories de billets et validation.
+  void _showEventSheet(OEvent e) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF14142B),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Consumer(
+        builder: (ctx, sheetRef, _) {
+          final detail = sheetRef.watch(oticketEventDetailProvider(e.id));
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: detail.when(
+              loading: () => const SizedBox(
+                  height: 160,
+                  child: Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF)))),
+              error: (_, __) => const SizedBox(
+                  height: 120,
+                  child: Center(
+                      child: Text('Détail indisponible', style: TextStyle(color: Colors.white54)))),
+              data: (data) {
+                final types = (data['ticket_types'] as List?) ?? const [];
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(e.title.toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
+                    const SizedBox(height: 4),
+                    Text('${e.date}  ${e.time} · ${e.location}',
+                        style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    const SizedBox(height: 16),
+                    if (types.isEmpty)
+                      const Text('Aucun billet en vente pour le moment.',
+                          style: TextStyle(color: Colors.white54))
+                    else
+                      ...types.map((t) {
+                        final remaining =
+                            int.tryParse((t['remaining'] ?? 0).toString()) ?? 0;
+                        final price =
+                            double.tryParse((t['price_fc'] ?? 0).toString()) ?? 0;
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(t['name'].toString(),
+                              style: const TextStyle(color: Colors.white, fontSize: 14)),
+                          subtitle: Text(
+                            remaining > 0 ? '$remaining disponible(s)' : 'Épuisé',
+                            style: TextStyle(
+                                color: remaining > 0 ? Colors.white38 : Colors.redAccent,
+                                fontSize: 11),
+                          ),
+                          trailing: ElevatedButton(
+                            onPressed: remaining > 0
+                                ? () => _buy(ctx, (t['id'] as num).toInt(), price)
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF7C4DFF)),
+                            child: Text('${price.toStringAsFixed(0)} FC',
+                                style: const TextStyle(
+                                    color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        );
+                      }),
+                    const SizedBox(height: 10),
+                  ],
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _buy(BuildContext sheetCtx, int ticketTypeId, double price) async {
+    final confirmed = await showDialog<bool>(
+      context: sheetCtx,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF14142B),
+        title: const Text('Confirmer l\'achat', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Un billet à ${price.toStringAsFixed(0)} FC sera payé depuis votre wallet Oli.',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Annuler')),
+          ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Acheter')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final error = await purchaseTickets(ref, ticketTypeId, 1);
+    if (!mounted) return;
+    Navigator.of(sheetCtx).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error ?? 'Billet acheté. Retrouvez-le dans « Mes Billets ».'),
+        backgroundColor: error == null ? const Color(0xFF22C55E) : Colors.redAccent,
+      ),
+    );
+    if (error == null) _tabController.animateTo(0);
+  }
+
+  Widget _buildNoEvents() => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7C4DFF).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.explore_outlined, color: Color(0xFF7C4DFF), size: 48),
+            ),
+            const SizedBox(height: 20),
+            const Text('Aucun événement pour le moment',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Revenez bientôt : de nouveaux événements\nseront publiés dans votre ville.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white38, fontSize: 13, height: 1.5)),
+          ],
+        ),
+      );
+
+  Widget _buildLoadError() => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.wifi_off_rounded, color: Colors.white24, size: 44),
+            const SizedBox(height: 12),
+            const Text('Chargement impossible',
+                style: TextStyle(color: Colors.white70, fontSize: 15)),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () {
+                ref.invalidate(myTicketsProvider);
+                ref.invalidate(oticketEventsProvider);
+              },
+              child: const Text('Réessayer', style: TextStyle(color: Color(0xFF7C4DFF))),
+            ),
+          ],
+        ),
+      );
+
 
   Widget _buildEmptyState() {
     return Center(

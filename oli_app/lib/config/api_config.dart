@@ -69,6 +69,12 @@ class ApiConfig {
   static const String userAvatar = '$baseUrl/auth/avatar';
   static const String userAddresses = '$baseUrl/auth/addresses';
   // --- Support ---
+  // --- Billetterie O-Ticket ---
+  static const String oticketEvents = '$baseUrl/tickets/events';
+  static String oticketEventDetail(int id) => '$baseUrl/tickets/events/$id';
+  static const String oticketPurchase = '$baseUrl/tickets/purchase';
+  static const String oticketMyTickets = '$baseUrl/tickets/my';
+
   static const String supportTickets = '$baseUrl/support/tickets';
   static String supportTicketDetail(int id) => '$baseUrl/support/tickets/$id';
   static String supportTicketReply(int id) => '$baseUrl/support/tickets/$id/reply';
