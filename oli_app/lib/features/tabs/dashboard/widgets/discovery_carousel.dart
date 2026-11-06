@@ -89,15 +89,6 @@ class _DiscoveryCarouselState extends State<DiscoveryCarousel> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.blueAccent.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text("DÉCOUVERTE", style: TextStyle(color: Colors.blueAccent, fontSize: 8, fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(height: 6),
                       Text(
                         product.name,
                         maxLines: 2,
