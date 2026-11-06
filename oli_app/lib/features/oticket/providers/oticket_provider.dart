@@ -92,3 +92,82 @@ Future<String?> purchaseTickets(WidgetRef ref, int ticketTypeId, int quantity) a
     return 'Achat impossible pour le moment.';
   }
 }
+
+/// Événement dont l'utilisateur connecté est l'organisateur.
+class OrganizerEvent {
+  final int id;
+  final String title;
+  final String date;
+  final String location;
+  final String status;
+  final int sold;
+  final int checkedIn;
+
+  const OrganizerEvent({
+    required this.id,
+    required this.title,
+    required this.date,
+    required this.location,
+    required this.status,
+    required this.sold,
+    required this.checkedIn,
+  });
+
+  factory OrganizerEvent.fromJson(Map<String, dynamic> j) => OrganizerEvent(
+        id: (j['id'] as num).toInt(),
+        title: (j['title'] ?? '').toString(),
+        date: (j['event_date'] ?? '').toString().split('T').first,
+        location: (j['location'] ?? '').toString(),
+        status: (j['status'] ?? 'draft').toString(),
+        sold: int.tryParse((j['sold'] ?? 0).toString()) ?? 0,
+        checkedIn: int.tryParse((j['checked_in'] ?? 0).toString()) ?? 0,
+      );
+}
+
+/// Mes événements en tant qu'organisateur (liste vide si l'utilisateur n'en a aucun).
+final organizerEventsProvider = FutureProvider<List<OrganizerEvent>>((ref) async {
+  try {
+    final res = await ref.read(dioProvider).get(ApiConfig.oticketOrganizerEvents);
+    final list = (res.data as List?) ?? const [];
+    return list.map((e) => OrganizerEvent.fromJson(e as Map<String, dynamic>)).toList();
+  } catch (_) {
+    return const [];
+  }
+});
+
+/// Résultat d'un scan de billet.
+class ScanOutcome {
+  final String result; // valid | already_used | wrong_event | cancelled | not_found | forbidden | error
+  final String message;
+  final String? detail;
+
+  const ScanOutcome(this.result, this.message, [this.detail]);
+}
+
+/// Valide un billet scanné pour un événement donné.
+Future<ScanOutcome> validateTicket(WidgetRef ref, String ticketCode, int eventId) async {
+  try {
+    final res = await ref.read(dioProvider).post(
+          ApiConfig.oticketValidate,
+          data: {'ticket_code': ticketCode, 'event_id': eventId},
+        );
+    final data = (res.data as Map).cast<String, dynamic>();
+    final t = data['ticket'];
+    final detail = t is Map ? [t['type'], t['seat']].where((e) => e != null && '$e'.isNotEmpty).join(' · ') : null;
+    return ScanOutcome(
+      (data['result'] ?? 'valid').toString(),
+      (data['message'] ?? 'Entrée autorisée').toString(),
+      (detail != null && detail.isNotEmpty) ? detail : null,
+    );
+  } catch (e) {
+    final data = (e as dynamic).response?.data;
+    if (data is Map) {
+      return ScanOutcome(
+        (data['result'] ?? 'error').toString(),
+        (data['message'] ?? data['error'] ?? 'Validation impossible').toString(),
+        data['used_at'] != null ? 'Déjà scanné le ${data['used_at'].toString().substring(0, 16).replaceFirst('T', ' à ')}' : null,
+      );
+    }
+    return const ScanOutcome('error', 'Réseau indisponible');
+  }
+}

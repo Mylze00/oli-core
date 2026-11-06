@@ -12,6 +12,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const pool = require('../../config/db');
+const walletRepository = require('../../repositories/wallet.repository');
 
 const router = express.Router();
 
@@ -251,6 +252,74 @@ router.patch('/tickets/:id/status', async (req, res) => {
         if (!TICKET_STATUSES.includes(status)) {
             return res.status(400).json({ error: `Statut invalide (${TICKET_STATUSES.join(', ')})` });
         }
+        // Annulation ou remboursement : l'acheteur est recrédité une seule fois.
+        if (status === 'refunded' || status === 'cancelled') {
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                const tRes = await client.query(
+                    'SELECT * FROM event_tickets WHERE id = $1 FOR UPDATE',
+                    [req.params.id]
+                );
+                if (!tRes.rows.length) {
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ error: 'Billet introuvable' });
+                }
+                const ticket = tRes.rows[0];
+                if (ticket.status === 'refunded' || ticket.status === 'cancelled') {
+                    await client.query('ROLLBACK');
+                    return res.status(409).json({ error: 'Billet déjà annulé ou remboursé' });
+                }
+
+                const amount = parseFloat(ticket.price_paid_fc);
+                const reference = `TICKET_REFUND_${ticket.id}`;
+
+                if (ticket.buyer_id && amount > 0) {
+                    const dup = await client.query(
+                        'SELECT 1 FROM wallet_transactions WHERE reference = $1 LIMIT 1',
+                        [reference]
+                    );
+                    if (!dup.rows.length) {
+                        const wallet = await walletRepository._getOrCreateWallet(ticket.buyer_id, client);
+                        const before = parseFloat(wallet.balance);
+                        const after = before + amount;
+                        await client.query('UPDATE wallets SET balance = $1 WHERE id = $2', [after, wallet.id]);
+                        await client.query('UPDATE users SET wallet = $1 WHERE id = $2', [after, ticket.buyer_id]);
+                        await walletRepository._insertTx(client, {
+                            userId: ticket.buyer_id,
+                            type: 'refund',
+                            amount,
+                            balanceBefore: before,
+                            balanceAfter: after,
+                            provider: 'O_TICKET',
+                            reference,
+                            description: `Remboursement billet ${ticket.ticket_code}`,
+                        });
+                    }
+                }
+
+                // Le billet libère sa place dans le quota
+                if (ticket.ticket_type_id) {
+                    await client.query(
+                        'UPDATE event_ticket_types SET quantity_sold = GREATEST(quantity_sold - 1, 0) WHERE id = $1',
+                        [ticket.ticket_type_id]
+                    );
+                }
+
+                const upd = await client.query(
+                    'UPDATE event_tickets SET status = $2 WHERE id = $1 RETURNING *',
+                    [req.params.id, status]
+                );
+                await client.query('COMMIT');
+                return res.json({ ...upd.rows[0], refunded_fc: ticket.buyer_id ? amount : 0 });
+            } catch (e) {
+                await client.query('ROLLBACK');
+                throw e;
+            } finally {
+                client.release();
+            }
+        }
+
         const { rows } = await pool.query(`
             UPDATE event_tickets
                SET status = $2,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ticket_model.dart';
 import '../providers/oticket_provider.dart';
+import 'organizer_scan_page.dart';
 import '../widgets/ticket_widget.dart';
 import 'ticket_detail_page.dart';
 
@@ -56,7 +57,64 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     );
   }
 
+  /// Accès au contrôle des entrées, visible seulement pour un organisateur.
+  Widget? _buildScanAction() {
+    final events = ref.watch(organizerEventsProvider).valueOrNull ?? const [];
+    if (events.isEmpty) return null;
+    return IconButton(
+      tooltip: 'Contrôler les entrées',
+      icon: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF7C4DFF)),
+      onPressed: () => _chooseEventToScan(events),
+    );
+  }
+
+  void _chooseEventToScan(List<OrganizerEvent> events) {
+    if (events.length == 1) {
+      _openScanner(events.first);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF14142B),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Quel événement contrôler ?',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            ...events.map((e) => ListTile(
+                  title: Text(e.title, style: const TextStyle(color: Colors.white)),
+                  subtitle: Text('${e.date} · ${e.checkedIn}/${e.sold} entrée(s)',
+                      style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openScanner(e);
+                  },
+                )),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openScanner(OrganizerEvent e) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OrganizerScanPage(eventId: e.id, eventTitle: e.title),
+      ),
+    ).then((_) => ref.invalidate(organizerEventsProvider));
+  }
+
   AppBar _buildAppBar() {
+    final scanAction = _buildScanAction();
     return AppBar(
       backgroundColor: const Color(0xFF0A0A18),
       elevation: 0,
@@ -64,6 +122,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
         icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
         onPressed: () => Navigator.pop(context),
       ),
+      actions: scanAction == null ? null : [scanAction],
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

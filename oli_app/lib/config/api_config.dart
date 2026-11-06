@@ -74,6 +74,8 @@ class ApiConfig {
   static String oticketEventDetail(int id) => '$baseUrl/tickets/events/$id';
   static const String oticketPurchase = '$baseUrl/tickets/purchase';
   static const String oticketMyTickets = '$baseUrl/tickets/my';
+  static const String oticketValidate = '$baseUrl/tickets/validate';
+  static const String oticketOrganizerEvents = '$baseUrl/tickets/organizer/events';
 
   static const String supportTickets = '$baseUrl/support/tickets';
   static String supportTicketDetail(int id) => '$baseUrl/support/tickets/$id';

@@ -175,4 +175,110 @@ router.get('/my', requireAuth, async (req, res) => {
     }
 });
 
+// ─── Espace organisateur : mes événements ────────────────────────────────────
+router.get('/organizer/events', requireAuth, async (req, res) => {
+    try {
+        const { rows } = await pool.query(`
+            SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.status,
+                   COUNT(t.id) FILTER (WHERE t.status IN ('valid','used'))::int AS sold,
+                   COUNT(t.id) FILTER (WHERE t.status = 'used')::int            AS checked_in
+              FROM events e
+              LEFT JOIN event_tickets t ON t.event_id = e.id
+             WHERE e.organizer_id = $1
+             GROUP BY e.id
+             ORDER BY e.event_date DESC
+             LIMIT 100
+        `, [req.user.id]);
+        res.json(rows);
+    } catch (err) {
+        console.error('❌ [O-Ticket] événements organisateur:', err.message);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+// ─── Contrôle à l'entrée : validation d'un billet scanné ─────────────────────
+// Réservé à l'organisateur de l'événement (ou à un admin).
+// Réponses : valid | already_used | wrong_event | cancelled | not_found | forbidden
+router.post('/validate', requireAuth, async (req, res) => {
+    const { ticket_code, event_id } = req.body || {};
+    if (!ticket_code) return res.status(400).json({ error: 'Code du billet requis' });
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Verrou sur le billet : deux scans simultanés ne peuvent pas tous deux valider
+        const tRes = await client.query(`
+            SELECT t.*, e.organizer_id, e.title AS event_title, tt.name AS type_name
+              FROM event_tickets t
+              JOIN events e ON e.id = t.event_id
+              LEFT JOIN event_ticket_types tt ON tt.id = t.ticket_type_id
+             WHERE t.ticket_code = $1
+             FOR UPDATE OF t
+        `, [String(ticket_code).trim()]);
+
+        if (!tRes.rows.length) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ result: 'not_found', message: 'Billet inconnu' });
+        }
+        const ticket = tRes.rows[0];
+
+        // Autorisation : organisateur de l'événement, ou admin
+        const isOrganizer = Number(ticket.organizer_id) === Number(req.user.id);
+        if (!isOrganizer && req.user.is_admin !== true) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ result: 'forbidden', message: "Vous n'organisez pas cet événement" });
+        }
+
+        // Billet d'un autre événement que celui contrôlé
+        if (event_id && Number(event_id) !== Number(ticket.event_id)) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({
+                result: 'wrong_event',
+                message: `Ce billet est pour « ${ticket.event_title} »`,
+            });
+        }
+
+        if (ticket.status === 'used') {
+            await client.query('ROLLBACK');
+            return res.status(409).json({
+                result: 'already_used',
+                message: 'Billet déjà utilisé',
+                used_at: ticket.used_at,
+                ticket: { code: ticket.ticket_code, type: ticket.type_name, event: ticket.event_title },
+            });
+        }
+        if (ticket.status !== 'valid') {
+            await client.query('ROLLBACK');
+            return res.status(409).json({
+                result: 'cancelled',
+                message: ticket.status === 'refunded' ? 'Billet remboursé' : 'Billet annulé',
+            });
+        }
+
+        await client.query(
+            `UPDATE event_tickets SET status = 'used', used_at = NOW() WHERE id = $1`,
+            [ticket.id]
+        );
+        await client.query('COMMIT');
+
+        res.json({
+            result: 'valid',
+            message: 'Entrée autorisée',
+            ticket: {
+                code: ticket.ticket_code,
+                type: ticket.type_name,
+                event: ticket.event_title,
+                seat: ticket.seat_label,
+            },
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ [O-Ticket] validation:', err.message);
+        res.status(500).json({ error: 'Validation impossible' });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
