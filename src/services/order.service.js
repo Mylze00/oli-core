@@ -60,14 +60,30 @@ class OrderService {
         }
 
         // Créer la commande en base
-        const order = await orderRepository.createOrder(
-            userId,
-            items,
-            deliveryAddress || null,
-            paymentMethod || 'wallet',
-            parseFloat(deliveryFee) || 0,
-            deliveryMethodId || null
-        );
+        let order;
+        try {
+            order = await orderRepository.createOrder(
+                userId,
+                items,
+                deliveryAddress || null,
+                paymentMethod || 'wallet',
+                parseFloat(deliveryFee) || 0,
+                deliveryMethodId || null
+            );
+        } catch (createErr) {
+            // [FIN C2] Le wallet a déjà été débité : on rembourse si la commande n'existe pas
+            if (paymentStatus === 'completed') {
+                const walletRepository = require('../repositories/wallet.repository');
+                await walletRepository.performDeposit(userId, totalAmount, {
+                    type: 'refund',
+                    provider: 'WALLET',
+                    reference: `REFUND_ORDER_FAIL_${userId}_${Date.now()}`,
+                    description: `Remboursement : commande non créée (${createErr.message})`,
+                });
+                console.error(`↩️ Commande non créée : remboursement de ${totalAmount} FC à l'utilisateur #${userId}`);
+            }
+            throw createErr;
+        }
 
         // Pour Wallet : mettre à jour la référence de transaction avec l'ID commande réel
         if (paymentMethod === 'wallet' && paymentStatus === 'completed') {
@@ -533,6 +549,14 @@ class OrderService {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+
+            // [FIN C3] Verrou de ligne + contrôle du statut DANS la transaction :
+            // deux validations simultanées ne peuvent plus créditer le vendeur deux fois.
+            const locked = await client.query('SELECT status FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
+            if (!allowedStatuses.includes(locked.rows[0]?.status)) {
+                await client.query('ROLLBACK');
+                throw new Error('Cette livraison a déjà été validée');
+            }
 
             await client.query(
                 "UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1",

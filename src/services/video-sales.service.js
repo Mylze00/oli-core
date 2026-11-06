@@ -184,13 +184,24 @@ class VideoSalesService {
                     const ownerId = ownerRes.rows[0].user_id;
                     // Ne pas se récompenser soi-même
                     if (ownerId != userId) {
-                        const walletRepository = require('../repositories/wallet.repository');
-                        await walletRepository.performDeposit(ownerId, 1, {
-                            type: 'reward',
-                            provider: 'LIVE_SHOPPING',
-                            reference: `LIKE_${videoId}_${userId}_${Date.now()}`,
-                            description: `Récompense de 1 FC pour un J'aime sur votre vidéo`
-                        });
+                        // [FIN C1] Une seule récompense par (compte, vidéo, sans plafond journalier) : pas de récompense
+                        // en cas de unlike puis de nouveau like.
+                        const alreadyRewarded = await pool.query(
+                            `SELECT 1 FROM wallet_transactions
+                             WHERE user_id = $1 AND type = 'reward' AND starts_with(reference, $2)
+                             LIMIT 1`,
+                            [ownerId, `LIKE_${videoId}_${userId}_`]
+                        );
+                        // Pas de plafond : décision métier. Seul l'anti-doublon ci-dessus s'applique.
+                        if (alreadyRewarded.rows.length === 0) {
+                            const walletRepository = require('../repositories/wallet.repository');
+                            await walletRepository.performDeposit(ownerId, 1, {
+                                type: 'reward',
+                                provider: 'LIVE_SHOPPING',
+                                reference: `LIKE_${videoId}_${userId}_${Date.now()}`,
+                                description: `Récompense de 1 FC pour un J'aime sur votre vidéo`
+                            });
+                        }
                     }
                 }
             } catch (err) {
