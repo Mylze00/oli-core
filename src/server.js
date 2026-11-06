@@ -482,6 +482,15 @@ if (process.env.NODE_ENV !== 'test') {
             await pool.query(`UPDATE unipesa_operations SET settled_at = COALESCE(confirmed_at, NOW()) WHERE status IN ('success','failed') AND settled_at IS NULL`);
             console.log('✅ [MIGRATION] Verrou de règlement unipesa_operations.settled_at vérifié.');
 
+            // Migration 047 — billetterie O-Ticket (tables nouvelles, idempotente)
+            const fsTick = require('fs');
+            const pathTick = require('path');
+            const tickPath = pathTick.join(__dirname, 'migrations', '047_ticketing.sql');
+            if (fsTick.existsSync(tickPath)) {
+                await pool.query(fsTick.readFileSync(tickPath, 'utf8'));
+                console.log('✅ [MIGRATION] Tables billetterie vérifiées.');
+            }
+
             // 🏦 Migration 039 — OLI Bank Portail Cryptographique
             const fs = require('fs');
             const path = require('path');

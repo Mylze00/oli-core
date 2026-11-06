@@ -12,6 +12,7 @@ import {
     ClipboardDocumentListIcon,
     MegaphoneIcon,
     BoltIcon, // ✨ Icone pour Services
+    TicketIcon, // 🎟️ Billetterie
     CheckBadgeIcon, // 🆕 Icone pour Certifications
     ChatBubbleLeftRightIcon, // 🆕 Icone pour Support
     CircleStackIcon, // 🗄️ Icone pour Base de données
@@ -30,10 +31,10 @@ const navigation = [
     { name: 'Livreurs', href: '/delivery', icon: TruckIcon },
     { name: 'Commandes', href: '/orders', icon: CubeIcon },
     { name: 'Finances (Commandes)', href: '/finances', icon: CreditCardIcon },
-    { name: 'Wallets OLI', href: '/finances-wallet', icon: BanknotesIcon },
     { name: 'Modération', href: '/disputes', icon: ShieldCheckIcon },
     { name: 'Publicités', href: '/ads', icon: MegaphoneIcon },
     { name: 'Services', href: '/services', icon: BoltIcon }, // ✨
+    { name: 'Billetterie', href: '/ticketing', icon: TicketIcon }, // 🎟️
     { name: 'Support', href: '/support', icon: ChatBubbleLeftRightIcon }, // 🆕
     { name: 'Certifications', href: '/verifications', icon: CheckBadgeIcon }, // 🆕
     { name: 'Worker Prix', href: '/price-worker', icon: CpuChipIcon }, // 🤖
