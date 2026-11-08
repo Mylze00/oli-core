@@ -68,6 +68,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   late Animation<double> _categoryFadeAnimation;
 
   static const int _rankingMaxCount  = 64;
+  static const int _rankingBatchSize = 16; // multiple de 8 : un bloc se termine par une bannière
+  int _rankingVisibleCount = _rankingBatchSize;
+  int _rankingTotal = 0; // produits disponibles, mis à jour à chaque build
 
   // ── Lazy loading 5 sections anonymes ───────────────────────────────
   static const int _anonSectionCount = 5;
@@ -141,7 +144,11 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     }
     // Infinite scroll : charger plus produits pour les sections anonymes (le Top Classement est déjà contraint)
     if (offset >= maxScroll - 400) {
-      _loadMoreAnonProducts();
+      if (_rankingVisibleCount < _rankingTotal) {
+        setState(() => _rankingVisibleCount += _rankingBatchSize);
+      } else {
+        _loadMoreAnonProducts();
+      }
     }
   }
 
@@ -413,6 +420,25 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     // ── LOGIQUE DE DÉDOUBLONNAGE GLOBAL ──
     final Set<String> displayedIds = {};
 
+    // Le Top Classement est servi en premier : les sections du haut chargent
+    // après lui et ne peuvent plus déplacer ses produits une fois affichés.
+    final discoverRandom = ref.watch(discoverRandomProvider);
+    final fullRankingList = discoverRandom.isNotEmpty
+        ? discoverRandom
+        : (cachedRankingList.isNotEmpty ? cachedRankingList : cachedSuperOffers);
+    final deduplicatedRanking = <Product>[];
+    final rankingImages = <String>{};
+    for (final p in fullRankingList) {
+      if (deduplicatedRanking.length >= _rankingMaxCount) break;
+      if (displayedIds.contains(p.id)) continue;
+      // Une même photo sous deux fiches compte aussi comme un doublon.
+      if (p.images.isNotEmpty && !rankingImages.add(p.images.first)) continue;
+      displayedIds.add(p.id);
+      deduplicatedRanking.add(p);
+    }
+    _rankingTotal = deduplicatedRanking.length;
+    final rankingFullyShown = _rankingVisibleCount >= _rankingTotal;
+
     List<Product> removeDuplicatesAndTrack(List<Product> source, [int? limit]) {
       final result = <Product>[];
       for (final p in source) {
@@ -442,16 +468,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
     // On prend jusqu'à 18 produits (3 slots de 6)
     final deduplicatedBranded = removeDuplicatesAndTrack(brandedProducts, 18);
     
-    // 6. Top Classement : tirage aléatoire personnalisé côté serveur
-    //    (hors habitudes de l'utilisateur). Repli local si l'appel échoue.
-    final discoverRandom =
-        ref.watch(discoverRandomProvider).valueOrNull ?? const <Product>[];
-    final fullRankingList = discoverRandom.isNotEmpty
-        ? discoverRandom
-        : (cachedRankingList.isNotEmpty ? cachedRankingList : cachedSuperOffers);
-    final deduplicatedRanking = removeDuplicatesAndTrack(fullRankingList, _rankingMaxCount);
-    
-    // 7. Produits restants (5 sections en bas)
+    // 6. Produits restants (5 sections en bas)
     final deduplicatedAnonProducts = removeDuplicatesAndTrack(allProducts);
 
     final featuredNotifier = ref.read(featuredProductsProvider.notifier);
@@ -467,12 +484,16 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
           // ── Contenu principal scrollable ──
           OliRefreshIndicator(
             onRefresh: () async {
-              await ref
-                  .read(featuredProductsProvider.notifier)
-                  .fetchFeaturedProducts();
-              // Nouveau tirage du Top Classement
-              ref.invalidate(discoverRandomProvider);
+              // Actualisation volontaire : toutes les sections sont rechargées.
+              await Future.wait([
+                ref.read(featuredProductsProvider.notifier).fetchFeaturedProducts(),
+                ref.read(topSellersProvider.notifier).fetchTopSellers(shuffle: true),
+                ref.read(verifiedShopsProductsProvider.notifier).fetchVerifiedShopsProducts(),
+                ref.read(brandedProductsProvider.notifier).fetchBrandedProducts(),
+                ref.read(discoverRandomProvider.notifier).refresh(),
+              ]);
               setState(() {
+                _rankingVisibleCount = _rankingBatchSize;
                 _anonLoadedCount = _anonBatchSize;
                 resetDistribution();
               });
@@ -581,7 +602,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                 ),
 
                 ...RankingSectionHelper.buildSlivers(
-                    deduplicatedRanking, textColor,
+                    deduplicatedRanking.take(_rankingVisibleCount).toList(), textColor,
                     brandedProducts: deduplicatedBranded),
 
                 const SliverPadding(padding: EdgeInsets.only(bottom: 4)),
@@ -602,6 +623,10 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                     Icons.thumb_up_rounded,
                     Icons.local_fire_department_rounded,
                   ];
+
+                  // Ces sections apparaissent une fois tout le classement révélé,
+                  // pour que l'ajout de produits ne décale pas ce qui est à l'écran.
+                  if (!rankingFullyShown) return const <Widget>[];
 
                   final start = s * _anonSectionSize;
                   if (_anonLoadedCount <= start) return const <Widget>[];

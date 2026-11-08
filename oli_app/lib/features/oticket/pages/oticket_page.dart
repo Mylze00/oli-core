@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ticket_model.dart';
 import '../providers/oticket_provider.dart';
 import 'organizer_scan_page.dart';
+import '../widgets/oticket_font.dart';
 import '../widgets/ticket_widget.dart';
+import 'event_detail_page.dart';
 import 'ticket_detail_page.dart';
 
 class OTicketPage extends ConsumerStatefulWidget {
@@ -17,6 +19,8 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _currentTicketIndex = 0;
+  int _currentEventIndex = 0;
+  final PageController _eventsController = PageController(viewportFraction: 0.85);
 
   // Billets réels de l'utilisateur (GET /tickets/my)
   List<OTicket> _myTickets = const [];
@@ -32,6 +36,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _eventsController.dispose();
     super.dispose();
   }
 
@@ -40,19 +45,21 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     final ticketsAsync = ref.watch(myTicketsProvider);
     _myTickets = ticketsAsync.valueOrNull ?? const [];
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0A18),
-      appBar: _buildAppBar(),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          ticketsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF))),
-            error: (_, __) => _buildLoadError(),
-            data: (_) => _buildMyTickets(),
-          ),
-          _buildExplore(),
-        ],
+    return OTicketFont(
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0A0A18),
+        appBar: _buildAppBar(),
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildExplore(),
+            ticketsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF))),
+              error: (_, __) => _buildLoadError(),
+              data: (_) => _buildMyTickets(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -108,7 +115,9 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => OrganizerScanPage(eventId: e.id, eventTitle: e.title),
+        builder: (_) => OTicketFont(
+          child: OrganizerScanPage(eventId: e.id, eventTitle: e.title),
+        ),
       ),
     ).then((_) => ref.invalidate(organizerEventsProvider));
   }
@@ -154,10 +163,14 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
         indicatorWeight: 3,
         labelColor: Colors.white,
         unselectedLabelColor: Colors.white38,
-        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        labelStyle: const TextStyle(
+          fontFamily: OTicketFont.family,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
         tabs: const [
-          Tab(text: 'Mes Billets'),
           Tab(text: 'Explorer'),
+          Tab(text: 'Mes Billets'),
         ],
       ),
     );
@@ -167,7 +180,8 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
   Widget _buildMyTickets() {
     if (_myTickets.isEmpty) return _buildEmptyState();
 
-    return Column(
+    return SingleChildScrollView(
+      child: Column(
       children: [
         const SizedBox(height: 24),
 
@@ -259,6 +273,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
 
         const SizedBox(height: 32),
       ],
+      ),
     );
   }
 
@@ -353,208 +368,129 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
         if (events.isEmpty) return _buildNoEvents();
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(oticketEventsProvider),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: events.length,
-            itemBuilder: (context, i) => _buildEventCard(events[i]),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${events.length} événement${events.length > 1 ? 's' : ''} à venir',
+                        style: const TextStyle(color: Colors.white60, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 480,
+                  child: PageView.builder(
+                    controller: _eventsController,
+                    itemCount: events.length,
+                    onPageChanged: (i) => setState(() => _currentEventIndex = i),
+                    itemBuilder: (context, i) => GestureDetector(
+                      onTap: () => _openEvent(events[i]),
+                      child: AnimatedScale(
+                        scale: _currentEventIndex == i ? 1.0 : 0.92,
+                        duration: const Duration(milliseconds: 200),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: _buildEventCard(events[i]),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (events.length > 1) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      events.length,
+                      (i) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: _currentEventIndex == i ? 20 : 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: _currentEventIndex == i
+                              ? const Color(0xFF7C4DFF)
+                              : Colors.white24,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
+  /// Événement au format billet : le bas affiche le prix à la place du QR code,
+  /// qui n'existe qu'après l'achat.
   Widget _buildEventCard(OEvent e) {
-    return GestureDetector(
-      onTap: () => _showEventSheet(e),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF14142B),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white10),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (e.imageUrl != null && e.imageUrl!.isNotEmpty)
-              SizedBox(
-                height: 130,
-                width: double.infinity,
-                child: Image.network(
-                  e.imageUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.white10,
-                    child: const Icon(Icons.image, color: Colors.white24),
-                  ),
-                ),
+    final onSale = e.typeCount > 0;
+
+    return TicketWidget(
+      ticket: e.toPreviewTicket(),
+      topFlex: 72,
+      footer: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            onSale ? 'À PARTIR DE' : 'BILLETTERIE',
+            style: const TextStyle(color: Colors.white38, fontSize: 9, letterSpacing: 1),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            onSale ? '${e.minPriceFC.toStringAsFixed(0)} FC' : 'Bientôt en vente',
+            style: const TextStyle(
+                color: Color(0xFFFFD700), fontWeight: FontWeight.w800, fontSize: 20),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 36,
+            child: ElevatedButton(
+              onPressed: () => _openEvent(e),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: e.soldOut ? Colors.grey[800] : const Color(0xFF7C4DFF),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    e.title.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today, size: 12, color: Colors.white38),
-                      const SizedBox(width: 5),
-                      Text('${e.date}  ${e.time}',
-                          style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 12, color: Colors.white38),
-                      const SizedBox(width: 5),
-                      Expanded(
-                        child: Text(e.location,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Text(
-                        'dès ${e.minPriceFC.toStringAsFixed(0)} FC',
-                        style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      const Spacer(),
-                      Text(
-                        e.placesLabel,
-                        style: TextStyle(
-                            color: e.soldOut ? Colors.redAccent : Colors.white54, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ],
+              child: Text(
+                e.soldOut ? 'Complet' : 'Voir les billets',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Feuille d'achat : catégories de billets et validation.
-  void _showEventSheet(OEvent e) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF14142B),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Consumer(
-        builder: (ctx, sheetRef, _) {
-          final detail = sheetRef.watch(oticketEventDetailProvider(e.id));
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: detail.when(
-              loading: () => const SizedBox(
-                  height: 160,
-                  child: Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF)))),
-              error: (_, __) => const SizedBox(
-                  height: 120,
-                  child: Center(
-                      child: Text('Détail indisponible', style: TextStyle(color: Colors.white54)))),
-              data: (data) {
-                final types = (data['ticket_types'] as List?) ?? const [];
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(e.title.toUpperCase(),
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
-                    const SizedBox(height: 4),
-                    Text('${e.date}  ${e.time} · ${e.location}',
-                        style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                    const SizedBox(height: 16),
-                    if (types.isEmpty)
-                      const Text('Aucun billet en vente pour le moment.',
-                          style: TextStyle(color: Colors.white54))
-                    else
-                      ...types.map((t) {
-                        final unlimited = t['unlimited'] == true;
-                        final remaining = unlimited
-                            ? 1
-                            : (int.tryParse((t['remaining'] ?? 0).toString()) ?? 0);
-                        final price =
-                            double.tryParse((t['price_fc'] ?? 0).toString()) ?? 0;
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(t['name'].toString(),
-                              style: const TextStyle(color: Colors.white, fontSize: 14)),
-                          subtitle: Text(
-                            unlimited
-                                ? 'Places disponibles'
-                                : (remaining > 0 ? '$remaining place(s) disponible(s)' : 'Épuisé'),
-                            style: TextStyle(
-                                color: remaining > 0 ? Colors.white38 : Colors.redAccent,
-                                fontSize: 11),
-                          ),
-                          trailing: ElevatedButton(
-                            onPressed: remaining > 0
-                                ? () => _buy(ctx, (t['id'] as num).toInt(), price)
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF7C4DFF)),
-                            child: Text('${price.toStringAsFixed(0)} FC',
-                                style: const TextStyle(
-                                    color: Colors.white, fontWeight: FontWeight.bold)),
-                          ),
-                        );
-                      }),
-                    const SizedBox(height: 10),
-                  ],
-                );
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _buy(BuildContext sheetCtx, int ticketTypeId, double price) async {
-    final confirmed = await showDialog<bool>(
-      context: sheetCtx,
-      builder: (c) => AlertDialog(
-        backgroundColor: const Color(0xFF14142B),
-        title: const Text('Confirmer l\'achat', style: TextStyle(color: Colors.white)),
-        content: Text(
-          'Un billet à ${price.toStringAsFixed(0)} FC sera payé depuis votre wallet Oli.',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Annuler')),
-          ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Acheter')),
+          ),
         ],
       ),
     );
-    if (confirmed != true) return;
+  }
 
-    final error = await purchaseTickets(ref, ticketTypeId, 1);
-    if (!mounted) return;
-    Navigator.of(sheetCtx).pop();
+  /// Ouvre la page de l'événement et bascule sur « Mes Billets » après un achat.
+  Future<void> _openEvent(OEvent e) async {
+    final purchased = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => OTicketFont(child: EventDetailPage(event: e))),
+    );
+    if (purchased != true || !mounted) return;
+    _tabController.animateTo(1);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(error ?? 'Billet acheté. Retrouvez-le dans « Mes Billets ».'),
-        backgroundColor: error == null ? const Color(0xFF22C55E) : Colors.redAccent,
+      const SnackBar(
+        content: Text('Billet acheté. Retrouvez-le dans « Mes Billets ».'),
+        backgroundColor: Color(0xFF22C55E),
       ),
     );
-    if (error == null) _tabController.animateTo(0);
   }
 
   Widget _buildNoEvents() => Center(
@@ -623,7 +559,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
   void _openDetail(OTicket ticket) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => TicketDetailPage(ticket: ticket)),
+      MaterialPageRoute(builder: (_) => OTicketFont(child: TicketDetailPage(ticket: ticket))),
     );
   }
 

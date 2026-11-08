@@ -55,5 +55,7 @@
 	<string>Cette application a besoin d'accéder à votre caméra pour prendre des photos et les envoyer.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Cette application a besoin d'accéder à votre microphone pour les vidéos.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Oli lit les numéros de vos contacts, sur votre demande, pour vous montrer ceux qui sont déjà inscrits. Les contacts non inscrits restent sur votre téléphone.</string>
 </dict>
 </plist>

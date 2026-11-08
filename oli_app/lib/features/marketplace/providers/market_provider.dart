@@ -109,6 +109,23 @@ final marketProductsProvider = StateNotifierProvider<MarketProductsNotifier, Asy
 });
 
 /// Notifier pour les produits mis en avant (Featured) - Page Accueil
+/// Délai pendant lequel une réouverture de l'application réutilise le cache
+/// des sections de l'accueil, sans appel réseau.
+const Duration _homeCacheValidity = Duration(hours: 12);
+
+/// Date d'écriture du cache [cacheKey] s'il a moins de 12 heures, sinon null.
+DateTime? _freshHomeCacheTime(String cacheKey) {
+  final ms = HiveCacheService.getCache('${cacheKey}_at');
+  if (ms is! int) return null;
+  final at = DateTime.fromMillisecondsSinceEpoch(ms);
+  final age = DateTime.now().difference(at);
+  return (age.isNegative || age >= _homeCacheValidity) ? null : at;
+}
+
+Future<void> _stampHomeCache(String cacheKey) {
+  return HiveCacheService.setCache('${cacheKey}_at', DateTime.now().millisecondsSinceEpoch);
+}
+
 class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
   Timer? _refreshTimer;
   bool _isLoading = false;
@@ -123,7 +140,7 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
   static const Duration _cacheDuration = Duration(hours: 24); // ← Durée du cache
 
   FeaturedProductsNotifier() : super([]) {
-    fetchFeaturedProducts();
+    fetchFeaturedProducts(force: false);
     // Vérification toutes les heures, mais ne recharge que si le cache est expiré
     _refreshTimer = Timer.periodic(const Duration(hours: 1), (_) => _refreshIfStale());
   }
@@ -154,7 +171,8 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
     super.dispose();
   }
 
-  Future<void> fetchFeaturedProducts() async {
+  /// Avec [force] à false, un cache de moins de 12 heures évite l'appel réseau.
+  Future<void> fetchFeaturedProducts({bool force = true}) async {
     if (_isLoading) return;
     _isLoading = true;
     _isLoadingMore = false;
@@ -179,12 +197,24 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
       }
     }
 
+    if (!force && state.isNotEmpty) {
+      final cachedAt = _freshHomeCacheTime('market_featured_cache');
+      if (cachedAt != null) {
+        _lastFetchTime = cachedAt;
+        _offset = state.length;
+        _hasMore = state.length >= _initialPageSize;
+        _isLoading = false;
+        return;
+      }
+    }
+
     try {
       final uri = Uri.parse('${ApiConfig.productsFeatured}?limit=$_initialPageSize');
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+        data.shuffle(); // Mélange avant la mise en cache : l'ordre reste le même à la réouverture
         final newProducts = <Product>[];
         for (final item in data) {
           try {
@@ -193,7 +223,6 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
             debugPrint('⚠️ Featured product skipped (parse error): $e');
           }
         }
-        newProducts.shuffle(); // Ordre complètement aléatoire
         _offset = newProducts.length;
         _hasMore = newProducts.length >= _initialPageSize;
         _lastFetchTime = DateTime.now(); // ← Mémoriser l'heure du chargement
@@ -203,6 +232,7 @@ class FeaturedProductsNotifier extends StateNotifier<List<Product>> {
         // Mise à jour du cache local
         try {
           await HiveCacheService.setCache('market_featured_cache', data);
+          await _stampHomeCache('market_featured_cache');
         } catch (e) {
           debugPrint('Erreur écriture cache featured: $e');
         }
@@ -264,7 +294,7 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
   static const Duration _cacheDuration = Duration(hours: 24); // ← Durée du cache
 
   TopSellersNotifier() : super([]) {
-    fetchTopSellers(shuffle: true);
+    fetchTopSellers(shuffle: true, force: false);
     // Vérification toutes les heures, ne recharge que si cache expiré
     _refreshTimer = Timer.periodic(const Duration(hours: 1), (_) => _refreshIfStale());
   }
@@ -293,7 +323,8 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
     super.dispose();
   }
 
-  Future<void> fetchTopSellers({bool shuffle = false}) async {
+  /// Avec [force] à false, un cache de moins de 12 heures évite l'appel réseau.
+  Future<void> fetchTopSellers({bool shuffle = false, bool force = true}) async {
     _isLoading = true;
     _error = null;
 
@@ -314,6 +345,15 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
       }
     }
 
+    if (!force && state.isNotEmpty) {
+      final cachedAt = _freshHomeCacheTime('market_topsellers_cache');
+      if (cachedAt != null) {
+        _lastFetchTime = cachedAt;
+        _isLoading = false;
+        return;
+      }
+    }
+
     try {
       final topSellersUrl = '${ApiConfig.productsTopSellers}?limit=30';
       final uri = Uri.parse(topSellersUrl);
@@ -321,11 +361,10 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        final newProducts = data.map((item) => Product.fromJson(item)).toList();
-
         if (shuffle) {
-          newProducts.shuffle(); // Ordre complètement aléatoire
+          data.shuffle(); // Mélange avant la mise en cache : l'ordre reste le même à la réouverture
         }
+        final newProducts = data.map((item) => Product.fromJson(item)).toList();
 
         _lastFetchTime = DateTime.now(); // ← Mémoriser l'heure du chargement
         state = newProducts;
@@ -334,6 +373,7 @@ class TopSellersNotifier extends StateNotifier<List<Product>> {
         // Mise à jour du cache local
         try {
           await HiveCacheService.setCache('market_topsellers_cache', data);
+          await _stampHomeCache('market_topsellers_cache');
         } catch (e) {
           debugPrint('Erreur écriture cache topsellers: $e');
         }
@@ -354,13 +394,14 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
   String? _error;
 
   VerifiedShopsProductsNotifier() : super([]) {
-    fetchVerifiedShopsProducts(); // Load once on init, refresh only on manual pull-to-refresh
+    fetchVerifiedShopsProducts(force: false);
   }
 
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> fetchVerifiedShopsProducts({bool shuffle = true}) async {
+  /// Avec [force] à false, un cache de moins de 12 heures évite l'appel réseau.
+  Future<void> fetchVerifiedShopsProducts({bool shuffle = true, bool force = true}) async {
     _isLoading = true;
     _error = null;
 
@@ -374,6 +415,11 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
       } catch (e) {}
     }
 
+    if (!force && state.isNotEmpty && _freshHomeCacheTime('market_verified_shops_cache') != null) {
+      _isLoading = false;
+      return;
+    }
+
     try {
       final verifiedUrl = '${ApiConfig.productsVerifiedShops}?limit=50';
       final uri = Uri.parse(verifiedUrl);
@@ -382,7 +428,9 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         final allProducts = data.map((item) => Product.fromJson(item)).toList();
-        
+        // L'ordre mis en cache doit être l'ordre affiché, pour rester le même à la réouverture.
+        List<dynamic> dataToCache = data;
+
         if (shuffle && allProducts.isNotEmpty) {
           final Map<String, List<Product>> byShop = {};
           for (final p in allProducts) {
@@ -407,12 +455,17 @@ class VerifiedShopsProductsNotifier extends StateNotifier<List<Product>> {
             }
             round++;
           }
+          final rawById = {
+            for (var i = 0; i < allProducts.length; i++) allProducts[i].id: data[i],
+          };
+          dataToCache = diversified.map((p) => rawById[p.id]).toList();
           state = diversified;
         } else {
           state = allProducts;
         }
         _error = null;
-        HiveCacheService.setCache('market_verified_shops_cache', data);
+        await HiveCacheService.setCache('market_verified_shops_cache', dataToCache);
+        await _stampHomeCache('market_verified_shops_cache');
       } else {
         _error = "Erreur serveur: ${response.statusCode}";
       }
@@ -436,10 +489,11 @@ final verifiedShopsProductsProvider = StateNotifierProvider<VerifiedShopsProduct
 /// Notifier pour les produits brandCertified (badge "Original")
 class BrandedProductsNotifier extends StateNotifier<List<Product>> {
   BrandedProductsNotifier() : super([]) {
-    fetchBrandedProducts();
+    fetchBrandedProducts(force: false);
   }
 
-  Future<void> fetchBrandedProducts() async {
+  /// Avec [force] à false, un cache de moins de 12 heures évite l'appel réseau.
+  Future<void> fetchBrandedProducts({bool force = true}) async {
     if (state.isEmpty) {
       try {
         final cachedData = HiveCacheService.getCache('market_branded_cache');
@@ -448,6 +502,10 @@ class BrandedProductsNotifier extends StateNotifier<List<Product>> {
           state = data.map((item) => Product.fromJson(item as Map<String, dynamic>)).toList();
         }
       } catch (e) {}
+    }
+
+    if (!force && state.isNotEmpty && _freshHomeCacheTime('market_branded_cache') != null) {
+      return;
     }
 
     try {
@@ -464,7 +522,8 @@ class BrandedProductsNotifier extends StateNotifier<List<Product>> {
           }
         }
         state = products;
-        HiveCacheService.setCache('market_branded_cache', data);
+        await HiveCacheService.setCache('market_branded_cache', data);
+        await _stampHomeCache('market_branded_cache');
         debugPrint('✅ brandedProductsProvider: ${state.length} produits Original chargés');
       }
     } catch (e) {

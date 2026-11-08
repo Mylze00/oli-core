@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../../../utils/price_color.dart';
 import '../../../marketplace/presentation/pages/product_details_page.dart';
@@ -552,11 +553,14 @@ class TopRankingProductCard extends ConsumerWidget {
             AspectRatio(
               aspectRatio: 1,
               child: product.images.isNotEmpty
-                  ? Image.network(
-                      CloudinaryHelper.card(product.images.first),
+                  ? CachedNetworkImage(
+                      imageUrl: CloudinaryHelper.card(product.images.first),
                       fit: BoxFit.cover,
-                      cacheWidth: 540, // décodage à la résolution servie (540 px)
-                      errorBuilder: (_, __, ___) => Container(
+                      memCacheWidth: 540, // décodage à la résolution servie (540 px)
+                      placeholder: (_, __) => Container(
+                        color: isDark ? Colors.grey[900] : Colors.grey[200],
+                      ),
+                      errorWidget: (_, __, ___) => Container(
                         color: isDark ? Colors.grey[900] : Colors.grey[200],
                         child: const Icon(Icons.broken_image, color: Colors.grey),
                       ),

@@ -24,19 +24,15 @@ class OrderService {
 
         // Validation de base
         if (!items || !Array.isArray(items) || items.length === 0) {
-            throw new Error("Items requis");
+            throw this._badRequest("Items requis");
         }
 
-        // Validation des items
-        for (const item of items) {
-            if (!item.productId || !item.productName || !item.price || !item.quantity) {
-                throw new Error("Chaque item doit avoir productId, productName, price et quantity");
-            }
-        }
+        // [SÉCU C1/C2] Les prix viennent de la base, jamais du client.
+        const { items: pricedItems, itemsTotal } = await this._priceItemsFromCatalogue(items);
 
-        // Calcul du total
-        const itemsTotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-        const totalAmount = itemsTotal + (parseFloat(deliveryFee) || 0);
+        // [SÉCU C2] Frais de livraison : jamais négatifs (le recalcul par mode reste à faire)
+        const safeDeliveryFee = Math.max(0, parseFloat(deliveryFee) || 0);
+        const totalAmount = itemsTotal + safeDeliveryFee;
 
         // LOGIQUE PAIEMENT INSTANTANÉ (wallet & mobile_money)
         let paymentStatus = 'pending';
@@ -50,7 +46,7 @@ class OrderService {
                 orderStatus = 'paid';
             } catch (err) {
                 // Relancer l'erreur avec message clair (ex: Solde insuffisant)
-                throw new Error(err.message || 'Échec du paiement Wallet');
+                throw this._badRequest(err.message || 'Échec du paiement Wallet');
             }
         } else if (paymentMethod === 'mobile_money') {
             // Mobile Money = flux asynchrone : on crée la commande en 'pending'
@@ -64,10 +60,10 @@ class OrderService {
         try {
             order = await orderRepository.createOrder(
                 userId,
-                items,
+                pricedItems,
                 deliveryAddress || null,
                 paymentMethod || 'wallet',
-                parseFloat(deliveryFee) || 0,
+                safeDeliveryFee,
                 deliveryMethodId || null
             );
         } catch (createErr) {
@@ -131,6 +127,67 @@ class OrderService {
         }
 
         return order;
+    }
+
+    /**
+     * Erreur métier renvoyée au client avec un statut 400 (et non 500).
+     */
+    _badRequest(message) {
+        const err = new Error(message);
+        err.status = 400;
+        return err;
+    }
+
+    /**
+     * [SÉCU C1/C2] Recalcule les prix à partir de la table `products`.
+     * Seuls productId et quantity sont lus côté client ; le prix, le nom et le vendeur
+     * sont relus en base. Refuse les produits non actifs, les prix invalides et les
+     * quantités non entières ou hors bornes.
+     *
+     * @returns {Promise<{items: Array, itemsTotal: number}>}
+     */
+    async _priceItemsFromCatalogue(items) {
+        const MAX_QTY_PER_LINE = 1000;
+        const parsed = items.map((item) => {
+            const productId = parseInt(item?.productId, 10);
+            const quantity = Number(item?.quantity);
+            if (!Number.isInteger(productId) || productId <= 0) {
+                throw this._badRequest("productId invalide");
+            }
+            if (!Number.isInteger(quantity) || quantity <= 0 || quantity > MAX_QTY_PER_LINE) {
+                throw this._badRequest(`Quantité invalide (entier entre 1 et ${MAX_QTY_PER_LINE})`);
+            }
+            return { ...item, productId, quantity };
+        });
+
+        const uniqueIds = [...new Set(parsed.map((i) => i.productId))];
+        const res = await pool.query(
+            'SELECT id, name, price, status FROM products WHERE id = ANY($1::int[])',
+            [uniqueIds]
+        );
+        const byId = new Map(res.rows.map((p) => [p.id, p]));
+
+        const pricedItems = parsed.map((item) => {
+            const product = byId.get(item.productId);
+            if (!product) {
+                throw this._badRequest(`Produit introuvable (#${item.productId})`);
+            }
+            if (product.status !== 'active') {
+                throw this._badRequest(`Produit indisponible : ${product.name}`);
+            }
+            const price = parseFloat(product.price);
+            if (!Number.isFinite(price) || price <= 0) {
+                throw this._badRequest(`Prix invalide pour le produit #${item.productId}`);
+            }
+            return {
+                ...item,
+                productName: product.name,
+                price,
+            };
+        });
+
+        const itemsTotal = pricedItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
+        return { items: pricedItems, itemsTotal };
     }
 
     async getUserOrders(userId) {

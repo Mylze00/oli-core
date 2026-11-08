@@ -71,7 +71,7 @@ class _OrganizerScanPageState extends ConsumerState<OrganizerScanPage> {
               children: [
                 MobileScanner(
                   controller: _controller,
-                  errorBuilder: (context, error, child) => Center(
+                  errorBuilder: (context, error) => Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Column(

@@ -43,6 +43,19 @@ class OEvent {
 
   bool get soldOut => typeCount > 0 && !hasUnlimited && remaining <= 0;
 
+  /// Représentation au format billet, pour l'affichage avant achat.
+  OTicket toPreviewTicket() => OTicket.fromApi({
+        'ticket_code': 'event-$id',
+        'title': title,
+        'subtitle': subtitle,
+        'category': category,
+        'event_date': date,
+        'event_time': time,
+        'location': location,
+        'seat_label': placesLabel,
+        'image_url': imageUrl,
+      });
+
   factory OEvent.fromJson(Map<String, dynamic> j) => OEvent(
         id: (j['id'] as num).toInt(),
         title: (j['title'] ?? '').toString(),

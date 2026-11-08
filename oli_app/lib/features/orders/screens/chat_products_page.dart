@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../chat/conversations_page.dart';
 import '../../chat/chat_page.dart';
+import '../../chat/providers/inbox_providers.dart';
 import '../../../core/user/user_provider.dart';
 
 /// Page affichant les produits pour lesquels l'utilisateur a lancé un chat
@@ -11,7 +11,7 @@ class ChatProductsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(userProvider).value;
-    final conversationsAsync = ref.watch(conversationsProvider);
+    final conversationsAsync = ref.watch(inboxConversationsProvider);
 
     return Scaffold(
       backgroundColor: Colors.black,
