@@ -325,7 +325,7 @@ class _SplashWrapperState extends State<SplashWrapper>
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          'Plus mieux, tout en un clic',
+                          'Tout en un clic',
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           style: TextStyle(
