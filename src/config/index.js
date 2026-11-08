@@ -60,6 +60,8 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "https://oli-core.web.app";
 const DEFAULT_ORIGINS = [
     "https://oli-core.web.app",
     "https://oli-core.firebaseapp.com",
+    // Canal de prévisualisation Firebase du frontend (copie de travail)
+    "https://oli-core--frontend-copie-lwlvhqlw.web.app",
     "https://oli-app.web.app",
     "https://oli-app.firebaseapp.com",
     // Delivery App Firebase
