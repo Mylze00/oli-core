@@ -13,6 +13,7 @@ import 'widgets/wallet_summary_card.dart';
 import 'widgets/dashboard_section.dart';
 import 'widgets/profile_tools_grid.dart';
 import '../../user/widgets/visited_products_section.dart';
+import '../../../core/theme/oli_colors.dart';
 
 class ProfileAndWalletPage extends ConsumerWidget {
   const ProfileAndWalletPage({super.key});
@@ -124,7 +125,7 @@ class ProfileAndWalletPage extends ConsumerWidget {
 
               // 4. RÉCEMMENT CONSULTÉS
               const VisitedProductsSection(),
-              const SizedBox(height: 30),
+              SizedBox(height: bottomNavClearance(context)),
             ],
           ),
         ),

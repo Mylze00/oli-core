@@ -12,6 +12,7 @@ import '../../../../models/product_model.dart';
 import '../providers/shops_provider.dart';
 import '../../../../app/theme/theme_provider.dart';
 import 'network_status_indicator.dart';
+import '../../../../core/theme/oli_colors.dart';
 
 class HomeAppBar extends ConsumerWidget {
   final TextEditingController searchCtrl;
@@ -102,7 +103,7 @@ class HomeAppBar extends ConsumerWidget {
                 end: Alignment.bottomCenter,
                 colors: isDark
                     ? [Colors.blue, Colors.black]
-                    : [const Color(0xFF1E7DBA), const Color(0xFFD9D9D9)],
+                    : [const Color(0xFF1E7DBA), OliLightColors.background],
               ),
             ),
           ),

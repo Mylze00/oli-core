@@ -12,6 +12,7 @@ import '../../../tabs/dashboard/widgets/verified_shops_carousel.dart';
 import '../../../tabs/dashboard/widgets/product_sections.dart';
 import '../../../tabs/dashboard/providers/shops_provider.dart';
 import '../../../tabs/dashboard/widgets/category_glass_section.dart';
+import '../../../../core/theme/oli_colors.dart';
 
 /// Page Marché - Produits des utilisateurs
 class MarketView extends ConsumerStatefulWidget {
@@ -313,7 +314,7 @@ class _MarketViewState extends ConsumerState<MarketView> {
                     ),
                   ),
 
-                const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+                SliverPadding(padding: EdgeInsets.only(bottom: bottomNavClearance(context))),
               ],
             ),
           );

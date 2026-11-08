@@ -30,6 +30,7 @@ import '../../marketplace/presentation/widgets/market_product_card.dart';
 
 // Logique métier extraite
 import 'dashboard_product_distribution.dart';
+import '../../../core/theme/oli_colors.dart';
 
 
 class MainDashboardView extends ConsumerStatefulWidget {
@@ -390,7 +391,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
-    final backgroundColor = isDark ? Colors.black : const Color(0xFFD9D9D9);
+    final backgroundColor = isDark ? Colors.black : OliLightColors.background;
     final textColor = isDark ? Colors.white : Colors.black87;
 
     // Providers de données
@@ -667,7 +668,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   ];
                 }).expand((x) => x),
 
-                const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+                SliverPadding(padding: EdgeInsets.only(bottom: bottomNavClearance(context))),
               ],
             ),
           ),

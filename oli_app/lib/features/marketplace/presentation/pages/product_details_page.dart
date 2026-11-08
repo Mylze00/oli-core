@@ -31,6 +31,7 @@ import '../widgets/product_details/product_variant_selector.dart';
 import '../../../../models/product_variant_model.dart';
 import '../../../shop/screens/edit_product_page.dart';
 import '../widgets/market_product_card.dart'; // Import pour les produits similaires
+import '../../../../core/theme/oli_colors.dart';
 class ProductDetailsPage extends ConsumerStatefulWidget {
   final Product product;
   final String? originVideoId;
@@ -238,7 +239,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     final isDark = ref.watch(themeProvider);
 
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : const Color(0xFFD9D9D9),
+      backgroundColor: isDark ? Colors.black : OliLightColors.background,
       appBar: AppBar(
         title: Text("Détail", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
         backgroundColor: isDark ? Colors.black : Colors.white,
