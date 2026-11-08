@@ -266,8 +266,8 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
 
                   // 1. Filtre type (Privé / Market)
                   final filtered = allConversations.where((c) {
-                    final hasProduct = c['product_id'] != null;
-                    final matchesType = _selectedIndex == 1 ? hasProduct : !hasProduct;
+                    final isMarket = c['product_id'] != null || c['is_market'] == true;
+                    final matchesType = _selectedIndex == 1 ? isMarket : !isMarket;
                     final otherName = (c['other_name'] ?? '').toString().toLowerCase();
                     final lastMsg = (c['last_message'] ?? '').toString().toLowerCase();
                     final matchesSearch = otherName.contains(_searchQuery) || lastMsg.contains(_searchQuery);

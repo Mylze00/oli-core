@@ -538,6 +538,10 @@ if (process.env.NODE_ENV !== 'test') {
             await pool.query(fsTick.readFileSync(pathTick.join(__dirname, 'migrations', '049_product_request_source.sql'), 'utf8'));
             console.log('✅ [MIGRATION] Origine des demandes de produit vérifiée.');
 
+            // Migration 050 — réponses de l'équipe Oli dans Market Chat (idempotente)
+            await pool.query(fsTick.readFileSync(pathTick.join(__dirname, 'migrations', '050_market_team_reply.sql'), 'utf8'));
+            console.log('✅ [MIGRATION] Réponses Market Chat vérifiées.');
+
             // 🏦 Migration 039 — OLI Bank Portail Cryptographique
             const fs = require('fs');
             const path = require('path');

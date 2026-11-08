@@ -52,14 +52,18 @@ export default function ProductRequests() {
 
     const updateStatus = async (id, status, adminResponse = null) => {
         try {
-            await api.patch(`/api/product-requests/${id}/status`, {
+            const { data } = await api.patch(`/api/product-requests/${id}/status`, {
                 status,
                 admin_response: adminResponse
             });
             fetchRequests();
             setSelectedRequest(null);
             setResponseText('');
-            alert('Statut mis à jour !');
+            alert(
+                data.chat_delivery === 'sent' ? 'Réponse envoyée dans le Market Chat du client.'
+                    : data.chat_delivery === 'no_account' ? "Réponse enregistrée, mais ce client n'a pas de compte Oli : contactez-le par téléphone."
+                        : 'Statut mis à jour !'
+            );
         } catch (error) {
             console.error("Erreur:", error);
             alert('Erreur lors de la mise à jour');
@@ -219,6 +223,19 @@ export default function ProductRequests() {
                                     <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                                         <p className="text-sm font-medium text-green-800 mb-1">Réponse de l'équipe OLI :</p>
                                         <p className="text-green-700">{req.admin_response}</p>
+                                        {req.response_sent_at ? (
+                                            <p className="mt-2 text-xs font-medium text-green-800">✓ Envoyée dans le Market Chat du client</p>
+                                        ) : (
+                                            <div className="mt-2 flex flex-wrap items-center gap-3">
+                                                <p className="text-xs font-medium text-amber-700">Pas encore transmise au client</p>
+                                                <button
+                                                    onClick={() => updateStatus(req.id, req.status, req.admin_response)}
+                                                    className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"
+                                                >
+                                                    Envoyer dans le Market Chat
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

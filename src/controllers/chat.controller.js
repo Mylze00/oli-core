@@ -189,7 +189,7 @@ exports.getConversations = async (req, res) => {
     const myId = req.user.id;
     try {
         const result = await pool.query(`
-            SELECT c.id as conversation_id, u.name as other_name, u.avatar_url as other_avatar, u.id as other_id, u.phone as other_phone,
+            SELECT c.id as conversation_id, c.is_market, u.name as other_name, u.avatar_url as other_avatar, u.id as other_id, u.phone as other_phone,
                 m.content as last_message, m.type as last_message_type, m.created_at as last_time, m.sender_id as last_sender_id,
                 p.id as product_id, p.name as product_name, p.price as product_price, p.images as product_images_raw,
                 f.status as friendship_status, f.requester_id,
