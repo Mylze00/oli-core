@@ -21,6 +21,7 @@ import Delivery from './pages/Delivery'; // 🚚 Livreurs
 import Finances from './pages/Finances';
 import PriceWorker from './pages/PriceWorker'; // 🤖 Worker Prix
 import ProductComparator from './pages/ProductComparator'; // 🔍 Comparateur Prix
+import Operations from './pages/Operations'; // 🧭 Opérations
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
             <Route path="/shops" element={<Shops />} />
             <Route path="/requests" element={<Requests />} />
             <Route path="/product-requests" element={<ProductRequests />} /> {/* 📦 */}
+            <Route path="/operations" element={<Operations />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/disputes" element={<Disputes />} />
             <Route path="/ads" element={<AdsManager />} />

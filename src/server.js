@@ -534,6 +534,10 @@ if (process.env.NODE_ENV !== 'test') {
                 console.log('✅ [MIGRATION] Organisateurs d\'événement vérifiés.');
             }
 
+            // Migration 049 — origine des demandes de produit (idempotente)
+            await pool.query(fsTick.readFileSync(pathTick.join(__dirname, 'migrations', '049_product_request_source.sql'), 'utf8'));
+            console.log('✅ [MIGRATION] Origine des demandes de produit vérifiée.');
+
             // 🏦 Migration 039 — OLI Bank Portail Cryptographique
             const fs = require('fs');
             const path = require('path');

@@ -17,12 +17,16 @@ const STATUS_CONFIG = {
     closed: { label: 'Fermée', bg: 'bg-gray-100', text: 'text-gray-600', icon: XCircleIcon }
 };
 
+/** Lien WhatsApp à partir d'un numéro international (+243…). */
+const whatsappLink = (phone) => `https://wa.me/${phone.replace(/\D/g, '')}`;
+
 export default function ProductRequests() {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('pending');
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [responseText, setResponseText] = useState('');
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
         fetchRequests();
@@ -37,8 +41,10 @@ export default function ProductRequests() {
                 ? data
                 : data.filter(r => r.status === filter);
             setRequests(filtered);
+            setLoadError('');
         } catch (error) {
             console.error("Erreur:", error);
+            setLoadError(error.response?.data?.error || 'Le serveur ne répond pas.');
         } finally {
             setLoading(false);
         }
@@ -100,7 +106,7 @@ export default function ProductRequests() {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">📦 Demandes de Produit</h1>
                     <p className="text-gray-500 text-sm mt-1">
-                        Messages des utilisateurs cherchant des produits spécifiques
+                        Besoins envoyés par les clients et leurs coordonnées
                     </p>
                 </div>
 
@@ -130,8 +136,14 @@ export default function ProductRequests() {
             </div>
 
             {/* Liste des demandes */}
+            {loadError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    Impossible de charger les demandes : {loadError}
+                </div>
+            )}
+
             <div className="grid gap-4">
-                {requests.length === 0 ? (
+                {loadError ? null : requests.length === 0 ? (
                     <div className="bg-white rounded-lg p-8 text-center text-gray-500">
                         Aucune demande trouvée
                     </div>
@@ -149,15 +161,27 @@ export default function ProductRequests() {
                                     {/* Header */}
                                     <div className="flex items-start gap-4">
                                         <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                                            {req.user_name?.[0]?.toUpperCase() || 'U'}
+                                            {req.contact_name?.[0]?.toUpperCase() || 'U'}
                                         </div>
                                         <div>
-                                            <h3 className="font-semibold text-gray-900">{req.user_name || 'Utilisateur'}</h3>
-                                            {req.user_phone && (
-                                                <p className="text-sm text-gray-500 flex items-center gap-1">
-                                                    <PhoneIcon className="h-3 w-3" />
-                                                    {req.user_phone}
-                                                </p>
+                                            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                                                {req.contact_name || 'Client anonyme'}
+                                                {req.source === 'b2b' && (
+                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">B2B</span>
+                                                )}
+                                            </h3>
+                                            {req.contact_phone ? (
+                                                <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
+                                                    <a href={`tel:${req.contact_phone}`} className="font-medium text-gray-900 flex items-center gap-1 hover:text-indigo-600">
+                                                        <PhoneIcon className="h-4 w-4" />
+                                                        {req.contact_phone}
+                                                    </a>
+                                                    <a href={whatsappLink(req.contact_phone)} target="_blank" rel="noreferrer" className="font-medium text-green-700 hover:underline">
+                                                        WhatsApp
+                                                    </a>
+                                                </div>
+                                            ) : (
+                                                <p className="mt-1 text-sm text-red-600">Aucun numéro fourni</p>
                                             )}
                                             <p className="text-xs text-gray-400 mt-1">{formatDate(req.created_at)}</p>
                                         </div>
@@ -172,7 +196,7 @@ export default function ProductRequests() {
 
                                 {/* Description */}
                                 <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                                    <p className="text-gray-700 whitespace-pre-wrap">{req.description}</p>
+                                    <p className="text-gray-700 whitespace-pre-wrap">{req.description || 'Voir la photo jointe'}</p>
                                 </div>
 
                                 {/* Image si présente */}

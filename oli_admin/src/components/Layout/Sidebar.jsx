@@ -16,6 +16,7 @@ import {
     CheckBadgeIcon, // 🆕 Icone pour Certifications
     ChatBubbleLeftRightIcon, // 🆕 Icone pour Support
     CircleStackIcon, // 🗄️ Icone pour Base de données
+    Squares2X2Icon,
     GiftIcon, // 📦 Icone pour Demandes Produit
     CpuChipIcon, // 🤖 Icone pour Worker Prix
     ChartBarIcon, // 🔍 Comparateur Prix
@@ -23,6 +24,7 @@ import {
 
 const navigation = [
     { name: 'Tableau de bord', href: '/', icon: HomeIcon },
+    { name: 'Opérations', href: '/operations', icon: Squares2X2Icon },
     { name: 'Utilisateurs', href: '/users', icon: UsersIcon },
     { name: 'Marchands', href: '/shops', icon: ShoppingBagIcon },
     { name: 'Produits', href: '/products', icon: CubeIcon },

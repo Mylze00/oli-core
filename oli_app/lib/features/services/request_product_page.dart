@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'dart:typed_data';
 import '../auth/providers/auth_controller.dart';
 import '../../config/api_config.dart';
 
@@ -16,7 +16,7 @@ class RequestProductPage extends ConsumerStatefulWidget {
 class _RequestProductPageState extends ConsumerState<RequestProductPage> {
   final TextEditingController _descriptionController = TextEditingController();
   String? _uploadedFileName;
-  String? _uploadedFilePath;
+  Uint8List? _uploadedFileBytes;
   bool _isSubmitting = false;
 
   @override
@@ -34,7 +34,7 @@ class _RequestProductPageState extends ConsumerState<RequestProductPage> {
     if (result != null) {
       setState(() {
         _uploadedFileName = result.files.single.name;
-        _uploadedFilePath = result.files.single.path;
+        _uploadedFileBytes = result.files.single.bytes;
       });
     }
   }
@@ -55,16 +55,21 @@ class _RequestProductPageState extends ConsumerState<RequestProductPage> {
     try {
       final authState = ref.read(authControllerProvider);
       
-      final response = await http.post(
+      final request = http.MultipartRequest(
+        'POST',
         Uri.parse('${ApiConfig.baseUrl}/api/product-requests'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      )..fields.addAll({
+          'source': 'b2b',
           'description': _descriptionController.text,
-          'user_id': authState.userData?['id'],
-          'user_name': authState.userData?['name'] ?? 'Utilisateur',
-          'user_phone': authState.userData?['phone'],
-        }),
-      );
+          'user_name': (authState.userData?['name'] ?? 'Utilisateur').toString(),
+          if (authState.userData?['id'] != null) 'user_id': authState.userData!['id'].toString(),
+          if (authState.userData?['phone'] != null) 'user_phone': authState.userData!['phone'].toString(),
+        });
+      final bytes = _uploadedFileBytes;
+      if (bytes != null) {
+        request.files.add(http.MultipartFile.fromBytes('image', bytes, filename: _uploadedFileName));
+      }
+      final response = await http.Response.fromStream(await request.send());
 
       if (response.statusCode == 201) {
         if (mounted) {
