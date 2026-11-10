@@ -97,6 +97,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/logo.png
+    - assets/images/logo_oli_ticket.png
     - "assets/images/logo - Copie (1).svg"
     - assets/images/chat_bg.png
     - assets/images/chat_bg_new.png
