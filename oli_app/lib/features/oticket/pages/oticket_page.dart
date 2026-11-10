@@ -3,10 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ticket_model.dart';
 import '../providers/oticket_provider.dart';
 import 'organizer_scan_page.dart';
+import '../widgets/event_ticket_card.dart';
 import '../widgets/oticket_font.dart';
 import '../widgets/ticket_widget.dart';
 import 'event_detail_page.dart';
 import 'ticket_detail_page.dart';
+
+const _pageBlue = Color(0xFF072561);
+const _hubBlue = Color(0xFF051A45);
+const _roundButtonColor = Color(0xFF0A0A18);
+const _designPageWidth = 925.0;
+const _headerHeight = 150.0;
+const _hubPartners = ['CAA', 'Trans\nMatadi'];
 
 class OTicketPage extends ConsumerStatefulWidget {
   const OTicketPage({super.key});
@@ -20,7 +28,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
   late TabController _tabController;
   int _currentTicketIndex = 0;
   int _currentEventIndex = 0;
-  final PageController _eventsController = PageController(viewportFraction: 0.85);
+  final PageController _eventsController = PageController();
 
   // Billets réels de l'utilisateur (GET /tickets/my)
   List<OTicket> _myTickets = const [];
@@ -47,8 +55,8 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
 
     return OTicketFont(
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0A18),
-        appBar: _buildAppBar(),
+        backgroundColor: _pageBlue,
+        appBar: _buildHeader(),
         body: TabBarView(
           controller: _tabController,
           children: [
@@ -70,7 +78,14 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     if (events.isEmpty) return null;
     return IconButton(
       tooltip: 'Contrôler les entrées',
-      icon: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF7C4DFF)),
+      icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 18),
+      style: IconButton.styleFrom(
+        backgroundColor: _roundButtonColor,
+        fixedSize: const Size(36, 36),
+        minimumSize: const Size(36, 36),
+        padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
       onPressed: () => _chooseEventToScan(events),
     );
   }
@@ -122,57 +137,114 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     ).then((_) => ref.invalidate(organizerEventsProvider));
   }
 
-  AppBar _buildAppBar() {
+  PreferredSizeWidget _buildHeader() {
     final scanAction = _buildScanAction();
-    return AppBar(
-      backgroundColor: const Color(0xFF0A0A18),
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-        onPressed: () => Navigator.pop(context),
-      ),
-      actions: scanAction == null ? null : [scanAction],
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF7C4DFF), Color(0xFF448AFF)],
+    final topInset = MediaQuery.of(context).padding.top;
+    return PreferredSize(
+      preferredSize: Size.fromHeight(_headerHeight + topInset),
+      child: Padding(
+        padding: EdgeInsets.only(top: topInset),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 14,
+              left: 15,
+              child: IconButton(
+                tooltip: 'Retour',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+                style: IconButton.styleFrom(
+                  backgroundColor: _roundButtonColor,
+                  fixedSize: const Size(36, 36),
+                  minimumSize: const Size(36, 36),
+                  padding: EdgeInsets.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
-              borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.confirmation_number, color: Colors.white, size: 18),
-          ),
-          const SizedBox(width: 10),
-          const Text(
-            'O-Ticket',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 20,
-              letterSpacing: 1,
+            if (scanAction != null) Positioned(top: 14, right: 15, child: scanAction),
+            Positioned(
+              top: 16,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Image.asset(
+                  'assets/images/logo_oli_ticket.png',
+                  height: 66,
+                  fit: BoxFit.contain,
+                  semanticLabel: 'Oli Ticket',
+                ),
+              ),
             ),
-          ),
-        ],
-      ),
-      bottom: TabBar(
-        controller: _tabController,
-        indicatorColor: const Color(0xFF7C4DFF),
-        indicatorWeight: 3,
-        labelColor: Colors.white,
-        unselectedLabelColor: Colors.white38,
-        labelStyle: const TextStyle(
-          fontFamily: OTicketFont.family,
-          fontWeight: FontWeight.bold,
-          fontSize: 13,
+            Positioned(top: 119, left: 0, right: 0, height: 31, child: _buildTabs()),
+          ],
         ),
-        tabs: const [
-          Tab(text: 'Explorer'),
-          Tab(text: 'Mes Billets'),
-        ],
       ),
+    );
+  }
+
+  /// Onglets de la maquette : trait continu, repère épais et libellés en dessous.
+  Widget _buildTabs() {
+    const firstCenter = 300 / _designPageWidth;
+    const secondCenter = 693 / _designPageWidth;
+    const indicatorWidth = 64.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final lineInset = width * 34 / _designPageWidth;
+
+        Widget label(String text, double center, int index) => Positioned(
+              top: 2,
+              height: 26,
+              left: width * center - 70,
+              width: 140,
+              child: TextButton(
+                onPressed: () => _tabController.animateTo(index),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: OTicketFont.family,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            );
+
+        return Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: lineInset,
+              right: lineInset,
+              height: 2,
+              child: const ColoredBox(color: Colors.white),
+            ),
+            AnimatedBuilder(
+              animation: _tabController.animation!,
+              builder: (context, _) {
+                final center = firstCenter + (secondCenter - firstCenter) * _tabController.animation!.value;
+                return Positioned(
+                  top: 0,
+                  left: width * center - indicatorWidth / 2,
+                  width: indicatorWidth,
+                  height: 5,
+                  child: const ColoredBox(color: Colors.white),
+                );
+              },
+            ),
+            label('Explorer', firstCenter, 0),
+            label('Mes billets', secondCenter, 1),
+          ],
+        );
+      },
     );
   }
 
@@ -361,73 +433,69 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
   Widget _buildExplore() {
     final eventsAsync = ref.watch(oticketEventsProvider);
 
-    return eventsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF))),
-      error: (_, __) => _buildLoadError(),
-      data: (events) {
-        if (events.isEmpty) return _buildNoEvents();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pageWidth = constraints.maxWidth;
+        final cardLeft = pageWidth * 83 / _designPageWidth;
+        final cardRight = pageWidth * 79 / _designPageWidth;
+        final cardHeight = EventTicketCard.heightFor(pageWidth - cardLeft - cardRight);
+        final events = eventsAsync.valueOrNull ?? const <OEvent>[];
+        const dotsHeight = 44.0;
+        const cardTopSpacing = 7.0;
+        const hubGap = 16.0;
+        final countLineHeight = events.isEmpty ? 0.0 : 34.0;
+        final hubHeight = (constraints.maxHeight - cardTopSpacing - countLineHeight - cardHeight - dotsHeight - hubGap)
+            .clamp(190.0, double.infinity);
+
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(oticketEventsProvider),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               children: [
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${events.length} événement${events.length > 1 ? 's' : ''} à venir',
-                        style: const TextStyle(color: Colors.white60, fontSize: 13),
+                const SizedBox(height: cardTopSpacing),
+                if (events.isNotEmpty)
+                  SizedBox(
+                    height: countLineHeight,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${events.length} événement${events.length > 1 ? 's' : ''} à venir',
+                            style: const TextStyle(color: Colors.white60, fontSize: 13),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
                 SizedBox(
-                  height: 480,
-                  child: PageView.builder(
-                    controller: _eventsController,
-                    itemCount: events.length,
-                    onPageChanged: (i) => setState(() => _currentEventIndex = i),
-                    itemBuilder: (context, i) => GestureDetector(
-                      onTap: () => _openEvent(events[i]),
-                      child: AnimatedScale(
-                        scale: _currentEventIndex == i ? 1.0 : 0.92,
-                        duration: const Duration(milliseconds: 200),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: _buildEventCard(events[i]),
+                  height: cardHeight,
+                  child: eventsAsync.when(
+                    loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                    error: (_, __) => _buildLoadError(),
+                    data: (loaded) {
+                      if (loaded.isEmpty) return _buildNoEvents();
+                      return PageView.builder(
+                        controller: _eventsController,
+                        itemCount: loaded.length,
+                        onPageChanged: (i) => setState(() => _currentEventIndex = i),
+                        itemBuilder: (context, i) => Padding(
+                          padding: EdgeInsets.only(left: cardLeft, right: cardRight),
+                          child: GestureDetector(
+                            onTap: () => _openEvent(loaded[i]),
+                            child: _buildEventCard(loaded[i]),
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ),
-                if (events.length > 1) ...[
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      events.length,
-                      (i) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: _currentEventIndex == i ? 20 : 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: _currentEventIndex == i
-                              ? const Color(0xFF7C4DFF)
-                              : Colors.white24,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 32),
+                SizedBox(height: dotsHeight, child: _buildEventDots(events.length)),
+                const SizedBox(height: hubGap),
+                _buildHub(hubHeight),
               ],
             ),
           ),
@@ -436,44 +504,88 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     );
   }
 
-  /// Événement au format billet : le bas affiche le prix à la place du QR code,
-  /// qui n'existe qu'après l'achat.
-  Widget _buildEventCard(OEvent e) {
-    final onSale = e.typeCount > 0;
+  Widget _buildEventDots(int count) {
+    if (count < 2) return const SizedBox.shrink();
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        count,
+        (i) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: 11,
+          height: 11,
+          decoration: BoxDecoration(
+            color: _currentEventIndex == i ? const Color(0xFF03112D) : Colors.white,
+            shape: BoxShape.circle,
+          ),
+        ),
+      ),
+    );
+  }
 
-    return TicketWidget(
-      ticket: e.toPreviewTicket(),
-      topFlex: 72,
-      footer: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildHub(double height) {
+    return Container(
+      width: double.infinity,
+      height: height,
+      color: _hubBlue,
+      padding: const EdgeInsets.fromLTRB(23, 12, 23, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            onSale ? 'À PARTIR DE' : 'BILLETTERIE',
-            style: const TextStyle(color: Colors.white38, fontSize: 9, letterSpacing: 1),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            onSale ? '${e.minPriceFC.toStringAsFixed(0)} FC' : 'Bientôt en vente',
-            style: const TextStyle(
-                color: Color(0xFFFFD700), fontWeight: FontWeight.w800, fontSize: 20),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 36,
-            child: ElevatedButton(
-              onPressed: () => _openEvent(e),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: e.soldOut ? Colors.grey[800] : const Color(0xFF7C4DFF),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text(
-                e.soldOut ? 'Complet' : 'Voir les billets',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-            ),
+          const Center(child: Text('Hub', style: TextStyle(color: Colors.white, fontSize: 17))),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              for (final partner in _hubPartners) ...[
+                _buildHubPartner(partner),
+                const SizedBox(width: 28),
+              ],
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildHubPartner(String name) {
+    final oneLineName = name.replaceAll('\n', ' ');
+    return Semantics(
+      button: true,
+      label: oneLineName,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$oneLineName arrive bientôt sur Oli Ticket')),
+        ),
+        child: Container(
+          width: 72,
+          height: 72,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          child: Text(
+            name,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: const Color(0xFFE5121C),
+              fontSize: name.contains('\n') ? 14 : 19,
+              height: 1.1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Événement à l'affiche : le bas de la carte présente le prix et l'accès aux billets.
+  Widget _buildEventCard(OEvent e) {
+    final onSale = e.typeCount > 0;
+    return EventTicketCard(
+      ticket: e.toPreviewTicket(),
+      priceCaption: onSale ? 'À PARTIR DE' : 'BILLETTERIE',
+      priceLabel: onSale ? '${e.minPriceFC.toStringAsFixed(0)} FC' : 'Bientôt en vente',
+      buttonLabel: e.soldOut ? 'Complet' : 'Voir les billets',
+      isDisabled: e.soldOut,
+      onOpen: () => _openEvent(e),
     );
   }
 
@@ -493,26 +605,23 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     );
   }
 
-  Widget _buildNoEvents() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF7C4DFF).withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.explore_outlined, color: Color(0xFF7C4DFF), size: 48),
-            ),
-            const SizedBox(height: 20),
-            const Text('Aucun événement pour le moment',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text('Revenez bientôt : de nouveaux événements\nseront publiés dans votre ville.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white38, fontSize: 13, height: 1.5)),
-          ],
+  Widget _buildNoEvents() => const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.explore_outlined, color: Colors.white70, size: 48),
+              SizedBox(height: 16),
+              Text('Aucun événement pour le moment',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Text('Revenez bientôt : de nouveaux événements\nseront publiés dans votre ville.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
+            ],
+          ),
         ),
       );
 
@@ -530,7 +639,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
                 ref.invalidate(myTicketsProvider);
                 ref.invalidate(oticketEventsProvider);
               },
-              child: const Text('Réessayer', style: TextStyle(color: Color(0xFF7C4DFF))),
+              child: const Text('Réessayer', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
