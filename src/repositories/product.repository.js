@@ -1,6 +1,14 @@
 const pool = require('../config/db');
 const fuzzySearchService = require('../services/fuzzy_search.service');
 
+// L'identifiant départage les égalités : la pagination ne répète ni n'oublie aucun produit
+const PRODUCT_SORT_ORDERS = new Map([
+    ['recent', 'p.created_at DESC, p.id DESC'],
+    ['price_asc', 'p.price ASC, p.id DESC'],
+    ['price_desc', 'p.price DESC, p.id DESC'],
+    ['popular', 'COALESCE(p.view_count, 0) DESC, p.id DESC'],
+]);
+
 class ProductRepository {
     async findFeatured(adminPhone, limit, offset = 0) {
         const query = `
@@ -260,7 +268,9 @@ class ProductRepository {
         }
 
         // Tri selon le type de filtre
-        if (filters.filterType === 'popular') {
+        if (PRODUCT_SORT_ORDERS.has(filters.sort)) {
+            query += ` ORDER BY ${PRODUCT_SORT_ORDERS.get(filters.sort)}`;
+        } else if (filters.filterType === 'popular') {
             query += ` ORDER BY COALESCE(p.view_count, 0) DESC, p.created_at DESC`;
         } else {
             query += ` ORDER BY p.created_at DESC`;

@@ -69,6 +69,7 @@ exports.getAll = async (req, res) => {
             seller_id: req.query.seller_id,
             subcategory: req.query.subcategory,
             filterType: req.query.filterType, // new, popular, promotions
+            sort: req.query.sort, // recent, price_asc, price_desc, popular
             // Filtrage géographique (carte low-data)
             latitude: req.query.latitude,
             longitude: req.query.longitude,
