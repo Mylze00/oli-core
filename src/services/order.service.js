@@ -2,6 +2,8 @@ const orderRepository = require('../repositories/order.repository');
 const walletService = require('./wallet.service');
 const notificationService = require('./notification.service');
 const deliveryRepo = require('../repositories/delivery.repository');
+const exchangeRateService = require('./exchange-rate.service');
+const { orderAmountToWallet } = require('../utils/order-currency');
 const pool = require('../config/db');
 const crypto = require('crypto');
 
@@ -24,19 +26,19 @@ class OrderService {
 
         // Validation de base
         if (!items || !Array.isArray(items) || items.length === 0) {
-            throw new Error("Items requis");
+            throw this._badRequest("Items requis");
         }
 
-        // Validation des items
-        for (const item of items) {
-            if (!item.productId || !item.productName || !item.price || !item.quantity) {
-                throw new Error("Chaque item doit avoir productId, productName, price et quantity");
-            }
-        }
+        // [SÉCU C1/C2] Les prix viennent de la base, jamais du client.
+        const { items: pricedItems, itemsTotal } = await this._priceItemsFromCatalogue(items, userId);
 
-        // Calcul du total
-        const itemsTotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-        const totalAmount = itemsTotal + (parseFloat(deliveryFee) || 0);
+        // [SÉCU C2] Frais de livraison : jamais négatifs (le recalcul par mode reste à faire)
+        const safeDeliveryFee = Math.max(0, parseFloat(deliveryFee) || 0);
+        const totalAmount = itemsTotal + safeDeliveryFee;
+
+        // Taux figé pour toute la vie de la commande (débit, crédits et remboursement)
+        const exchangeRate = await this._getOrderExchangeRate();
+        const walletAmount = orderAmountToWallet(totalAmount, exchangeRate);
 
         // LOGIQUE PAIEMENT INSTANTANÉ (wallet & mobile_money)
         let paymentStatus = 'pending';
@@ -45,12 +47,12 @@ class OrderService {
         if (paymentMethod === 'wallet') {
             try {
                 // Débiter le wallet avant de créer la commande en base
-                await walletService.payOrder(userId, totalAmount, null); // orderId connu après création
+                await walletService.payOrder(userId, walletAmount, null); // orderId connu après création
                 paymentStatus = 'completed';
                 orderStatus = 'paid';
             } catch (err) {
                 // Relancer l'erreur avec message clair (ex: Solde insuffisant)
-                throw new Error(err.message || 'Échec du paiement Wallet');
+                throw this._badRequest(err.message || 'Échec du paiement Wallet');
             }
         } else if (paymentMethod === 'mobile_money') {
             // Mobile Money = flux asynchrone : on crée la commande en 'pending'
@@ -64,23 +66,24 @@ class OrderService {
         try {
             order = await orderRepository.createOrder(
                 userId,
-                items,
+                pricedItems,
                 deliveryAddress || null,
                 paymentMethod || 'wallet',
-                parseFloat(deliveryFee) || 0,
-                deliveryMethodId || null
+                safeDeliveryFee,
+                deliveryMethodId || null,
+                exchangeRate
             );
         } catch (createErr) {
             // [FIN C2] Le wallet a déjà été débité : on rembourse si la commande n'existe pas
             if (paymentStatus === 'completed') {
                 const walletRepository = require('../repositories/wallet.repository');
-                await walletRepository.performDeposit(userId, totalAmount, {
+                await walletRepository.performDeposit(userId, walletAmount, {
                     type: 'refund',
                     provider: 'WALLET',
                     reference: `REFUND_ORDER_FAIL_${userId}_${Date.now()}`,
                     description: `Remboursement : commande non créée (${createErr.message})`,
                 });
-                console.error(`↩️ Commande non créée : remboursement de ${totalAmount} FC à l'utilisateur #${userId}`);
+                console.error(`↩️ Commande non créée : remboursement de ${walletAmount} FC à l'utilisateur #${userId}`);
             }
             throw createErr;
         }
@@ -131,6 +134,112 @@ class OrderService {
         }
 
         return order;
+    }
+
+    /**
+     * Erreur métier renvoyée au client avec un statut 400 (et non 500).
+     */
+    _badRequest(message) {
+        const err = new Error(message);
+        err.status = 400;
+        return err;
+    }
+
+    /**
+     * Récupère le taux USD → FC à figer sur la commande.
+     * Sans taux fiable, la commande est refusée avant tout débit.
+     */
+    async _getOrderExchangeRate() {
+        try {
+            return await exchangeRateService.getRateForOrder();
+        } catch (err) {
+            console.error('❌ Commande refusée, taux de change indisponible:', err.message);
+            const unavailable = new Error('Le taux de change est momentanément indisponible. Réessayez dans quelques instants.');
+            unavailable.status = 503;
+            throw unavailable;
+        }
+    }
+
+    /**
+     * [SÉCU C1/C2] Recalcule les prix à partir de la table `products`.
+     * Seuls productId et quantity sont lus côté client ; le prix, le nom et le vendeur
+     * sont relus en base. Refuse les produits non actifs, les prix invalides et les
+     * quantités non entières ou hors bornes.
+     *
+     * @returns {Promise<{items: Array, itemsTotal: number}>}
+     */
+    async _priceItemsFromCatalogue(items, buyerId) {
+        const MAX_QTY_PER_LINE = 1000;
+        const parsed = items.map((item) => {
+            const productId = parseInt(item?.productId, 10);
+            const quantity = Number(item?.quantity);
+            if (!Number.isInteger(productId) || productId <= 0) {
+                throw this._badRequest("productId invalide");
+            }
+            if (!Number.isInteger(quantity) || quantity <= 0 || quantity > MAX_QTY_PER_LINE) {
+                throw this._badRequest(`Quantité invalide (entier entre 1 et ${MAX_QTY_PER_LINE})`);
+            }
+            return { ...item, productId, quantity };
+        });
+
+        const uniqueIds = [...new Set(parsed.map((i) => i.productId))];
+        const res = await pool.query(
+            'SELECT id, name, price, status FROM products WHERE id = ANY($1::int[])',
+            [uniqueIds]
+        );
+        const byId = new Map(res.rows.map((p) => [p.id, p]));
+
+        const videosById = await this._loadOriginVideos(parsed);
+
+        const pricedItems = parsed.map((item) => {
+            const product = byId.get(item.productId);
+            if (!product) {
+                throw this._badRequest(`Produit introuvable (#${item.productId})`);
+            }
+            if (product.status !== 'active') {
+                throw this._badRequest(`Produit indisponible : ${product.name}`);
+            }
+            const price = parseFloat(product.price);
+            if (!Number.isFinite(price) || price <= 0) {
+                throw this._badRequest(`Prix invalide pour le produit #${item.productId}`);
+            }
+            // La commission vidéo n'est retenue que si la vidéo présente bien ce produit
+            // et que l'acheteur n'est pas lui-même le créateur de la vidéo.
+            const originVideo = videosById.get(parseInt(item.originVideoId, 10));
+            const isValidOrigin = originVideo
+                && originVideo.product_id === item.productId
+                && String(originVideo.user_id) !== String(buyerId);
+
+            return {
+                ...item,
+                productName: product.name,
+                price,
+                originVideoId: isValidOrigin ? originVideo.id : null,
+            };
+        });
+
+        const itemsTotal = pricedItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
+        return { items: pricedItems, itemsTotal };
+    }
+
+    /**
+     * Charge les vidéos actives citées comme origine des articles d'une commande.
+     * @returns {Promise<Map<number, {id: number, user_id: number, product_id: number}>>}
+     */
+    async _loadOriginVideos(items) {
+        const videoIds = [...new Set(
+            items
+                .map((item) => parseInt(item.originVideoId, 10))
+                .filter((id) => Number.isInteger(id) && id > 0)
+        )];
+        if (videoIds.length === 0) return new Map();
+
+        const res = await pool.query(
+            `SELECT id, user_id, product_id FROM video_sales
+             WHERE id = ANY($1::int[]) AND status = 'active'`,
+            [videoIds]
+        );
+        return new Map(res.rows.map((video) => [video.id, video]));
     }
 
     async getUserOrders(userId) {
@@ -922,8 +1031,10 @@ class OrderService {
      */
     async _creditSellersForOrder(orderId) {
         const itemsResult = await pool.query(
-            `SELECT p.seller_id, oi.product_price, oi.quantity, oi.origin_video_id, vs.user_id AS video_creator_id
+            `SELECT p.seller_id, oi.product_price, oi.quantity, oi.origin_video_id, vs.user_id AS video_creator_id,
+                    o.exchange_rate
              FROM order_items oi
+             JOIN orders o ON o.id = oi.order_id
              JOIN products p ON oi.product_id::integer = p.id
              LEFT JOIN video_sales vs ON oi.origin_video_id = vs.id
              WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL`,
@@ -935,6 +1046,7 @@ class OrderService {
             return;
         }
 
+        const exchangeRate = itemsResult.rows[0].exchange_rate;
         const sellerTotals = {};
         const videoCreatorTotals = {};
 
@@ -962,7 +1074,8 @@ class OrderService {
         }
 
         // Payer les vendeurs
-        for (const [sellerId, amount] of Object.entries(sellerTotals)) {
+        for (const [sellerId, usdAmount] of Object.entries(sellerTotals)) {
+            const amount = orderAmountToWallet(usdAmount, exchangeRate);
             if (amount <= 0) continue;
             try {
                 await walletService.creditSeller(sellerId, amount, orderId);
@@ -972,7 +1085,8 @@ class OrderService {
         }
 
         // Payer les créateurs de vidéos (Affiliation 2%)
-        for (const [creatorId, amount] of Object.entries(videoCreatorTotals)) {
+        for (const [creatorId, usdAmount] of Object.entries(videoCreatorTotals)) {
+            const amount = orderAmountToWallet(usdAmount, exchangeRate);
             if (amount <= 0) continue;
             try {
                 const walletRepository = require('../repositories/wallet.repository');

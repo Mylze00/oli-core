@@ -1,3 +1,4 @@
+import 'dart:math';
 import '../../../models/product_model.dart';
 
 /// Mixin qui encapsule toute la logique de distribution des produits admin
@@ -32,8 +33,12 @@ mixin DashboardProductDistribution {
     
     final Set<String> usedIds = {};
     
-    // Pour que ce soit aléatoire à chaque fois
-    final shuffledProducts = List<Product>.from(allProducts)..shuffle();
+    // Mélange reproductible : tant que la liste en cache est la même (12 h),
+    // chaque section garde les mêmes produits à la réouverture.
+    final random = Random(allProducts.isEmpty
+        ? 0
+        : allProducts.first.id.codeUnits.fold<int>(0, (seed, c) => (seed * 31 + c) & 0x7fffffff));
+    final shuffledProducts = List<Product>.from(allProducts)..shuffle(random);
 
     // ── 1. Section "Sélection" : groupe par mot-clé (seuil min 3 produits) ──
     final Map<String, List<Product>> groupedProducts = {};
@@ -56,7 +61,7 @@ mixin DashboardProductDistribution {
         .where((k) => groupedProducts[k]!.length >= 3)
         .toList();
     if (validKeys.isNotEmpty) {
-      validKeys.shuffle();
+      validKeys.shuffle(random);
       cachedSelectionKeyword = validKeys.first;
       cachedSelectionProducts =
           groupedProducts[cachedSelectionKeyword]!.take(15).toList();

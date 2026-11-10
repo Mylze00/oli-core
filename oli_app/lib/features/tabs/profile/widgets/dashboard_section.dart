@@ -251,11 +251,11 @@ class _BuyerGrid extends StatelessWidget {
     ordersAsync.whenData((orders) {
       total = orders.length;
       inProgress = orders
-          .where((o) =>
-              ['paid', 'processing', 'shipped'].contains(o.status))
+          .where((o) => PurchaseFilter.inProgress.matches(o.status))
           .length;
-      delivered =
-          orders.where((o) => o.status == 'delivered').length;
+      delivered = orders
+          .where((o) => PurchaseFilter.delivered.matches(o.status))
+          .length;
     });
 
     return _IconGrid(items: [
@@ -323,7 +323,8 @@ class _SellerGrid extends StatelessWidget {
     final sellerState = ref.watch(sellerOrdersProvider);
 
     final pending = sellerState.statusCounts['paid'] ?? 0;
-    final processing = sellerState.statusCounts['processing'] ?? 0;
+    final processing = (sellerState.statusCounts['processing'] ?? 0) +
+        (sellerState.statusCounts['ready'] ?? 0);
     final shipped = sellerState.statusCounts['shipped'] ?? 0;
 
     return _IconGrid(items: [
@@ -333,7 +334,11 @@ class _SellerGrid extends StatelessWidget {
         count: pending,
         countColor: const Color(0xFFF59E0B),
         onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const MySalesPage())),
+            MaterialPageRoute(builder: (_) => const MySalesPage(
+                  title: 'Commandes reçues',
+                  statuses: ['paid'],
+                  emptyMessage: 'Aucune nouvelle commande',
+                ))),
       ),
       _DashItem(
         icon: Icons.inventory_2_outlined,
@@ -341,7 +346,11 @@ class _SellerGrid extends StatelessWidget {
         count: processing,
         countColor: const Color(0xFF1E7DBA),
         onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const MySalesPage())),
+            MaterialPageRoute(builder: (_) => const MySalesPage(
+                  title: 'En traitement',
+                  statuses: ['processing', 'ready'],
+                  emptyMessage: 'Aucune commande en traitement',
+                ))),
       ),
       _DashItem(
         icon: Icons.local_shipping_outlined,
@@ -349,7 +358,11 @@ class _SellerGrid extends StatelessWidget {
         count: shipped,
         countColor: const Color(0xFF22C55E),
         onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const MySalesPage())),
+            MaterialPageRoute(builder: (_) => const MySalesPage(
+                  title: 'Commandes expédiées',
+                  statuses: ['shipped'],
+                  emptyMessage: 'Aucune commande expédiée',
+                ))),
       ),
       _DashItem(
         icon: Icons.add_box_outlined,
@@ -541,8 +554,11 @@ class _DashIconWidgetState extends State<_DashIconWidget>
                                   size: 8, color: Colors.white)
                               : Text(
                                   item.count > 99 ? '99+' : '${item.count}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    // Texte foncé sur les badges clairs (orange, vert)
+                                    color: item.countColor.computeLuminance() > 0.3
+                                        ? const Color(0xFF0B1727)
+                                        : Colors.white,
                                     fontSize: 9,
                                     fontWeight: FontWeight.bold,
                                   ),

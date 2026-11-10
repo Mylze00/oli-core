@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
+const { orderAmountToWallet } = require('../../utils/order-currency');
 
 router.get('/recent', async (req, res) => {
     try {
@@ -136,15 +137,16 @@ router.patch('/:id/status', async (req, res) => {
             try {
                 const walletService = require('../../services/wallet.service');
                 const itemsResult = await pool.query(
-                    `SELECT p.seller_id, SUM(oi.product_price * oi.quantity) as seller_total
+                    `SELECT p.seller_id, o.exchange_rate, SUM(oi.product_price * oi.quantity) as seller_total
                      FROM order_items oi
+                     JOIN orders o ON o.id = oi.order_id
                      JOIN products p ON oi.product_id::integer = p.id
                      WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL
-                     GROUP BY p.seller_id`,
+                     GROUP BY p.seller_id, o.exchange_rate`,
                     [id]
                 );
                 for (const row of itemsResult.rows) {
-                    const amount = parseFloat(row.seller_total);
+                    const amount = orderAmountToWallet(row.seller_total, row.exchange_rate);
                     if (amount > 0) {
                         await walletService.creditSeller(row.seller_id, amount, id);
                     }

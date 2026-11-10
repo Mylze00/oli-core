@@ -1,7 +1,7 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:dropdown_search/dropdown_search.dart';
@@ -24,7 +24,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
   XFile? _videoFile;
   bool _isUploading = false;
   double _uploadProgress = 0;
-  String? _selectedProductId;
+  Map<String, dynamic>? _selectedProduct;
   List<Map<String, dynamic>> _myProducts = [];
   bool _loadingProducts = false;
 
@@ -55,6 +55,23 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       debugPrint('Erreur chargement produits: $e');
     }
     if (mounted) setState(() => _loadingProducts = false);
+  }
+
+  /// Sans recherche : mes produits. Avec recherche : tout le catalogue actif.
+  Future<List<Map<String, dynamic>>> _searchProducts(String filter) async {
+    final query = filter.trim();
+    if (query.isEmpty) return _myProducts;
+
+    final response = await ref.read(dioProvider).get(
+      '/products',
+      queryParameters: {'search': query, 'limit': 30},
+    );
+    final products = response.data['products'];
+    if (products is! List) return [];
+    return products
+        .cast<Map<String, dynamic>>()
+        .where((p) => p['status'] == null || p['status'] == 'active')
+        .toList();
   }
 
   Future<void> _pickVideo() async {
@@ -93,19 +110,22 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       if (_descController.text.isNotEmpty) {
         request.fields['description'] = _descController.text;
       }
-      if (_selectedProductId != null) {
-        request.fields['product_id'] = _selectedProductId!;
+      if (_selectedProduct != null) {
+        request.fields['product_id'] = _selectedProduct!['id'].toString();
       }
 
       // -- COMPRESSION DE LA VIDÉO (environ 80% de réduction) --
       setState(() => _uploadProgress = 0.1);
 
-      final mediaInfo = await VideoCompress.compressVideo(
-        _videoFile!.path,
-        quality: VideoQuality.LowQuality, // Compression agressive
-        deleteOrigin: false, // Garder l'original sur l'appareil
-        includeAudio: true,
-      );
+      // video_compress n'existe pas sur le web : la vidéo y est envoyée telle quelle
+      final mediaInfo = kIsWeb
+          ? null
+          : await VideoCompress.compressVideo(
+              _videoFile!.path,
+              quality: VideoQuality.LowQuality, // Compression agressive
+              deleteOrigin: false, // Garder l'original sur l'appareil
+              includeAudio: true,
+            );
 
       setState(() => _uploadProgress = 0.4);
 
@@ -311,22 +331,18 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                         ),
                       ),
                       child: DropdownSearch<Map<String, dynamic>>(
-                        items: _myProducts,
-                        compareFn: (i, s) => i['id'] == s['id'],
+                        asyncItems: _searchProducts,
+                        // Le filtrage est fait par le serveur
+                        filterFn: (_, __) => true,
+                        compareFn: (i, s) => i['id']?.toString() == s['id']?.toString(),
                         itemAsString: (Map<String, dynamic> u) => u['name']?.toString() ?? 'Produit',
                         onChanged: (Map<String, dynamic>? data) {
-                          setState(() {
-                            _selectedProductId = data?['id']?.toString();
-                          });
+                          setState(() => _selectedProduct = data);
                         },
-                        selectedItem: _selectedProductId != null 
-                            ? _myProducts.firstWhere(
-                                (p) => p['id']?.toString() == _selectedProductId, 
-                                orElse: () => {'id': _selectedProductId, 'name': 'Produit sélectionné'}
-                              )
-                            : null,
+                        selectedItem: _selectedProduct,
                         popupProps: PopupProps.menu(
                           showSearchBox: true,
+                          isFilterOnline: true,
                           searchFieldProps: TextFieldProps(
                             style: const TextStyle(color: Colors.black87),
                             decoration: InputDecoration(
@@ -371,6 +387,12 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                         ),
                       ),
                     ),
+            ),
+
+            const SizedBox(height: 8),
+            const Text(
+              "Recherchez dans tout le catalogue. Si le produit appartient à un autre vendeur, vous recevez 2 % de chaque vente issue de votre vidéo.",
+              style: TextStyle(color: Colors.white38, fontSize: 12),
             ),
 
             const SizedBox(height: 32),

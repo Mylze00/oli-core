@@ -11,6 +11,7 @@ import '../../config/api_config.dart';
 import '../../core/user/user_provider.dart';
 import '../../core/storage/secure_storage_service.dart';
 import 'calls_page.dart';
+import '../../core/theme/oli_colors.dart';
 
 // Provider pour les conversations migré vers inbox_providers.dart pour le cache offline-first
 
@@ -71,7 +72,8 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
     final bgColor = theme.scaffoldBackgroundColor;
     final textColor = isDark ? Colors.white : Colors.black;
     final iconColor = isDark ? Colors.white : Colors.black;
-    final containerColor = isDark ? Colors.white.withOpacity(0.08) : Colors.grey[100];
+    final containerColor = isDark ? Colors.white.withOpacity(0.08) : OliLightColors.surface;
+    final secondaryText = isDark ? Colors.white54 : OliLightColors.textSecondary;
     final bgImage = isDark ? "assets/images/chat_bg_new.png" : "assets/images/chat_bg_new blanc.png";
 
     if (user == null) {
@@ -147,8 +149,8 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                     style: TextStyle(color: textColor),
                     decoration: InputDecoration(
                       hintText: 'Rechercher un message...',
-                      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
-                      prefixIcon: Icon(Icons.search, color: isDark ? Colors.white54 : Colors.grey),
+                      hintStyle: TextStyle(color: secondaryText),
+                      prefixIcon: Icon(Icons.search, color: secondaryText),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     ),
@@ -323,7 +325,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                             _searchQuery.isNotEmpty 
                                 ? "Aucun résultat trouvé"
                                 : (_selectedIndex == 0 ? "Aucune conversation privée" : "Aucune conversation Market"),
-                            style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                            style: TextStyle(color: secondaryText, fontSize: 16),
                           ),
                         ],
                       ),
@@ -333,7 +335,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                   return RefreshIndicator(
                     onRefresh: () async => ref.read(inboxConversationsProvider.notifier).fetchConversations(),
                     child: ListView.separated(
-                      padding: const EdgeInsets.only(top: 8, bottom: 80),
+                      padding: EdgeInsets.only(top: 8, bottom: bottomNavClearance(context)),
                       itemCount: filteredConversations.length,
                       separatorBuilder: (context, index) => const Divider(height: 1, indent: 80),
                       itemBuilder: (context, index) {
@@ -559,7 +561,9 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
               label,
               style: TextStyle(
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? (isDark ? Colors.white : Colors.black) : Colors.grey[500],
+                color: isSelected
+                    ? (isDark ? Colors.white : Colors.black)
+                    : (isDark ? Colors.grey[500] : OliLightColors.textSecondary),
               ),
             ),
           ),
@@ -776,7 +780,7 @@ class ConversationTile extends StatelessWidget {
                           fontSize: 13,
                           color: unreadCount > 0 
                               ? (isDark ? Colors.white : Colors.black87) 
-                              : (isDark ? Colors.grey[500] : Colors.grey[500]),
+                              : (isDark ? Colors.grey[500] : OliLightColors.textSecondary),
                           fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
                         ),
                         maxLines: 1,

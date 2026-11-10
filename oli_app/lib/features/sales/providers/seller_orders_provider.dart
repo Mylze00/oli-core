@@ -58,7 +58,8 @@ class SellerOrdersNotifier extends StateNotifier<SellerOrdersState> {
     state = state.copyWith(isLoading: true, error: null, currentFilter: status);
 
     try {
-      final queryParams = status != null ? {'status': status} : <String, dynamic>{};
+      // Le filtrage par bouton se fait sur l'appareil : on charge au-delà des 50 par défaut.
+      final queryParams = <String, dynamic>{'limit': 500, if (status != null) 'status': status};
       
       final response = await _dio.get(
         '${ApiConfig.baseUrl}/api/seller/orders',

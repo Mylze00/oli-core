@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
+import 'package:share_plus/share_plus.dart';
 import 'dart:async';
 import '../models/video_sale_model.dart';
 import '../providers/video_feed_provider.dart';
 import 'product_bottom_sheet.dart';
+import 'video_comments_sheet.dart';
+import 'video_report_sheet.dart';
+import '../../marketplace/presentation/pages/seller_profile_page.dart';
+import '../../../core/user/user_provider.dart';
+import '../../../providers/exchange_rate_provider.dart';
 import '../../../utils/cloudinary_helper.dart';
 
 /// Carte vidéo plein écran style TikTok
@@ -25,8 +31,10 @@ class VideoPlayerCard extends ConsumerStatefulWidget {
 class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
   late VideoPlayerController _controller;
   bool _isInitialized = false;
-  bool _showPlayIcon = false;
+  bool _userPaused = false;
+  bool _isRouteCurrent = true;
   bool _showHeart = false;
+  bool _viewRegistered = false;
   Timer? _viewTimer;
 
   @override
@@ -42,31 +50,48 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
         if (mounted) {
           setState(() => _isInitialized = true);
           _controller.setLooping(true);
-          if (widget.isActive) {
-            _controller.play();
-            _startViewTimer();
-          }
+          _syncPlayback();
         }
       });
   }
 
+  /// Aligne la lecture sur l'état de la carte : visible, non recouverte, non mise en pause.
+  void _syncPlayback() {
+    if (!_isInitialized) return;
+    final shouldPlay = widget.isActive && _isRouteCurrent && !_userPaused;
+    if (shouldPlay == _controller.value.isPlaying) return;
+
+    if (shouldPlay) {
+      _controller.play();
+      _startViewTimer();
+    } else {
+      _controller.pause();
+      _viewTimer?.cancel();
+    }
+  }
+
   void _startViewTimer() {
+    if (_viewRegistered) return;
     _viewTimer?.cancel();
     _viewTimer = Timer(const Duration(seconds: 3), () {
+      _viewRegistered = true;
       ref.read(videoFeedProvider.notifier).registerView(widget.video.id);
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Une page ou un volet ouvert par-dessus met la vidéo en pause
+    _isRouteCurrent = ModalRoute.isCurrentOf(context) ?? true;
+    _syncPlayback();
+  }
+
+  @override
   void didUpdateWidget(covariant VideoPlayerCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) {
-      _controller.play();
-      _startViewTimer();
-    } else if (!widget.isActive && oldWidget.isActive) {
-      _controller.pause();
-      _viewTimer?.cancel();
-    }
+    if (!widget.isActive) _userPaused = false;
+    _syncPlayback();
   }
 
   @override
@@ -77,13 +102,66 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
   }
 
   void _togglePlay() {
-    if (_controller.value.isPlaying) {
-      _controller.pause();
-      setState(() => _showPlayIcon = true);
+    setState(() => _userPaused = !_userPaused);
+    _syncPlayback();
+  }
+
+  void _openSellerProfile() {
+    final sellerId = widget.video.sellerId;
+    if (sellerId.isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SellerProfilePage(sellerId: sellerId)),
+    );
+  }
+
+  Future<void> _shareVideo() async {
+    final video = widget.video;
+    final String text;
+    if (video.productId != null) {
+      final price = video.productPrice != null
+          ? '\n${ref.read(exchangeRateProvider.notifier).formatProductPrice(video.productPrice!)}'
+          : '';
+      text = "Regarde ce produit en vidéo sur Oli : ${video.productName ?? 'Produit'}$price\n"
+          'https://oli-app.web.app/product/${video.productId}';
     } else {
-      _controller.play();
-      setState(() => _showPlayIcon = false);
+      text = 'Regarde les vidéos de ${video.sellerName} sur Oli\nhttps://oli-app.web.app';
     }
+
+    try {
+      await Share.share(text);
+    } catch (e) {
+      debugPrint('Erreur partage vidéo: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible de partager cette vidéo')),
+        );
+      }
+    }
+  }
+
+  void _showComments() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => VideoCommentsSheet(video: widget.video),
+    );
+  }
+
+  void _showReportSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => VideoReportSheet(videoId: widget.video.id),
+    );
+  }
+
+  /// Formate un prix produit selon la devise choisie dans l'application.
+  String _formatPrice(double price) {
+    ref.watch(exchangeRateProvider);
+    return ref.read(exchangeRateProvider.notifier).formatProductPrice(price);
   }
 
   void _onDoubleTap() {
@@ -124,7 +202,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
         ),
 
         // ── Icône play/pause ──
-        if (_showPlayIcon)
+        if (_userPaused)
           const Center(
             child: Icon(Icons.play_arrow_rounded, color: Colors.white54, size: 80),
           ),
@@ -196,13 +274,12 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
 
   Widget _buildRightOverlay() {
     final video = widget.video;
+    final currentUserId = ref.watch(userProvider).value?.id.toString();
     return Column(
       children: [
         // Avatar vendeur
         GestureDetector(
-          onTap: () {
-            // TODO: Naviguer vers le profil vendeur
-          },
+          onTap: _openSellerProfile,
           child: Column(
             children: [
               CircleAvatar(
@@ -236,6 +313,16 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
 
         const SizedBox(height: 20),
 
+        // Commentaires
+        _interactionButton(
+          icon: Icons.chat_bubble_outline,
+          label: _formatNumber(video.commentsCount),
+          color: Colors.white,
+          onTap: _showComments,
+        ),
+
+        const SizedBox(height: 20),
+
         // Vues
         _interactionButton(
           icon: Icons.visibility_outlined,
@@ -251,15 +338,19 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
           icon: Icons.share_outlined,
           label: 'Partager',
           color: Colors.white,
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Partage bientôt disponible'),
-                backgroundColor: Color(0xFF1A1A2E),
-              ),
-            );
-          },
+          onTap: _shareVideo,
         ),
+
+        // Signalement (impossible sur sa propre vidéo)
+        if (currentUserId != video.sellerId) ...[
+          const SizedBox(height: 20),
+          _interactionButton(
+            icon: Icons.flag_outlined,
+            label: 'Signaler',
+            color: Colors.white70,
+            onTap: _showReportSheet,
+          ),
+        ],
       ],
     );
   }
@@ -388,7 +479,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
                   ),
                   if (video.productPrice != null)
                     Text(
-                      '\$${video.productPrice!.toStringAsFixed(2)}',
+                      _formatPrice(video.productPrice!),
                       style: const TextStyle(color: Color(0xFFFFB74D), fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                 ],
@@ -432,7 +523,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
             if (video.productPrice != null) ...[
               const SizedBox(width: 10),
               Text(
-                '\$${video.productPrice!.toStringAsFixed(2)}',
+                _formatPrice(video.productPrice!),
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
               ),
             ],
@@ -443,15 +534,12 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
   }
 
   void _showProductSheet() {
-    _controller.pause();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => ProductBottomSheet(video: widget.video),
-    ).then((_) {
-      if (widget.isActive) _controller.play();
-    });
+    );
   }
 
   String _formatNumber(int n) {

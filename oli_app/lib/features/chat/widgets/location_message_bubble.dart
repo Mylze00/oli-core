@@ -58,7 +58,7 @@ class LocationMessageBubble extends StatelessWidget {
                 children: [
                   TileLayer(
                     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.mylze.oli',
+                    userAgentPackageName: 'com.oli.apprdc',
                   ),
                   MarkerLayer(
                     markers: [

@@ -300,7 +300,7 @@ class _OtpPageState extends ConsumerState<OtpPage>
                       right: 24,
                     ),
                     child: Text(
-                      'Plus mieux, tout en un clic',
+                      'Tout en un clic',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: 'LetterMagic',

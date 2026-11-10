@@ -45,6 +45,7 @@ router.use('/delivery', deliveryRoutes); // 🚚 Livreurs
 router.use('/finances', financesRoutes); // 💰 Finances
 router.use('/ticketing', ticketingRoutes); // 🎟️ Billetterie
 router.use('/operations', operationsRoutes); // 🧭 Opérations
+router.use('/videos', require('./admin/videos.routes')); // 🎬 Modération des vidéos
 
 
 // Route de test

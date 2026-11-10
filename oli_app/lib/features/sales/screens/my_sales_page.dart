@@ -6,7 +6,18 @@ import '../widgets/seller_order_card.dart';
 
 /// Page "Mes Ventes" - Gestion des commandes en tant que vendeur
 class MySalesPage extends ConsumerStatefulWidget {
-  const MySalesPage({super.key});
+  final String title;
+
+  /// Statuts affichés ; null affiche toutes les ventes.
+  final List<String>? statuses;
+  final String emptyMessage;
+
+  const MySalesPage({
+    super.key,
+    this.title = 'Mes Ventes',
+    this.statuses,
+    this.emptyMessage = 'Aucune vente',
+  });
 
   @override
   ConsumerState<MySalesPage> createState() => _MySalesPageState();
@@ -24,13 +35,17 @@ class _MySalesPageState extends ConsumerState<MySalesPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(sellerOrdersProvider);
+    final statuses = widget.statuses;
+    final orders = statuses == null
+        ? state.orders
+        : state.orders.where((o) => statuses.contains(o.status)).toList();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     const oliBlue = Color(0xFF1E7DBA);
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: const Text('Mes Ventes 🔑 v2'),
+        title: Text(widget.title),
         backgroundColor: oliBlue,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -72,17 +87,17 @@ class _MySalesPageState extends ConsumerState<MySalesPage> {
           Expanded(
             child: state.isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : state.orders.isEmpty
+                : orders.isEmpty
                     ? _buildEmptyState()
                     : RefreshIndicator(
                         onRefresh: () =>
                             ref.read(sellerOrdersProvider.notifier).loadAll(),
                         child: ListView.builder(
                           padding: const EdgeInsets.all(16),
-                          itemCount: state.orders.length,
+                          itemCount: orders.length,
                           itemBuilder: (context, index) {
                             return SellerOrderCard(
-                              order: state.orders[index],
+                              order: orders[index],
                             );
                           },
                         ),
@@ -101,7 +116,7 @@ class _MySalesPageState extends ConsumerState<MySalesPage> {
           Icon(Icons.sell_outlined, size: 64, color: Colors.grey[300]),
           const SizedBox(height: 16),
           Text(
-            'Aucune vente',
+            widget.emptyMessage,
             style: TextStyle(fontSize: 18, color: Colors.grey[600]),
           ),
           const SizedBox(height: 8),

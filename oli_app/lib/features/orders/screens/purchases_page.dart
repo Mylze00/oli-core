@@ -18,7 +18,7 @@ enum PurchaseFilter {
   final String label;
   const PurchaseFilter(this.label);
 
-  static const List<String> inProgressStatuses = ['paid', 'processing', 'shipped'];
+  static const List<String> inProgressStatuses = ['paid', 'processing', 'ready', 'shipped'];
 
   bool matches(String status) {
     switch (this) {
@@ -46,7 +46,7 @@ class PurchasesPage extends ConsumerStatefulWidget {
 class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   int? _expandedOrderId;
   Timer? _pollTimer;
-  late PurchaseFilter _filter;
+  late final PurchaseFilter _filter;
 
   @override
   void initState() {
@@ -74,74 +74,86 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
-        title: const Text('Mes Achats'),
+        title: Text(_title),
       ),
       body: ordersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Erreur: $err', style: const TextStyle(color: Colors.red))),
         data: (orders) {
-          final filtered = orders.where((o) => _filter.matches(o.status)).toList();
+          // « Mes Commandes » regroupe par état ; « En cours » et « Livrées » n'affichent que le leur.
+          final entries = _filter == PurchaseFilter.all
+              ? _groupedEntries(orders)
+              : orders.where((o) => _filter.matches(o.status)).toList();
 
-          return Column(
-            children: [
-              _buildFilterBar(orders),
-              Expanded(
-                child: filtered.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey.shade700),
-                            const SizedBox(height: 16),
-                            Text(
-                              _emptyMessage(),
-                              style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) => _buildOrderCard(filtered[index]),
-                      ),
+          if (entries.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey.shade700),
+                  const SizedBox(height: 16),
+                  Text(
+                    _emptyMessage(),
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+                  ),
+                ],
               ),
-            ],
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: entries.length,
+            itemBuilder: (context, index) {
+              final entry = entries[index];
+              return entry is Order ? _buildOrderCard(entry) : _buildSectionHeader(entry as String);
+            },
           );
         },
       ),
     );
   }
 
-  /// Barre de filtres avec compteur par catégorie.
-  Widget _buildFilterBar(List<Order> orders) {
-    return SizedBox(
-      height: 52,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        children: PurchaseFilter.values.map((f) {
-          final count = orders.where((o) => f.matches(o.status)).length;
-          final selected = f == _filter;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text('${f.label} ($count)'),
-              selected: selected,
-              onSelected: (_) => setState(() {
-                _filter = f;
-                _expandedOrderId = null;
-              }),
-              selectedColor: const Color(0xFF1E7DBA),
-              backgroundColor: const Color(0xFF1A1A1A),
-              labelStyle: TextStyle(
-                color: selected ? Colors.white : Colors.grey.shade400,
-                fontWeight: FontWeight.w600,
-              ),
-              side: BorderSide.none,
-            ),
-          );
-        }).toList(),
+  String get _title {
+    switch (_filter) {
+      case PurchaseFilter.all:
+        return 'Mes commandes';
+      case PurchaseFilter.inProgress:
+        return 'Commandes en cours';
+      case PurchaseFilter.delivered:
+        return 'Commandes livrées';
+    }
+  }
+
+  /// Titres de section et commandes, dans l'ordre d'affichage.
+  List<Object> _groupedEntries(List<Order> orders) {
+    const sections = <(String, List<String>)>[
+      ('En attente de paiement', ['pending']),
+      ('En cours', PurchaseFilter.inProgressStatuses),
+      ('Livrées', ['delivered']),
+      ('Annulées', ['cancelled']),
+    ];
+    final entries = <Object>[];
+    void addSection(String title, Iterable<Order> matching) {
+      final list = matching.toList();
+      if (list.isEmpty) return;
+      entries..add('$title (${list.length})')..addAll(list);
+    }
+
+    for (final (title, statuses) in sections) {
+      addSection(title, orders.where((o) => statuses.contains(o.status)));
+    }
+    final known = sections.expand((section) => section.$2).toSet();
+    addSection('Autres', orders.where((o) => !known.contains(o.status)));
+    return entries;
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 12),
+      child: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
       ),
     );
   }

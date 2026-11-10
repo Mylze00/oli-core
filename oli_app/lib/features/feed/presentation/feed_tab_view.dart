@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/feed_provider.dart';
 import 'widgets/feed_post_widget.dart';
 import 'create_post_page.dart';
+import '../../../core/theme/oli_colors.dart';
 
 class FeedTabView extends ConsumerWidget {
   const FeedTabView({Key? key}) : super(key: key);
@@ -53,7 +54,7 @@ class FeedTabView extends ConsumerWidget {
                 return false;
               },
               child: ListView.builder(
-                padding: const EdgeInsets.only(bottom: 80),
+                padding: EdgeInsets.only(bottom: bottomNavClearance(context)),
                 itemCount: posts.length + (ref.watch(feedProvider.notifier).hasMore ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (index == posts.length) {
@@ -76,7 +77,7 @@ class FeedTabView extends ConsumerWidget {
         },
       ),
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 72),
+        padding: EdgeInsets.only(bottom: bottomNavClearance(context)),
         child: FloatingActionButton(
           onPressed: () {
             Navigator.push(

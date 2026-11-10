@@ -20,6 +20,7 @@ import {
     GiftIcon, // 📦 Icone pour Demandes Produit
     CpuChipIcon, // 🤖 Icone pour Worker Prix
     ChartBarIcon, // 🔍 Comparateur Prix
+    VideoCameraIcon, // 🎬 Modération des vidéos
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -34,6 +35,7 @@ const navigation = [
     { name: 'Commandes', href: '/orders', icon: CubeIcon },
     { name: 'Finances (Commandes)', href: '/finances', icon: CreditCardIcon },
     { name: 'Modération', href: '/disputes', icon: ShieldCheckIcon },
+    { name: 'Modération vidéos', href: '/videos', icon: VideoCameraIcon }, // 🎬
     { name: 'Publicités', href: '/ads', icon: MegaphoneIcon },
     { name: 'Services', href: '/services', icon: BoltIcon }, // ✨
     { name: 'Billetterie', href: '/ticketing', icon: TicketIcon }, // 🎟️

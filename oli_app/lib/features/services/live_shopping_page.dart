@@ -31,6 +31,22 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
     super.dispose();
   }
 
+  /// Ouvre la publication puis revient en tête du fil pour afficher la nouvelle vidéo.
+  Future<void> _openUploadPage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const VideoUploadPage()),
+    );
+    if (result != true || !mounted) return;
+
+    await ref.read(videoFeedProvider.notifier).loadFeed();
+    if (!mounted) return;
+    setState(() => _currentPage = 0);
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final feedState = ref.watch(videoFeedProvider);
@@ -71,15 +87,7 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
               ),
               child: const Icon(Icons.add, color: Colors.white, size: 22),
             ),
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const VideoUploadPage()),
-              );
-              if (result == true) {
-                ref.read(videoFeedProvider.notifier).loadFeed();
-              }
-            },
+            onPressed: _openUploadPage,
           ),
           const SizedBox(width: 8),
         ],
@@ -124,6 +132,9 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
       return _buildEmptyState();
     }
 
+    // Une vidéo signalée peut disparaître en fin de liste
+    final activeIndex = _currentPage.clamp(0, feedState.videos.length - 1);
+
     // Feed TikTok
     return PageView.builder(
       controller: _pageController,
@@ -140,8 +151,10 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
       itemBuilder: (context, index) {
         final video = feedState.videos[index];
         return VideoPlayerCard(
+          // La clé garantit un lecteur propre à chaque vidéo quand le fil change
+          key: ValueKey(video.id),
           video: video,
-          isActive: index == _currentPage,
+          isActive: index == activeIndex,
         );
       },
     );
@@ -185,15 +198,7 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const VideoUploadPage()),
-              );
-              if (result == true) {
-                ref.read(videoFeedProvider.notifier).loadFeed();
-              }
-            },
+            onPressed: _openUploadPage,
             icon: const Icon(Icons.videocam, size: 20),
             label: const Text(
               'Publier une vidéo',

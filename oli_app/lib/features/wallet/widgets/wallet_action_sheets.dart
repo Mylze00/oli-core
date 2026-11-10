@@ -964,7 +964,7 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
                   else if (_hasPermission)
                     MobileScanner(
                       key: ValueKey('scanner-$_retry'),
-                      errorBuilder: (context, error, child) => Center(
+                      errorBuilder: (context, error) => Center(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(

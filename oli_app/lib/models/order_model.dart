@@ -59,6 +59,7 @@ class Order {
       case 'pending': return 'En attente';
       case 'paid': return 'Payée';
       case 'processing': return 'En préparation';
+      case 'ready': return 'Prête';
       case 'shipped': return 'Expédiée';
       case 'delivered': return 'Livrée';
       case 'cancelled': return 'Annulée';

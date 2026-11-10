@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_controller.dart';
 import 'otp_page.dart';
 
@@ -15,6 +16,9 @@ class LoginPage extends ConsumerStatefulWidget {
 
 class _LoginPageState extends ConsumerState<LoginPage>
     with TickerProviderStateMixin {
+  static const _privacyPolicyUrl = 'https://oli-core.web.app/politique-confidentialite.html';
+  static const _supportEmail = 'pixelgraphicsarl@gmail.com';
+
   final TextEditingController _phoneController =
       TextEditingController(text: '+243');
 
@@ -185,7 +189,12 @@ class _LoginPageState extends ConsumerState<LoginPage>
     final authState = ref.watch(authControllerProvider);
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
+    // Même police que l'écran d'accueil.
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'CreatoDisplay'),
+      ),
+      child: Scaffold(
       backgroundColor: const Color(0xFF2196C8),
       body: Stack(
         children: [
@@ -442,9 +451,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
 
                   // ✨ SLOGAN en bas — Police LetterMagic
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
+                    padding: const EdgeInsets.only(left: 24, right: 24),
                     child: Text(
-                      'Plus mieux, tout en un clic',
+                      'Tout en un clic',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: 'LetterMagic',
@@ -455,13 +464,75 @@ class _LoginPageState extends ConsumerState<LoginPage>
                       ),
                     ),
                   ),
+
+                  _buildLegalLinks(),
                 ],
               ),
             ),
           ),
         ],
       ),
+      ),
     );
+  }
+
+  Widget _buildLegalLinks() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _legalLink('Confidentialité', _openPrivacyPolicy),
+          _legalLink('Besoin d\'aide ?', _contactSupport),
+        ],
+      ),
+    );
+  }
+
+  Widget _legalLink(String label, VoidCallback onPressed) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFF0B1727),
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          decoration: TextDecoration.underline,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    final opened = await launchUrl(
+      Uri.parse(_privacyPolicyUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) _showLinkError('Impossible d\'ouvrir la page. Réessayez plus tard.');
+  }
+
+  Future<void> _contactSupport() async {
+    bool opened = false;
+    try {
+      opened = await launchUrl(
+        Uri(
+          scheme: 'mailto',
+          path: _supportEmail,
+          query: 'subject=Aide%20connexion%20Oli',
+        ),
+      );
+    } catch (_) {}
+    if (!opened) _showLinkError('Écrivez-nous à $_supportEmail');
+  }
+
+  void _showLinkError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -540,12 +611,13 @@ class _GlassButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    // Bouton actif : plein et blanc. Désactivé : discret, mais toujours lisible.
+    return Semantics(
+      button: true,
+      enabled: isEnabled,
+      child: GestureDetector(
       onTap: isEnabled ? onPressed : null,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 300),
-        opacity: isEnabled ? 1.0 : 0.5,
-        child: ClipRRect(
+      child: ClipRRect(
           borderRadius: BorderRadius.circular(32),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
@@ -554,9 +626,10 @@ class _GlassButton extends StatelessWidget {
               height: 56,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(32),
-                color: Colors.white.withOpacity(0.2),
+                // Fond opaque : le bouton reste lisible s'il chevauche la zone bleue.
+                color: isEnabled ? Colors.white : const Color(0xFF2C3745),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.4),
+                  color: Colors.white.withOpacity(isEnabled ? 1 : 0.45),
                   width: 1.5,
                 ),
                 boxShadow: [
@@ -579,8 +652,10 @@ class _GlassButton extends StatelessWidget {
                       )
                     : Text(
                         label,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: isEnabled
+                              ? const Color(0xFF0B1727)
+                              : Colors.white.withOpacity(0.78),
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.8,
@@ -589,7 +664,7 @@ class _GlassButton extends StatelessWidget {
               ),
             ),
           ),
-        ),
+      ),
       ),
     );
   }

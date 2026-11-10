@@ -13,6 +13,7 @@ import '../shop/screens/publish_article_page.dart';
 import '../feed/presentation/create_post_page.dart';
 import '../search/providers/search_filters_provider.dart';
 import '../../app/theme/theme_provider.dart';
+import '../../core/theme/oli_colors.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -177,7 +178,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       child: DefaultTextStyle(
         style: DefaultTextStyle.of(context).style.copyWith(fontFamily: 'CreatoDisplay'),
         child: Scaffold(
-          backgroundColor: isDark ? Colors.black : const Color(0xFFD9D9D9),
+          backgroundColor: isDark ? Colors.black : OliLightColors.background,
           extendBody: true,
           body: IndexedStack(index: _currentIndex, children: _pages),
           bottomNavigationBar: _OliBottomNav(
@@ -247,34 +248,41 @@ class _OliBottomNav extends StatelessWidget {
                     height: 72,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(40),
-                      color: isDark ? Colors.black.withOpacity(0.25) : Colors.white.withOpacity(0.35),
+                      color: isDark ? Colors.black.withOpacity(0.25) : Colors.white.withOpacity(0.92),
                       // L'effet "reflet de verre" sur le dessus
                       border: Border.all(
                         width: 1.0,
-                        color: isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.6),
+                        color: isDark ? Colors.white.withOpacity(0.15) : Colors.black.withOpacity(0.06),
                       ),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withOpacity(isDark ? 0.15 : 0.4),
-                          Colors.white.withOpacity(isDark ? 0.02 : 0.1),
-                          Colors.black.withOpacity(isDark ? 0.1 : 0.0),
-                        ],
-                        stops: const [0.0, 0.5, 1.0],
-                      ),
+                      // En mode clair, fond stable : aucun reflet ni couleur de la page.
+                      gradient: !isDark
+                          ? null
+                          : LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.white.withOpacity(0.15),
+                                Colors.white.withOpacity(0.02),
+                                Colors.black.withOpacity(0.1),
+                              ],
+                              stops: const [0.0, 0.5, 1.0],
+                            ),
                     ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: items.map((item) {
                       if (item.isSell) {
-                        return _SellButton(label: item.label, onTap: () => onTap(item.barIndex));
+                        return Flexible(
+                          child: _SellButton(label: item.label, onTap: () => onTap(item.barIndex)),
+                        );
                       }
                       final isSelected = item.pageIndex == currentIndex;
-                      return _NavTabItem(
-                        item: item,
-                        isSelected: isSelected,
-                        onTap: () => onTap(item.barIndex),
+                      return Flexible(
+                        child: _NavTabItem(
+                          item: item,
+                          isSelected: isSelected,
+                          onTap: () => onTap(item.barIndex),
+                        ),
                       );
                     }).toList(),
                   ),
@@ -327,7 +335,7 @@ class _NavTabItem extends StatelessWidget {
     final isDarkNav = brightness == Brightness.dark;
     final color = isSelected
         ? (isDarkNav ? Colors.white : Colors.black87)
-        : (isDarkNav ? Colors.white54 : Colors.black38);
+        : (isDarkNav ? Colors.white54 : OliLightColors.textSecondary);
 
     return GestureDetector(
       onTap: onTap,
@@ -335,7 +343,7 @@ class _NavTabItem extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
           // Si sélectionné, on applique un effet de "pill" interne en verre
           color: isSelected
@@ -378,13 +386,17 @@ class _NavTabItem extends StatelessWidget {
             ),
             const SizedBox(height: 3),
             // Label toujours visible
-            Text(
-              item.label,
-              style: TextStyle(
-                fontFamily: 'CreatoDisplay',
-                color: color,
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                item.label,
+                maxLines: 1,
+                style: TextStyle(
+                  fontFamily: 'CreatoDisplay',
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                ),
               ),
             ),
           ],

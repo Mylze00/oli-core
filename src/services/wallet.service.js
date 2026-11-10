@@ -306,7 +306,7 @@ class WalletService {
         });
         // 🏦 OLI Bank — Ledger escrow_release (non-bloquant)
         _recordToLedger(sellerId, 'escrow_release', amount, { orderId, role: 'seller' });
-        console.log(`💰 Vendeur #${sellerId} crédité : +${amount.toFixed(2)} USD (commande #${orderId}) → solde: ${result.balanceAfter.toFixed(2)} USD`);
+        console.log(`💰 Vendeur #${sellerId} crédité : +${amount.toFixed(0)} FC (commande #${orderId}) → solde: ${result.balanceAfter.toFixed(0)} FC`);
         return result;
     }
 
@@ -332,7 +332,7 @@ class WalletService {
             orderId,
         });
 
-        console.log(`🚚💰 Livreur #${delivererId} crédité : +${amount.toFixed(2)} USD (commande #${orderId}) → solde: ${result.balanceAfter.toFixed(2)} USD`);
+        console.log(`🚚💰 Livreur #${delivererId} crédité : +${amount.toFixed(0)} FC (commande #${orderId}) → solde: ${result.balanceAfter.toFixed(0)} FC`);
         return result;
     }
 

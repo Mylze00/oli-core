@@ -16,13 +16,11 @@ class MyApp extends ConsumerWidget {
           ? ThemeData.dark().copyWith(
               textTheme: ThemeData.dark().textTheme.apply(
                 fontFamily: 'CreatoDisplay',
-                fontWeightDelta: 0,
               ),
             )
           : ThemeData.light().copyWith(
               textTheme: ThemeData.light().textTheme.apply(
                 fontFamily: 'CreatoDisplay',
-                fontWeightDelta: 0,
               ),
             ),
       home: const HomePage(),

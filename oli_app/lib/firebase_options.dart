@@ -57,7 +57,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyD94QiOmpjpjiQPoBW-5dKJxhTI-ydQwDA',
-    appId: '1:1045211732966:android:56bb5bd9d0baf97e0b1427',
+    appId: '1:1045211732966:android:a9fc917b9cd29c350b1427',
     messagingSenderId: '1045211732966',
     projectId: 'oli-core',
     storageBucket: 'oli-core.firebasestorage.app',

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,13 +33,31 @@ class _ContactsInvitePageState extends ConsumerState<ContactsInvitePage> {
   List<_ContactEntry> _onOli = [];
   List<_ContactEntry> _notOnOli = [];
 
+  /// Sur web, pas d'accès au carnet d'adresses : l'utilisateur saisit lui-même les numéros.
+  bool _webEntry = false;
+  final TextEditingController _phonesController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
+  @override
+  void dispose() {
+    _phonesController.dispose();
+    super.dispose();
+  }
+
   Future<void> _start() async {
+    if (kIsWeb) {
+      setState(() {
+        _webEntry = true;
+        _error = null;
+      });
+      return;
+    }
+
     final consent = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -87,23 +106,66 @@ class _ContactsInvitePageState extends ConsumerState<ContactsInvitePage> {
         }
       }
 
-      final service = ContactsMatchService(ref.read(dioProvider));
-      final matches = await service.matchPhones(byPhone.keys.toList());
-      final matchedPhones = matches.map((m) => m.phone).toSet();
-
-      final onOli = byPhone.values.where((e) => matchedPhones.contains(e.phone)).toList()
-        ..sort((a, b) => a.displayName.compareTo(b.displayName));
-      final notOnOli = byPhone.values.where((e) => !matchedPhones.contains(e.phone)).toList()
-        ..sort((a, b) => a.displayName.compareTo(b.displayName));
-
-      if (mounted) {
-        setState(() {
-          _onOli = onOli;
-          _notOnOli = notOnOli;
-        });
-      }
+      await _matchAndShow(byPhone);
     } catch (e) {
       if (mounted) setState(() => _error = 'Impossible de synchroniser vos contacts. Réessayez plus tard.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Interroge le serveur sur les numéros et sépare les contacts inscrits des autres.
+  Future<void> _matchAndShow(Map<String, _ContactEntry> byPhone) async {
+    final service = ContactsMatchService(ref.read(dioProvider));
+    final matches = await service.matchPhones(byPhone.keys.toList());
+    final matchedPhones = matches.map((m) => m.phone).toSet();
+
+    final onOli = byPhone.values.where((e) => matchedPhones.contains(e.phone)).toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    final notOnOli = byPhone.values.where((e) => !matchedPhones.contains(e.phone)).toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+
+    if (mounted) {
+      setState(() {
+        _onOli = onOli;
+        _notOnOli = notOnOli;
+      });
+    }
+  }
+
+  /// Web : l'utilisateur saisit les numéros (séparés par des virgules, espaces ou retours à la ligne).
+  Future<void> _submitWebPhones() async {
+    final raw = _phonesController.text.split(RegExp(r'[,;\s]+'));
+    final byPhone = <String, _ContactEntry>{};
+    var invalid = 0;
+    for (final r in raw) {
+      if (r.trim().isEmpty) continue;
+      final normalized = normalizePhone(r);
+      if (normalized == null) {
+        invalid++;
+      } else if (!byPhone.containsKey(normalized)) {
+        byPhone[normalized] = _ContactEntry(phone: normalized, displayName: normalized);
+      }
+    }
+
+    if (byPhone.isEmpty) {
+      setState(() => _error = 'Aucun numéro valide. Exemple : 0812345678 ou +243812345678.');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await _matchAndShow(byPhone);
+      if (invalid > 0 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$invalid numéro(s) ignoré(s) car invalide(s).')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Impossible de vérifier ces numéros. Réessayez plus tard.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -134,6 +196,8 @@ class _ContactsInvitePageState extends ConsumerState<ContactsInvitePage> {
 
   Widget _buildBody() {
     if (_loading) return const Center(child: CircularProgressIndicator());
+
+    if (_webEntry) return _buildWebEntry();
 
     if (_permissionDenied) {
       return const Center(
@@ -184,6 +248,41 @@ class _ContactsInvitePageState extends ConsumerState<ContactsInvitePage> {
               subtitle: Text(e.phone),
               trailing: TextButton(onPressed: _invite, child: const Text('Inviter')),
             )),
+      ],
+    );
+  }
+
+  Widget _buildWebEntry() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Saisissez les numéros de téléphone de vos contacts, séparés par des virgules ou des retours à la ligne. '
+          'Les numéros sont envoyés pour vérifier s\'ils sont déjà inscrits sur Oli, puis ne sont pas conservés.',
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _phonesController,
+          minLines: 4,
+          maxLines: 8,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(
+            hintText: '0812345678, +243998765432',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Text(_error!, style: const TextStyle(color: Colors.red)),
+        ],
+        const SizedBox(height: 12),
+        ElevatedButton(onPressed: _submitWebPhones, child: const Text('Vérifier les numéros')),
+        if (_onOli.isNotEmpty || _notOnOli.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text('Déjà sur Oli (${_onOli.length}) : ${_onOli.map((e) => e.phone).join(', ')}'),
+          const SizedBox(height: 8),
+          Text('Non inscrits (${_notOnOli.length}) : ${_notOnOli.map((e) => e.phone).join(', ')}'),
+        ],
       ],
     );
   }

@@ -8,6 +8,7 @@ import UserDetail from './pages/UserDetail';
 import Products from './pages/Products';
 import Orders from './pages/Orders';
 import Disputes from './pages/Disputes';
+import Videos from './pages/Videos';
 import Shops from './pages/Shops';
 import Requests from './pages/Requests';
 import AdsManager from './pages/AdsManager';
@@ -41,6 +42,7 @@ function App() {
             <Route path="/operations" element={<Operations />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/disputes" element={<Disputes />} />
+            <Route path="/videos" element={<Videos />} /> {/* 🎬 */}
             <Route path="/ads" element={<AdsManager />} />
             <Route path="/services" element={<ServicesManager />} />
             <Route path="/ticketing" element={<Ticketing />} /> {/* 🎟️ Billetterie */}

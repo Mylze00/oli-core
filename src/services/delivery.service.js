@@ -1,6 +1,7 @@
 const deliveryRepo = require('../repositories/delivery.repository');
 const pool = require('../config/db');
 const walletService = require('./wallet.service');
+const { orderAmountToWallet } = require('../utils/order-currency');
 
 class DeliveryService {
 
@@ -92,7 +93,8 @@ class DeliveryService {
 
         // JOIN pour récupérer le delivery_code depuis orders
         const result = await pool.query(`
-            SELECT d.*, o.delivery_code as order_delivery_code, o.id as real_order_id
+            SELECT d.*, o.delivery_code as order_delivery_code, o.id as real_order_id,
+                   o.exchange_rate as order_exchange_rate
             FROM delivery_orders d
             JOIN orders o ON d.order_id = o.id
             WHERE d.id = $1
@@ -118,11 +120,11 @@ class DeliveryService {
         );
 
         // 💰 Créditer automatiquement le livreur
-        const fee = parseFloat(delivery.delivery_fee) || 0;
+        const fee = orderAmountToWallet(delivery.delivery_fee || 0, delivery.order_exchange_rate) || 0;
         if (fee > 0) {
             try {
                 await walletService.creditDeliverer(user.id, fee, delivery.real_order_id);
-                console.log(`🚚✅ Livreur #${user.id} crédité de ${fee}$ pour commande #${delivery.real_order_id}`);
+                console.log(`🚚✅ Livreur #${user.id} crédité de ${fee} FC pour commande #${delivery.real_order_id}`);
             } catch (err) {
                 console.error(`⚠️ Erreur crédit livreur #${user.id}:`, err.message);
             }

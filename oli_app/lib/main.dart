@@ -14,6 +14,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'features/chat/call_screen.dart';
 import 'firebase_options.dart';
 import 'core/router/network/dio_provider.dart';
+import 'core/theme/oli_colors.dart';
 
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -111,7 +112,7 @@ class OliApp extends ConsumerWidget {
         useMaterial3: true,
         brightness: Brightness.light,
         primaryColor: const Color(0xFF1E7DBA),
-        scaffoldBackgroundColor: const Color(0xFFD9D9D9),
+        scaffoldBackgroundColor: OliLightColors.background,
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1E7DBA),
           primary: const Color(0xFF1E7DBA),
@@ -325,7 +326,7 @@ class _SplashWrapperState extends State<SplashWrapper>
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          'Plus mieux, tout en un clic',
+                          'Tout en un clic',
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           style: TextStyle(

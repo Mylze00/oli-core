@@ -126,7 +126,11 @@ class _CallScreenState extends ConsumerState<CallScreen>
     final mediaConstraints = {
       'audio': true,
       'video': _isVideoEnabled
-          ? {'facingMode': 'user', 'ideal': '720p'}
+          ? {
+              'facingMode': 'user',
+              'width': {'ideal': 1280},
+              'height': {'ideal': 720},
+            }
           : false,
     };
 
@@ -134,15 +138,21 @@ class _CallScreenState extends ConsumerState<CallScreen>
       _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       _localRenderer.srcObject = _localStream;
 
-      _localStream?.getTracks().forEach((track) {
-        _peerConnection?.addTrack(track, _localStream!);
-      });
+      for (final track in _localStream?.getTracks() ?? const <MediaStreamTrack>[]) {
+        await _peerConnection?.addTrack(track, _localStream!);
+      }
     } catch (e) {
       debugPrint("MediaStream Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Impossible d'accéder au micro ou à la caméra.")),
+        );
+      }
     }
 
     // Handle Remote Stream
     _peerConnection?.onTrack = (RTCTrackEvent event) {
+      if (!mounted) return;
       if (event.streams.isNotEmpty) {
         setState(() {
           _remoteStream = event.streams[0];
@@ -381,10 +391,8 @@ class _CallScreenState extends ConsumerState<CallScreen>
   
   void _toggleSpeaker() {
     setState(() => _isSpeakerOn = !_isSpeakerOn);
-    // Dans flutter_webrtc mobile
-    _localStream?.getAudioTracks().forEach((track) {
-       Helper.setSpeakerphoneOn(_isSpeakerOn);
-    });
+    // Haut-parleur : un seul appel, indépendant du nombre de pistes
+    Helper.setSpeakerphoneOn(_isSpeakerOn);
   }
 
   @override

@@ -482,6 +482,9 @@ if (process.env.NODE_ENV !== 'test') {
         try {
             const pool = require('./config/db');
 
+            // Taux USD → FC figé sur chaque commande
+            await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(14,4)`);
+
             // Créer la table notifications si elle n'existe pas
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS notifications (
