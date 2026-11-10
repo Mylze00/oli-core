@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../live_shopping/providers/video_feed_provider.dart';
 import '../live_shopping/widgets/video_player_card.dart';
 import '../live_shopping/pages/video_upload_page.dart';
+import '../marketplace/presentation/pages/seller_profile_page.dart';
+import '../../core/user/user_provider.dart';
 
 /// Page principale Live Shopping — Feed vidéo style TikTok
 class LiveShoppingPage extends ConsumerStatefulWidget {
@@ -79,6 +81,28 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
           ),
         ),
         actions: [
+          // Score du créateur connecté
+          IconButton(
+            tooltip: 'Mon score',
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black38,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.emoji_events_outlined, color: Colors.white, size: 22),
+            ),
+            onPressed: () {
+              final userId = ref.read(userProvider).value?.id.toString();
+              if (userId == null) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SellerProfilePage(sellerId: userId, openVideosTab: true),
+                ),
+              );
+            },
+          ),
           // Bouton upload
           IconButton(
             icon: Container(

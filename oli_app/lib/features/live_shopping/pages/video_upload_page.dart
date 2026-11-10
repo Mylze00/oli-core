@@ -3,21 +3,24 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
-import 'dart:convert';
-import '../../../config/api_config.dart';
+import 'package:dio/dio.dart' show CancelToken, DioException;
+import 'dart:async';
+import 'dart:typed_data';
 import '../../../core/router/network/dio_provider.dart';
-import '../../../core/storage/secure_storage_service.dart';
 import '../../../core/theme/oli_glass.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../../../utils/cloudinary_helper.dart';
+import '../services/resumable_upload.dart';
 
 const _megabyte = 1024 * 1024;
-const _maxVideoBytes = 50 * _megabyte;
+const _maxVideoBytes = 100 * _megabyte;
 const _maxVideoBytesWithSound = 40 * _megabyte;
+const _readStep = 2 * _megabyte;
+
+enum _VideoStage { empty, preparing, ready, failed }
 const _maxSoundBytes = 15 * _megabyte;
 
 /// Couleurs de la page selon le mode clair ou sombre de l'application.
@@ -53,15 +56,6 @@ class _UploadColors {
   });
 }
 
-/// Vidéo prête à être envoyée après compression éventuelle.
-class _PreparedVideo {
-  final List<int> bytes;
-  final String filename;
-  final int? durationSeconds;
-
-  const _PreparedVideo(this.bytes, this.filename, this.durationSeconds);
-}
-
 /// Page de publication d'une vidéo de vente
 class VideoUploadPage extends ConsumerStatefulWidget {
   const VideoUploadPage({super.key});
@@ -73,18 +67,31 @@ class VideoUploadPage extends ConsumerStatefulWidget {
 class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
-  XFile? _videoFile;
   PlatformFile? _soundFile;
   bool _linkProduct = false;
   bool _useCustomSound = false;
+
+  _VideoStage _stage = _VideoStage.empty;
+  double _preparePercent = 0;
+  String? _prepareError;
+  int _prepareRun = 0;
+  XFile? _preparedFile;
+  int _preparedLength = 0;
+  Uint8List? _thumbnail;
+  VideoPlayerController? _webPreview;
+
   bool _isUploading = false;
-  String _uploadStatus = '';
+  double? _publishProgress = 0;
+  String? _publishError;
+  CancelToken? _cancelToken;
+  ResumableUpload? _videoUpload;
+  ResumableUpload? _soundUpload;
   Map<String, dynamic>? _selectedProduct;
   List<Map<String, dynamic>> _myProducts = [];
   bool _loadingProducts = false;
 
   bool get _canPublish =>
-      _videoFile != null &&
+      _stage == _VideoStage.ready &&
       !_isUploading &&
       (!_linkProduct || _selectedProduct != null) &&
       (!_useCustomSound || _soundFile != null);
@@ -97,6 +104,10 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
 
   @override
   void dispose() {
+    _webPreview?.dispose();
+    if (!kIsWeb && _stage == _VideoStage.preparing) {
+      VideoCompress.cancelCompression();
+    }
     _titleController.dispose();
     _descController.dispose();
     super.dispose();
@@ -152,7 +163,123 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       maxDuration: const Duration(seconds: 60),
     );
     if (video != null && mounted) {
-      setState(() => _videoFile = video);
+      await _prepareVideo(video);
+    }
+  }
+
+  /// Prépare la vidéo dès sa sélection : la publication n'est possible qu'à 100 %.
+  Future<void> _prepareVideo(XFile video) async {
+    final run = ++_prepareRun;
+    if (!kIsWeb && _stage == _VideoStage.preparing) {
+      await VideoCompress.cancelCompression();
+    }
+    final previous = _webPreview;
+    setState(() {
+      _stage = _VideoStage.preparing;
+      _preparePercent = 0;
+      _prepareError = null;
+      _thumbnail = null;
+      _webPreview = null;
+      _preparedFile = null;
+      _videoUpload = null;
+    });
+    await previous?.dispose();
+
+    try {
+      final prepared = kIsWeb ? await _readForWeb(video, run) : await _compressOnMobile(video, run);
+      if (run != _prepareRun || !mounted) return;
+
+      final length = await prepared.length();
+      if (length > _maxVideoBytes) {
+        _failPreparation('La vidéo dépasse 100 Mo, choisissez-en une plus courte.');
+        return;
+      }
+      setState(() {
+        _preparedFile = prepared;
+        _preparedLength = length;
+        _preparePercent = 1;
+        _stage = _VideoStage.ready;
+      });
+    } catch (e) {
+      debugPrint('Préparation de la vidéo impossible: $e');
+      if (run == _prepareRun && mounted) {
+        _failPreparation('Cette vidéo ne peut pas être lue. Essayez-en une autre.');
+      }
+    }
+  }
+
+  void _failPreparation(String message) {
+    setState(() {
+      _stage = _VideoStage.failed;
+      _prepareError = message;
+    });
+  }
+
+  /// Le navigateur lit le fichier par blocs pour vérifier qu'il est accessible en entier.
+  Future<XFile> _readForWeb(XFile video, int run) async {
+    unawaited(_loadWebPreview(video, run));
+    final total = await video.length();
+    var offset = 0;
+    while (offset < total) {
+      final end = offset + _readStep < total ? offset + _readStep : total;
+      await video.openRead(offset, end).drain<void>();
+      offset = end;
+      if (run != _prepareRun || !mounted) return video;
+      setState(() => _preparePercent = offset / total);
+    }
+    return video;
+  }
+
+  /// Certains formats ne sont pas lisibles par le navigateur : l'aperçu reste alors sans image.
+  Future<void> _loadWebPreview(XFile video, int run) async {
+    final controller = VideoPlayerController.networkUrl(Uri.parse(video.path));
+    try {
+      await controller.initialize();
+      await controller.setVolume(0);
+      await controller.seekTo(const Duration(milliseconds: 200));
+      if (run == _prepareRun && mounted) {
+        setState(() => _webPreview = controller);
+      } else {
+        await controller.dispose();
+      }
+    } catch (e) {
+      debugPrint('Aperçu de la vidéo indisponible: $e');
+      await controller.dispose();
+    }
+  }
+
+  /// Compresse en HD et garde l'originale si elle est déjà plus légère.
+  Future<XFile> _compressOnMobile(XFile video, int run) async {
+    unawaited(_loadMobileThumbnail(video, run));
+    final subscription = VideoCompress.compressProgress$.subscribe((percent) {
+      if (run == _prepareRun && mounted) {
+        setState(() => _preparePercent = (percent / 100).clamp(0.0, 1.0));
+      }
+    });
+    try {
+      final compressed = await VideoCompress.compressVideo(
+        video.path,
+        quality: VideoQuality.Res1280x720Quality,
+        deleteOrigin: false,
+      );
+      final file = compressed?.file;
+      if (file != null && await file.length() < await video.length()) {
+        return XFile(file.path);
+      }
+    } catch (e) {
+      debugPrint('Compression impossible, envoi de la vidéo originale: $e');
+    } finally {
+      subscription.unsubscribe();
+    }
+    return video;
+  }
+
+  Future<void> _loadMobileThumbnail(XFile video, int run) async {
+    try {
+      final thumbnail = await VideoCompress.getByteThumbnail(video.path, quality: 60);
+      if (run == _prepareRun && mounted) setState(() => _thumbnail = thumbnail);
+    } catch (e) {
+      debugPrint('Miniature indisponible: $e');
     }
   }
 
@@ -169,149 +296,107 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       _showMessage('Le fichier son doit faire moins de 15 Mo.', isError: true);
       return;
     }
-    setState(() => _soundFile = file);
+    setState(() {
+      _soundFile = file;
+      _soundUpload = null;
+    });
   }
 
-  /// Compresse en HD sur mobile. Le navigateur envoie la vidéo telle quelle,
-  /// son optimisation étant alors assurée par Cloudinary.
-  Future<_PreparedVideo> _prepareVideo(XFile video) async {
-    if (kIsWeb) {
-      return _PreparedVideo(
-        await video.readAsBytes(),
-        video.name,
-        await _readWebDuration(video.path),
-      );
+  /// Envoie les fichiers puis enregistre la publication.
+  /// Après une coupure, un nouvel appel reprend là où l'envoi s'était arrêté.
+  Future<void> _publish() async {
+    final file = _preparedFile;
+    if (file == null || !_canPublish) return;
+
+    if (_useCustomSound && _preparedLength > _maxVideoBytesWithSound) {
+      _showMessage('Avec un son ajouté, la vidéo doit faire moins de 40 Mo.', isError: true);
+      return;
     }
 
-    setState(() => _uploadStatus = 'Compression de la vidéo...');
-    MediaInfo? compressed;
-    try {
-      compressed = await VideoCompress.compressVideo(
-        video.path,
-        quality: VideoQuality.Res1280x720Quality,
-        deleteOrigin: false,
-        includeAudio: !_useCustomSound,
-      );
-    } catch (e) {
-      debugPrint('Compression impossible, envoi de la vidéo originale: $e');
-    }
-
-    final compressedFile = compressed?.file;
-    final durationMs = compressed?.duration;
-    final durationSeconds = durationMs != null && durationMs > 0 ? (durationMs / 1000).ceil() : null;
-
-    if (compressedFile != null && await compressedFile.length() < await video.length()) {
-      return _PreparedVideo(
-        await compressedFile.readAsBytes(),
-        compressedFile.path.split('/').last,
-        durationSeconds,
-      );
-    }
-    return _PreparedVideo(await video.readAsBytes(), video.name, durationSeconds);
-  }
-
-  Future<int?> _readWebDuration(String path) async {
-    final controller = VideoPlayerController.networkUrl(Uri.parse(path));
-    try {
-      await controller.initialize();
-      final seconds = controller.value.duration.inMilliseconds / 1000;
-      return seconds > 0 ? seconds.ceil() : null;
-    } catch (e) {
-      debugPrint('Durée de la vidéo illisible: $e');
-      return null;
-    } finally {
-      await controller.dispose();
-    }
-  }
-
-  /// Retourne le message d'erreur si la taille n'est pas acceptée.
-  String? _sizeError(int bytes) {
-    if (bytes > _maxVideoBytes) {
-      return 'La vidéo dépasse 50 Mo, choisissez-en une plus courte.';
-    }
-    if (_useCustomSound && bytes > _maxVideoBytesWithSound) {
-      return 'Avec un son ajouté, la vidéo doit faire moins de 40 Mo.';
-    }
-    return null;
-  }
-
-  Future<void> _uploadVideo() async {
-    final video = _videoFile;
-    if (video == null || !_canPublish) return;
-
+    final cancelToken = CancelToken();
     setState(() {
       _isUploading = true;
-      _uploadStatus = 'Préparation de la vidéo...';
+      _publishError = null;
+      _publishProgress = 0;
+      _cancelToken = cancelToken;
     });
 
+    final api = ref.read(dioProvider);
+    final sound = _useCustomSound ? _soundFile : null;
+    final soundLength = sound?.size ?? 0;
+    final totalBytes = _preparedLength + soundLength;
+
+    void reportProgress(int sent) {
+      if (mounted) setState(() => _publishProgress = (sent / totalBytes).clamp(0.0, 1.0));
+    }
+
     try {
-      final prepared = await _prepareVideo(video);
-      final sizeError = _sizeError(prepared.bytes.length);
-      if (sizeError != null) {
-        _showMessage(sizeError, isError: true);
-        return;
-      }
-
-      if (mounted) setState(() => _uploadStatus = 'Publication de la vidéo...');
-
-      final token = await ref.read(secureStorageProvider).getToken();
-      final request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/videos'));
-      if (token != null) {
-        request.headers['Authorization'] = 'Bearer $token';
-      }
-
-      if (_titleController.text.isNotEmpty) {
-        request.fields['title'] = _titleController.text;
-      }
-      if (_descController.text.isNotEmpty) {
-        request.fields['description'] = _descController.text;
-      }
-      if (_linkProduct && _selectedProduct != null) {
-        request.fields['product_id'] = _selectedProduct!['id'].toString();
-      }
-      if (prepared.durationSeconds != null) {
-        request.fields['duration_seconds'] = prepared.durationSeconds.toString();
-      }
-
-      request.files.add(http.MultipartFile.fromBytes(
-        'video',
-        prepared.bytes,
-        filename: prepared.filename,
-      ));
-      final sound = _soundFile;
-      if (_useCustomSound && sound != null) {
-        request.files.add(http.MultipartFile.fromBytes(
-          'audio',
-          sound.bytes!,
+      String? soundPublicId;
+      if (sound != null) {
+        final bytes = sound.bytes!;
+        _soundUpload ??= ResumableUpload(
+          kind: 'audio',
           filename: sound.name,
-        ));
+          length: soundLength,
+          api: api,
+          read: (start, end) => Stream.value(bytes.sublist(start, end)),
+        );
+        soundPublicId = await _soundUpload!.run(onProgress: reportProgress, cancelToken: cancelToken);
       }
 
-      final response = await http.Response.fromStream(await request.send());
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        _showMessage(_readServerError(response.body), isError: true);
-        return;
-      }
+      _videoUpload ??= ResumableUpload(
+        kind: 'video',
+        filename: file.name,
+        length: _preparedLength,
+        api: api,
+        read: file.openRead,
+      );
+      final videoPublicId = await _videoUpload!.run(
+        onProgress: (sent) => reportProgress(soundLength + sent),
+        cancelToken: cancelToken,
+      );
 
+      if (mounted) setState(() => _publishProgress = null);
+      await api.post(
+        '/api/videos',
+        cancelToken: cancelToken,
+        data: {
+          'video_public_id': videoPublicId,
+          if (soundPublicId != null) 'audio_public_id': soundPublicId,
+          if (_titleController.text.isNotEmpty) 'title': _titleController.text,
+          if (_descController.text.isNotEmpty) 'description': _descController.text,
+          if (_linkProduct && _selectedProduct != null) 'product_id': _selectedProduct!['id'].toString(),
+        },
+      );
+
+      if (!kIsWeb) await VideoCompress.deleteAllCache();
       _showMessage('🎬 Vidéo publiée avec succès !');
       if (mounted) Navigator.pop(context, true); // true = rafraîchir le fil
-    } catch (e) {
-      debugPrint('Erreur publication vidéo: $e');
-      _showMessage("Erreur lors de l'envoi de la vidéo", isError: true);
-    } finally {
-      if (!kIsWeb) {
-        await VideoCompress.deleteAllCache();
+    } on UploadFailure catch (e) {
+      if (e.cancelled) {
+        _closePublishOverlay();
+      } else {
+        _showPublishError(e.message);
       }
-      if (mounted) setState(() => _isUploading = false);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      _showPublishError(
+        (data is Map ? (data['message'] ?? data['error'])?.toString() : null) ??
+            "La publication n'a pas abouti. Vérifiez votre connexion et réessayez.",
+      );
     }
   }
 
-  String _readServerError(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      return (decoded['message'] ?? decoded['error'] ?? "Erreur lors de l'envoi").toString();
-    } catch (_) {
-      return "Erreur lors de l'envoi";
+  void _showPublishError(String message) {
+    if (mounted) setState(() => _publishError = message);
+  }
+
+  void _closePublishOverlay() {
+    if (mounted) {
+      setState(() {
+        _isUploading = false;
+        _publishError = null;
+      });
     }
   }
 
@@ -324,7 +409,9 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
   @override
   Widget build(BuildContext context) {
     final colors = _UploadColors.of(context);
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -367,25 +454,13 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
             const SizedBox(height: 16),
             _buildProductSection(colors),
             const SizedBox(height: 32),
-            if (_isUploading) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  backgroundColor: colors.border,
-                  valueColor: AlwaysStoppedAnimation<Color>(colors.accent),
-                  minHeight: 6,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: Text(_uploadStatus, style: TextStyle(color: colors.muted, fontSize: 12)),
-              ),
-              const SizedBox(height: 16),
-            ],
             _buildPublishButton(colors),
           ],
         ),
       ),
+        ),
+        if (_isUploading) Positioned.fill(child: _buildPublishOverlay()),
+      ],
     );
   }
 
@@ -423,56 +498,208 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
     );
   }
 
+  /// Image de la vidéo en arrière-plan, ou fond sombre si le format ne peut pas s'afficher.
+  Widget _buildVideoBackdrop() {
+    final thumbnail = _thumbnail;
+    if (thumbnail != null) {
+      return Image.memory(thumbnail, fit: BoxFit.cover, cacheWidth: 720);
+    }
+    final preview = _webPreview;
+    if (preview != null && preview.value.isInitialized) {
+      return FittedBox(
+        fit: BoxFit.cover,
+        clipBehavior: Clip.hardEdge,
+        child: SizedBox(
+          width: preview.value.size.width,
+          height: preview.value.size.height,
+          child: VideoPlayer(preview),
+        ),
+      );
+    }
+    return const ColoredBox(color: OliPalette.navy);
+  }
+
+  Widget _buildPercent(double? progress, String label) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          progress == null ? '...' : '${(progress * 100).floor()} %',
+          style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: Colors.white24,
+              valueColor: const AlwaysStoppedAnimation<Color>(OliPalette.blueOnDark),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+      ],
+    );
+  }
+
   Widget _buildVideoPicker(_UploadColors colors) {
-    final video = _videoFile;
+    final isEmpty = _stage == _VideoStage.empty;
     return GestureDetector(
-      onTap: _isUploading ? null : _pickVideo,
+      onTap: _isUploading || _stage == _VideoStage.preparing ? null : _pickVideo,
       child: Container(
-        height: 200,
+        height: 220,
         width: double.infinity,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: colors.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: video != null ? colors.accent : colors.border,
-            width: video != null ? 2 : 1,
+            color: _stage == _VideoStage.ready ? colors.accent : colors.border,
+            width: _stage == _VideoStage.ready ? 2 : 1,
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: video != null
-              ? [
-                  Icon(Icons.videocam, color: colors.accent, size: 48),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      video.name,
-                      style: TextStyle(color: colors.muted, fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  TextButton(
-                    onPressed: _isUploading ? null : _pickVideo,
-                    child: Text('Changer la vidéo', style: TextStyle(color: colors.accent)),
-                  ),
-                ]
-              : [
+        child: isEmpty
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
                   Icon(Icons.video_call_outlined, color: colors.faint, size: 48),
                   const SizedBox(height: 12),
                   Text('Sélectionner une vidéo', style: TextStyle(color: colors.muted, fontSize: 14)),
                   const SizedBox(height: 4),
                   Text(
-                    'Max 60 secondes · compression automatique',
+                    'MP4, MOV, WebM et autres · 100 Mo maximum',
                     style: TextStyle(color: colors.faint, fontSize: 12),
                   ),
                 ],
+              )
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildVideoBackdrop(),
+                  const ColoredBox(color: Color(0x8C000000)),
+                  _buildVideoStage(),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildVideoStage() {
+    switch (_stage) {
+      case _VideoStage.preparing:
+        return _buildPercent(_preparePercent, kIsWeb ? 'Chargement de la vidéo' : 'Compression de la vidéo');
+      case _VideoStage.ready:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white, size: 44),
+            const SizedBox(height: 8),
+            const Text(
+              'Vidéo prête à publier',
+              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            TextButton(
+              onPressed: _isUploading ? null : _pickVideo,
+              child: const Text('Changer la vidéo', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      case _VideoStage.failed:
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white, size: 40),
+              const SizedBox(height: 8),
+              Text(
+                _prepareError ?? 'Cette vidéo ne peut pas être préparée.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+              TextButton(
+                onPressed: _pickVideo,
+                child: const Text('Choisir une autre vidéo', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      case _VideoStage.empty:
+        return const SizedBox.shrink();
+    }
+  }
+
+  /// Écran de publication : l'aperçu reste visible derrière la progression réelle.
+  Widget _buildPublishOverlay() {
+    final error = _publishError;
+    return PopScope(
+      canPop: false,
+      child: Material(
+        color: Colors.black,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildVideoBackdrop(),
+            const ColoredBox(color: Color(0xA6000000)),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (error == null)
+                      _buildPercent(
+                        _publishProgress,
+                        _publishProgress == null ? 'Finalisation de la publication' : 'Envoi de votre vidéo',
+                      )
+                    else ...[
+                      const Icon(Icons.wifi_off, color: Colors.white, size: 44),
+                      const SizedBox(height: 12),
+                      Text(
+                        error,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 15),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _retryPublish,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: OliPalette.blue,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Réessayer'),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: error == null ? () => _cancelToken?.cancel() : _closePublishOverlay,
+                      child: Text(
+                        error == null ? "Annuler l'envoi" : 'Fermer',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  /// Relance l'envoi après une erreur, depuis le dernier morceau reçu.
+  void _retryPublish() {
+    setState(() => _isUploading = false);
+    _publish();
   }
 
   Widget _buildOptionCard({
@@ -708,7 +935,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       width: double.infinity,
       height: 54,
       child: ElevatedButton.icon(
-        onPressed: _canPublish ? _uploadVideo : null,
+        onPressed: _canPublish ? _publish : null,
         icon: _isUploading
             ? const SizedBox(
                 width: 20,

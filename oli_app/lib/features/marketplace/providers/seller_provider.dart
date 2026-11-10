@@ -17,6 +17,8 @@ class SellerProfile {
   final String? shopName;
   final bool shopVerified;
   final String? description;
+  final int deliveredOrders;
+  final int failedOrders;
 
   SellerProfile({
     required this.id,
@@ -31,7 +33,15 @@ class SellerProfile {
     this.shopName,
     this.shopVerified = false,
     this.description,
+    this.deliveredOrders = 0,
+    this.failedOrders = 0,
   });
+
+  /// Part des commandes abouties, ou null tant qu'aucune commande n'est terminée.
+  int? get reliabilityPercent {
+    final total = deliveredOrders + failedOrders;
+    return total == 0 ? null : (deliveredOrders * 100 / total).round();
+  }
 
   factory SellerProfile.fromJson(Map<String, dynamic> json) {
     return SellerProfile(
@@ -47,6 +57,8 @@ class SellerProfile {
       shopName: json['shop_name'],
       shopVerified: json['shop_verified'] ?? false,
       description: json['description'],
+      deliveredOrders: json['delivered_orders'] ?? 0,
+      failedOrders: json['failed_orders'] ?? 0,
     );
   }
 }

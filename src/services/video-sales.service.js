@@ -3,12 +3,32 @@
  * Gère les vidéos de vente pré-enregistrées
  */
 const pool = require('../config/db');
+const cloudinary = require('cloudinary').v2;
 
 const COMMENT_MAX_LENGTH = 500;
 const CLOUDINARY_VIDEO_PATH = '/video/upload/';
 // Au-delà, Cloudinary ne transforme plus une vidéo à la volée sur l'offre gratuite
 const MAX_TRANSFORMED_VIDEO_BYTES = 40 * 1024 * 1024;
 const MAX_VIDEO_SECONDS = 600;
+const MAX_DIRECT_VIDEO_BYTES = 100 * 1024 * 1024;
+// Convertit tout format reçu (MOV, HEVC, WebM...) en MP4 H.264, lisible sur tous les téléphones
+const PLAYABLE_VIDEO_TRANSFORMATION = 'f_mp4,q_auto,vc_h264';
+const UPLOAD_KINDS = {
+    video: {
+        folder: 'oli_app/videos',
+        formats: 'mp4,mov,m4v,webm,avi,mkv,3gp,mpeg,mpg,wmv,ts,flv',
+        eager: { eager: PLAYABLE_VIDEO_TRANSFORMATION, eager_async: true },
+    },
+    audio: { folder: 'oli_app/audio', formats: 'mp3,wav,m4a,aac,ogg', eager: {} },
+};
+const SCORE_POINTS = { video: 20, sale: 50, comment: 8, like: 5, product: 5, view: 1 };
+const CREATOR_LEVELS = [
+    { name: 'Débutant', from: 0 },
+    { name: 'Bronze', from: 200 },
+    { name: 'Argent', from: 1000 },
+    { name: 'Or', from: 5000 },
+    { name: 'Diamant', from: 20000 },
+];
 const COMMENT_SORTS = {
     recent: 'c.created_at DESC, c.id DESC',
     top: 'likes_count DESC, c.created_at DESC, c.id DESC',
@@ -43,7 +63,155 @@ function commentSelect(viewerParam) {
     `;
 }
 
+/** Miniature d'une vidéo Cloudinary, y compris pour les vidéos publiées avant les miniatures. */
+function deriveThumbnailUrl(videoUrl) {
+    const match = /^(.*\/video\/upload\/)(?:.*\/)?(v\d+\/.+)\.[a-z0-9]+$/i.exec(videoUrl || '');
+    return match ? `${match[1]}so_1,f_jpg,w_540,q_auto/${match[2]}.jpg` : null;
+}
+
+function withThumbnail(video) {
+    return { ...video, thumbnail_url: video.thumbnail_url || deriveThumbnailUrl(video.video_url) };
+}
+
 class VideoSalesService {
+
+    /**
+     * Autorise l'envoi direct d'un fichier vers Cloudinary, sans transiter par ce serveur.
+     * @param {'video'|'audio'} kind
+     * @throws {Error} INVALID_KIND, UPLOAD_UNAVAILABLE ou LIMIT_REACHED
+     */
+    async createUploadTicket(userId, kind) {
+        const config = UPLOAD_KINDS[kind];
+        if (!config) throw new Error('INVALID_KIND');
+
+        const { cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret } = cloudinary.config();
+        if (!cloudName || !apiKey || !apiSecret) throw new Error('UPLOAD_UNAVAILABLE');
+
+        if (kind === 'video') await this._assertCanPublish(userId);
+
+        const params = {
+            timestamp: Math.round(Date.now() / 1000),
+            folder: `${config.folder}/${userId}`,
+            allowed_formats: config.formats,
+            ...config.eager,
+        };
+        return {
+            upload_url: `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`,
+            params: {
+                ...params,
+                api_key: apiKey,
+                signature: cloudinary.utils.api_sign_request(params, apiSecret),
+            },
+        };
+    }
+
+    /** Vérifie qu'un fichier envoyé directement existe et appartient bien à cet utilisateur. */
+    async _getUploadedAsset(userId, publicId, kind) {
+        const expectedPrefix = `${UPLOAD_KINDS[kind].folder}/${userId}/`;
+        if (typeof publicId !== 'string' || !publicId.startsWith(expectedPrefix)) {
+            throw new Error('INVALID_UPLOAD');
+        }
+        try {
+            return await cloudinary.api.resource(publicId, { resource_type: 'video' });
+        } catch (error) {
+            console.error('❌ Fichier envoyé introuvable:', error.error?.message || error.message);
+            throw new Error('INVALID_UPLOAD');
+        }
+    }
+
+    /**
+     * Construit les URL de diffusion d'une vidéo envoyée directement.
+     * @throws {Error} INVALID_UPLOAD, VIDEO_TOO_LARGE ou AUDIO_VIDEO_TOO_LARGE
+     */
+    async resolveDirectUpload(userId, videoPublicId, audioPublicId) {
+        const video = await this._getUploadedAsset(userId, videoPublicId, 'video');
+        if (video.bytes > MAX_DIRECT_VIDEO_BYTES) throw new Error('VIDEO_TOO_LARGE');
+
+        const steps = [];
+        if (audioPublicId) {
+            await this._getUploadedAsset(userId, audioPublicId, 'audio');
+            if (video.bytes > MAX_TRANSFORMED_VIDEO_BYTES) throw new Error('AUDIO_VIDEO_TOO_LARGE');
+            steps.push('ac_none', `l_audio:${audioPublicId.replace(/\//g, ':')}`);
+            if (video.duration > 0) steps.push(`du_${Math.ceil(video.duration)}`);
+            steps.push('fl_layer_apply');
+        }
+        steps.push(PLAYABLE_VIDEO_TRANSFORMATION);
+
+        const { cloud_name: cloudName } = cloudinary.config();
+        const base = `https://res.cloudinary.com/${cloudName}/video/upload`;
+        const asset = `v${video.version}/${video.public_id}`;
+        return {
+            videoUrl: `${base}/${steps.join('/')}/${asset}.mp4`,
+            thumbnailUrl: `${base}/so_1,f_jpg,w_540,q_auto/${asset}.jpg`,
+            durationSeconds: video.duration > 0 ? Math.ceil(video.duration) : null,
+        };
+    }
+
+    /** @throws {Error} LIMIT_REACHED au-delà de 3 vidéos par mois sans certification */
+    async _assertCanPublish(userId) {
+        const userCheck = await pool.query(
+            'SELECT has_certified_shop FROM users WHERE id = $1',
+            [userId]
+        );
+        if (userCheck.rows[0]?.has_certified_shop) return;
+
+        const countResult = await pool.query(
+            `SELECT COUNT(*) AS cnt FROM video_sales
+             WHERE user_id = $1
+             AND created_at >= date_trunc('month', NOW())
+             AND status != 'deleted'`,
+            [userId]
+        );
+        if (parseInt(countResult.rows[0].cnt) >= 3) {
+            throw new Error('LIMIT_REACHED');
+        }
+    }
+
+    /**
+     * Score, niveau et vidéos réelles d'un créateur
+     * @throws {Error} NOT_FOUND si l'utilisateur n'existe pas
+     */
+    async getCreatorProfile(userId, viewerId) {
+        const statsResult = await pool.query(
+            `SELECT
+                (SELECT COUNT(*)::int FROM video_sales v WHERE v.user_id = u.id AND v.status = 'active') AS videos_count,
+                (SELECT COUNT(*)::int FROM products p WHERE p.seller_id = u.id AND p.status = 'active') AS products_count,
+                (SELECT COALESCE(SUM(v.views_count), 0)::int FROM video_sales v WHERE v.user_id = u.id AND v.status = 'active') AS views_count,
+                (SELECT COALESCE(SUM(v.likes_count), 0)::int FROM video_sales v WHERE v.user_id = u.id AND v.status = 'active') AS likes_count,
+                (SELECT COUNT(*)::int FROM video_comments c
+                 JOIN video_sales v ON v.id = c.video_id
+                 WHERE v.user_id = u.id AND v.status = 'active' AND c.status = 'active') AS comments_count,
+                (SELECT COALESCE(SUM(oi.quantity), 0)::int FROM order_items oi
+                 JOIN orders o ON o.id = oi.order_id
+                 JOIN video_sales v ON v.id = oi.origin_video_id
+                 WHERE v.user_id = u.id AND o.status = 'delivered') AS video_sales_count
+             FROM users u WHERE u.id = $1`,
+            [userId]
+        );
+        const stats = statsResult.rows[0];
+        if (!stats) throw new Error('NOT_FOUND');
+
+        const score = stats.videos_count * SCORE_POINTS.video
+            + stats.video_sales_count * SCORE_POINTS.sale
+            + stats.comments_count * SCORE_POINTS.comment
+            + stats.likes_count * SCORE_POINTS.like
+            + stats.products_count * SCORE_POINTS.product
+            + stats.views_count * SCORE_POINTS.view;
+
+        const levelIndex = CREATOR_LEVELS.reduce((found, level, index) => (score >= level.from ? index : found), 0);
+        const level = CREATOR_LEVELS[levelIndex];
+        const nextLevel = CREATOR_LEVELS[levelIndex + 1];
+
+        return {
+            ...stats,
+            score,
+            level: level.name,
+            next_level: nextLevel ? nextLevel.name : null,
+            points_to_next: nextLevel ? nextLevel.from - score : 0,
+            level_progress: nextLevel ? (score - level.from) / (nextLevel.from - level.from) : 1,
+            videos: await this._getVideos({ limit: 60, offset: 0, viewerId, creatorId: userId }),
+        };
+    }
 
     /**
      * Construit l'URL diffusée : qualité optimisée par Cloudinary et, si demandé,
@@ -214,10 +382,29 @@ class VideoSalesService {
      * Récupérer le feed paginé
      */
     async getFeed(page = 1, limit = 10, currentUserId = null) {
-        const offset = (page - 1) * limit;
+        return this._getVideos({ limit, offset: (page - 1) * limit, viewerId: currentUserId });
+    }
 
-        const query = `
-            SELECT 
+    /**
+     * Vidéos publiées, du fil général ou d'un seul créateur.
+     * Le fil général masque à chacun les vidéos qu'il a signalées.
+     */
+    async _getVideos({ limit, offset, viewerId = null, creatorId = null }) {
+        const params = [limit, offset, viewerId];
+        let creatorClause = '';
+        if (creatorId) {
+            params.push(creatorId);
+            creatorClause = `AND v.user_id = $${params.length}`;
+        }
+        const reportedClause = creatorId || !viewerId ? '' : `
+            AND NOT EXISTS(
+                SELECT 1 FROM video_reports vr
+                WHERE vr.video_id = v.id AND vr.reporter_id = $3
+            )
+        `;
+
+        const result = await pool.query(`
+            SELECT
                 v.id, v.video_url, v.thumbnail_url, v.title, v.description,
                 v.duration_seconds, v.views_count, v.likes_count,
                 p.id AS product_id, v.created_at,
@@ -230,36 +417,27 @@ class VideoSalesService {
                     SELECT COUNT(*)::int FROM video_comments vc
                     WHERE vc.video_id = v.id AND vc.status = 'active'
                 ) AS comments_count,
-                ${currentUserId ? `
-                    EXISTS(
-                        SELECT 1 FROM video_likes vl 
-                        WHERE vl.video_id = v.id AND vl.user_id = $3
-                    ) AS is_liked
-                ` : 'FALSE AS is_liked'}
+                EXISTS(
+                    SELECT 1 FROM video_likes vl
+                    WHERE vl.video_id = v.id AND vl.user_id = $3::int
+                ) AS is_liked
             FROM video_sales v
             JOIN users u ON v.user_id = u.id
             LEFT JOIN products p ON v.product_id = p.id AND p.status = 'active'
             LEFT JOIN users ps ON p.seller_id = ps.id
             WHERE v.status = 'active'
-            ${currentUserId ? `
-                AND NOT EXISTS(
-                    SELECT 1 FROM video_reports vr
-                    WHERE vr.video_id = v.id AND vr.reporter_id = $3
-                )
-            ` : ''}
+            ${creatorClause}
+            ${reportedClause}
             ORDER BY v.created_at DESC
             LIMIT $1 OFFSET $2
-        `;
-
-        const params = currentUserId ? [limit, offset, currentUserId] : [limit, offset];
-        const result = await pool.query(query, params);
-        return result.rows;
+        `, params);
+        return result.rows.map(withThumbnail);
     }
 
     /**
      * Créer une vidéo de vente
      */
-    async createVideo(userId, videoUrl, thumbnailUrl, productId, title, description) {
+    async createVideo(userId, videoUrl, thumbnailUrl, productId, title, description, durationSeconds = null) {
         // N'importe quel produit actif peut être lié (affiliation entre vendeurs)
         if (productId) {
             const parsedProductId = parseInt(productId, 10);
@@ -274,32 +452,13 @@ class VideoSalesService {
             }
         }
 
-        // Vérification limite : 3 vidéos/mois pour non-certifiés
-        const userCheck = await pool.query(
-            'SELECT has_certified_shop FROM users WHERE id = $1',
-            [userId]
-        );
-        const isCertified = userCheck.rows[0]?.has_certified_shop;
-
-        if (!isCertified) {
-            const countResult = await pool.query(
-                `SELECT COUNT(*) AS cnt FROM video_sales 
-                 WHERE user_id = $1 
-                 AND created_at >= date_trunc('month', NOW())
-                 AND status != 'deleted'`,
-                [userId]
-            );
-            const monthCount = parseInt(countResult.rows[0].cnt);
-            if (monthCount >= 3) {
-                throw new Error('LIMIT_REACHED');
-            }
-        }
+        await this._assertCanPublish(userId);
 
         const result = await pool.query(
-            `INSERT INTO video_sales (user_id, product_id, video_url, thumbnail_url, title, description)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO video_sales (user_id, product_id, video_url, thumbnail_url, title, description, duration_seconds)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING *`,
-            [userId, productId || null, videoUrl, thumbnailUrl || null, title || null, description || null]
+            [userId, productId || null, videoUrl, thumbnailUrl || null, title || null, description || null, durationSeconds]
         );
         return result.rows[0];
     }

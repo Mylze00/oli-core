@@ -194,7 +194,11 @@ async function findPublicProfile(userId) {
       u.account_type, 
       u.has_certified_shop,
       u.total_sales,
-      u.rating
+      u.rating,
+      (SELECT COUNT(*)::int FROM orders o
+       WHERE o.seller_id = u.id AND o.status = 'delivered') AS delivered_orders,
+      (SELECT COUNT(*)::int FROM orders o
+       WHERE o.seller_id = u.id AND o.status IN ('cancelled', 'refunded')) AS failed_orders
     FROM users u
     WHERE u.id = $1
   `;

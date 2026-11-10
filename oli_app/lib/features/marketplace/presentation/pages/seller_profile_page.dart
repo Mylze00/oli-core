@@ -5,11 +5,12 @@ import 'package:intl/intl.dart';
 import '../../providers/seller_provider.dart';
 import '../../providers/market_provider.dart';
 import '../../../../../models/product_model.dart';
-import '../widgets/market_product_card.dart';
+import '../../../live_shopping/widgets/creator_videos_tab.dart';
 
 class SellerProfilePage extends ConsumerStatefulWidget {
   final String sellerId;
-  const SellerProfilePage({super.key, required this.sellerId});
+  final bool openVideosTab;
+  const SellerProfilePage({super.key, required this.sellerId, this.openVideosTab = false});
 
   @override
   ConsumerState<SellerProfilePage> createState() => _SellerProfilePageState();
@@ -37,7 +38,8 @@ class _SellerProfilePageState extends ConsumerState<SellerProfilePage> {
         error: (err, _) => Center(child: Text("Erreur: $err", style: const TextStyle(color: Colors.red))),
         data: (profile) {
           return DefaultTabController(
-            length: 3,
+            length: 4,
+            initialIndex: widget.openVideosTab ? 1 : 0,
             child: Stack(
               children: [
                 NestedScrollView(
@@ -66,6 +68,7 @@ class _SellerProfilePageState extends ConsumerState<SellerProfilePage> {
                             unselectedLabelColor: Colors.grey,
                             tabs: [
                               Tab(text: "Produits"),
+                              Tab(text: "Vidéos"),
                               Tab(text: "Avis"),
                               Tab(text: "Infos"),
                             ],
@@ -77,6 +80,7 @@ class _SellerProfilePageState extends ConsumerState<SellerProfilePage> {
                   body: TabBarView(
                     children: [
                       _buildProductsGrid(productsAsync),
+                      CreatorVideosTab(userId: widget.sellerId),
                       _buildReviewsList(profile),
                       _buildStoreInfo(profile),
                     ],
@@ -192,7 +196,7 @@ class _SellerProfilePageState extends ConsumerState<SellerProfilePage> {
         children: [
           _buildStatItem("Ventes", "${profile.totalSales}"),
           _buildStatItem("Note", "${profile.rating} ⭐"),
-          _buildStatItem("Fiabilité", "99%"),
+          _buildStatItem("Fiabilité", profile.reliabilityPercent == null ? "—" : "${profile.reliabilityPercent}%"),
         ],
       ),
     );
@@ -484,18 +488,12 @@ class _SellerProfilePageState extends ConsumerState<SellerProfilePage> {
   }
 
   Widget _buildReviewsList(SellerProfile profile) {
-    // Simulation d'une liste d'avis - À remplacer par vos données réelles
-    return ListView.builder(
-      padding: const EdgeInsets.all(15),
-      itemCount: 5,
-      itemBuilder: (context, index) => Card(
-        color: const Color(0xFF1E1E1E),
-        margin: const EdgeInsets.only(bottom: 10),
-        child: ListTile(
-          leading: const CircleAvatar(backgroundColor: Colors.grey, child: Icon(Icons.person, color: Colors.white)),
-          title: const Text("Client Oli", style: TextStyle(color: Colors.white)),
-          subtitle: const Text("Super produit, livraison très rapide à Kinshasa !", style: TextStyle(color: Colors.grey)),
-          trailing: const Text("5 ⭐", style: TextStyle(color: Colors.orangeAccent)),
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Text(
+          "Aucun avis pour le moment.",
+          style: TextStyle(color: Colors.grey, fontSize: 16),
         ),
       ),
     );
@@ -510,26 +508,6 @@ class _SellerProfilePageState extends ConsumerState<SellerProfilePage> {
           const Text("À propos de la boutique", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Text(profile.description ?? "Aucune description fournie par le vendeur.", style: const TextStyle(color: Colors.grey)),
-          const SizedBox(height: 20),
-          const Divider(color: Colors.white10),
-          _buildInfoRow(Icons.location_on, "Localisation", "Gombe, Kinshasa"),
-          _buildInfoRow(Icons.access_time, "Délai de réponse", "< 2 heures"),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String title, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.orangeAccent, size: 20),
-          const SizedBox(width: 15),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-            Text(value, style: const TextStyle(color: Colors.white, fontSize: 14)),
-          ]),
         ],
       ),
     );
