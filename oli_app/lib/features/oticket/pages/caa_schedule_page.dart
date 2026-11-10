@@ -38,11 +38,22 @@ class _CaaSchedulePageState extends State<CaaSchedulePage> {
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        title: const Column(
+        toolbarHeight: 84,
+        title: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Vols CAA', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-            Text('Programme du $caaScheduleDate', style: TextStyle(color: Colors.white70, fontSize: 12)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+              child: Image.asset(
+                'assets/images/logo_caa.png',
+                height: 42,
+                fit: BoxFit.contain,
+                semanticLabel: 'Compagnie Africaine d\'Aviation',
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text('Programme du $caaScheduleDate', style: TextStyle(color: Colors.white70, fontSize: 12)),
           ],
         ),
       ),

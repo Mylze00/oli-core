@@ -578,15 +578,16 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
           height: 72,
           alignment: Alignment.center,
           decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-          child: Text(
-            name,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: const Color(0xFFE5121C),
-              fontSize: name.contains('\n') ? 14 : 19,
-              height: 1.1,
-            ),
-          ),
+          child: name == 'CAA'
+              ? Padding(
+                  padding: const EdgeInsets.all(9),
+                  child: Image.asset('assets/images/logo_caa.png', fit: BoxFit.contain),
+                )
+              : Text(
+                  name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFFE5121C), fontSize: 14, height: 1.1),
+                ),
         ),
       ),
     );

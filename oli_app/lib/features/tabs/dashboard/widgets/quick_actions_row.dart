@@ -39,7 +39,7 @@ class QuickActionsRow extends ConsumerWidget {
               builder: (_) => const ServiceGlassPanel(),
             );
           }),
-          _buildQuickActionCard(context, isDark, "O-ticket", Icons.confirmation_number, Colors.purple, () {
+          _buildTicketActionCard(context, isDark, "O-ticket", () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const OTicketPage()));
           }),
           _buildAnimatedLiveActionCard(context, isDark, "Live", () {
@@ -108,6 +108,32 @@ class QuickActionsRow extends ConsumerWidget {
                   color: isDark ? Colors.white : Colors.black87,
                   fontSize: 10,
                   fontWeight: FontWeight.w500)
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTicketActionCard(BuildContext context, bool isDark, String title, VoidCallback? onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap ?? () {},
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _AnimatedTicketIcon(isDark: isDark),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontFamily: 'CreatoDisplay',
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -196,6 +222,119 @@ class QuickActionsRow extends ConsumerWidget {
                   fontWeight: FontWeight.w500), // Bold for Live
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Billet qui se balance puis reçoit un reflet, avant une pause.
+class _AnimatedTicketIcon extends StatefulWidget {
+  final bool isDark;
+  const _AnimatedTicketIcon({required this.isDark});
+
+  @override
+  State<_AnimatedTicketIcon> createState() => _AnimatedTicketIconState();
+}
+
+class _AnimatedTicketIconState extends State<_AnimatedTicketIcon> with SingleTickerProviderStateMixin {
+  static const _shineBandWidth = 0.35;
+
+  late final AnimationController _controller;
+
+  // Le mouvement occupe le début du cycle, le reste est une pause.
+  late final Animation<double> _rotation = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 0.0, end: -0.16), weight: 5),
+    TweenSequenceItem(tween: Tween(begin: -0.16, end: 0.14), weight: 7),
+    TweenSequenceItem(tween: Tween(begin: 0.14, end: -0.08), weight: 6),
+    TweenSequenceItem(tween: Tween(begin: -0.08, end: 0.0), weight: 5),
+    TweenSequenceItem(tween: ConstantTween(0.0), weight: 77),
+  ]).animate(_controller);
+
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.14), weight: 10),
+    TweenSequenceItem(tween: Tween(begin: 1.14, end: 1.0), weight: 13),
+    TweenSequenceItem(tween: ConstantTween(1.0), weight: 77),
+  ]).animate(_controller);
+
+  late final Animation<double> _shine = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.24, 0.5, curve: Curves.easeInOut),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 3600));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Respecte le réglage « réduire les animations » du téléphone
+    if (MediaQuery.of(context).disableAnimations) {
+      _controller.stop();
+      _controller.value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Shader _shineShader(Rect bounds) {
+    // Le reflet traverse le billet de gauche à droite pendant sa phase du cycle
+    final position = -_shineBandWidth + _shine.value * (1 + 2 * _shineBandWidth);
+    return LinearGradient(
+      colors: const [Colors.transparent, Color(0xB3FFFFFF), Colors.transparent],
+      stops: [
+        (position - _shineBandWidth / 2).clamp(0.0, 1.0),
+        position.clamp(0.0, 1.0),
+        (position + _shineBandWidth / 2).clamp(0.0, 1.0),
+      ],
+    ).createShader(bounds);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: widget.isDark
+            ? Colors.white.withOpacity(0.05)
+            : Colors.black.withOpacity(0.06),
+        shape: BoxShape.circle,
+        border: widget.isDark ? null : Border.all(
+          color: Colors.white,
+          width: 1.5
+        ),
+      ),
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _controller,
+          child: Image.asset(
+            'assets/images/ticket_icon.png',
+            width: 36,
+            height: 36,
+            fit: BoxFit.contain,
+          ),
+          builder: (context, child) => Transform.rotate(
+            angle: _rotation.value,
+            child: Transform.scale(
+              scale: _scale.value,
+              child: _shine.value > 0 && _shine.value < 1
+                  ? ShaderMask(
+                      shaderCallback: _shineShader,
+                      blendMode: BlendMode.srcATop,
+                      child: child,
+                    )
+                  : child,
+            ),
+          ),
         ),
       ),
     );

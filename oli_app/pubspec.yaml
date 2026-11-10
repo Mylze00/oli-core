@@ -98,6 +98,8 @@ flutter:
   assets:
     - assets/images/logo.png
     - assets/images/logo_oli_ticket.png
+    - assets/images/logo_caa.png
+    - assets/images/ticket_icon.png
     - "assets/images/logo - Copie (1).svg"
     - assets/images/chat_bg.png
     - assets/images/chat_bg_new.png
