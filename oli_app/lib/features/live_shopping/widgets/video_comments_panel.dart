@@ -9,16 +9,12 @@ import '../../../core/user/user_provider.dart';
 import '../../../utils/cloudinary_helper.dart';
 import '../models/video_sale_model.dart';
 import '../providers/video_feed_provider.dart';
+import 'comment_media_picker.dart';
 
 const _commentsPageSize = 20;
 const _likeValue = 1;
 const _dislikeValue = -1;
 const _noReaction = 0;
-const _quickEmojis = [
-  '😀', '😂', '🤣', '😍', '🥰', '😘', '😎', '🤩', '😢', '😭', '😡', '🥳',
-  '😅', '😊', '😉', '🤔', '🙄', '😴', '😱', '🤝', '👍', '👎', '👏', '🙏',
-  '💪', '✌️', '🔥', '❤️', '💙', '💯', '🎉', '✨', '💰', '🛍️', '🇨🇩', '⭐',
-];
 
 /// Couleurs du panneau selon le mode clair ou sombre.
 class _PanelColors {
@@ -79,7 +75,7 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
   bool _hasError = false;
   bool _hasMore = false;
   bool _isSending = false;
-  bool _showEmojis = false;
+  bool _showMediaPicker = false;
   int _page = 0;
   String _sort = 'recent';
   VideoComment? _replyTarget;
@@ -245,7 +241,7 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
     final isReplyToReply = comment.parentId != null;
     setState(() {
       _replyTarget = comment;
-      _showEmojis = false;
+      _showMediaPicker = false;
     });
     _inputController.text = isReplyToReply ? '@${comment.userName} ' : '';
     _inputController.selection = TextSelection.collapsed(offset: _inputController.text.length);
@@ -285,9 +281,14 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
   }
 
   Future<void> _send() async {
-    if (!_canSend) return;
+    if (_canSend) await _submit();
+  }
+
+  /// Un sticker part immédiatement, avec le texte déjà saisi.
+  Future<void> _submit({CommentSticker? sticker}) async {
+    if (_isSending) return;
     final content = _inputController.text.trim();
-    final image = _imageBytes;
+    final image = sticker == null ? _imageBytes : null;
     final parentId = _replyTarget?.id;
 
     setState(() => _isSending = true);
@@ -301,6 +302,7 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
           : {
               'content': content,
               if (parentId != null) 'parent_id': parentId,
+              if (sticker != null) 'sticker_id': sticker.id,
             };
 
       final response = await ref.read(dioProvider).post(_commentsPath, data: body);
@@ -315,7 +317,7 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
         _replyTarget = null;
         _imageBytes = null;
         _imageName = null;
-        _showEmojis = false;
+        _showMediaPicker = false;
       });
     } on DioException {
       _showError("Impossible d'envoyer le commentaire");
@@ -601,7 +603,19 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
                   )),
                   const SizedBox(height: 2),
                   if (comment.content.isNotEmpty) _buildContent(comment.content, colors),
-                  if (comment.imageUrl != null)
+                  if (comment.imageUrl != null && comment.isSticker)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Image.network(
+                        comment.imageUrl!,
+                        width: 110,
+                        height: 110,
+                        fit: BoxFit.contain,
+                        cacheWidth: 330,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    )
+                  else if (comment.imageUrl != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: ClipRRect(
@@ -783,7 +797,7 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
                           minLines: 1,
                           maxLines: 3,
                           onTap: () {
-                            if (_showEmojis) setState(() => _showEmojis = false);
+                            if (_showMediaPicker) setState(() => _showMediaPicker = false);
                           },
                           style: TextStyle(color: colors.text, fontSize: 15),
                           decoration: InputDecoration(
@@ -796,9 +810,9 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
                         ),
                       ),
                       _buildComposerIcon(Icons.image_outlined, 'Ajouter une image', _pickImage, colors),
-                      _buildComposerIcon(Icons.emoji_emotions_outlined, 'Ajouter un emoji', () {
+                      _buildComposerIcon(Icons.emoji_emotions_outlined, 'Emojis et stickers', () {
                         _inputFocus.unfocus();
-                        setState(() => _showEmojis = !_showEmojis);
+                        setState(() => _showMediaPicker = !_showMediaPicker);
                       }, colors),
                       _buildComposerIcon(Icons.alternate_email, 'Mentionner', () => _showMentions(colors), colors),
                     ],
@@ -814,7 +828,14 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
             ],
           ),
         ),
-        if (_showEmojis) _buildEmojiGrid(),
+        if (_showMediaPicker)
+          CommentMediaPicker(
+            accent: colors.accent,
+            text: colors.text,
+            muted: colors.muted,
+            onEmoji: _insertAtCursor,
+            onSticker: (sticker) => _submit(sticker: sticker),
+          ),
       ],
     );
   }
@@ -825,23 +846,6 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
       visualDensity: VisualDensity.compact,
       onPressed: onPressed,
       icon: Icon(icon, color: colors.text, size: 21),
-    );
-  }
-
-  Widget _buildEmojiGrid() {
-    return SizedBox(
-      height: 150,
-      child: GridView.count(
-        crossAxisCount: 8,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        children: [
-          for (final emoji in _quickEmojis)
-            InkWell(
-              onTap: () => _insertAtCursor(emoji),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),
-            ),
-        ],
-      ),
     );
   }
 }

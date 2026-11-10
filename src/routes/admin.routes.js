@@ -46,6 +46,7 @@ router.use('/finances', financesRoutes); // 💰 Finances
 router.use('/ticketing', ticketingRoutes); // 🎟️ Billetterie
 router.use('/operations', operationsRoutes); // 🧭 Opérations
 router.use('/videos', require('./admin/videos.routes')); // 🎬 Modération des vidéos
+router.use('/stickers', require('./admin/stickers.routes')); // 😀 Galerie de stickers
 
 
 // Route de test

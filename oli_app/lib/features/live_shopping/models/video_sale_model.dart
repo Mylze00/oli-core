@@ -126,6 +126,30 @@ class VideoSale {
   }
 }
 
+/// Sticker de la galerie des commentaires
+class CommentSticker {
+  final String id;
+  final String pack;
+  final String name;
+  final String imageUrl;
+
+  const CommentSticker({
+    required this.id,
+    required this.pack,
+    required this.name,
+    required this.imageUrl,
+  });
+
+  factory CommentSticker.fromJson(Map<String, dynamic> json) {
+    return CommentSticker(
+      id: json['id']?.toString() ?? '',
+      pack: json['pack'] ?? 'Oli',
+      name: json['name'] ?? 'Sticker',
+      imageUrl: resolveVideoMediaUrl(json['image_url']) ?? '',
+    );
+  }
+}
+
 /// Commentaire d'une vidéo de vente
 class VideoComment {
   final String id;
@@ -135,6 +159,7 @@ class VideoComment {
   final String? userAvatar;
   final String content;
   final String? imageUrl;
+  final bool isSticker;
   final bool isCreator;
   final bool creatorLiked;
   final int likesCount;
@@ -152,6 +177,7 @@ class VideoComment {
     this.userAvatar,
     required this.content,
     this.imageUrl,
+    this.isSticker = false,
     this.isCreator = false,
     this.creatorLiked = false,
     this.likesCount = 0,
@@ -169,6 +195,7 @@ class VideoComment {
       userAvatar: resolveVideoMediaUrl(json['user_avatar']),
       content: json['content'] ?? '',
       imageUrl: resolveVideoMediaUrl(json['image_url']),
+      isSticker: json['is_sticker'] == true,
       isCreator: json['is_creator'] == true,
       creatorLiked: json['creator_liked'] == true,
       likesCount: json['likes_count'] ?? 0,
@@ -192,6 +219,7 @@ class VideoComment {
       userAvatar: userAvatar,
       content: content,
       imageUrl: imageUrl,
+      isSticker: isSticker,
       isCreator: isCreator,
       creatorLiked: creatorLiked ?? this.creatorLiked,
       likesCount: likesCount ?? this.likesCount,

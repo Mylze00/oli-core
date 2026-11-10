@@ -37,6 +37,19 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/videos/stickers
+ * Galerie de stickers des commentaires
+ */
+router.get('/stickers', requireAuth, async (req, res) => {
+    try {
+        res.json({ success: true, stickers: await videoService.getStickers() });
+    } catch (err) {
+        console.error('❌ Erreur stickers:', err.message);
+        res.status(500).json({ error: 'Erreur lors du chargement des stickers' });
+    }
+});
+
+/**
  * GET /api/videos/my
  * Mes vidéos
  */
@@ -194,7 +207,7 @@ router.get('/:id/comments/:commentId/replies', requireAuth, async (req, res) => 
 /**
  * POST /api/videos/:id/comments
  * Ajouter un commentaire ou une réponse, avec image facultative
- * Body (JSON ou multipart): content, parent_id, image
+ * Body (JSON ou multipart): content, parent_id, sticker_id, image
  */
 router.post('/:id/comments', requireAuth, (req, res, next) => {
     genericUpload.single('image')(req, res, function (err) {
@@ -215,11 +228,15 @@ router.post('/:id/comments', requireAuth, (req, res, next) => {
         const comment = await videoService.addComment(req.params.id, req.user.id, req.body?.content, {
             parentId: req.body?.parent_id,
             imageUrl: image ? image.path : null,
+            stickerId: req.body?.sticker_id,
         });
         res.status(201).json({ success: true, comment });
     } catch (err) {
         if (err.message === 'INVALID_COMMENT') {
             return res.status(400).json({ error: 'Le commentaire doit contenir un texte de 500 caractères maximum ou une image' });
+        }
+        if (err.message === 'INVALID_STICKER') {
+            return res.status(400).json({ error: "Ce sticker n'est plus disponible" });
         }
         if (err.message === 'INVALID_PARENT') {
             return res.status(400).json({ error: "Le commentaire auquel vous répondez n'existe plus" });

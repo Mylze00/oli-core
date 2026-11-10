@@ -170,6 +170,13 @@ class VideoFeedNotifier extends StateNotifier<VideoFeedState> {
   }
 }
 
+/// Galerie de stickers, chargée une fois puis conservée
+final commentStickersProvider = FutureProvider<List<CommentSticker>>((ref) async {
+  final response = await ref.read(dioProvider).get('/api/videos/stickers');
+  final stickers = (response.data['stickers'] as List).cast<Map<String, dynamic>>();
+  return stickers.map(CommentSticker.fromJson).toList();
+});
+
 /// Providers Riverpod
 final videoFeedProvider =
     StateNotifierProvider<VideoFeedNotifier, VideoFeedState>((ref) {
