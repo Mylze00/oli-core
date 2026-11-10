@@ -6,14 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
-import 'package:dio/dio.dart' show CancelToken, DioException;
 import 'dart:async';
 import 'dart:typed_data';
 import '../../../core/router/network/dio_provider.dart';
 import '../../../core/theme/oli_glass.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../../../utils/cloudinary_helper.dart';
-import '../services/resumable_upload.dart';
+import '../providers/video_publish_provider.dart';
 
 const _megabyte = 1024 * 1024;
 const _maxVideoBytes = 100 * _megabyte;
@@ -80,15 +79,11 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
   Uint8List? _thumbnail;
   VideoPlayerController? _webPreview;
 
-  bool _isUploading = false;
-  double? _publishProgress = 0;
-  String? _publishError;
-  CancelToken? _cancelToken;
-  ResumableUpload? _videoUpload;
-  ResumableUpload? _soundUpload;
   Map<String, dynamic>? _selectedProduct;
   List<Map<String, dynamic>> _myProducts = [];
   bool _loadingProducts = false;
+
+  bool get _isUploading => ref.read(videoPublishProvider).isActive;
 
   bool get _canPublish =>
       _stage == _VideoStage.ready &&
@@ -181,7 +176,6 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       _thumbnail = null;
       _webPreview = null;
       _preparedFile = null;
-      _videoUpload = null;
     });
     await previous?.dispose();
 
@@ -236,7 +230,10 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
     try {
       await controller.initialize();
       await controller.setVolume(0);
-      await controller.seekTo(const Duration(milliseconds: 200));
+      // Safari sur iPhone n'affiche la première image qu'après un début de lecture
+      await controller.play();
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await controller.pause();
       if (run == _prepareRun && mounted) {
         setState(() => _webPreview = controller);
       } else {
@@ -298,13 +295,11 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
     }
     setState(() {
       _soundFile = file;
-      _soundUpload = null;
     });
   }
 
-  /// Envoie les fichiers puis enregistre la publication.
-  /// Après une coupure, un nouvel appel reprend là où l'envoi s'était arrêté.
-  Future<void> _publish() async {
+  /// Confie la publication au service global, qui survit à la fermeture de la page.
+  void _publish() {
     final file = _preparedFile;
     if (file == null || !_canPublish) return;
 
@@ -313,91 +308,26 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       return;
     }
 
-    final cancelToken = CancelToken();
-    setState(() {
-      _isUploading = true;
-      _publishError = null;
-      _publishProgress = 0;
-      _cancelToken = cancelToken;
-    });
-
-    final api = ref.read(dioProvider);
-    final sound = _useCustomSound ? _soundFile : null;
-    final soundLength = sound?.size ?? 0;
-    final totalBytes = _preparedLength + soundLength;
-
-    void reportProgress(int sent) {
-      if (mounted) setState(() => _publishProgress = (sent / totalBytes).clamp(0.0, 1.0));
-    }
-
-    try {
-      String? soundPublicId;
-      if (sound != null) {
-        final bytes = sound.bytes!;
-        _soundUpload ??= ResumableUpload(
-          kind: 'audio',
-          filename: sound.name,
-          length: soundLength,
-          api: api,
-          read: (start, end) => Stream.value(bytes.sublist(start, end)),
+    ref.read(videoPublishProvider.notifier).start(
+          VideoPublishJob(
+            file: file,
+            length: _preparedLength,
+            sound: _useCustomSound ? _soundFile : null,
+            title: _titleController.text,
+            description: _descController.text,
+            productId: _linkProduct ? _selectedProduct!['id'].toString() : null,
+          ),
+          thumbnail: _thumbnail,
         );
-        soundPublicId = await _soundUpload!.run(onProgress: reportProgress, cancelToken: cancelToken);
-      }
-
-      _videoUpload ??= ResumableUpload(
-        kind: 'video',
-        filename: file.name,
-        length: _preparedLength,
-        api: api,
-        read: file.openRead,
-      );
-      final videoPublicId = await _videoUpload!.run(
-        onProgress: (sent) => reportProgress(soundLength + sent),
-        cancelToken: cancelToken,
-      );
-
-      if (mounted) setState(() => _publishProgress = null);
-      await api.post(
-        '/api/videos',
-        cancelToken: cancelToken,
-        data: {
-          'video_public_id': videoPublicId,
-          if (soundPublicId != null) 'audio_public_id': soundPublicId,
-          if (_titleController.text.isNotEmpty) 'title': _titleController.text,
-          if (_descController.text.isNotEmpty) 'description': _descController.text,
-          if (_linkProduct && _selectedProduct != null) 'product_id': _selectedProduct!['id'].toString(),
-        },
-      );
-
-      if (!kIsWeb) await VideoCompress.deleteAllCache();
-      _showMessage('🎬 Vidéo publiée avec succès !');
-      if (mounted) Navigator.pop(context, true); // true = rafraîchir le fil
-    } on UploadFailure catch (e) {
-      if (e.cancelled) {
-        _closePublishOverlay();
-      } else {
-        _showPublishError(e.message);
-      }
-    } on DioException catch (e) {
-      final data = e.response?.data;
-      _showPublishError(
-        (data is Map ? (data['message'] ?? data['error'])?.toString() : null) ??
-            "La publication n'a pas abouti. Vérifiez votre connexion et réessayez.",
-      );
-    }
   }
 
-  void _showPublishError(String message) {
-    if (mounted) setState(() => _publishError = message);
-  }
-
-  void _closePublishOverlay() {
-    if (mounted) {
-      setState(() {
-        _isUploading = false;
-        _publishError = null;
-      });
-    }
+  /// L'envoi continue pendant que l'utilisateur navigue dans l'application.
+  void _continueInBackground() {
+    ref.read(videoPublishProvider.notifier).sendToBackground();
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("L'envoi continue. Gardez l'application ouverte jusqu'à la fin.")),
+    );
   }
 
   String? _productImage(Map<String, dynamic> product) {
@@ -409,6 +339,15 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
   @override
   Widget build(BuildContext context) {
     final colors = _UploadColors.of(context);
+    final publish = ref.watch(videoPublishProvider);
+    ref.listen(videoPublishProvider, (previous, next) {
+      if (next.status == VideoPublishStatus.done && !next.inBackground) {
+        _showMessage('🎬 Vidéo publiée avec succès !');
+        ref.read(videoPublishProvider.notifier).dismiss();
+        Navigator.pop(context, true); // true = rafraîchir le fil
+      }
+    });
+
     return Stack(
       children: [
         Scaffold(
@@ -459,7 +398,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         ),
       ),
         ),
-        if (_isUploading) Positioned.fill(child: _buildPublishOverlay()),
+        if (publish.isActive && !publish.inBackground) Positioned.fill(child: _buildPublishOverlay(publish)),
       ],
     );
   }
@@ -634,10 +573,21 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
   }
 
   /// Écran de publication : l'aperçu reste visible derrière la progression réelle.
-  Widget _buildPublishOverlay() {
-    final error = _publishError;
+  Widget _buildPublishOverlay(VideoPublishState publish) {
+    final notifier = ref.read(videoPublishProvider.notifier);
+    final error = publish.error;
+    final isFinalizing = publish.status == VideoPublishStatus.finalizing;
+
     return PopScope(
       canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (error == null) {
+          _continueInBackground();
+        } else {
+          notifier.dismiss();
+        }
+      },
       child: Material(
         color: Colors.black,
         child: Stack(
@@ -651,12 +601,26 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    if (error == null)
+                    if (error == null) ...[
                       _buildPercent(
-                        _publishProgress,
-                        _publishProgress == null ? 'Finalisation de la publication' : 'Envoi de votre vidéo',
-                      )
-                    else ...[
+                        isFinalizing ? null : publish.progress,
+                        isFinalizing ? 'Finalisation de la publication' : 'Envoi de votre vidéo',
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: _continueInBackground,
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('Continuer en arrière-plan'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: OliPalette.blue,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ] else ...[
                       const Icon(Icons.wifi_off, color: Colors.white, size: 44),
                       const SizedBox(height: 12),
                       Text(
@@ -669,7 +633,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: _retryPublish,
+                          onPressed: notifier.retry,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: OliPalette.blue,
                             foregroundColor: Colors.white,
@@ -680,7 +644,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                     ],
                     const SizedBox(height: 12),
                     TextButton(
-                      onPressed: error == null ? () => _cancelToken?.cancel() : _closePublishOverlay,
+                      onPressed: error == null ? notifier.cancel : notifier.dismiss,
                       child: Text(
                         error == null ? "Annuler l'envoi" : 'Fermer',
                         style: const TextStyle(color: Colors.white),
@@ -694,12 +658,6 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         ),
       ),
     );
-  }
-
-  /// Relance l'envoi après une erreur, depuis le dernier morceau reçu.
-  void _retryPublish() {
-    setState(() => _isUploading = false);
-    _publish();
   }
 
   Widget _buildOptionCard({

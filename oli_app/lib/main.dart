@@ -1,3 +1,4 @@
+import 'features/live_shopping/widgets/video_publish_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -103,6 +104,7 @@ class OliApp extends ConsumerWidget {
       title: 'Oli App',
       navigatorKey: globalNavigatorKey,
       debugShowCheckedModeBanner: false,
+      builder: (context, child) => VideoPublishBanner(child: child ?? const SizedBox.shrink()),
       localizationsDelegates: context.localizationDelegates,
       supportedLocales: context.supportedLocales,
       locale: context.locale,
