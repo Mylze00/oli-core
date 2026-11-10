@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/ticket_model.dart';
+import 'oticket_colors.dart';
 import 'ticket_clipper.dart';
 
 const _cardDarkColor = Color(0xFF1A1A2E);
@@ -154,7 +155,7 @@ class EventTicketCard extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: onOpen,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isDisabled ? Colors.grey[800] : const Color(0xFF7C4DFF),
+                        backgroundColor: isDisabled ? Colors.grey[800] : oticketDarkBlue,
                         padding: EdgeInsets.zero,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

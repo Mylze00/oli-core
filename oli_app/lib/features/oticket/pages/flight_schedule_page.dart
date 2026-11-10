@@ -1,33 +1,36 @@
 import 'package:flutter/material.dart';
-import '../models/caa_schedule.dart';
+import '../models/flight_schedule.dart';
+import '../widgets/oticket_colors.dart';
 import '../widgets/oticket_font.dart';
 
 const _pageBlue = Color(0xFF072561);
 const _rowBlue = Color(0xFF051A45);
-const _buyColor = Color(0xFF7C4DFF);
 const _flightRed = Color(0xFFE5121C);
 
-/// Horaires des vols CAA, jour par jour.
-class CaaSchedulePage extends StatefulWidget {
-  const CaaSchedulePage({super.key});
+/// Horaires des vols d'une compagnie, jour par jour.
+class FlightSchedulePage extends StatefulWidget {
+  final AirlineSchedule schedule;
+
+  const FlightSchedulePage({super.key, required this.schedule});
 
   @override
-  State<CaaSchedulePage> createState() => _CaaSchedulePageState();
+  State<FlightSchedulePage> createState() => _FlightSchedulePageState();
 }
 
-class _CaaSchedulePageState extends State<CaaSchedulePage> {
+class _FlightSchedulePageState extends State<FlightSchedulePage> {
   int _dayIndex = DateTime.now().weekday - 1;
 
-  /// L'achat sera branché quand la vente de billets CAA sera configurée.
+  /// L'achat sera branché quand la vente de billets sera configurée.
   void _buyTicket() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("L'achat de billets CAA sera bientôt disponible")),
+      SnackBar(content: Text("L'achat de billets ${widget.schedule.name} sera bientôt disponible")),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final day = caaSchedule[_dayIndex];
+    final schedule = widget.schedule;
+    final day = schedule.days[_dayIndex];
     final flights = [...day.flights]
       ..sort((a, b) => a.departureTime.compareTo(b.departureTime));
 
@@ -46,14 +49,14 @@ class _CaaSchedulePageState extends State<CaaSchedulePage> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
               child: Image.asset(
-                'assets/images/logo_caa.png',
+                schedule.logoAsset,
                 height: 42,
                 fit: BoxFit.contain,
-                semanticLabel: 'Compagnie Africaine d\'Aviation',
+                semanticLabel: schedule.logoLabel,
               ),
             ),
             const SizedBox(height: 4),
-            const Text('Programme du $caaScheduleDate', style: TextStyle(color: Colors.white70, fontSize: 12)),
+            Text(schedule.caption, style: const TextStyle(color: Colors.white70, fontSize: 12)),
           ],
         ),
       ),
@@ -66,7 +69,7 @@ class _CaaSchedulePageState extends State<CaaSchedulePage> {
               children: [
                 Expanded(
                   child: Text(
-                    '${day.label} · ${flights.length} vols',
+                    '${day.label} · ${flights.length} vol${flights.length > 1 ? 's' : ''}',
                     style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -78,12 +81,16 @@ class _CaaSchedulePageState extends State<CaaSchedulePage> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: flights.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) => _FlightTile(flight: flights[index]),
-            ),
+            child: flights.isEmpty
+                ? const Center(
+                    child: Text('Aucun vol régulier ce jour', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    itemCount: flights.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) => _FlightTile(flight: flights[index]),
+                  ),
           ),
           SafeArea(
             top: false,
@@ -97,8 +104,9 @@ class _CaaSchedulePageState extends State<CaaSchedulePage> {
                   icon: const Icon(Icons.flight_takeoff),
                   label: const Text('Acheter un billet'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _buyColor,
+                    backgroundColor: oticketDarkBlue,
                     foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white38),
                     textStyle: const TextStyle(
                       fontFamily: OTicketFont.family,
                       fontWeight: FontWeight.bold,
@@ -121,12 +129,12 @@ class _CaaSchedulePageState extends State<CaaSchedulePage> {
       child: Row(
         children: [
           const SizedBox(width: 12),
-          for (var index = 0; index < caaSchedule.length; index++)
+          for (var index = 0; index < widget.schedule.days.length; index++)
             Expanded(
               child: Semantics(
                 button: true,
                 selected: index == _dayIndex,
-                label: caaSchedule[index].label,
+                label: widget.schedule.days[index].label,
                 child: ExcludeSemantics(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -143,7 +151,7 @@ class _CaaSchedulePageState extends State<CaaSchedulePage> {
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            caaSchedule[index].shortLabel,
+                            widget.schedule.days[index].shortLabel,
                             style: TextStyle(
                               color: index == _dayIndex ? _pageBlue : Colors.white,
                               fontSize: 13,
@@ -165,7 +173,7 @@ class _CaaSchedulePageState extends State<CaaSchedulePage> {
 }
 
 class _FlightTile extends StatelessWidget {
-  final CaaFlight flight;
+  final FlightLeg flight;
 
   const _FlightTile({required this.flight});
 
@@ -200,10 +208,10 @@ class _FlightTile extends StatelessWidget {
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                   children: [
                     TextSpan(
-                      text: 'Vol ${flight.number}',
+                      text: flight.number == null ? 'Vol régulier' : 'Vol ${flight.number}',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
-                    TextSpan(text: '  ·  ${flight.aircraft}'),
+                    if (flight.aircraft != null) TextSpan(text: '  ·  ${flight.aircraft}'),
                   ],
                 )),
               ),

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ticket_model.dart';
 import '../providers/oticket_provider.dart';
-import 'caa_schedule_page.dart';
+import '../models/caa_schedule.dart';
+import '../models/flight_schedule.dart';
+import '../models/kin_avia_schedule.dart';
+import 'flight_schedule_page.dart';
 import 'organizer_scan_page.dart';
 import '../widgets/event_ticket_card.dart';
 import '../widgets/oticket_font.dart';
@@ -17,7 +20,7 @@ const _designPageWidth = 925.0;
 const _headerHeight = 150.0;
 const _hubHeightFactor = 0.6;
 const _hubMinHeight = 150.0;
-const _hubPartners = ['CAA', 'Trans\nMatadi'];
+const _hubPartners = [caaAirlineSchedule, kinAviaSchedule];
 
 class OTicketPage extends ConsumerStatefulWidget {
   const OTicketPage({super.key});
@@ -65,7 +68,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
           children: [
             _buildExplore(),
             ticketsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF))),
+              loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
               error: (_, __) => _buildLoadError(),
               data: (_) => _buildMyTickets(),
             ),
@@ -316,7 +319,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
                   height: 6,
                   decoration: BoxDecoration(
                     color: _currentTicketIndex == i
-                        ? const Color(0xFF7C4DFF)
+                        ? Colors.white
                         : Colors.white24,
                     borderRadius: BorderRadius.circular(3),
                   ),
@@ -552,42 +555,26 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     );
   }
 
-  void _openHubPartner(String name) {
-    if (name == 'CAA') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const OTicketFont(child: CaaSchedulePage())),
-      );
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$name arrive bientôt sur Oli Ticket')),
+  void _openFlightSchedule(AirlineSchedule schedule) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => OTicketFont(child: FlightSchedulePage(schedule: schedule))),
     );
   }
 
-  Widget _buildHubPartner(String name) {
-    final oneLineName = name.replaceAll('\n', ' ');
+  Widget _buildHubPartner(AirlineSchedule schedule) {
     return Semantics(
       button: true,
-      label: oneLineName,
+      label: schedule.name,
       child: InkWell(
         customBorder: const CircleBorder(),
-        onTap: () => _openHubPartner(oneLineName),
+        onTap: () => _openFlightSchedule(schedule),
         child: Container(
           width: 72,
           height: 72,
-          alignment: Alignment.center,
+          padding: const EdgeInsets.all(9),
           decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-          child: name == 'CAA'
-              ? Padding(
-                  padding: const EdgeInsets.all(9),
-                  child: Image.asset('assets/images/logo_caa.png', fit: BoxFit.contain),
-                )
-              : Text(
-                  name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFFE5121C), fontSize: 14, height: 1.1),
-                ),
+          child: Image.asset(schedule.logoAsset, fit: BoxFit.contain),
         ),
       ),
     );

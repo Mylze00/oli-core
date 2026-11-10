@@ -1,3 +1,4 @@
+import '../widgets/oticket_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ticket_model.dart';
@@ -18,7 +19,7 @@ class EventDetailPage extends ConsumerStatefulWidget {
 class _EventDetailPageState extends ConsumerState<EventDetailPage> {
   static const _background = Color(0xFF0A0A18);
   static const _surface = Color(0xFF14142B);
-  static const _accent = Color(0xFF7C4DFF);
+  static const _accent = oticketDarkBlue;
 
   /// Catégorie en cours d'achat : bloque les boutons pour éviter un double débit.
   int? _buyingTypeId;
@@ -80,7 +81,7 @@ class _EventDetailPageState extends ConsumerState<EventDetailPage> {
               child: detail.when(
                 loading: () => const SizedBox(
                   height: 140,
-                  child: Center(child: CircularProgressIndicator(color: _accent)),
+                  child: Center(child: CircularProgressIndicator(color: Colors.white)),
                 ),
                 error: (_, __) => _buildDetailError(),
                 data: (data) {
@@ -264,7 +265,7 @@ class _EventDetailPageState extends ConsumerState<EventDetailPage> {
         const Text('Billets indisponibles', style: TextStyle(color: Colors.white54, fontSize: 14)),
         TextButton(
           onPressed: () => ref.invalidate(oticketEventDetailProvider(_event.id)),
-          child: const Text('Réessayer', style: TextStyle(color: _accent)),
+          child: const Text('Réessayer', style: TextStyle(color: Colors.white)),
         ),
       ],
     );
