@@ -11,6 +11,7 @@ import 'widgets/reply_preview.dart';
 import 'widgets/chat_cart_summary.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
 import '../../config/api_config.dart';
+import 'package:dio/dio.dart';
 import '../../core/router/network/dio_provider.dart';
 import '../cart/providers/cart_provider.dart';
 import '../checkout/screens/checkout_page.dart';
@@ -787,11 +788,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     ),
                   ),
 
-                  if (selectedCurrency == 'FC')
+                  if (selectedCurrency == 'USD')
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        'Sera converti en USD automatiquement',
+                        "Converti en FC au taux du jour au moment de l'envoi",
                         style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontFamily: 'CreatoDisplay'),
                       ),
                     ),
@@ -834,9 +835,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             ref.read(walletProvider.notifier).loadWalletData();
 
                             // Send a special chat message for the transfer
-                            final displayAmount = selectedCurrency == 'USD'
-                                ? '\$${amount.toStringAsFixed(2)}'
-                                : '${amount.toStringAsFixed(0)} FC';
+                            // Montant réellement transféré, après conversion au taux du jour
+                            final displayAmount = '${(response.data['amountFC'] as num).toStringAsFixed(0)} FC';
                             
                             String messageContent = '💸 Envoi de $displayAmount';
                             if (noteController.text.trim().isNotEmpty) {
@@ -850,6 +850,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               productName: widget.productName,
                               productImage: widget.productImage,
                               productPrice: widget.productPrice,
+                              // Le serveur vérifie cette référence avant d'afficher le billet
+                              customMetadata: {
+                                'cash_transfer': {
+                                  'reference': response.data['reference'],
+                                  'amount_fc': response.data['amountFC'],
+                                },
+                              },
                             );
 
                             if (mounted) {
@@ -869,10 +876,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           }
                         } catch (e) {
                           setSheetState(() => isSending = false);
-                          String errorMsg = 'Erreur lors du transfert';
-                          if (e.toString().contains('Solde insuffisant')) {
-                            errorMsg = 'Solde insuffisant !';
-                          }
+                          final serverError = e is DioException && e.response?.data is Map
+                              ? e.response!.data['error']?.toString()
+                              : null;
+                          final errorMsg = serverError ?? 'Erreur lors du transfert';
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -73,7 +74,16 @@ class ChatController extends StateNotifier<ChatState> {
   Dio get _dio => _ref.read(dioProvider);
   final _storage = SecureStorageService();
   VoidCallback? _socketUnsubscribe;
+  VoidCallback? _typingUnsubscribe;
   String? _productId;
+
+  static const _typingRefreshInterval = Duration(seconds: 3);
+  static const _typingIdleDelay = Duration(seconds: 4);
+  static const _typingExpiryDelay = Duration(seconds: 7);
+
+  DateTime? _lastTypingSentAt;
+  Timer? _typingIdleTimer;
+  Timer? _typingExpiryTimer;
 
   ChatController(this.otherUserId, this.myId, this._socketService, this._ref) : super(ChatState()) {
     _initChat();
@@ -97,7 +107,7 @@ class ChatController extends StateNotifier<ChatState> {
       _socketService.on('user_online', _handleUserOnline);
 
       // Écouter le typing
-      _socketService.on('user_typing', _handleUserTyping);
+      _typingUnsubscribe = _socketService.onUserTyping(_handleUserTyping);
       
       // Charger les messages depuis le backend
       await loadMessages();
@@ -108,6 +118,11 @@ class ChatController extends StateNotifier<ChatState> {
 
   void _handleNewMessage(Map<String, dynamic> data) {
     final senderId = data['sender_id']?.toString();
+
+    if (senderId == otherUserId && state.isOtherUserTyping) {
+      _typingExpiryTimer?.cancel();
+      state = state.copyWith(isOtherUserTyping: false);
+    }
     
     // Vérifier si le message nous concerne
     if (senderId == otherUserId || senderId == myId) {
@@ -176,17 +191,52 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  void _handleUserTyping(dynamic data) {
-    if (data is Map && data['userId'].toString() == otherUserId) {
-       state = state.copyWith(isOtherUserTyping: data['isTyping'] == true);
+  void _handleUserTyping(Map<String, dynamic> data) {
+    if (!mounted || data['userId']?.toString() != otherUserId) return;
+
+    final conversationId = data['conversationId'];
+    if (conversationId != null &&
+        state.conversationId != null &&
+        conversationId.toString() != state.conversationId.toString()) {
+      return;
     }
+
+    final isTyping = data['isTyping'] == true;
+    _typingExpiryTimer?.cancel();
+    if (isTyping) {
+      // L'indicateur s'efface seul si l'autre personne perd sa connexion
+      _typingExpiryTimer = Timer(_typingExpiryDelay, () {
+        if (mounted) state = state.copyWith(isOtherUserTyping: false);
+      });
+    }
+    state = state.copyWith(isOtherUserTyping: isTyping);
   }
-  
+
+  /// Le signal n'est répété que toutes les 3 secondes, pas à chaque touche.
   void sendTyping(bool isTyping) {
+    _typingIdleTimer?.cancel();
+
+    if (!isTyping) {
+      if (_lastTypingSentAt != null) {
+        _lastTypingSentAt = null;
+        _emitTyping(false);
+      }
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastTypingSentAt == null || now.difference(_lastTypingSentAt!) >= _typingRefreshInterval) {
+      _lastTypingSentAt = now;
+      _emitTyping(true);
+    }
+    _typingIdleTimer = Timer(_typingIdleDelay, () => sendTyping(false));
+  }
+
+  void _emitTyping(bool isTyping) {
     if (state.conversationId != null) {
       _socketService.emit('typing', {
         'conversationId': state.conversationId,
-        'isTyping': isTyping
+        'isTyping': isTyping,
       });
     }
   }
@@ -515,6 +565,9 @@ class ChatController extends StateNotifier<ChatState> {
   @override
   void dispose() {
     _socketUnsubscribe?.call();
+    _typingUnsubscribe?.call();
+    _typingIdleTimer?.cancel();
+    _typingExpiryTimer?.cancel();
     super.dispose();
   }
 }

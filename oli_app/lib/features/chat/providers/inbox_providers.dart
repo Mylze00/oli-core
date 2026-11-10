@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,29 +10,91 @@ import '../../../core/storage/secure_storage_service.dart';
 import '../../../core/services/database_helper.dart';
 import '../../../core/services/hive_cache_service.dart'; // keeping for fallback if needed
 import '../../../core/user/user_provider.dart';
+import '../socket_service.dart';
 
 // ─── Providers Riverpod ──────────────────────────────────────────
 
 /// Inbox Conversations Provider (Offline-First)
 final inboxConversationsProvider = StateNotifierProvider<ConversationsNotifier, AsyncValue<List<Map<String, dynamic>>>>((ref) {
   final user = ref.watch(userProvider).value;
-  return ConversationsNotifier(user?.id.toString());
+  return ConversationsNotifier(user?.id.toString(), ref.read(socketServiceProvider));
 });
 
 class ConversationsNotifier extends StateNotifier<AsyncValue<List<Map<String, dynamic>>>> {
-  final String? userId;
-  bool _isLoading = false;
+  static const _refreshDebounce = Duration(milliseconds: 300);
+  static const _typingExpiryDelay = Duration(seconds: 7);
 
-  ConversationsNotifier(this.userId) : super(const AsyncValue.loading()) {
+  final String? userId;
+  final SocketService _socketService;
+  final List<VoidCallback> _subscriptions = [];
+  final Map<String, Timer> _typingExpiryTimers = {};
+  Timer? _refreshTimer;
+  bool _isLoading = false;
+  bool _isRefreshQueued = false;
+
+  ConversationsNotifier(this.userId, this._socketService) : super(const AsyncValue.loading()) {
     if (userId != null) {
       fetchConversations();
+      _listenToSocket();
     } else {
       state = const AsyncValue.data([]);
     }
   }
 
+  Future<void> _listenToSocket() async {
+    _subscriptions.addAll([
+      _socketService.onMessage((_) => _scheduleRefresh()),
+      _socketService.onReconnected(_scheduleRefresh),
+      _socketService.onUserTyping(_handleTyping),
+    ]);
+    try {
+      await _socketService.connect(userId!);
+    } catch (e) {
+      debugPrint('❌ Connexion temps réel des discussions impossible: $e');
+    }
+  }
+
+  void _scheduleRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer(_refreshDebounce, fetchConversations);
+  }
+
+  void _handleTyping(Map<String, dynamic> data) {
+    final conversationId = data['conversationId']?.toString();
+    if (conversationId == null) return;
+
+    final isTyping = data['isTyping'] == true;
+    _typingExpiryTimers.remove(conversationId)?.cancel();
+    if (isTyping) {
+      _typingExpiryTimers[conversationId] =
+          Timer(_typingExpiryDelay, () => _setTyping(conversationId, false));
+    }
+    _setTyping(conversationId, isTyping);
+  }
+
+  void _setTyping(String conversationId, bool isTyping) {
+    if (mounted) _updateLocal(conversationId, (c) => {...c, 'is_typing': isTyping});
+  }
+
+  @override
+  void dispose() {
+    for (final unsubscribe in _subscriptions) {
+      unsubscribe();
+    }
+    for (final timer in _typingExpiryTimers.values) {
+      timer.cancel();
+    }
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> fetchConversations() async {
-    if (_isLoading) return;
+    if (!mounted) return;
+    if (_isLoading) {
+      // Un message arrivé pendant un chargement ne doit pas être perdu
+      _isRefreshQueued = true;
+      return;
+    }
     _isLoading = true;
 
     // --- CACHE OFFLINE-FIRST (SQLite) ---
@@ -78,6 +141,8 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Map<String, dy
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final conversations = List<Map<String, dynamic>>.from(response.data);
         state = AsyncValue.data(conversations);
@@ -116,6 +181,10 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Map<String, dy
       if (!state.hasValue) state = const AsyncValue.data([]);
     } finally {
       _isLoading = false;
+      if (_isRefreshQueued) {
+        _isRefreshQueued = false;
+        fetchConversations();
+      }
     }
   }
 

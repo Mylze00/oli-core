@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { BASE_URL } = require('../config');
 const presence = require('../services/presence.service');
+const { attestCashTransfer } = require('../services/cash-message.service');
 
 const MAX_PINNED_CONVERSATIONS = 3;
 const CONVERSATION_FLAGS = ['is_archived', 'is_favorite', 'is_pinned'];
@@ -82,7 +83,7 @@ exports.sendInitialMessage = async (req, res) => {
         }
 
         // Enrichir metadata avec les coordonnées GPS si c'est un message location
-        let msgMetadata = metadata || {};
+        let msgMetadata = await attestCashTransfer(metadata, { conversationId, senderId, recipientId });
         if (type === 'location' && latitude && longitude) {
             msgMetadata = { ...msgMetadata, latitude, longitude };
         }
@@ -155,6 +156,8 @@ exports.sendMessage = async (req, res) => {
             );
             if (partRes.rows.length > 0) recipientId = partRes.rows[0].user_id;
         }
+
+        messageMetadata = await attestCashTransfer(messageMetadata, { conversationId, senderId, recipientId });
 
         const msgResult = await pool.query(
             `INSERT INTO messages (conversation_id, sender_id, content, type, amount, reply_to_id, metadata, latitude, longitude) 

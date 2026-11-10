@@ -56,6 +56,9 @@ class SocketService {
     _socket!.onReconnect((_) {
       _isConnected = true;
       _socket!.emit('join', roomName);
+      for (final listener in _reconnectListeners.toList()) {
+        listener();
+      }
     });
     
     _socket!.onDisconnect((_) {
@@ -189,15 +192,16 @@ class SocketService {
   }
 
   // Callbacks séparés pour messages et statuts (#9)
-  Function(Map<String, dynamic>)? _messageHandler;
+  final _messageListeners = <Function(Map<String, dynamic>)>{};
+  final _typingListeners = <Function(Map<String, dynamic>)>{};
+  final _reconnectListeners = <VoidCallback>{};
   Function(Map<String, dynamic>)? _statusHandler;
   Function(Map<String, dynamic>)? _notificationHandler;
-  Function(Map<String, dynamic>)? _typingHandler;
 
   /// Enregistrer un callback pour les messages reçus
   VoidCallback onMessage(Function(Map<String, dynamic>) callback) {
-    _messageHandler = callback;
-    return () => _messageHandler = null;
+    _messageListeners.add(callback);
+    return () => _messageListeners.remove(callback);
   }
 
   /// Enregistrer un callback pour les changements de statut utilisateur
@@ -214,8 +218,14 @@ class SocketService {
   
   /// Enregistrer un callback pour l'indicateur de frappe
   VoidCallback onUserTyping(Function(Map<String, dynamic>) callback) {
-    _typingHandler = callback;
-    return () => _typingHandler = null;
+    _typingListeners.add(callback);
+    return () => _typingListeners.remove(callback);
+  }
+
+  /// Après une coupure, les événements manqués doivent être rechargés.
+  VoidCallback onReconnected(VoidCallback callback) {
+    _reconnectListeners.add(callback);
+    return () => _reconnectListeners.remove(callback);
   }
   
   // Generic handler for other events
@@ -232,8 +242,9 @@ class SocketService {
   }
 
   void _onMessageReceived(dynamic data) {
-    if (_messageHandler != null) {
-      _messageHandler!(Map<String, dynamic>.from(data));
+    final message = Map<String, dynamic>.from(data);
+    for (final listener in _messageListeners.toList()) {
+      listener(message);
     }
   }
 
@@ -250,8 +261,10 @@ class SocketService {
   }
 
   void _onUserTyping(dynamic data) {
-    if (_typingHandler != null && data is Map) {
-      _typingHandler!(Map<String, dynamic>.from(data));
+    if (data is! Map) return;
+    final typing = Map<String, dynamic>.from(data);
+    for (final listener in _typingListeners.toList()) {
+      listener(typing);
     }
   }
 

@@ -6,6 +6,7 @@ import '../../../../widgets/auto_refresh_avatar.dart';
 import 'location_message_bubble.dart';
 import 'audio_message_bubble.dart';
 import 'reaction_picker.dart';
+import 'cash_note_bubble.dart';
 import 'chat_image_viewer.dart';
 import 'message_actions.dart';
 
@@ -163,6 +164,39 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     }
   }
 
+  // ─── Time + read ticks ────────────────────────────────────────────────────
+
+  Widget _buildTimeRow(String timeString, {required Color color, required Color readColor}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (timeString.isNotEmpty)
+            Text(timeString, style: TextStyle(fontSize: 10, color: color)),
+          if (widget.isMe) ...[
+            const SizedBox(width: 4),
+            if (widget.message['id'].toString().startsWith('temp_'))
+              Icon(Icons.access_time, size: 12, color: color)
+            else if (widget.message['is_read'] == true)
+              Icon(Icons.done_all, size: 14, color: readColor)
+            else
+              Icon(Icons.check, size: 14, color: color),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Le commentaire du transfert suit le montant dans le texte du message.
+  String? _cashNote() {
+    const marker = '\nNote: ';
+    final content = widget.message['content']?.toString() ?? '';
+    final index = content.indexOf(marker);
+    return index < 0 ? null : content.substring(index + marker.length);
+  }
+
   // ─── Reply-to context helper ──────────────────────────────────────────────
 
   Widget? _buildReplyContext() {
@@ -246,6 +280,10 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
             "${date.hour}:${date.minute.toString().padLeft(2, '0')}";
       } catch (e) { /* ignore */ }
     }
+
+    final cashTransfer = metaMap?['cash_transfer'];
+    final cashAmount = cashTransfer is Map ? num.tryParse('${cashTransfer['amount_fc']}') : null;
+    final isCardMessage = isLocation || cashAmount != null;
 
     final reactions = _parseReactions();
     final replyContext = _buildReplyContext();
@@ -350,15 +388,15 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
               Flexible(
                 child: Container(
                   constraints: BoxConstraints(maxWidth: size.width * 0.75),
-                  padding: isLocation
+                  padding: isCardMessage
                       ? EdgeInsets.zero
                       : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isLocation
+                    color: isCardMessage
                         ? Colors.transparent
                         : (widget.isMe ? theme.primaryColor : (isDark ? const Color(0xFF2C2C2E) : Colors.white)),
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: isLocation
+                    boxShadow: isCardMessage
                         ? []
                         : [
                             BoxShadow(
@@ -370,6 +408,18 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                   ),
                   child: isLocation
                       ? LocationMessageBubble(metadata: metaMap!, isMe: widget.isMe)
+                      : cashAmount != null
+                          ? CashNoteBubble(
+                              amountFc: cashAmount,
+                              isMe: widget.isMe,
+                              note: _cashNote(),
+                              noteTextColor: isDark ? Colors.white : Colors.black87,
+                              footer: _buildTimeRow(
+                                timeString,
+                                color: isDark ? Colors.white70 : Colors.black54,
+                                readColor: theme.primaryColor,
+                              ),
+                            )
                       : (mediaType == 'audio' ||
                               (mediaUrl != null && mediaUrl.endsWith('.m4a')))
                           ? AudioMessageBubble(audioUrl: mediaUrl!, isMe: widget.isMe)
@@ -445,41 +495,12 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                   ),
 
                                 // ── Time + Read ticks ──
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      if (timeString.isNotEmpty)
-                                        Text(
-                                          timeString,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: widget.isMe || isDark
-                                                ? Colors.white.withOpacity(0.7)
-                                                : Colors.black38,
-                                          ),
-                                        ),
-                                      if (widget.isMe) ...[
-                                        const SizedBox(width: 4),
-                                        if (widget.message['id']
-                                            .toString()
-                                            .startsWith('temp_'))
-                                          Icon(Icons.access_time,
-                                              size: 12,
-                                              color: Colors.white.withOpacity(0.7))
-                                        else if (widget.message['is_read'] == true)
-                                          const Icon(Icons.done_all,
-                                              size: 14,
-                                              color: Colors.lightBlueAccent)
-                                        else
-                                          Icon(Icons.check,
-                                              size: 14,
-                                              color: Colors.white.withOpacity(0.7)),
-                                      ],
-                                    ],
-                                  ),
+                                _buildTimeRow(
+                                  timeString,
+                                  color: widget.isMe || isDark
+                                      ? Colors.white.withOpacity(0.7)
+                                      : Colors.black38,
+                                  readColor: Colors.lightBlueAccent,
                                 ),
                               ],
                             ),

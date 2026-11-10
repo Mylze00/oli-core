@@ -163,13 +163,28 @@ io.on('connection', (socket) => {
     });
 
     // 4. INDICATEUR DE FRAPPE (Typing)
-    socket.on('typing', ({ conversationId, isTyping }) => {
-        if (userId) {
-            socket.to(`conversation_${conversationId}`).emit('user_typing', {
-                userId,
-                conversationId,
-                isTyping
-            });
+    socket.on('typing', async (payload) => {
+        const conversationId = Number(payload && payload.conversationId);
+        if (!userId || !Number.isInteger(conversationId)) return;
+        try {
+            // La jointure vérifie que l'auteur participe bien à cette conversation
+            const { rows } = await pool.query(
+                `SELECT other.user_id
+                   FROM conversation_participants me
+                   JOIN conversation_participants other
+                     ON other.conversation_id = me.conversation_id AND other.user_id <> me.user_id
+                  WHERE me.conversation_id = $1 AND me.user_id = $2`,
+                [conversationId, userId]
+            );
+            for (const { user_id: otherId } of rows) {
+                io.to(`user_${otherId}`).emit('user_typing', {
+                    userId,
+                    conversationId,
+                    isTyping: payload.isTyping === true,
+                });
+            }
+        } catch (e) {
+            console.warn('[SOCKET] Indicateur de frappe impossible:', e.message);
         }
     });
 
@@ -493,6 +508,11 @@ if (process.env.NODE_ENV !== 'test') {
             // Liste de contacts de chaque utilisateur
             await pool.query(require('fs').readFileSync(
                 require('path').join(__dirname, 'migrations/add_user_contacts.sql'), 'utf8'
+            ));
+
+            // Un transfert d'argent ne produit qu'un seul billet dans la messagerie
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_message_cash_reference.sql'), 'utf8'
             ));
 
             // Demandes de remboursement soumises à l'administrateur

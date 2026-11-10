@@ -52,10 +52,6 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
     if (user != null) {
       final socketService = ref.read(socketServiceProvider);
       await socketService.connect(user.id.toString());
-      
-      socketService.onMessage((data) {
-        ref.read(inboxConversationsProvider.notifier).fetchConversations();
-      });
     }
   }
 
@@ -739,7 +735,9 @@ class ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final otherName = conversation['other_name'] ?? 'Utilisateur';
-    final lastMessage = conversation['last_message'] ?? '';
+    final lastMessage = conversation['is_typing'] == true
+        ? "En train d'écrire…"
+        : (conversation['last_message'] ?? '');
     final unreadCount = conversation['unread_count'] ?? 0;
     final productName = conversation['product_name'];
     final isOnline = conversation['is_online'] == true;

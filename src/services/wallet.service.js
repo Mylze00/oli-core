@@ -12,6 +12,7 @@
  *  8. Récompense points (rewardUser)
  */
 const walletRepository = require('../repositories/wallet.repository');
+const exchangeRateService = require('./exchange-rate.service');
 const unipesaService = require('./unipesa.service');
 const pool = require('../config/db');
 const { FEES, FC_TO_USD_FALLBACK } = require('../config/index'); // [P1.4]
@@ -354,6 +355,21 @@ class WalletService {
         if (!receiverId) throw new Error('Destinataire invalide');
         if (senderId === receiverId) throw new Error("Impossible de s'envoyer de l'argent à soi-même");
         if (!amount || amount <= 0) throw new Error('Montant invalide');
+
+        const requestedCurrency = String(currency || 'FC').toUpperCase();
+        if (requestedCurrency !== 'FC' && requestedCurrency !== 'USD') {
+            throw new Error('Devise non prise en charge');
+        }
+        if (requestedCurrency === 'USD') {
+            let rate;
+            try {
+                rate = await exchangeRateService.getRateForOrder();
+            } catch (rateError) {
+                throw new Error('Taux de change indisponible. Réessayez plus tard ou envoyez en FC.');
+            }
+            amount = Math.round(amount * rate);
+        }
+
         if (amount < 100) throw new Error('Montant trop faible (minimum 100 FC)');
 
         // Frais P2P : 1% à la charge de l'expéditeur
