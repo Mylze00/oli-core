@@ -1,3 +1,4 @@
+import '../../core/theme/oli_glass.dart';
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -226,48 +227,23 @@ class _OliBottomNav extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // Ombre portée externe
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(40),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 30,
-                    offset: const Offset(0, 15),
-                    spreadRadius: -5,
-                  )
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(40),
-                child: BackdropFilter(
-                  // Flou très intense typique d'Apple
-                  filter: ImageFilter.blur(sigmaX: 40.0, sigmaY: 40.0),
-                  child: Container(
-                    height: 72,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(40),
-                      color: isDark ? Colors.black.withOpacity(0.25) : Colors.white.withOpacity(0.92),
-                      // L'effet "reflet de verre" sur le dessus
-                      border: Border.all(
-                        width: 1.0,
-                        color: isDark ? Colors.white.withOpacity(0.15) : Colors.black.withOpacity(0.06),
-                      ),
-                      // En mode clair, fond stable : aucun reflet ni couleur de la page.
-                      gradient: !isDark
-                          ? null
-                          : LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.white.withOpacity(0.15),
-                                Colors.white.withOpacity(0.02),
-                                Colors.black.withOpacity(0.1),
-                              ],
-                              stops: const [0.0, 0.5, 1.0],
-                            ),
-                    ),
+            OliGlassSurface(
+              borderRadius: BorderRadius.circular(40),
+              blur: 28,
+              // En mode clair, le fond reste assez opaque pour garder les libellés lisibles
+              tint: isDark ? const Color(0x40000000) : const Color(0xC7FFFFFF),
+              borderColor: isDark ? const Color(0x33FFFFFF) : const Color(0x14000000),
+              reflection: isDark ? 0.16 : 0.0,
+              shadows: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.18),
+                  blurRadius: 30,
+                  offset: const Offset(0, 15),
+                  spreadRadius: -5,
+                ),
+              ],
+              child: SizedBox(
+                height: 72,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: items.map((item) {
@@ -286,8 +262,6 @@ class _OliBottomNav extends StatelessWidget {
                       );
                     }).toList(),
                   ),
-                  ),
-                ),
               ),
             ),
           ],
@@ -337,9 +311,8 @@ class _NavTabItem extends StatelessWidget {
         ? (isDarkNav ? Colors.white : Colors.black87)
         : (isDarkNav ? Colors.white54 : OliLightColors.textSecondary);
 
-    return GestureDetector(
+    return OliPressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,

@@ -405,7 +405,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
           ),
         ),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 14),
 
         // Like
         _interactionButton(
@@ -415,7 +415,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
           onTap: () => ref.read(videoFeedProvider.notifier).toggleLike(video.id),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
 
         // Commentaires
         _interactionButton(
@@ -425,7 +425,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
           onTap: () => _setCommentsOpen(true),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
 
         // Vues
         _interactionButton(
@@ -435,7 +435,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
           onTap: null,
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
 
         // Partage
         _interactionButton(
@@ -447,7 +447,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
 
         // Signalement (impossible sur sa propre vidéo)
         if (currentUserId != video.sellerId) ...[
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           _interactionButton(
             icon: Icons.flag_outlined,
             label: 'Signaler',
@@ -465,18 +465,20 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
     required Color color,
     VoidCallback? onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+    return Column(
+      children: [
+        OliGlassIconButton(icon: icon, label: label, color: color, iconSize: 24, onPressed: onTap),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

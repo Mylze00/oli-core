@@ -61,16 +61,14 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
       appBar: _commentsOpen ? null : AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.black38,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+        leadingWidth: 60,
+        leading: Center(
+          child: OliGlassIconButton(
+            icon: Icons.arrow_back_ios_new,
+            label: 'Retour',
+            iconSize: 18,
+            onPressed: () => Navigator.pop(context),
           ),
-          onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Live Shopping',
@@ -81,39 +79,28 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
           ),
         ),
         actions: [
-          // Score du créateur connecté
-          IconButton(
-            tooltip: 'Mon score',
-            icon: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.black38,
-                borderRadius: BorderRadius.circular(10),
+          OliGlassGroup(
+            actions: [
+              OliGlassGroupAction(
+                icon: Icons.emoji_events_outlined,
+                label: 'Mon score',
+                onPressed: () {
+                  final userId = ref.read(userProvider).value?.id.toString();
+                  if (userId == null) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SellerProfilePage(sellerId: userId, openVideosTab: true),
+                    ),
+                  );
+                },
               ),
-              child: const Icon(Icons.emoji_events_outlined, color: Colors.white, size: 22),
-            ),
-            onPressed: () {
-              final userId = ref.read(userProvider).value?.id.toString();
-              if (userId == null) return;
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SellerProfilePage(sellerId: userId, openVideosTab: true),
-                ),
-              );
-            },
-          ),
-          // Bouton upload
-          IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.black38,
-                borderRadius: BorderRadius.circular(10),
+              OliGlassGroupAction(
+                icon: Icons.add,
+                label: 'Publier une vidéo',
+                onPressed: _openUploadPage,
               ),
-              child: const Icon(Icons.add, color: Colors.white, size: 22),
-            ),
-            onPressed: _openUploadPage,
+            ],
           ),
           const SizedBox(width: 8),
         ],

@@ -177,3 +177,187 @@ Future<bool> showOliConfirmDialog(
   );
   return result == true;
 }
+
+const _pressDuration = Duration(milliseconds: 120);
+const _pressedScale = 0.92;
+
+/// Réduit légèrement son contenu pendant l'appui.
+class OliPressable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const OliPressable({super.key, required this.child, this.onTap});
+
+  @override
+  State<OliPressable> createState() => _OliPressableState();
+}
+
+class _OliPressableState extends State<OliPressable> {
+  bool _isPressed = false;
+
+  void _setPressed(bool value) {
+    if (widget.onTap != null) setState(() => _isPressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) => _setPressed(true),
+      onTapUp: (_) => _setPressed(false),
+      onTapCancel: () => _setPressed(false),
+      child: AnimatedScale(
+        scale: _isPressed ? _pressedScale : 1,
+        duration: _pressDuration,
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Surface de verre : flou de l'arrière-plan, teinte, reflet et contour lumineux.
+class OliGlassSurface extends StatelessWidget {
+  final Widget child;
+  final BorderRadius borderRadius;
+  final double blur;
+  final Color tint;
+  final Color borderColor;
+  final double reflection;
+  final List<BoxShadow> shadows;
+
+  const OliGlassSurface({
+    super.key,
+    required this.child,
+    required this.borderRadius,
+    this.blur = 18,
+    this.tint = const Color(0x40101820),
+    this.borderColor = const Color(0x40FFFFFF),
+    this.reflection = 0.22,
+    this.shadows = const [],
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: borderRadius, boxShadow: shadows),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: borderRadius,
+              color: tint,
+              border: Border.all(color: borderColor),
+            ),
+            foregroundDecoration: BoxDecoration(
+              borderRadius: borderRadius,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: reflection),
+                  Colors.white.withValues(alpha: 0),
+                ],
+                stops: const [0, 0.55],
+              ),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bouton rond en verre. La version mise en avant est teintée en bleu Oli.
+class OliGlassIconButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final Color color;
+  final double size;
+  final double iconSize;
+  final bool prominent;
+
+  const OliGlassIconButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.color = Colors.white,
+    this.size = 44,
+    this.iconSize = 22,
+    this.prominent = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: onPressed != null,
+      label: label,
+      child: ExcludeSemantics(
+        child: OliPressable(
+          onTap: onPressed,
+          child: SizedBox.square(
+            dimension: size,
+            child: OliGlassSurface(
+              borderRadius: BorderRadius.circular(size / 2),
+              tint: prominent ? const Color(0xB31E7DBA) : const Color(0x59101820),
+              child: Center(child: Icon(icon, color: color, size: iconSize)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Capsule de verre unique contenant plusieurs actions, avec un seul flou.
+class OliGlassGroup extends StatelessWidget {
+  final List<OliGlassGroupAction> actions;
+
+  const OliGlassGroup({super.key, required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return OliGlassSurface(
+      borderRadius: BorderRadius.circular(22),
+      tint: const Color(0x59101820),
+      child: Row(mainAxisSize: MainAxisSize.min, children: actions),
+    );
+  }
+}
+
+/// Action d'un [OliGlassGroup].
+class OliGlassGroupAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const OliGlassGroupAction({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: OliPressable(
+          onTap: onPressed,
+          child: SizedBox.square(
+            dimension: 44,
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+        ),
+      ),
+    );
+  }
+}

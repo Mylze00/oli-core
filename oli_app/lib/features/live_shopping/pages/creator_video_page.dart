@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/oli_glass.dart';
 import '../models/video_sale_model.dart';
 import '../providers/video_feed_provider.dart';
 import '../widgets/video_player_card.dart';
@@ -44,11 +45,11 @@ class _CreatorVideoPageState extends ConsumerState<CreatorVideoPage> {
             Positioned(
               top: MediaQuery.of(context).padding.top + 6,
               left: 8,
-              child: IconButton(
-                tooltip: 'Retour',
+              child: OliGlassIconButton(
+                icon: Icons.arrow_back_ios_new,
+                label: 'Retour',
+                iconSize: 18,
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-                style: IconButton.styleFrom(backgroundColor: Colors.black38),
               ),
             ),
         ],
