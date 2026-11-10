@@ -1,64 +1,95 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../config/api_config.dart';
 import '../../../models/product_model.dart';
+import '../../../providers/exchange_rate_provider.dart';
+import '../../cart/providers/cart_provider.dart';
 import '../models/video_sale_model.dart';
 import '../../marketplace/presentation/pages/product_details_page.dart';
 
 /// Bottom sheet affichant les détails du produit lié à la vidéo
-class ProductBottomSheet extends StatefulWidget {
+class ProductBottomSheet extends ConsumerStatefulWidget {
   final VideoSale video;
 
   const ProductBottomSheet({super.key, required this.video});
 
   @override
-  State<ProductBottomSheet> createState() => _ProductBottomSheetState();
+  ConsumerState<ProductBottomSheet> createState() => _ProductBottomSheetState();
 }
 
-class _ProductBottomSheetState extends State<ProductBottomSheet> {
+class _ProductBottomSheetState extends ConsumerState<ProductBottomSheet> {
   bool _isLoadingProduct = false;
 
-  Future<void> _fetchAndNavigate(BuildContext context) async {
+  Future<Product> _fetchProduct(String productId) async {
+    final response = await http.get(Uri.parse('${ApiConfig.products}/$productId'));
+    if (response.statusCode != 200) {
+      throw Exception('Produit introuvable');
+    }
+    final data = jsonDecode(response.body);
+    // data peut être { product: {...} } ou juste {...}
+    return Product.fromJson(data['product'] ?? data);
+  }
+
+  Future<bool> _hasVariants(String productId) async {
+    final response = await http.get(
+      Uri.parse('${ApiConfig.baseUrl}/api/variants/public/$productId'),
+    );
+    if (response.statusCode != 200) return false;
+    final data = jsonDecode(response.body);
+    return data is List && data.isNotEmpty;
+  }
+
+  /// Ferme le volet et ouvre la fiche produit en conservant l'origine vidéo.
+  void _openProductDetails(NavigatorState navigator, Product product) {
+    navigator.pop();
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => ProductDetailsPage(
+          product: product,
+          originVideoId: widget.video.id,
+        ),
+      ),
+    );
+  }
+
+  CartItem _buildCartItem(Product product) {
+    final basePrice = double.tryParse(product.price) ?? 0.0;
+    final discount = product.discountPrice;
+    final shipping = product.shippingOptions.isNotEmpty ? product.shippingOptions.first : null;
+    return CartItem(
+      productId: product.id,
+      productName: product.name,
+      price: (discount != null && discount > 0) ? discount : basePrice,
+      imageUrl: product.images.isNotEmpty ? product.images.first : null,
+      sellerName: product.seller,
+      sellerId: product.sellerId,
+      deliveryPrice: shipping?.cost ?? product.deliveryPrice,
+      deliveryMethod: shipping?.label ?? 'Standard',
+      originVideoId: widget.video.id,
+    );
+  }
+
+  /// Charge le produit, puis exécute [action] ; affiche une erreur en cas d'échec.
+  Future<void> _withProduct(
+    Future<void> Function(Product product, String productId) action,
+  ) async {
     final productId = widget.video.productId;
-    if (productId == null) return;
+    if (productId == null || _isLoadingProduct) return;
 
     setState(() => _isLoadingProduct = true);
-
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      final uri = Uri.parse('${ApiConfig.products}/$productId');
-      final response = await http.get(uri);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        // data peut être { product: {...} } ou juste {...}
-        final productJson = data['product'] ?? data;
-        final product = Product.fromJson(productJson);
-
-        if (mounted) {
-          Navigator.pop(context); // Fermer le bottom sheet
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductDetailsPage(
-                product: product,
-                originVideoId: widget.video.id.toString(),
-              ),
-            ),
-          );
-        }
-      } else {
-        throw Exception('Produit introuvable');
-      }
+      await action(await _fetchProduct(productId), productId);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Impossible de charger les détails du produit'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+      debugPrint('Erreur produit Live Shopping: $e');
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Impossible de charger les détails du produit'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isLoadingProduct = false);
@@ -66,9 +97,46 @@ class _ProductBottomSheetState extends State<ProductBottomSheet> {
     }
   }
 
+  Future<void> _viewProduct() {
+    final navigator = Navigator.of(context);
+    return _withProduct((product, _) async => _openProductDetails(navigator, product));
+  }
+
+  /// Ajoute le produit au panier. Un produit à variantes passe par sa fiche,
+  /// car le client doit d'abord choisir une option.
+  Future<void> _addToCart() {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final cart = ref.read(cartProvider.notifier);
+
+    return _withProduct((product, productId) async {
+      if (await _hasVariants(productId)) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Choisissez une option pour ce produit')),
+        );
+        _openProductDetails(navigator, product);
+        return;
+      }
+
+      cart.addItem(_buildCartItem(product));
+      navigator.pop();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Produit ajouté au panier !'),
+          backgroundColor: Color(0xFF00C853),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final video = widget.video;
+    ref.watch(exchangeRateProvider);
+    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
+    final soldByOtherSeller =
+        video.productSellerName != null && video.productSellerName != video.sellerName;
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.55,
@@ -148,7 +216,7 @@ class _ProductBottomSheetState extends State<ProductBottomSheet> {
                           const SizedBox(height: 8),
                           if (video.productPrice != null)
                             Text(
-                              '\$${video.productPrice!.toStringAsFixed(2)}',
+                              exchangeNotifier.formatProductPrice(video.productPrice!),
                               style: const TextStyle(
                                 color: Color(0xFFFF6D00),
                                 fontSize: 22,
@@ -157,6 +225,12 @@ class _ProductBottomSheetState extends State<ProductBottomSheet> {
                             ),
                           const SizedBox(height: 8),
                           // Vendeur
+                          if (soldByOtherSeller)
+                            Text(
+                              'Vendu par ${video.productSellerName}',
+                              style: const TextStyle(color: Colors.white60, fontSize: 13),
+                            )
+                          else
                           Row(
                             children: [
                               CircleAvatar(
@@ -194,7 +268,7 @@ class _ProductBottomSheetState extends State<ProductBottomSheet> {
                     // Voir le produit
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isLoadingProduct ? null : () => _fetchAndNavigate(context),
+                        onPressed: _isLoadingProduct ? null : _viewProduct,
                         icon: _isLoadingProduct 
                             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.visibility_outlined, size: 18),
@@ -215,17 +289,7 @@ class _ProductBottomSheetState extends State<ProductBottomSheet> {
                     // Ajouter au panier
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          // TODO: Ajouter au panier via cartProvider
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Produit ajouté au panier !'),
-                              backgroundColor: Color(0xFF00C853),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
+                        onPressed: _isLoadingProduct ? null : _addToCart,
                         icon: const Icon(Icons.add_shopping_cart, size: 18),
                         label: const Text('Ajouter au panier'),
                         style: ElevatedButton.styleFrom(

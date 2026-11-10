@@ -4,7 +4,25 @@
  */
 const pool = require('../config/db');
 
+const COMMENT_MAX_LENGTH = 500;
+const REPORT_REASONS = ['spam', 'arnaque', 'contenu_choquant', 'contrefacon', 'autre'];
+
 class VideoSalesService {
+
+    /**
+     * Vérifie qu'une vidéo est publiée et retourne son propriétaire.
+     * @throws {Error} NOT_FOUND si la vidéo est absente, supprimée ou retirée par la modération.
+     */
+    async _getActiveVideoOwner(videoId) {
+        const result = await pool.query(
+            `SELECT user_id FROM video_sales WHERE id = $1 AND status = 'active'`,
+            [videoId]
+        );
+        if (result.rows.length === 0) {
+            throw new Error('NOT_FOUND');
+        }
+        return result.rows[0].user_id;
+    }
 
     /**
      * Auto-migration : créer les tables si elles n'existent pas
@@ -46,6 +64,38 @@ class VideoSalesService {
                     UNIQUE(video_id, user_id)
                 )
             `);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS video_comments (
+                    id SERIAL PRIMARY KEY,
+                    video_id INTEGER NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    content VARCHAR(${COMMENT_MAX_LENGTH}) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'active',
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            `);
+            await pool.query(`
+                CREATE INDEX IF NOT EXISTS idx_video_comments_video
+                ON video_comments(video_id, created_at DESC)
+            `);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS video_reports (
+                    id SERIAL PRIMARY KEY,
+                    video_id INTEGER NOT NULL REFERENCES video_sales(id) ON DELETE CASCADE,
+                    reporter_id INTEGER NOT NULL REFERENCES users(id),
+                    reason VARCHAR(30) NOT NULL,
+                    details TEXT,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    reviewed_by INTEGER REFERENCES users(id),
+                    reviewed_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE(video_id, reporter_id)
+                )
+            `);
+            await pool.query(`
+                CREATE INDEX IF NOT EXISTS idx_video_reports_status
+                ON video_reports(status, created_at DESC)
+            `);
             console.log('✅ Tables video_sales prêtes');
         } catch (err) {
             console.error('❌ Erreur migration video_sales:', err.message);
@@ -62,11 +112,16 @@ class VideoSalesService {
             SELECT 
                 v.id, v.video_url, v.thumbnail_url, v.title, v.description,
                 v.duration_seconds, v.views_count, v.likes_count,
-                v.product_id, v.created_at,
+                p.id AS product_id, v.created_at,
                 u.id AS seller_id, u.name AS seller_name, u.avatar_url AS seller_avatar,
                 u.has_certified_shop AS seller_certified,
-                p.name AS product_name, p.price AS product_price, 
+                p.name AS product_name, p.price AS product_price,
                 p.images AS product_images,
+                ps.name AS product_seller_name,
+                (
+                    SELECT COUNT(*)::int FROM video_comments vc
+                    WHERE vc.video_id = v.id AND vc.status = 'active'
+                ) AS comments_count,
                 ${currentUserId ? `
                     EXISTS(
                         SELECT 1 FROM video_likes vl 
@@ -75,8 +130,15 @@ class VideoSalesService {
                 ` : 'FALSE AS is_liked'}
             FROM video_sales v
             JOIN users u ON v.user_id = u.id
-            LEFT JOIN products p ON v.product_id = p.id
+            LEFT JOIN products p ON v.product_id = p.id AND p.status = 'active'
+            LEFT JOIN users ps ON p.seller_id = ps.id
             WHERE v.status = 'active'
+            ${currentUserId ? `
+                AND NOT EXISTS(
+                    SELECT 1 FROM video_reports vr
+                    WHERE vr.video_id = v.id AND vr.reporter_id = $3
+                )
+            ` : ''}
             ORDER BY v.created_at DESC
             LIMIT $1 OFFSET $2
         `;
@@ -90,6 +152,20 @@ class VideoSalesService {
      * Créer une vidéo de vente
      */
     async createVideo(userId, videoUrl, thumbnailUrl, productId, title, description) {
+        // N'importe quel produit actif peut être lié (affiliation entre vendeurs)
+        if (productId) {
+            const parsedProductId = parseInt(productId, 10);
+            const productCheck = Number.isInteger(parsedProductId)
+                ? await pool.query(
+                    `SELECT 1 FROM products WHERE id = $1 AND status = 'active'`,
+                    [parsedProductId]
+                )
+                : { rows: [] };
+            if (productCheck.rows.length === 0) {
+                throw new Error('INVALID_PRODUCT');
+            }
+        }
+
         // Vérification limite : 3 vidéos/mois pour non-certifiés
         const userCheck = await pool.query(
             'SELECT has_certified_shop FROM users WHERE id = $1',
@@ -151,6 +227,9 @@ class VideoSalesService {
      * Toggle like (like ou unlike)
      */
     async toggleLike(videoId, userId) {
+        // Une vidéo retirée ou supprimée ne doit plus générer de récompense
+        await this._getActiveVideoOwner(videoId);
+
         const existing = await pool.query(
             'SELECT id FROM video_likes WHERE video_id = $1 AND user_id = $2',
             [videoId, userId]
@@ -241,6 +320,171 @@ class VideoSalesService {
             [userId]
         );
         return result.rows;
+    }
+
+    /**
+     * Liste paginée des commentaires visibles d'une vidéo (plus récents d'abord)
+     */
+    async getComments(videoId, page = 1, limit = 20) {
+        const result = await pool.query(
+            `SELECT c.id, c.video_id, c.user_id, c.content, c.created_at,
+                    u.name AS user_name, u.avatar_url AS user_avatar
+             FROM video_comments c
+             JOIN users u ON u.id = c.user_id
+             WHERE c.video_id = $1 AND c.status = 'active'
+             ORDER BY c.created_at DESC, c.id DESC
+             LIMIT $2 OFFSET $3`,
+            [videoId, limit, (page - 1) * limit]
+        );
+        return result.rows;
+    }
+
+    /**
+     * Ajoute un commentaire sur une vidéo publiée
+     * @throws {Error} INVALID_COMMENT si le texte est vide ou trop long
+     */
+    async addComment(videoId, userId, rawContent) {
+        const content = typeof rawContent === 'string' ? rawContent.trim() : '';
+        if (!content || content.length > COMMENT_MAX_LENGTH) {
+            throw new Error('INVALID_COMMENT');
+        }
+        await this._getActiveVideoOwner(videoId);
+
+        const result = await pool.query(
+            `WITH inserted AS (
+                INSERT INTO video_comments (video_id, user_id, content)
+                VALUES ($1, $2, $3)
+                RETURNING id, video_id, user_id, content, created_at
+             )
+             SELECT inserted.*, u.name AS user_name, u.avatar_url AS user_avatar
+             FROM inserted
+             JOIN users u ON u.id = inserted.user_id`,
+            [videoId, userId, content]
+        );
+        return result.rows[0];
+    }
+
+    /**
+     * Masque un commentaire (auteur du commentaire ou propriétaire de la vidéo)
+     */
+    async deleteComment(videoId, commentId, userId) {
+        const result = await pool.query(
+            `UPDATE video_comments c SET status = 'deleted'
+             FROM video_sales v
+             WHERE c.id = $1 AND c.video_id = $2 AND v.id = c.video_id
+               AND c.status = 'active'
+               AND (c.user_id = $3 OR v.user_id = $3)
+             RETURNING c.id`,
+            [commentId, videoId, userId]
+        );
+        if (result.rows.length === 0) {
+            throw new Error('NOT_FOUND');
+        }
+        return { success: true };
+    }
+
+    /**
+     * Signale une vidéo à la modération (un signalement par compte et par vidéo)
+     * @throws {Error} INVALID_REASON si le motif est inconnu, OWN_VIDEO pour sa propre vidéo
+     */
+    async reportVideo(videoId, reporterId, reason, details) {
+        if (!REPORT_REASONS.includes(reason)) {
+            throw new Error('INVALID_REASON');
+        }
+        const ownerId = await this._getActiveVideoOwner(videoId);
+        if (String(ownerId) === String(reporterId)) {
+            throw new Error('OWN_VIDEO');
+        }
+        await pool.query(
+            `INSERT INTO video_reports (video_id, reporter_id, reason, details)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (video_id, reporter_id) DO NOTHING`,
+            [videoId, reporterId, reason, typeof details === 'string' ? details.trim().slice(0, 1000) || null : null]
+        );
+        return { reported: true };
+    }
+
+    /**
+     * Liste des vidéos pour la modération
+     * @param {'pending'|'removed'|'all'} filter
+     */
+    async listForModeration(filter = 'pending', limit = 50, offset = 0) {
+        const statusClause = filter === 'removed' ? `AND v.status = 'removed'` : '';
+        const havingClause = filter === 'pending'
+            ? `HAVING COUNT(r.id) FILTER (WHERE r.status = 'pending') > 0`
+            : '';
+
+        const result = await pool.query(
+            `SELECT v.id, v.video_url, v.thumbnail_url, v.title, v.description, v.status,
+                    v.views_count, v.likes_count, v.created_at,
+                    u.id AS seller_id, u.name AS seller_name, u.phone AS seller_phone,
+                    COUNT(r.id) FILTER (WHERE r.status = 'pending')::int AS pending_reports,
+                    COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'id', r.id, 'reason', r.reason, 'details', r.details,
+                                'status', r.status, 'created_at', r.created_at,
+                                'reporter_name', ru.name
+                            ) ORDER BY r.created_at DESC
+                        ) FILTER (WHERE r.id IS NOT NULL),
+                        '[]'
+                    ) AS reports
+             FROM video_sales v
+             JOIN users u ON u.id = v.user_id
+             LEFT JOIN video_reports r ON r.video_id = v.id
+             LEFT JOIN users ru ON ru.id = r.reporter_id
+             WHERE v.status <> 'deleted' ${statusClause}
+             GROUP BY v.id, u.id
+             ${havingClause}
+             ORDER BY pending_reports DESC, v.created_at DESC
+             LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
+        return result.rows;
+    }
+
+    /**
+     * Applique une décision de modération sur une vidéo
+     * @param {'remove'|'restore'|'dismiss'} action
+     * @throws {Error} NOT_FOUND si la vidéo n'est pas dans un état compatible avec l'action
+     */
+    async moderateVideo(videoId, adminId, action) {
+        const REVIEW_REPORTS = `
+            UPDATE video_reports
+            SET status = $3, reviewed_by = $2, reviewed_at = NOW()
+            WHERE video_id IN (SELECT id FROM target) AND status = 'pending'
+        `;
+        const queries = {
+            remove: {
+                sql: `WITH target AS (
+                        UPDATE video_sales SET status = 'removed', updated_at = NOW()
+                        WHERE id = $1 AND status = 'active'
+                        RETURNING id
+                      ), reviewed AS (${REVIEW_REPORTS})
+                      SELECT id FROM target`,
+                params: [videoId, adminId, 'actioned'],
+            },
+            dismiss: {
+                sql: `WITH target AS (
+                        SELECT id FROM video_sales WHERE id = $1 AND status <> 'deleted'
+                      ), reviewed AS (${REVIEW_REPORTS})
+                      SELECT id FROM target`,
+                params: [videoId, adminId, 'dismissed'],
+            },
+            restore: {
+                sql: `UPDATE video_sales SET status = 'active', updated_at = NOW()
+                      WHERE id = $1 AND status = 'removed'
+                      RETURNING id`,
+                params: [videoId],
+            },
+        };
+
+        const query = queries[action];
+        const result = await pool.query(query.sql, query.params);
+        if (result.rows.length === 0) {
+            throw new Error('NOT_FOUND');
+        }
+        return { success: true };
     }
 }
 

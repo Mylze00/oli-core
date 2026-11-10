@@ -11,6 +11,14 @@ const { genericUpload } = require('../config/upload');
 // ─── Auto-migration au démarrage ──────
 videoService.ensureTables();
 
+// Les identifiants de vidéo sont des entiers : on refuse le reste avant d'interroger la base
+router.param('id', (req, res, next, id) => {
+    if (!/^\d+$/.test(id)) {
+        return res.status(400).json({ error: 'Identifiant de vidéo invalide' });
+    }
+    next();
+});
+
 /**
  * GET /api/videos
  * Feed paginé de vidéos
@@ -83,6 +91,12 @@ router.post('/', requireAuth, (req, res, next) => {
                 message: 'Vous avez atteint la limite de 3 vidéos par mois. Obtenez la certification pour un accès illimité.'
             });
         }
+        if (err.message === 'INVALID_PRODUCT') {
+            return res.status(400).json({
+                error: 'Produit invalide',
+                message: "Ce produit n'existe pas ou n'est plus disponible."
+            });
+        }
         console.error('❌ Erreur upload vidéo:', err.message);
         console.error('   Stack:', err.stack);
         res.status(500).json({ error: 'Erreur lors de l\'upload', message: err.message });
@@ -112,8 +126,98 @@ router.post('/:id/like', requireAuth, async (req, res) => {
         const result = await videoService.toggleLike(req.params.id, req.user.id);
         res.json({ success: true, ...result });
     } catch (err) {
+        if (err.message === 'NOT_FOUND') {
+            return res.status(404).json({ error: 'Vidéo non disponible' });
+        }
         console.error('❌ Erreur like vidéo:', err.message);
         res.status(500).json({ error: 'Erreur' });
+    }
+});
+
+/**
+ * GET /api/videos/:id/comments
+ * Commentaires paginés d'une vidéo
+ * Query: ?page=1&limit=20
+ */
+router.get('/:id/comments', requireAuth, async (req, res) => {
+    try {
+        const page = Math.max(parseInt(req.query.page) || 1, 1);
+        const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+        const comments = await videoService.getComments(req.params.id, page, limit);
+        res.json({ success: true, comments, page, limit });
+    } catch (err) {
+        console.error('❌ Erreur commentaires vidéo:', err.message);
+        res.status(500).json({ error: 'Erreur lors du chargement des commentaires' });
+    }
+});
+
+/**
+ * POST /api/videos/:id/comments
+ * Ajouter un commentaire
+ * Body: { content }
+ */
+router.post('/:id/comments', requireAuth, async (req, res) => {
+    try {
+        const comment = await videoService.addComment(req.params.id, req.user.id, req.body?.content);
+        res.status(201).json({ success: true, comment });
+    } catch (err) {
+        if (err.message === 'INVALID_COMMENT') {
+            return res.status(400).json({ error: 'Le commentaire doit contenir entre 1 et 500 caractères' });
+        }
+        if (err.message === 'NOT_FOUND') {
+            return res.status(404).json({ error: 'Vidéo non disponible' });
+        }
+        console.error('❌ Erreur ajout commentaire:', err.message);
+        res.status(500).json({ error: "Erreur lors de l'ajout du commentaire" });
+    }
+});
+
+/**
+ * DELETE /api/videos/:id/comments/:commentId
+ * Supprimer un commentaire (son auteur ou le propriétaire de la vidéo)
+ */
+router.delete('/:id/comments/:commentId', requireAuth, async (req, res) => {
+    try {
+        if (!/^\d+$/.test(req.params.commentId)) {
+            return res.status(400).json({ error: 'Identifiant de commentaire invalide' });
+        }
+        await videoService.deleteComment(req.params.id, req.params.commentId, req.user.id);
+        res.json({ success: true });
+    } catch (err) {
+        if (err.message === 'NOT_FOUND') {
+            return res.status(404).json({ error: 'Commentaire non trouvé ou non autorisé' });
+        }
+        console.error('❌ Erreur suppression commentaire:', err.message);
+        res.status(500).json({ error: 'Erreur lors de la suppression' });
+    }
+});
+
+/**
+ * POST /api/videos/:id/report
+ * Signaler une vidéo à la modération
+ * Body: { reason, details }
+ */
+router.post('/:id/report', requireAuth, async (req, res) => {
+    try {
+        const result = await videoService.reportVideo(
+            req.params.id,
+            req.user.id,
+            req.body?.reason,
+            req.body?.details
+        );
+        res.status(201).json({ success: true, ...result });
+    } catch (err) {
+        if (err.message === 'INVALID_REASON') {
+            return res.status(400).json({ error: 'Motif de signalement invalide' });
+        }
+        if (err.message === 'OWN_VIDEO') {
+            return res.status(400).json({ error: 'Vous ne pouvez pas signaler votre propre vidéo' });
+        }
+        if (err.message === 'NOT_FOUND') {
+            return res.status(404).json({ error: 'Vidéo non disponible' });
+        }
+        console.error('❌ Erreur signalement vidéo:', err.message);
+        res.status(500).json({ error: 'Erreur lors du signalement' });
     }
 });
 

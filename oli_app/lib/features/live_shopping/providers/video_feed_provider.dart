@@ -124,10 +124,40 @@ class VideoFeedNotifier extends StateNotifier<VideoFeedState> {
       await _dio.post('/api/videos/$videoId/like');
     } catch (e) {
       // Rollback on error
-      final rollbackVideos = [...state.videos];
-      rollbackVideos[index] = video;
-      state = state.copyWith(videos: rollbackVideos);
+      state = state.copyWith(
+        videos: [
+          for (final v in state.videos) v.id == videoId ? video : v,
+        ],
+      );
     }
+  }
+
+  /// Met à jour le compteur de commentaires après un ajout ou une suppression
+  void adjustCommentsCount(String videoId, int delta) {
+    state = state.copyWith(
+      videos: [
+        for (final v in state.videos)
+          if (v.id == videoId)
+            v.copyWith(commentsCount: (v.commentsCount + delta).clamp(0, 1 << 31))
+          else
+            v,
+      ],
+    );
+  }
+
+  /// Signale une vidéo à la modération
+  Future<void> reportVideo(String videoId, String reason, String? details) async {
+    await _dio.post('/api/videos/$videoId/report', data: {
+      'reason': reason,
+      if (details != null && details.isNotEmpty) 'details': details,
+    });
+  }
+
+  /// Retire une vidéo du fil affiché
+  void removeVideo(String videoId) {
+    state = state.copyWith(
+      videos: state.videos.where((v) => v.id != videoId).toList(),
+    );
   }
 
   /// Enregistrer une vue

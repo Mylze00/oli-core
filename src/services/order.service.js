@@ -28,7 +28,7 @@ class OrderService {
         }
 
         // [SÉCU C1/C2] Les prix viennent de la base, jamais du client.
-        const { items: pricedItems, itemsTotal } = await this._priceItemsFromCatalogue(items);
+        const { items: pricedItems, itemsTotal } = await this._priceItemsFromCatalogue(items, userId);
 
         // [SÉCU C2] Frais de livraison : jamais négatifs (le recalcul par mode reste à faire)
         const safeDeliveryFee = Math.max(0, parseFloat(deliveryFee) || 0);
@@ -146,7 +146,7 @@ class OrderService {
      *
      * @returns {Promise<{items: Array, itemsTotal: number}>}
      */
-    async _priceItemsFromCatalogue(items) {
+    async _priceItemsFromCatalogue(items, buyerId) {
         const MAX_QTY_PER_LINE = 1000;
         const parsed = items.map((item) => {
             const productId = parseInt(item?.productId, 10);
@@ -167,6 +167,8 @@ class OrderService {
         );
         const byId = new Map(res.rows.map((p) => [p.id, p]));
 
+        const videosById = await this._loadOriginVideos(parsed);
+
         const pricedItems = parsed.map((item) => {
             const product = byId.get(item.productId);
             if (!product) {
@@ -179,15 +181,43 @@ class OrderService {
             if (!Number.isFinite(price) || price <= 0) {
                 throw this._badRequest(`Prix invalide pour le produit #${item.productId}`);
             }
+            // La commission vidéo n'est retenue que si la vidéo présente bien ce produit
+            // et que l'acheteur n'est pas lui-même le créateur de la vidéo.
+            const originVideo = videosById.get(parseInt(item.originVideoId, 10));
+            const isValidOrigin = originVideo
+                && originVideo.product_id === item.productId
+                && String(originVideo.user_id) !== String(buyerId);
+
             return {
                 ...item,
                 productName: product.name,
                 price,
+                originVideoId: isValidOrigin ? originVideo.id : null,
             };
         });
 
         const itemsTotal = pricedItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
         return { items: pricedItems, itemsTotal };
+    }
+
+    /**
+     * Charge les vidéos actives citées comme origine des articles d'une commande.
+     * @returns {Promise<Map<number, {id: number, user_id: number, product_id: number}>>}
+     */
+    async _loadOriginVideos(items) {
+        const videoIds = [...new Set(
+            items
+                .map((item) => parseInt(item.originVideoId, 10))
+                .filter((id) => Number.isInteger(id) && id > 0)
+        )];
+        if (videoIds.length === 0) return new Map();
+
+        const res = await pool.query(
+            `SELECT id, user_id, product_id FROM video_sales
+             WHERE id = ANY($1::int[]) AND status = 'active'`,
+            [videoIds]
+        );
+        return new Map(res.rows.map((video) => [video.id, video]));
     }
 
     async getUserOrders(userId) {
