@@ -5,6 +5,8 @@ import 'ticket_clipper.dart';
 const _cardDarkColor = Color(0xFF1A1A2E);
 const _designWidth = 322.0;
 const _designHeight = 379.0;
+const _outerRadius = 17.0;
+const _borderWidth = 1.5;
 const _months = ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUIN', 'JUIL', 'AOÛT', 'SEP', 'OCT', 'NOV', 'DÉC'];
 
 /// Carte d'un événement à l'affiche, dessinée aux proportions de la maquette.
@@ -54,112 +56,118 @@ class EventTicketCard extends StatelessWidget {
         child: Container(
           width: _designWidth,
           height: _designHeight,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: _cardDarkColor,
-            borderRadius: BorderRadius.circular(17),
-            border: Border.all(color: Colors.white, width: 1.5),
-          ),
-          child: Stack(
-            children: [
-              Positioned(top: 0, left: 0, right: 0, height: 124, child: _buildHero()),
-              Positioned(
-                top: 276,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [_cardDarkColor, Color.alphaBlend(ticket.color.withValues(alpha: 0.32), _cardDarkColor)],
+          padding: const EdgeInsets.all(_borderWidth),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(_outerRadius)),
+          // Le contenu est découpé à l'intérieur du contour, qui reste entier dans les angles
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(_outerRadius - _borderWidth),
+            child: ColoredBox(
+              color: _cardDarkColor,
+              child: Stack(
+                children: [
+                  Positioned(top: 0, left: 0, right: 0, height: 124, child: _buildHero()),
+                  Positioned(
+                    top: 276,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            _cardDarkColor,
+                            Color.alphaBlend(ticket.color.withValues(alpha: 0.32), _cardDarkColor),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              Positioned(top: 7, left: 7, child: _buildBadge()),
-              Positioned(
-                top: 129,
-                left: 17,
-                right: 17,
-                child: _buildText(
-                  ticket.title,
-                  const TextStyle(color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w800),
-                ),
-              ),
-              if (ticket.subtitle.isNotEmpty)
-                Positioned(
-                  top: 151,
-                  left: 17,
-                  right: 17,
-                  child: _buildText(ticket.subtitle, const TextStyle(color: Colors.white54, fontSize: 9.5)),
-                ),
-              Positioned(
-                top: 171,
-                left: 17,
-                width: 150,
-                child: _buildInfo(Icons.calendar_today_outlined, 'DATE', _displayDate),
-              ),
-              Positioned(
-                top: 171,
-                left: 167,
-                right: 12,
-                child: _buildInfo(Icons.access_time_outlined, 'HEURE', _displayTime),
-              ),
-              Positioned(
-                top: 203,
-                left: 17,
-                right: 17,
-                child: _buildInfo(Icons.location_on_outlined, 'LIEU', ticket.location.toUpperCase()),
-              ),
-              Positioned(
-                top: 233,
-                left: 17,
-                right: 17,
-                child: _buildInfo(Icons.event_seat_outlined, 'PLACE', ticket.seat.toUpperCase()),
-              ),
-              Positioned(top: 268, left: 17, right: 17, height: 8, child: _buildDivider()),
-              Positioned(
-                top: 292,
-                left: 0,
-                right: 0,
-                child: Text(
-                  priceCaption,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white54, fontSize: 8, letterSpacing: 1),
-                ),
-              ),
-              Positioned(
-                top: 305,
-                left: 8,
-                right: 8,
-                child: _buildText(
-                  priceLabel,
-                  const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.w800, fontSize: 18),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              Positioned(
-                top: 335,
-                left: 109,
-                width: 104,
-                height: 29,
-                child: ElevatedButton(
-                  onPressed: onOpen,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDisabled ? Colors.grey[800] : const Color(0xFF7C4DFF),
-                    padding: EdgeInsets.zero,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  Positioned(top: 7, left: 7, child: _buildBadge()),
+                  Positioned(
+                    top: 129,
+                    left: 17,
+                    right: 17,
+                    child: _buildText(
+                      ticket.title,
+                      const TextStyle(color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w800),
+                    ),
                   ),
-                  child: Text(
-                    buttonLabel,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
+                  if (ticket.subtitle.isNotEmpty)
+                    Positioned(
+                      top: 151,
+                      left: 17,
+                      right: 17,
+                      child: _buildText(ticket.subtitle, const TextStyle(color: Colors.white54, fontSize: 9.5)),
+                    ),
+                  Positioned(
+                    top: 171,
+                    left: 17,
+                    width: 150,
+                    child: _buildInfo(Icons.calendar_today_outlined, 'DATE', _displayDate),
                   ),
-                ),
+                  Positioned(
+                    top: 171,
+                    left: 167,
+                    right: 12,
+                    child: _buildInfo(Icons.access_time_outlined, 'HEURE', _displayTime),
+                  ),
+                  Positioned(
+                    top: 203,
+                    left: 17,
+                    right: 17,
+                    child: _buildInfo(Icons.location_on_outlined, 'LIEU', ticket.location.toUpperCase()),
+                  ),
+                  Positioned(
+                    top: 233,
+                    left: 17,
+                    right: 17,
+                    child: _buildInfo(Icons.event_seat_outlined, 'PLACE', ticket.seat.toUpperCase()),
+                  ),
+                  Positioned(top: 268, left: 17, right: 17, height: 8, child: _buildDivider()),
+                  Positioned(
+                    top: 292,
+                    left: 0,
+                    right: 0,
+                    child: Text(
+                      priceCaption,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white54, fontSize: 8, letterSpacing: 1),
+                    ),
+                  ),
+                  Positioned(
+                    top: 305,
+                    left: 8,
+                    right: 8,
+                    child: _buildText(
+                      priceLabel,
+                      const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.w800, fontSize: 18),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  Positioned(
+                    top: 335,
+                    left: 109,
+                    width: 104,
+                    height: 29,
+                    child: ElevatedButton(
+                      onPressed: onOpen,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDisabled ? Colors.grey[800] : const Color(0xFF7C4DFF),
+                        padding: EdgeInsets.zero,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: Text(
+                        buttonLabel,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -174,14 +182,13 @@ class EventTicketCard extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (_hasImage)
-          Image.network(
-            ticket.imageUrl!,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _buildHeroFallback(),
-          )
-        else
-          _buildHeroFallback(),
+        // L'image s'arrête juste avant le bas du dégradé pour ne laisser aucun filet clair
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: _hasImage
+              ? Image.network(ticket.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildHeroFallback())
+              : _buildHeroFallback(),
+        ),
         const Positioned(
           left: 0,
           right: 0,
@@ -246,14 +253,14 @@ class EventTicketCard extends StatelessWidget {
 
   Widget _buildDivider() {
     Widget ring() => Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F0F1A),
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFF3A3A5C)),
-          ),
-        );
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F0F1A),
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF3A3A5C)),
+      ),
+    );
     return Row(
       children: [
         ring(),

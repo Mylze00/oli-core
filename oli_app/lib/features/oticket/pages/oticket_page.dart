@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ticket_model.dart';
 import '../providers/oticket_provider.dart';
+import 'caa_schedule_page.dart';
 import 'organizer_scan_page.dart';
 import '../widgets/event_ticket_card.dart';
 import '../widgets/oticket_font.dart';
@@ -14,6 +15,8 @@ const _hubBlue = Color(0xFF051A45);
 const _roundButtonColor = Color(0xFF0A0A18);
 const _designPageWidth = 925.0;
 const _headerHeight = 150.0;
+const _hubHeightFactor = 0.6;
+const _hubMinHeight = 150.0;
 const _hubPartners = ['CAA', 'Trans\nMatadi'];
 
 class OTicketPage extends ConsumerStatefulWidget {
@@ -444,8 +447,10 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
         const cardTopSpacing = 7.0;
         const hubGap = 16.0;
         final countLineHeight = events.isEmpty ? 0.0 : 34.0;
-        final hubHeight = (constraints.maxHeight - cardTopSpacing - countLineHeight - cardHeight - dotsHeight - hubGap)
-            .clamp(190.0, double.infinity);
+        final spaceForHub = constraints.maxHeight - cardTopSpacing - countLineHeight - cardHeight - dotsHeight - hubGap;
+        final hubHeight = (spaceForHub * _hubHeightFactor).clamp(_hubMinHeight, double.infinity);
+        // La place libérée par le Hub est répartie autour de la carte
+        final extraSpacing = ((spaceForHub - hubHeight) / 2).clamp(0.0, double.infinity);
 
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(oticketEventsProvider),
@@ -453,7 +458,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               children: [
-                const SizedBox(height: cardTopSpacing),
+                SizedBox(height: cardTopSpacing + extraSpacing),
                 if (events.isNotEmpty)
                   SizedBox(
                     height: countLineHeight,
@@ -494,7 +499,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
                   ),
                 ),
                 SizedBox(height: dotsHeight, child: _buildEventDots(events.length)),
-                const SizedBox(height: hubGap),
+                SizedBox(height: hubGap + extraSpacing),
                 _buildHub(hubHeight),
               ],
             ),
@@ -547,6 +552,19 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     );
   }
 
+  void _openHubPartner(String name) {
+    if (name == 'CAA') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const OTicketFont(child: CaaSchedulePage())),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$name arrive bientôt sur Oli Ticket')),
+    );
+  }
+
   Widget _buildHubPartner(String name) {
     final oneLineName = name.replaceAll('\n', ' ');
     return Semantics(
@@ -554,9 +572,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
       label: oneLineName,
       child: InkWell(
         customBorder: const CircleBorder(),
-        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$oneLineName arrive bientôt sur Oli Ticket')),
-        ),
+        onTap: () => _openHubPartner(oneLineName),
         child: Container(
           width: 72,
           height: 72,
