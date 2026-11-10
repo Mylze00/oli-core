@@ -1,3 +1,4 @@
+import '../../../core/theme/oli_glass.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -88,7 +89,7 @@ class _VideoReportSheetState extends ConsumerState<VideoReportSheet> {
                   groupValue: _reason,
                   onChanged: _isSending ? null : (value) => setState(() => _reason = value),
                   title: Text(entry.value, style: const TextStyle(color: Colors.white, fontSize: 14)),
-                  activeColor: const Color(0xFFFF6D00),
+                  activeColor: OliPalette.blueOnDark,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                 ),
@@ -114,7 +115,7 @@ class _VideoReportSheetState extends ConsumerState<VideoReportSheet> {
                 child: ElevatedButton(
                   onPressed: _reason != null && !_isSending ? _submit : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6D00),
+                    backgroundColor: OliPalette.blue,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: Colors.white12,
                     padding: const EdgeInsets.symmetric(vertical: 14),

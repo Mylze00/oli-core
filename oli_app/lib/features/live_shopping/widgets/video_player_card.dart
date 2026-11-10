@@ -6,22 +6,31 @@ import 'dart:async';
 import '../models/video_sale_model.dart';
 import '../providers/video_feed_provider.dart';
 import 'product_bottom_sheet.dart';
-import 'video_comments_sheet.dart';
+import 'floating_likes.dart';
+import 'video_comments_panel.dart';
 import 'video_report_sheet.dart';
 import '../../marketplace/presentation/pages/seller_profile_page.dart';
+import '../../../core/theme/oli_glass.dart';
 import '../../../core/user/user_provider.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../../../utils/cloudinary_helper.dart';
+
+const _commentsAnimation = Duration(milliseconds: 280);
+
+/// Part de la hauteur gardée par la vidéo quand les commentaires sont ouverts.
+const _reducedVideoRatio = 0.34;
 
 /// Carte vidéo plein écran style TikTok
 class VideoPlayerCard extends ConsumerStatefulWidget {
   final VideoSale video;
   final bool isActive;
+  final ValueChanged<bool>? onCommentsChanged;
 
   const VideoPlayerCard({
     super.key,
     required this.video,
     required this.isActive,
+    this.onCommentsChanged,
   });
 
   @override
@@ -35,6 +44,10 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
   bool _isRouteCurrent = true;
   bool _showHeart = false;
   bool _viewRegistered = false;
+  bool _commentsOpen = false;
+  bool _commentsMounted = false;
+  bool _likesBurstPlayed = false;
+  bool _showLikesBurst = false;
   Timer? _viewTimer;
 
   @override
@@ -64,10 +77,28 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
     if (shouldPlay) {
       _controller.play();
       _startViewTimer();
+      _playLikesBurstOnce();
     } else {
       _controller.pause();
       _viewTimer?.cancel();
     }
+  }
+
+  /// Lance l'effet des j'aime à la première lecture de la vidéo.
+  void _playLikesBurstOnce() {
+    if (_likesBurstPlayed || widget.video.likesCount == 0) return;
+    _likesBurstPlayed = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _showLikesBurst = true);
+    });
+  }
+
+  void _setCommentsOpen(bool open) {
+    setState(() {
+      _commentsOpen = open;
+      if (open) _commentsMounted = true;
+    });
+    widget.onCommentsChanged?.call(open);
   }
 
   void _startViewTimer() {
@@ -140,15 +171,6 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
     }
   }
 
-  void _showComments() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => VideoCommentsSheet(video: widget.video),
-    );
-  }
-
   void _showReportSheet() {
     showModalBottomSheet(
       context: context,
@@ -174,101 +196,159 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // ── Vidéo ou placeholder ──
-        GestureDetector(
-          onTap: _togglePlay,
-          onDoubleTap: _onDoubleTap,
-          child: _isInitialized
-              ? FittedBox(
-                  fit: BoxFit.cover,
+    return PopScope(
+      canPop: !_commentsOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _setCommentsOpen(false);
+      },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final height = constraints.maxHeight;
+          final reducedHeight = height * _reducedVideoRatio;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: Colors.black),
+
+              // ── Vidéo, réduite quand les commentaires sont ouverts ──
+              AnimatedPositioned(
+                duration: _commentsAnimation,
+                curve: Curves.easeOut,
+                top: 0,
+                left: 0,
+                right: 0,
+                height: _commentsOpen ? reducedHeight : height,
+                child: _buildVideoArea(),
+              ),
+
+              if (_userPaused && !_commentsOpen)
+                const Center(
+                  child: Icon(Icons.play_arrow_rounded, color: Colors.white54, size: 80),
+                ),
+
+              // ── Animation cœur (double-tap) ──
+              if (_showHeart)
+                Center(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.5, end: 1.2),
+                    duration: const Duration(milliseconds: 400),
+                    builder: (_, scale, __) => Transform.scale(
+                      scale: scale,
+                      child: const Icon(Icons.favorite, color: Colors.redAccent, size: 100),
+                    ),
+                  ),
+                ),
+
+              if (!_commentsOpen) ...[
+                // ── Gradient bas ──
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 250,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Effet des j'aime au lancement ──
+                if (_showLikesBurst)
+                  Positioned(
+                    right: 0,
+                    bottom: 260,
+                    width: 80,
+                    height: height * 0.5,
+                    child: FloatingLikes(
+                      likesCount: widget.video.likesCount,
+                      onFinished: () => setState(() => _showLikesBurst = false),
+                    ),
+                  ),
+
+                // ── Overlay droite : interactions ──
+                Positioned(
+                  right: 12,
+                  bottom: 160,
+                  child: _buildRightOverlay(),
+                ),
+
+                // ── Overlay bas : infos + produit ──
+                Positioned(
+                  bottom: 20,
+                  left: 16,
+                  right: 80,
+                  child: _buildBottomOverlay(),
+                ),
+
+                // ── Progress bar ──
+                if (_isInitialized)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: VideoProgressIndicator(
+                      _controller,
+                      allowScrubbing: true,
+                      colors: VideoProgressColors(
+                        playedColor: Colors.white,
+                        bufferedColor: Colors.white24,
+                        backgroundColor: Colors.white10,
+                      ),
+                    ),
+                  ),
+              ],
+
+              // ── Commentaires ──
+              AnimatedPositioned(
+                duration: _commentsAnimation,
+                curve: Curves.easeOut,
+                top: _commentsOpen ? reducedHeight : height,
+                left: 0,
+                right: 0,
+                height: height - reducedHeight,
+                child: _commentsMounted
+                    ? VideoCommentsPanel(
+                        video: widget.video,
+                        onClose: () => _setCommentsOpen(false),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildVideoArea() {
+    return GestureDetector(
+      onTap: _commentsOpen ? () => _setCommentsOpen(false) : _togglePlay,
+      onDoubleTap: _onDoubleTap,
+      child: Container(
+        color: Colors.black,
+        padding: EdgeInsets.only(top: _commentsOpen ? MediaQuery.of(context).viewPadding.top : 0),
+        child: _isInitialized
+            ? ClipRect(
+                child: FittedBox(
+                  fit: _commentsOpen ? BoxFit.contain : BoxFit.cover,
                   child: SizedBox(
                     width: _controller.value.size.width,
                     height: _controller.value.size.height,
                     child: VideoPlayer(_controller),
                   ),
-                )
-              : Container(
-                  color: Colors.black,
-                  child: const Center(
-                    child: CircularProgressIndicator(
-                      color: Colors.white24,
-                      strokeWidth: 2,
-                    ),
-                  ),
                 ),
-        ),
-
-        // ── Icône play/pause ──
-        if (_userPaused)
-          const Center(
-            child: Icon(Icons.play_arrow_rounded, color: Colors.white54, size: 80),
-          ),
-
-        // ── Animation cœur (double-tap) ──
-        if (_showHeart)
-          Center(
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.5, end: 1.2),
-              duration: const Duration(milliseconds: 400),
-              builder: (_, scale, __) => Transform.scale(
-                scale: scale,
-                child: const Icon(Icons.favorite, color: Colors.redAccent, size: 100),
+              )
+            : const Center(
+                child: CircularProgressIndicator(color: Colors.white24, strokeWidth: 2),
               ),
-            ),
-          ),
-
-        // ── Gradient bas ──
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 250,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-              ),
-            ),
-          ),
-        ),
-
-        // ── Overlay droite : interactions ──
-        Positioned(
-          right: 12,
-          bottom: 160,
-          child: _buildRightOverlay(),
-        ),
-
-        // ── Overlay bas : infos + bouton achat ──
-        Positioned(
-          bottom: 20,
-          left: 16,
-          right: 80,
-          child: _buildBottomOverlay(),
-        ),
-
-        // ── Progress bar ──
-        if (_isInitialized)
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: VideoProgressIndicator(
-              _controller,
-              allowScrubbing: true,
-              colors: VideoProgressColors(
-                playedColor: Colors.white,
-                bufferedColor: Colors.white24,
-                backgroundColor: Colors.white10,
-              ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 
@@ -318,7 +398,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
           icon: Icons.chat_bubble_outline,
           label: _formatNumber(video.commentsCount),
           color: Colors.white,
-          onTap: _showComments,
+          onTap: () => _setCommentsOpen(true),
         ),
 
         const SizedBox(height: 20),
@@ -413,12 +493,8 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
 
         const SizedBox(height: 12),
 
-        // Vignette produit + bouton « Acheter » (présentation plateformes de live shopping)
-        if (video.productId != null) ...[
-          _buildProductMiniCard(),
-          const SizedBox(height: 10),
-          _buildBuyButton(),
-        ],
+        // La vignette du produit ouvre la fiche d'achat
+        if (video.productId != null) _buildProductMiniCard(),
       ],
     );
   }
@@ -480,53 +556,12 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
                   if (video.productPrice != null)
                     Text(
                       _formatPrice(video.productPrice!),
-                      style: const TextStyle(color: Color(0xFFFFB74D), fontSize: 14, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: OliPalette.blueOnDark, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                 ],
               ),
             ),
             const Icon(Icons.chevron_right_rounded, color: Colors.white70),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Bouton « Acheter » pleine largeur, ouvre la fiche d'achat.
-  Widget _buildBuyButton() {
-    final video = widget.video;
-    return GestureDetector(
-      onTap: _showProductSheet,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFF6D00),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF6D00).withOpacity(0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            const Text(
-              'Acheter',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            if (video.productPrice != null) ...[
-              const SizedBox(width: 10),
-              Text(
-                _formatPrice(video.productPrice!),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
-              ),
-            ],
           ],
         ),
       ),

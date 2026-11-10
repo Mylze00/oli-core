@@ -129,29 +129,85 @@ class VideoSale {
 /// Commentaire d'une vidéo de vente
 class VideoComment {
   final String id;
+  final String? parentId;
   final String userId;
   final String userName;
   final String? userAvatar;
   final String content;
+  final String? imageUrl;
+  final bool isCreator;
+  final bool creatorLiked;
+  final int likesCount;
+  final int repliesCount;
+
+  /// 1 pour j'aime, -1 pour je n'aime pas, 0 sans réaction.
+  final int myReaction;
   final DateTime createdAt;
 
   const VideoComment({
     required this.id,
+    this.parentId,
     required this.userId,
     required this.userName,
     this.userAvatar,
     required this.content,
+    this.imageUrl,
+    this.isCreator = false,
+    this.creatorLiked = false,
+    this.likesCount = 0,
+    this.repliesCount = 0,
+    this.myReaction = 0,
     required this.createdAt,
   });
 
   factory VideoComment.fromJson(Map<String, dynamic> json) {
     return VideoComment(
       id: json['id']?.toString() ?? '',
+      parentId: json['parent_id']?.toString(),
       userId: json['user_id']?.toString() ?? '',
       userName: json['user_name'] ?? 'Utilisateur',
       userAvatar: resolveVideoMediaUrl(json['user_avatar']),
       content: json['content'] ?? '',
+      imageUrl: resolveVideoMediaUrl(json['image_url']),
+      isCreator: json['is_creator'] == true,
+      creatorLiked: json['creator_liked'] == true,
+      likesCount: json['likes_count'] ?? 0,
+      repliesCount: json['replies_count'] ?? 0,
+      myReaction: json['my_reaction'] ?? 0,
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+    );
+  }
+
+  VideoComment copyWith({
+    bool? creatorLiked,
+    int? likesCount,
+    int? repliesCount,
+    int? myReaction,
+  }) {
+    return VideoComment(
+      id: id,
+      parentId: parentId,
+      userId: userId,
+      userName: userName,
+      userAvatar: userAvatar,
+      content: content,
+      imageUrl: imageUrl,
+      isCreator: isCreator,
+      creatorLiked: creatorLiked ?? this.creatorLiked,
+      likesCount: likesCount ?? this.likesCount,
+      repliesCount: repliesCount ?? this.repliesCount,
+      myReaction: myReaction ?? this.myReaction,
+      createdAt: createdAt,
+    );
+  }
+
+  /// Applique immédiatement une réaction avant la réponse du serveur.
+  VideoComment withReaction(int value, {required bool viewerIsCreator}) {
+    final likesDelta = (value == 1 ? 1 : 0) - (myReaction == 1 ? 1 : 0);
+    return copyWith(
+      myReaction: value,
+      likesCount: likesCount + likesDelta,
+      creatorLiked: viewerIsCreator ? value == 1 : creatorLiked,
     );
   }
 }

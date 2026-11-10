@@ -9,7 +9,32 @@ const CLOUDINARY_VIDEO_PATH = '/video/upload/';
 // Au-delà, Cloudinary ne transforme plus une vidéo à la volée sur l'offre gratuite
 const MAX_TRANSFORMED_VIDEO_BYTES = 40 * 1024 * 1024;
 const MAX_VIDEO_SECONDS = 600;
+const COMMENT_SORTS = {
+    recent: 'c.created_at DESC, c.id DESC',
+    top: 'likes_count DESC, c.created_at DESC, c.id DESC',
+};
+const MAX_REPLIES = 100;
 const REPORT_REASONS = ['spam', 'arnaque', 'contenu_choquant', 'contrefacon', 'autre'];
+
+/** Commentaire complet tel que vu par l'utilisateur placé dans le paramètre SQL indiqué. */
+function commentSelect(viewerParam) {
+    return `
+        SELECT c.id, c.video_id, c.user_id, c.parent_id, c.content, c.image_url, c.created_at,
+               u.name AS user_name, u.avatar_url AS user_avatar,
+               c.user_id = v.user_id AS is_creator,
+               (SELECT COUNT(*)::int FROM video_comment_reactions r
+                WHERE r.comment_id = c.id AND r.value = 1) AS likes_count,
+               COALESCE((SELECT r.value::int FROM video_comment_reactions r
+                         WHERE r.comment_id = c.id AND r.user_id = ${viewerParam}), 0) AS my_reaction,
+               EXISTS(SELECT 1 FROM video_comment_reactions r
+                      WHERE r.comment_id = c.id AND r.user_id = v.user_id AND r.value = 1) AS creator_liked,
+               (SELECT COUNT(*)::int FROM video_comments reply
+                WHERE reply.parent_id = c.id AND reply.status = 'active') AS replies_count
+        FROM video_comments c
+        JOIN users u ON u.id = c.user_id
+        JOIN video_sales v ON v.id = c.video_id
+    `;
+}
 
 class VideoSalesService {
 
@@ -107,6 +132,23 @@ class VideoSalesService {
                     content VARCHAR(${COMMENT_MAX_LENGTH}) NOT NULL,
                     status VARCHAR(20) NOT NULL DEFAULT 'active',
                     created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            `);
+            await pool.query(`
+                ALTER TABLE video_comments
+                ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES video_comments(id) ON DELETE CASCADE,
+                ADD COLUMN IF NOT EXISTS image_url TEXT
+            `);
+            await pool.query(`
+                CREATE INDEX IF NOT EXISTS idx_video_comments_parent ON video_comments(parent_id)
+            `);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS video_comment_reactions (
+                    comment_id INTEGER NOT NULL REFERENCES video_comments(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    value SMALLINT NOT NULL CHECK (value IN (1, -1)),
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (comment_id, user_id)
                 )
             `);
             await pool.query(`
@@ -358,64 +400,145 @@ class VideoSalesService {
     }
 
     /**
-     * Liste paginée des commentaires visibles d'une vidéo (plus récents d'abord)
+     * Commentaires principaux d'une vidéo, paginés
+     * @param {{page?: number, limit?: number, sort?: 'recent'|'top'}} options
      */
-    async getComments(videoId, page = 1, limit = 20) {
+    async getComments(videoId, viewerId, { page = 1, limit = 20, sort = 'recent' } = {}) {
         const result = await pool.query(
-            `SELECT c.id, c.video_id, c.user_id, c.content, c.created_at,
-                    u.name AS user_name, u.avatar_url AS user_avatar
-             FROM video_comments c
-             JOIN users u ON u.id = c.user_id
-             WHERE c.video_id = $1 AND c.status = 'active'
-             ORDER BY c.created_at DESC, c.id DESC
-             LIMIT $2 OFFSET $3`,
-            [videoId, limit, (page - 1) * limit]
+            `${commentSelect('$2')}
+             WHERE c.video_id = $1 AND c.status = 'active' AND c.parent_id IS NULL
+             ORDER BY ${COMMENT_SORTS[sort] || COMMENT_SORTS.recent}
+             LIMIT $3 OFFSET $4`,
+            [videoId, viewerId, limit, (page - 1) * limit]
         );
         return result.rows;
     }
 
     /**
-     * Ajoute un commentaire sur une vidéo publiée
-     * @throws {Error} INVALID_COMMENT si le texte est vide ou trop long
+     * Réponses à un commentaire, dans l'ordre de la conversation
      */
-    async addComment(videoId, userId, rawContent) {
-        const content = typeof rawContent === 'string' ? rawContent.trim() : '';
-        if (!content || content.length > COMMENT_MAX_LENGTH) {
-            throw new Error('INVALID_COMMENT');
-        }
-        await this._getActiveVideoOwner(videoId);
-
+    async getReplies(videoId, parentId, viewerId) {
         const result = await pool.query(
-            `WITH inserted AS (
-                INSERT INTO video_comments (video_id, user_id, content)
-                VALUES ($1, $2, $3)
-                RETURNING id, video_id, user_id, content, created_at
-             )
-             SELECT inserted.*, u.name AS user_name, u.avatar_url AS user_avatar
-             FROM inserted
-             JOIN users u ON u.id = inserted.user_id`,
-            [videoId, userId, content]
+            `${commentSelect('$3')}
+             WHERE c.video_id = $1 AND c.parent_id = $2 AND c.status = 'active'
+             ORDER BY c.created_at ASC, c.id ASC
+             LIMIT ${MAX_REPLIES}`,
+            [videoId, parentId, viewerId]
+        );
+        return result.rows;
+    }
+
+    async _getCommentForViewer(commentId, viewerId) {
+        const result = await pool.query(
+            `${commentSelect('$2')} WHERE c.id = $1`,
+            [commentId, viewerId]
         );
         return result.rows[0];
     }
 
     /**
-     * Masque un commentaire (auteur du commentaire ou propriétaire de la vidéo)
+     * Rattache une réponse au commentaire principal : la conversation garde un seul niveau.
+     * @throws {Error} INVALID_PARENT si le commentaire visé n'existe pas sur cette vidéo
+     */
+    async _resolveParentId(videoId, parentId) {
+        if (!parentId) return null;
+        if (!/^\d+$/.test(String(parentId))) {
+            throw new Error('INVALID_PARENT');
+        }
+        const result = await pool.query(
+            `SELECT id, parent_id FROM video_comments
+             WHERE id = $1 AND video_id = $2 AND status = 'active'`,
+            [parentId, videoId]
+        );
+        if (result.rows.length === 0) {
+            throw new Error('INVALID_PARENT');
+        }
+        return result.rows[0].parent_id || result.rows[0].id;
+    }
+
+    /**
+     * Ajoute un commentaire, une réponse ou une image sur une vidéo publiée
+     * @throws {Error} INVALID_COMMENT si le commentaire est vide ou trop long
+     */
+    async addComment(videoId, userId, rawContent, { parentId = null, imageUrl = null } = {}) {
+        const content = typeof rawContent === 'string' ? rawContent.trim() : '';
+        if ((!content && !imageUrl) || content.length > COMMENT_MAX_LENGTH) {
+            throw new Error('INVALID_COMMENT');
+        }
+        await this._getActiveVideoOwner(videoId);
+        const rootParentId = await this._resolveParentId(videoId, parentId);
+
+        const inserted = await pool.query(
+            `INSERT INTO video_comments (video_id, user_id, content, parent_id, image_url)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id`,
+            [videoId, userId, content, rootParentId, imageUrl]
+        );
+        return this._getCommentForViewer(inserted.rows[0].id, userId);
+    }
+
+    /**
+     * Enregistre la réaction d'un utilisateur à un commentaire
+     * @param {1|-1|0} value - j'aime, je n'aime pas, ou retrait de la réaction
+     * @throws {Error} INVALID_REACTION si la valeur est inconnue, NOT_FOUND si le commentaire est absent
+     */
+    async reactToComment(videoId, commentId, userId, value) {
+        if (![1, -1, 0].includes(value)) {
+            throw new Error('INVALID_REACTION');
+        }
+        const comment = await pool.query(
+            `SELECT 1 FROM video_comments c
+             JOIN video_sales v ON v.id = c.video_id
+             WHERE c.id = $1 AND c.video_id = $2 AND c.status = 'active' AND v.status = 'active'`,
+            [commentId, videoId]
+        );
+        if (comment.rows.length === 0) {
+            throw new Error('NOT_FOUND');
+        }
+
+        if (value === 0) {
+            await pool.query(
+                'DELETE FROM video_comment_reactions WHERE comment_id = $1 AND user_id = $2',
+                [commentId, userId]
+            );
+        } else {
+            await pool.query(
+                `INSERT INTO video_comment_reactions (comment_id, user_id, value)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (comment_id, user_id) DO UPDATE SET value = EXCLUDED.value`,
+                [commentId, userId, value]
+            );
+        }
+        return this._getCommentForViewer(commentId, userId);
+    }
+
+    /**
+     * Masque un commentaire et ses réponses (auteur du commentaire ou propriétaire de la vidéo)
+     * @returns {Promise<{deleted: number}>} nombre de commentaires masqués
      */
     async deleteComment(videoId, commentId, userId) {
         const result = await pool.query(
-            `UPDATE video_comments c SET status = 'deleted'
-             FROM video_sales v
-             WHERE c.id = $1 AND c.video_id = $2 AND v.id = c.video_id
-               AND c.status = 'active'
-               AND (c.user_id = $3 OR v.user_id = $3)
-             RETURNING c.id`,
+            `WITH target AS (
+                UPDATE video_comments c SET status = 'deleted'
+                FROM video_sales v
+                WHERE c.id = $1 AND c.video_id = $2 AND v.id = c.video_id
+                  AND c.status = 'active'
+                  AND (c.user_id = $3 OR v.user_id = $3)
+                RETURNING c.id
+             ), replies AS (
+                UPDATE video_comments SET status = 'deleted'
+                WHERE parent_id IN (SELECT id FROM target) AND status = 'active'
+                RETURNING id
+             )
+             SELECT (SELECT COUNT(*) FROM target)::int AS comments,
+                    (SELECT COUNT(*) FROM replies)::int AS replies`,
             [commentId, videoId, userId]
         );
-        if (result.rows.length === 0) {
+        const { comments, replies } = result.rows[0];
+        if (comments === 0) {
             throw new Error('NOT_FOUND');
         }
-        return { success: true };
+        return { deleted: comments + replies };
     }
 
     /**
