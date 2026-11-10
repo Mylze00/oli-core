@@ -10,7 +10,7 @@ class OrderProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (status == 'cancelled') {
+    if (status == 'cancelled' || status == 'refunded') {
       return _buildCancelledBar();
     }
     if (status == 'pending') {
@@ -105,22 +105,23 @@ class OrderProgressBar extends StatelessWidget {
               size: 16,
               color: (isCompleted || isCurrent)
                   ? Colors.white
-                  : Colors.grey.shade500,
+                  : Colors.white70,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             step.label,
             style: TextStyle(
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
               color: (isCompleted || isCurrent)
-                  ? (isCurrent ? const Color(0xFF1E7DBA) : Colors.green)
-                  : Colors.grey.shade500,
+                  ? (isCurrent ? const Color(0xFF6CB8EA) : Colors.green)
+                  : Colors.white70,
             ),
             textAlign: TextAlign.center,
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            overflow: TextOverflow.fade,
           ),
         ],
       ),

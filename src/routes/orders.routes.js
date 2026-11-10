@@ -63,6 +63,11 @@ router.post("/:id/verify-delivery", orderController.verifyDelivery);
 router.post("/:id/cancel", orderController.cancel);
 
 /**
+ * POST /orders/:id/refund-request - Demander un remboursement (décision de l'administrateur)
+ */
+router.post("/:id/refund-request", orderController.requestRefund);
+
+/**
  * POST /orders/:id/pay - Simuler le paiement (DEV)
  */
 router.post("/:id/pay", orderController.pay);

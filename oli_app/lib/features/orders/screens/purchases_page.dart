@@ -6,6 +6,7 @@ import '../../../models/order_model.dart';
 import '../providers/orders_provider.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../widgets/order_progress_bar.dart';
+import '../../../core/theme/oli_glass.dart';
 
 /// Filtres de la page « Mes Achats ».
 /// Les définitions de statut sont celles des compteurs du profil (dashboard_section.dart),
@@ -69,12 +70,16 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     final ordersAsync = ref.watch(ordersProvider);
     ref.watch(exchangeRateProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.black,
+    return Container(
+      decoration: const BoxDecoration(gradient: oliBackgroundGradient),
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: Colors.white,
         elevation: 0,
-        title: Text(_title),
+        title: Text(_title, style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: ordersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -94,7 +99,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                   const SizedBox(height: 16),
                   Text(
                     _emptyMessage(),
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+                    style: TextStyle(color: OliPalette.textSecondary, fontSize: 16),
                   ),
                 ],
               ),
@@ -110,6 +115,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             },
           );
         },
+      ),
       ),
     );
   }
@@ -180,22 +186,16 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeInOut,
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(12),
-          border: isExpanded
-              ? Border.all(color: const Color(0xFF1E7DBA).withOpacity(0.4), width: 1)
-              : null,
-        ),
+        margin: const EdgeInsets.only(bottom: 14),
+        clipBehavior: Clip.antiAlias,
+        decoration: oliGlassCardDecoration(highlighted: isExpanded),
         child: Column(
           children: [
             // Header avec date et statut
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: OliPalette.hairline)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -206,7 +206,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                       const SizedBox(width: 8),
                       Icon(
                         isExpanded ? Icons.expand_less : Icons.expand_more,
-                        color: Colors.grey.shade500,
+                        color: OliPalette.textSecondary,
                         size: 20,
                       ),
                     ],
@@ -245,7 +245,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                   children: [
                     Text(
                       'Articles (${order.items.length})',
-                      style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: OliPalette.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -258,7 +258,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   '+ ${order.items.length - 1} autre${order.items.length > 2 ? 's' : ''} article${order.items.length > 2 ? 's' : ''} · Cliquez pour détails',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                  style: TextStyle(color: OliPalette.textSecondary, fontSize: 11),
                 ),
               ),
 
@@ -342,26 +342,42 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
               child: OrderProgressBar(status: order.status),
             ),
               
-            const Divider(color: Colors.white10),
-            
+            const Divider(color: OliPalette.hairline, height: 16),
+
             // Footer avec Total et Actions
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
+                  Expanded(
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Total: ${exchangeNotifier.formatProductPrice(order.totalAmount)}', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text('Total : ${exchangeNotifier.formatProductPrice(order.totalAmount)}', style: const TextStyle(color: OliPalette.blueOnDark, fontSize: 17, fontWeight: FontWeight.w800)),
                       if (order.deliveryFee > 0)
-                        Text('dont livraison: ${exchangeNotifier.formatProductPrice(order.deliveryFee)}', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                        Text('dont livraison: ${exchangeNotifier.formatProductPrice(order.deliveryFee)}', style: TextStyle(color: OliPalette.textSecondary, fontSize: 11)),
                     ],
                   ),
+                  ),
+                  const SizedBox(width: 12),
                   if (order.canCancel)
-                    TextButton(
+                    OutlinedButton(
+                      style: oliSecondaryButtonStyle(color: OliPalette.danger),
                       onPressed: () => _cancelOrder(order.id),
-                      child: const Text('Annuler', style: TextStyle(color: Colors.red, fontSize: 13)),
+                      child: const Text('Annuler'),
+                    ),
+                  if (order.isRefundUnderReview)
+                    const Text(
+                      'Remboursement\nen examen',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    )
+                  else if (order.canRequestRefund)
+                    OutlinedButton(
+                      style: oliSecondaryButtonStyle(color: OliPalette.danger),
+                      onPressed: () => _requestRefund(order.id),
+                      child: const Text('Remboursement'),
                     ),
                 ],
               ),
@@ -377,17 +393,18 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          _buildItemImage(item.imageUrl, 40),
+          _buildItemImage(item.imageUrl, 48),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text('x${item.quantity}', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                Text('x${item.quantity}', style: TextStyle(color: OliPalette.textSecondary, fontSize: 12)),
               ],
             ),
           ),
+          const SizedBox(width: 12),
           Text(exchangeNotifier.formatProductPrice(item.total), style: const TextStyle(color: Colors.white)),
         ],
       ),
@@ -414,12 +431,12 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                 const SizedBox(height: 2),
                 Text(
                   '${exchangeNotifier.formatProductPrice(item.price)} × ${item.quantity}',
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                  style: TextStyle(color: OliPalette.textSecondary, fontSize: 12),
                 ),
                 if (item.sellerName != null)
                   Text(
                     'Vendeur: ${item.sellerName}',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                    style: TextStyle(color: OliPalette.textSecondary, fontSize: 11),
                   ),
               ],
             ),
@@ -439,11 +456,11 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
       height: size,
       decoration: BoxDecoration(
         color: Colors.white10,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: imageUrl != null
           ? ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
               child: Image.network(imageUrl, fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => const Icon(Icons.image, color: Colors.grey, size: 20),
               ),
@@ -457,9 +474,9 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF1E7DBA)),
+          Icon(icon, size: 16, color: OliPalette.blueOnDark),
           const SizedBox(width: 10),
-          Text('$label: ', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+          Text('$label: ', style: TextStyle(color: OliPalette.textSecondary, fontSize: 12)),
           Expanded(
             child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500), textAlign: TextAlign.end),
           ),
@@ -478,8 +495,13 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
         color = Colors.orange;
         icon = Icons.access_time;
         break;
+      case 'paid':
+      case 'ready':
+        color = OliPalette.blueOnDark;
+        icon = Icons.check_circle_outline;
+        break;
       case 'shipped':
-        color = Colors.blue;
+        color = OliPalette.blueOnDark;
         icon = Icons.local_shipping;
         break;
       case 'delivered':
@@ -534,20 +556,32 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     }
   }
 
-  Future<void> _cancelOrder(int orderId) async {
-    final confirm = await showDialog<bool>(
+  Future<void> _requestRefund(int orderId) async {
+    final reason = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Annuler la commande ?', style: TextStyle(color: Colors.white)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Non')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Oui, annuler', style: TextStyle(color: Colors.red))),
-        ],
-      ),
+      builder: (_) => const _RefundReasonDialog(),
+    );
+    if (reason == null || !mounted) return;
+
+    final error = await ref.read(orderServiceProvider).requestRefund(orderId, reason);
+    if (!mounted) return;
+    if (error == null) ref.invalidate(ordersProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error ?? 'Demande envoyée. Un administrateur va l\'examiner.')),
+    );
+  }
+
+  Future<void> _cancelOrder(int orderId) async {
+    final confirm = await showOliConfirmDialog(
+      context,
+      title: 'Annuler la commande ?',
+      message: 'Cette action ne peut pas être annulée.',
+      confirmLabel: 'Oui, annuler',
+      cancelLabel: 'Non',
+      destructive: true,
     );
 
-    if (confirm == true) {
+    if (confirm) {
       final success = await ref.read(orderServiceProvider).cancelOrder(orderId);
       if (success) {
         ref.invalidate(ordersProvider);
@@ -556,5 +590,60 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de l\'annulation'), backgroundColor: Colors.red));
       }
     }
+  }
+}
+
+/// Saisie du motif d'une demande de remboursement
+class _RefundReasonDialog extends StatefulWidget {
+  const _RefundReasonDialog();
+
+  @override
+  State<_RefundReasonDialog> createState() => _RefundReasonDialogState();
+}
+
+class _RefundReasonDialogState extends State<_RefundReasonDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Demander un remboursement'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Un administrateur examinera votre demande. La commande reste bloquée pendant cet examen.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            maxLength: 500,
+            maxLines: 3,
+            decoration: const InputDecoration(hintText: 'Motif de votre demande'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Fermer'),
+        ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _controller,
+          builder: (context, value, _) => TextButton(
+            onPressed: value.text.trim().isEmpty
+                ? null
+                : () => Navigator.pop(context, value.text.trim()),
+            child: const Text('Envoyer'),
+          ),
+        ),
+      ],
+    );
   }
 }

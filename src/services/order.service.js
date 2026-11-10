@@ -3,6 +3,7 @@ const walletService = require('./wallet.service');
 const notificationService = require('./notification.service');
 const deliveryRepo = require('../repositories/delivery.repository');
 const exchangeRateService = require('./exchange-rate.service');
+const refundService = require('./refund.service');
 const { orderAmountToWallet } = require('../utils/order-currency');
 const pool = require('../config/db');
 const crypto = require('crypto');
@@ -255,6 +256,8 @@ class OrderService {
     }
 
     async updateStatus(orderId, status) {
+        await refundService.assertNoOpenRefund(orderId);
+
         const validStatuses = ['pending', 'paid', 'processing', 'ready', 'shipped', 'delivered', 'cancelled'];
         if (!validStatuses.includes(status)) {
             throw new Error("Statut invalide");
@@ -300,6 +303,8 @@ class OrderService {
      * Le vendeur voit le pickup_code, l'acheteur recevra le delivery_code plus tard
      */
     async markProcessing(orderId, sellerId, io = null) {
+        await refundService.assertNoOpenRefund(orderId);
+
         const order = await this._getOrderForSeller(orderId, sellerId);
 
         if (!['paid'].includes(order.status)) {
@@ -421,6 +426,8 @@ class OrderService {
      * Génère les codes s'ils n'existent pas encore (commandes créées avant le système de codes)
      */
     async markReady(orderId, sellerId, io = null) {
+        await refundService.assertNoOpenRefund(orderId);
+
         const order = await this._getOrderForSeller(orderId, sellerId);
 
         if (!['processing'].includes(order.status)) {
@@ -493,6 +500,8 @@ class OrderService {
      * Circuit B (Pick & Go) : processing → delivered directement (pas de livreur)
      */
     async verifyPickup(orderId, code, verifierId, io = null) {
+        await refundService.assertNoOpenRefund(orderId);
+
         const result = await pool.query(
             'SELECT * FROM orders WHERE id = $1', [orderId]
         );
@@ -616,6 +625,8 @@ class OrderService {
      * Circuit C (Hand Delivery) : vendeur confirme remise (status: processing → delivered)
      */
     async verifyDelivery(orderId, code, userId, io = null) {
+        await refundService.assertNoOpenRefund(orderId);
+
         // Permettre au vendeur OU à l'acheteur de vérifier
         const result = await pool.query(
             'SELECT * FROM orders WHERE id = $1', [orderId]
@@ -838,7 +849,7 @@ class OrderService {
     async cancelOrder(userId, orderId) {
         const order = await orderRepository.cancelOrder(orderId, userId);
         if (!order) {
-            throw new Error("Impossible d'annuler cette commande (déjà expédiée ou annulée)");
+            throw new Error("Impossible d'annuler cette commande : une commande payée passe par une demande de remboursement.");
         }
         return order;
     }

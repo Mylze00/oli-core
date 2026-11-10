@@ -62,7 +62,7 @@ class HelpPage extends StatelessWidget {
             ),
             _FaqItem(
               question: 'Comment demander un remboursement ?',
-              answer: 'Contactez le vendeur via la messagerie. Si aucun accord n\'est trouvé, ouvrez un litige via "Mes Achats" > "Signaler un problème".',
+              answer: 'Dans "Mes Achats", appuyez sur "Remboursement" sur votre commande et indiquez le motif. Un administrateur examine la demande et prend la décision finale.',
             ),
             _FaqItem(
               question: 'Comment ajouter un moyen de paiement ?',

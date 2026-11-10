@@ -1,4 +1,5 @@
 const orderService = require('../services/order.service');
+const refundService = require('../services/refund.service');
 
 exports.create = async (req, res) => {
     try {
@@ -60,6 +61,9 @@ exports.updateStatus = async (req, res) => {
         res.json({ message: "Statut mis à jour", order });
     } catch (error) {
         console.error("Erreur mise à jour statut:", error);
+        if (error.status === 409) {
+            return res.status(409).json({ error: error.message });
+        }
         if (error.message === "Statut invalide") {
             return res.status(400).json({ error: "Statut invalide" });
         }
@@ -81,6 +85,22 @@ exports.cancel = async (req, res) => {
             return res.status(400).json({ error: error.message });
         }
         res.status(500).json({ error: "Erreur serveur" });
+    }
+};
+
+exports.requestRefund = async (req, res) => {
+    try {
+        const orderId = parseInt(req.params.id);
+        if (!Number.isInteger(orderId)) {
+            return res.status(400).json({ error: "Commande invalide" });
+        }
+        const request = await refundService.requestRefund(
+            req.user.id, orderId, req.body?.reason, req.body?.description, req.app.get('io')
+        );
+        res.status(201).json({ message: "Demande de remboursement envoyée", request });
+    } catch (error) {
+        console.error("Erreur demande de remboursement:", error);
+        res.status(error.status || 500).json({ error: error.status ? error.message : "Erreur serveur" });
     }
 };
 
@@ -157,6 +177,9 @@ exports.verifyPickup = async (req, res) => {
         res.json({ message: "Pickup validé, colis en route", order });
     } catch (error) {
         console.error("Erreur verifyPickup:", error);
+        if (error.status === 409) {
+            return res.status(409).json({ error: error.message });
+        }
         if (error.message.includes('Accès non autorisé')) {
             return res.status(403).json({ error: error.message });
         }
@@ -179,6 +202,9 @@ exports.verifyDelivery = async (req, res) => {
         res.json({ message: "Livraison confirmée", order });
     } catch (error) {
         console.error("Erreur verifyDelivery:", error);
+        if (error.status === 409) {
+            return res.status(409).json({ error: error.message });
+        }
         if (error.message.includes('invalide')) {
             return res.status(400).json({ error: error.message });
         }

@@ -49,11 +49,13 @@ export default function Disputes() {
             setResolutionNotes('');
         } catch (error) {
             console.error("Erreur resolution:", error);
-            alert("Erreur lors de la mise à jour");
+            alert(error.response?.data?.error || "Erreur lors de la mise à jour");
         }
     };
 
     if (loading) return <div>Chargement des litiges...</div>;
+
+    const isRefundRequest = selectedDispute?.type === 'refund_request';
 
     return (
         <div>
@@ -135,6 +137,20 @@ export default function Disputes() {
                             <p><strong>Contre :</strong> {selectedDispute.target_name || 'Vendeur'}</p>
                             <p className="mt-2"><strong>Motif :</strong> {selectedDispute.reason}</p>
                             <p className="mt-1 text-gray-600">"{selectedDispute.description || 'Pas de description'}"</p>
+                            {isRefundRequest && (
+                                <div className="mt-3 border-t pt-2">
+                                    <p><strong>Demande de remboursement</strong> · commande au statut « {selectedDispute.order_status} »</p>
+                                    <p>
+                                        <strong>Montant à rembourser :</strong>{' '}
+                                        {selectedDispute.refund_estimate_fc != null
+                                            ? `${Number(selectedDispute.refund_estimate_fc).toLocaleString('fr-FR')} FC`
+                                            : 'converti au taux du jour lors de la décision'}
+                                    </p>
+                                    {!selectedDispute.can_refund && (
+                                        <p className="mt-1 text-red-600">Le remboursement n'est pas disponible à ce stade de la commande.</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {selectedDispute.status === 'open' ? (
@@ -160,13 +176,14 @@ export default function Disputes() {
                                         onClick={() => handleResolve('rejected')}
                                         className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 flex items-center"
                                     >
-                                        <XCircleIcon className="h-5 w-5 mr-1" /> Rejeter
+                                        <XCircleIcon className="h-5 w-5 mr-1" /> {isRefundRequest ? 'Refuser' : 'Rejeter'}
                                     </button>
                                     <button
                                         onClick={() => handleResolve('resolved')}
-                                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
+                                        disabled={isRefundRequest && !selectedDispute.can_refund}
+                                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        <CheckCircleIcon className="h-5 w-5 mr-1" /> Résoudre (Rembourser)
+                                        <CheckCircleIcon className="h-5 w-5 mr-1" /> {isRefundRequest ? 'Accepter et rembourser' : 'Résoudre'}
                                     </button>
                                 </div>
                             </div>

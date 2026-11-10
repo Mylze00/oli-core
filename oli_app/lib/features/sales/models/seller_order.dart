@@ -89,6 +89,7 @@ class SellerOrder {
     'shipped': 'Expédiée',
     'delivered': 'Livrée',
     'cancelled': 'Annulée',
+    'refunded': 'Remboursée',
   };
 
   String get statusLabel => statusLabels[status] ?? status;

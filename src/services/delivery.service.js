@@ -2,6 +2,7 @@ const deliveryRepo = require('../repositories/delivery.repository');
 const pool = require('../config/db');
 const walletService = require('./wallet.service');
 const { orderAmountToWallet } = require('../utils/order-currency');
+const refundService = require('./refund.service');
 
 class DeliveryService {
 
@@ -23,6 +24,8 @@ class DeliveryService {
             throw new Error("Accès réservé aux livreurs");
         }
 
+        await refundService.assertDeliveryNotFrozen(deliveryId);
+
         const delivery = await deliveryRepo.assignDeliverer(deliveryId, user.id);
         if (!delivery) {
             throw new Error("Commande non disponible ou déjà prise");
@@ -42,6 +45,8 @@ class DeliveryService {
 
         const allowed = ['picked_up', 'in_transit', 'delivered', 'cancelled'];
         if (!allowed.includes(status)) throw new Error("Statut invalide");
+
+        await refundService.assertDeliveryNotFrozen(deliveryId);
 
         const delivery = await deliveryRepo.updateStatus(deliveryId, status, lat, lng);
 

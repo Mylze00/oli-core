@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
+const refundService = require('../../services/refund.service');
+const { orderAmountToWallet } = require('../../utils/order-currency');
 
 /**
  * GET /admin/disputes
@@ -13,6 +15,10 @@ router.get('/', async (req, res) => {
         let query = `
             SELECT d.*,
                    o.id as order_ref,
+                   o.status as order_status,
+                   o.total_amount as order_total,
+                   o.exchange_rate as order_exchange_rate,
+                   o.payment_method as order_payment_method,
                    r.name as reporter_name,
                    r.phone as reporter_phone,
                    t.name as target_name
@@ -34,7 +40,14 @@ router.get('/', async (req, res) => {
         params.push(parseInt(limit), parseInt(offset));
 
         const result = await pool.query(query, params);
-        res.json(result.rows);
+        res.json(result.rows.map((dispute) => ({
+            ...dispute,
+            can_refund: refundService.canRefundStatus(dispute.order_status),
+            // Sans taux enregistré, une commande payée hors portefeuille est convertie à la décision
+            refund_estimate_fc: dispute.order_exchange_rate || dispute.order_payment_method === 'wallet'
+                ? orderAmountToWallet(dispute.order_total, dispute.order_exchange_rate)
+                : null,
+        })));
     } catch (err) {
         console.error('Erreur GET /admin/disputes:', err);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -54,6 +67,14 @@ router.patch('/:id/resolve', async (req, res) => {
             return res.status(400).json({ error: 'Statut invalide' });
         }
 
+        const dispute = await pool.query('SELECT type FROM disputes WHERE id = $1', [id]);
+        if (dispute.rows[0]?.type === 'refund_request') {
+            const decision = await refundService.decide(
+                id, req.user.id, status === 'resolved', resolution_notes, req.app.get('io')
+            );
+            return res.json({ message: 'Décision enregistrée', ...decision });
+        }
+
         await pool.query(`
             UPDATE disputes 
             SET status = $1, resolution_notes = $2, updated_at = NOW() 
@@ -63,6 +84,9 @@ router.patch('/:id/resolve', async (req, res) => {
         res.json({ message: 'Litige mis à jour' });
     } catch (err) {
         console.error('Erreur PATCH /admin/disputes/:id/resolve:', err);
+        if (err.status) {
+            return res.status(err.status).json({ error: err.message });
+        }
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });

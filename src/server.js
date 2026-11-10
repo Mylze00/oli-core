@@ -485,6 +485,11 @@ if (process.env.NODE_ENV !== 'test') {
             // Taux USD → FC figé sur chaque commande
             await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(14,4)`);
 
+            // Demandes de remboursement soumises à l'administrateur
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_refund_requests.sql'), 'utf8'
+            ));
+
             // Créer la table notifications si elle n'existe pas
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS notifications (
