@@ -25,7 +25,7 @@ router.get('/overview', async (req, res) => {
                     COUNT(*) FILTER (WHERE payment_status = 'completed') as paid,
                     COUNT(*) FILTER (WHERE payment_status = 'pending' OR payment_status IS NULL) as pending_payment,
                     COALESCE(AVG(total_amount), 0) as avg_order
-                FROM orders WHERE status != 'cancelled'
+                FROM orders WHERE status NOT IN ('cancelled', 'refunded')
             `);
             const row = r.rows[0];
             revenueStats = {
@@ -76,7 +76,7 @@ router.get('/revenue-chart', async (req, res) => {
                 COALESCE(SUM(total_amount), 0) as revenue
             FROM orders
             WHERE created_at >= NOW() - INTERVAL '${days} days'
-            AND status != 'cancelled'
+            AND status NOT IN ('cancelled', 'refunded')
             GROUP BY DATE(created_at)
             ORDER BY date ASC
         `);

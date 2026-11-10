@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ticket_model.dart';
 import '../providers/oticket_provider.dart';
+import '../../../core/theme/oli_glass.dart';
 
 /// Page plein écran d'un événement : affiche, catégories de billets et achat.
 /// Renvoie `true` à la page appelante lorsqu'un billet a été acheté.
@@ -270,24 +271,14 @@ class _EventDetailPageState extends ConsumerState<EventDetailPage> {
   }
 
   Future<void> _buy(int ticketTypeId, String name, double price) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: _surface,
-        title: const Text('Confirmer l\'achat', style: TextStyle(color: Colors.white)),
-        content: Text(
-          price > 0
-              ? 'Un billet « $name » à ${price.toStringAsFixed(0)} FC sera payé depuis votre wallet Oli.'
-              : 'Vous allez réserver un billet gratuit « $name ».',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Annuler')),
-          ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Confirmer')),
-        ],
-      ),
+    final confirmed = await showOliConfirmDialog(
+      context,
+      title: 'Confirmer l\'achat',
+      message: price > 0
+          ? 'Un billet « $name » à ${price.toStringAsFixed(0)} FC sera payé depuis votre wallet Oli.'
+          : 'Vous allez réserver un billet gratuit « $name ».',
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _buyingTypeId = ticketTypeId);
     final error = await purchaseTickets(ref, ticketTypeId, 1);

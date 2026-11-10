@@ -108,7 +108,7 @@ class OliApp extends ConsumerWidget {
       locale: context.locale,
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
-        fontFamily: 'Inter',
+        fontFamily: 'CreatoDisplay',
         useMaterial3: true,
         brightness: Brightness.light,
         primaryColor: const Color(0xFF1E7DBA),
@@ -120,7 +120,7 @@ class OliApp extends ConsumerWidget {
         ),
       ),
       darkTheme: ThemeData(
-        fontFamily: 'Inter',
+        fontFamily: 'CreatoDisplay',
         useMaterial3: true,
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF1E7DBA),

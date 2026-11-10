@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
 const { orderAmountToWallet } = require('../../utils/order-currency');
+const refundService = require('../../services/refund.service');
 
 router.get('/recent', async (req, res) => {
     try {
@@ -126,6 +127,8 @@ router.patch('/:id/status', async (req, res) => {
             return res.status(400).json({ error: 'Statut invalide' });
         }
 
+        await refundService.assertNoOpenRefund(id);
+
         await pool.query(`
             UPDATE orders 
             SET status = $1, updated_at = NOW()
@@ -159,6 +162,9 @@ router.patch('/:id/status', async (req, res) => {
         res.json({ message: 'Statut mis à jour' });
     } catch (err) {
         console.error('Erreur PATCH /admin/orders/:id/status:', err);
+        if (err.status === 409) {
+            return res.status(409).json({ error: err.message });
+        }
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });

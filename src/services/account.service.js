@@ -10,7 +10,7 @@ const pool = require('../config/db');
 const { invalidateAccountCache } = require('../middlewares/auth.middleware');
 
 /** Statuts de commande considérés comme terminés (ne bloquent pas la suppression). */
-const CLOSED_ORDER_STATUSES = ['delivered', 'cancelled'];
+const CLOSED_ORDER_STATUSES = ['delivered', 'cancelled', 'refunded'];
 
 /**
  * Vérifie que le compte peut être supprimé.

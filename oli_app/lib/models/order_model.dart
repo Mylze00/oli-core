@@ -16,6 +16,10 @@ class Order {
   /// Référence de commande Unipesa (ex: DEP_42_1748304000000)
   /// Renseignée après l'initiation d'un paiement Mobile Money.
   final String? unipesaOrderId;
+  /// État de la dernière demande de remboursement : open, resolved ou rejected.
+  final String? refundRequestStatus;
+  /// Étape de cette demande : before_shipping ou after_delivery.
+  final String? refundRequestPhase;
 
   Order({
     required this.id,
@@ -32,6 +36,8 @@ class Order {
     required this.updatedAt,
     required this.items,
     this.unipesaOrderId,
+    this.refundRequestStatus,
+    this.refundRequestPhase,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -51,6 +57,8 @@ class Order {
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       items: itemsJson.map((e) => OrderItem.fromJson(e)).toList(),
       unipesaOrderId: json['unipesa_order_id'],
+      refundRequestStatus: json['refund_request_status'],
+      refundRequestPhase: json['refund_request_phase'],
     );
   }
 
@@ -63,11 +71,28 @@ class Order {
       case 'shipped': return 'Expédiée';
       case 'delivered': return 'Livrée';
       case 'cancelled': return 'Annulée';
+      case 'refunded': return 'Remboursée';
       default: return status;
     }
   }
 
-  bool get canCancel => status == 'pending' || status == 'paid';
+  /// Seule une commande non payée s'annule directement.
+  bool get canCancel => status == 'pending';
+
+  bool get isRefundUnderReview => refundRequestStatus == 'open';
+
+  /// Une demande est possible avant l'expédition, puis une autre après la livraison.
+  bool get canRequestRefund {
+    final String phase;
+    if (status == 'paid' || status == 'processing' || status == 'ready') {
+      phase = 'before_shipping';
+    } else if (status == 'delivered') {
+      phase = 'after_delivery';
+    } else {
+      return false;
+    }
+    return refundRequestPhase != phase;
+  }
 }
 
 /// Modèle d'un item de commande

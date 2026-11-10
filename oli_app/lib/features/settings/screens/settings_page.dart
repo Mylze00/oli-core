@@ -13,6 +13,7 @@ import 'package:dio/dio.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../../auth/providers/auth_controller.dart';
 import '../../auth/screens/login_page.dart';
+import '../../../core/theme/oli_glass.dart';
 
 /// Page "Paramètres"
 class SettingsPage extends ConsumerStatefulWidget {
@@ -418,11 +419,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => Dialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
           insetPadding: const EdgeInsets.all(20),
-          child: SizedBox(
-            width: double.maxFinite,
+          child: OliGlassPanel(
             child: SingleChildScrollView(
               child: Padding(
               padding: const EdgeInsets.all(24.0),
@@ -431,67 +431,37 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Modifier profil', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 24),
                   TextField(
                     controller: usernameController,
                     style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Pseudo (Public)',
-                      hintStyle: TextStyle(color: Colors.white),
-                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
-                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 8),
-                    ),
+                    decoration: oliGlassInputDecoration('Pseudo (public)'),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
                   TextField(
                     controller: nameController,
                     style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Noms complet (Privé)',
-                      hintStyle: TextStyle(color: Colors.white),
-                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
-                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 8),
-                    ),
+                    decoration: oliGlassInputDecoration('Nom complet (privé)'),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
                   TextField(
                     controller: cityController,
                     style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Adresse de Livraison',
-                      hintStyle: TextStyle(color: Colors.white),
-                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
-                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 8),
-                    ),
+                    decoration: oliGlassInputDecoration('Adresse de livraison'),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
                   TextField(
                     controller: bioController,
                     style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: '',
-                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
-                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 8),
-                    ),
+                    decoration: oliGlassInputDecoration('Bio (facultatif)'),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 24),
                   Center(
                     child: SizedBox(
-                      width: 160,
-                      height: 40,
+                      width: double.infinity,
+                      height: 50,
                       child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2AA81A),
-                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                        ),
+                        style: oliPrimaryButtonStyle(),
                         onPressed: isLoading ? null : () async {
                           final newName = nameController.text.trim();
                           final newUsername = usernameController.text.trim();
@@ -545,8 +515,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         },
                         child: isLoading 
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Text('Validé', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                          : const Text('Enregistrer'),
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton(
+                      onPressed: isLoading ? null : () => Navigator.pop(dialogContext),
+                      child: const Text('Annuler', style: TextStyle(color: OliPalette.textSecondary, fontSize: 15)),
                     ),
                   ),
                 ],

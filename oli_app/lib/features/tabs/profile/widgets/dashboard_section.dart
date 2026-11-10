@@ -10,8 +10,8 @@ import '../../../sales/screens/my_sales_page.dart';
 import '../../../shop/screens/publish_article_page.dart';
 import '../../../shop/screens/my_shops_screen.dart';
 import '../../../wallet/screens/wallet_screen.dart';
-import '../../../notifications/screens/notifications_view.dart';
-import '../../../notifications/providers/notification_provider.dart';
+import '../../../cart/screens/cart_page.dart';
+import '../../../cart/providers/cart_provider.dart';
 import '../../../settings/screens/settings_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -240,7 +240,8 @@ class _BuyerGrid extends StatelessWidget {
   @override
   Widget build(BuildContext wCtx) {
     final ordersAsync = ref.watch(ordersProvider);
-    final notificationState = ref.watch(notificationProvider);
+    // Badge = nombre total d'articles dans le panier
+    final cartCount = ref.watch(cartProvider).fold<int>(0, (sum, item) => sum + item.quantity);
     // Badge = nombre réel de favoris (aucun badge s'il n'y en a pas)
     final favoritesCount = ref.watch(favoritesProvider).length;
 
@@ -292,12 +293,12 @@ class _BuyerGrid extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const FavoritesPage())),
       ),
       _DashItem(
-        icon: Icons.notifications_outlined,
-        label: 'Alertes',
-        count: notificationState.unreadCount,
+        icon: Icons.shopping_cart_outlined,
+        label: 'Panier',
+        count: cartCount,
         countColor: Colors.red,
         onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const NotificationsView())),
+            MaterialPageRoute(builder: (_) => const CartPage())),
       ),
       _DashItem(
         icon: Icons.account_balance_wallet_outlined,

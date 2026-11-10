@@ -76,6 +76,20 @@ class OrderService {
     }
   }
 
+  /// Envoie une demande de remboursement à l'administrateur.
+  /// Retourne null en cas de succès, sinon le message d'erreur à afficher.
+  Future<String?> requestRefund(int orderId, String reason) async {
+    const fallback = "Impossible d'envoyer la demande de remboursement";
+    try {
+      await _dio.post(ApiConfig.orderRefundRequest(orderId), data: {'reason': reason});
+      return null;
+    } on DioException catch (e) {
+      debugPrint('❌ Erreur demande de remboursement: $e');
+      final data = e.response?.data;
+      return data is Map ? data['error']?.toString() ?? fallback : fallback;
+    }
+  }
+
   /// Initie le paiement Mobile Money direct pour une commande (déclenche le push USSD)
   /// Retourne l'oliOrderId pour le polling de statut, ou null si échec.
   Future<Map<String, dynamic>?> payOrderMobileMoney({

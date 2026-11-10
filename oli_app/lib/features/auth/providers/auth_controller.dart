@@ -217,6 +217,12 @@ class AuthController extends StateNotifier<AuthState> {
                name: user['name'],
                avatarUrl: user['avatar_url']
              );
+             // Compte déjà renseigné sur le serveur : pas de nouveau formulaire,
+             // même sur un navigateur ou un appareil jamais utilisé.
+             final existingName = user['name']?.toString().trim() ?? '';
+             if (existingName.isNotEmpty) {
+               await _storage.setOnboardingCompleted(phone);
+             }
           }
         }
 

@@ -55,7 +55,7 @@ router.get('/overview', async (req, res) => {
                     COALESCE(SUM(total_amount) FILTER (WHERE created_at >= NOW() - INTERVAL '${days * 2} days' AND created_at < NOW() - INTERVAL '${days} days'), 0) as revenue_prev_period,
                     COUNT(*) FILTER (WHERE payment_status = 'completed') as paid_orders
                 FROM orders
-                WHERE status != 'cancelled'
+                WHERE status NOT IN ('cancelled', 'refunded')
             `);
         } catch (e) {
             console.log('[STATS] Table orders indisponible:', e.message);
@@ -209,7 +209,7 @@ router.get('/revenue', async (req, res) => {
                 COALESCE(SUM(total_amount), 0) as revenue
             FROM orders
             WHERE created_at >= NOW() - INTERVAL '${days} days'
-            AND status != 'cancelled'
+            AND status NOT IN ('cancelled', 'refunded')
             GROUP BY DATE(created_at)
             ORDER BY date ASC
         `);

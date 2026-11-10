@@ -78,7 +78,11 @@ async function getOrdersByUser(userId, limit = 50, offset = 0) {
   const safeOffset = parseInt(offset) || 0;
 
   const ordersResult = await pool.query(`
-    SELECT o.*, 
+    SELECT o.*,
+           (SELECT d.status FROM disputes d WHERE d.order_id = o.id AND d.type = 'refund_request'
+            ORDER BY d.created_at DESC LIMIT 1) AS refund_request_status,
+           (SELECT d.request_phase FROM disputes d WHERE d.order_id = o.id AND d.type = 'refund_request'
+            ORDER BY d.created_at DESC LIMIT 1) AS refund_request_phase,
            json_agg(json_build_object(
              'id', oi.id,
              'productId', oi.product_id,
@@ -129,7 +133,11 @@ async function getDeliveryOrders() {
  */
 async function getOrderById(orderId, userId) {
   const result = await pool.query(`
-    SELECT o.*, 
+    SELECT o.*,
+           (SELECT d.status FROM disputes d WHERE d.order_id = o.id AND d.type = 'refund_request'
+            ORDER BY d.created_at DESC LIMIT 1) AS refund_request_status,
+           (SELECT d.request_phase FROM disputes d WHERE d.order_id = o.id AND d.type = 'refund_request'
+            ORDER BY d.created_at DESC LIMIT 1) AS refund_request_phase,
            json_agg(json_build_object(
              'id', oi.id,
              'productId', oi.product_id,
@@ -195,7 +203,7 @@ async function cancelOrder(orderId, userId) {
   const result = await pool.query(`
     UPDATE orders 
     SET status = 'cancelled', updated_at = NOW()
-    WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'paid')
+    WHERE id = $1 AND user_id = $2 AND status = 'pending'
     RETURNING *
   `, [orderId, userId]);
 

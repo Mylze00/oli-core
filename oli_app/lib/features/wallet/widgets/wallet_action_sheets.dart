@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +12,7 @@ import '../../../features/wallet/services/biometric_service.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import 'deposit_status_dialog.dart';
 import 'withdraw_status_dialog.dart';
+import '../../../core/theme/oli_glass.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper global
@@ -191,7 +191,7 @@ class _EnvoyerSheetState extends ConsumerState<EnvoyerSheet> {
               icon: Icons.qr_code_scanner_rounded,
               title: 'Scanner un QR Code',
               subtitle: 'Scanner le QR du destinataire',
-              color: const Color(0xFF7C3AED),
+              color: const Color(0xFF1E7DBA),
               onTap: () => setState(() => _mode = 'qr'),
             ),
             const SizedBox(height: 24),
@@ -336,7 +336,7 @@ class HistoriqueSheet extends ConsumerWidget {
     return _DarkSheet(
       title: 'Historique des transactions',
       icon: Icons.bar_chart_rounded,
-      iconColor: const Color(0xFF7C3AED),
+      iconColor: const Color(0xFF1E7DBA),
       child: walletState.isLoading
           ? const Padding(
               padding: EdgeInsets.all(40),
@@ -368,7 +368,7 @@ class HistoriqueSheet extends ConsumerWidget {
                   ),
                   itemBuilder: (_, i) {
                     final tx = walletState.transactions[i];
-                    final isCredit = tx.type == 'deposit' || tx.type == 'transfer_in';
+                    final isCredit = tx.amount > 0; // le signe de l'opération vient du montant
                     final color = isCredit ? const Color(0xFF22C55E) : const Color(0xFFF87171);
                     final icon = isCredit
                         ? Icons.arrow_downward_rounded
@@ -404,25 +404,26 @@ class HistoriqueSheet extends ConsumerWidget {
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   _formatDate(tx.createdAt),
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.4),
-                                    fontSize: 11,
+                                  style: const TextStyle(
+                                    color: OliPalette.textSecondary,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ],
                             ),
                           ),
+                          const SizedBox(width: 12),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                '$sign ${tx.amount.toStringAsFixed(0)} FC',
+                                '$sign ${_formatFc(tx.amount)} FC',
                                 style: TextStyle(
                                   color: color,
                                   fontWeight: FontWeight.w800,
@@ -477,6 +478,12 @@ class HistoriqueSheet extends ConsumerWidget {
     );
   }
 
+  /// Montant sans signe, avec séparateur de milliers.
+  String _formatFc(num amount) => amount
+      .abs()
+      .toStringAsFixed(0)
+      .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ');
+
   void _showTxDetail(BuildContext context, dynamic tx, Color color, IconData icon, String sign) {
     showModalBottomSheet(
       context: context,
@@ -497,7 +504,7 @@ class HistoriqueSheet extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              '$sign ${tx.amount.toStringAsFixed(0)} FC',
+              '$sign ${_formatFc(tx.amount)} FC',
               style: TextStyle(color: color, fontSize: 32, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
@@ -930,7 +937,7 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
     return _DarkSheet(
       title: 'Scanner QR Code',
       icon: Icons.qr_code_scanner_rounded,
-      iconColor: const Color(0xFF7C3AED),
+      iconColor: const Color(0xFF1E7DBA),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -941,14 +948,14 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.4)),
+                border: Border.all(color: const Color(0xFF1E7DBA).withOpacity(0.4)),
               ),
               clipBehavior: Clip.hardEdge,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
                   if (!_isPermissionChecked)
-                    const CircularProgressIndicator(color: Color(0xFF7C3AED))
+                    const CircularProgressIndicator(color: Color(0xFF1E7DBA))
                   else if (_hasPermission && kIsWeb && !_scanStarted)
                     Column(
                       mainAxisSize: MainAxisSize.min,
@@ -957,7 +964,7 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
                         const SizedBox(height: 10),
                         TextButton(
                           onPressed: () => setState(() => _scanStarted = true),
-                          child: const Text('Activer la caméra', style: TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.bold)),
+                          child: const Text('Activer la caméra', style: TextStyle(color: Color(0xFF1E7DBA), fontWeight: FontWeight.bold)),
                         ),
                       ],
                     )
@@ -984,7 +991,7 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
                               ),
                               TextButton(
                                 onPressed: () => setState(() => _retry++),
-                                child: const Text('Réessayer', style: TextStyle(color: Color(0xFF7C3AED))),
+                                child: const Text('Réessayer', style: TextStyle(color: Color(0xFF1E7DBA))),
                               ),
                             ],
                           ),
@@ -1009,14 +1016,14 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
                         const Text('Caméra bloquée', style: TextStyle(color: Colors.white54)),
                         TextButton(
                           onPressed: () => openAppSettings(),
-                          child: const Text('Ouvrir les paramètres', style: TextStyle(color: Color(0xFF7C3AED))),
+                          child: const Text('Ouvrir les paramètres', style: TextStyle(color: Color(0xFF1E7DBA))),
                         ),
                       ],
                     ),
                   if (_hasPermission)
                     Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.8), width: 2),
+                        border: Border.all(color: const Color(0xFF1E7DBA).withOpacity(0.8), width: 2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       width: 180,
@@ -1026,7 +1033,7 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
                     Container(
                       color: Colors.black54,
                       child: const Center(
-                        child: CircularProgressIndicator(color: Color(0xFF7C3AED)),
+                        child: CircularProgressIndicator(color: Color(0xFF1E7DBA)),
                       ),
                     ),
                 ],
@@ -1103,7 +1110,7 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
             const SizedBox(height: 16),
             _ActionButton(
               label: _isLoading ? 'Envoi...' : 'Confirmer l\'envoi',
-              color: const Color(0xFF7C3AED),
+              color: const Color(0xFF1E7DBA),
               isLoading: _isLoading,
               onTap: _send,
             ),
@@ -2049,17 +2056,9 @@ class _DarkSheet extends StatelessWidget {
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxH),
-        child: ClipRRect(
+        child: OliGlassPanel(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFF0F1E2E),
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: Column(
+          child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Handle
@@ -2088,12 +2087,14 @@ class _DarkSheet extends StatelessWidget {
                           child: Icon(icon, color: iconColor, size: 20),
                         ),
                         const SizedBox(width: 14),
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],
@@ -2115,8 +2116,6 @@ class _DarkSheet extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-          ),
         ),
       ),
     );
@@ -2147,20 +2146,16 @@ class _BigOptionTile extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.28)),
-        ),
+        decoration: oliGlassCardDecoration(),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.14),
+                color: color,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: color, size: 26),
+              child: Icon(icon, color: Colors.white, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -2168,20 +2163,20 @@ class _BigOptionTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
-                      style: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15)),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16)),
                   const SizedBox(height: 3),
                   Text(subtitle,
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.4),
-                          fontSize: 12)),
+                      style: const TextStyle(
+                          color: OliPalette.textSecondary,
+                          fontSize: 13)),
                 ],
               ),
             ),
             Icon(Icons.arrow_forward_ios_rounded,
-                color: color.withOpacity(0.5), size: 16),
+                color: OliPalette.textSecondary, size: 16),
           ],
         ),
       ),

@@ -63,7 +63,8 @@ const STATUS_LABELS = {
     'ready': 'Prête pour expédition',
     'shipped': 'Expédiée',
     'delivered': 'Livrée',
-    'cancelled': 'Annulée'
+    'cancelled': 'Annulée',
+    'refunded': 'Remboursée'
 };
 
 /**
@@ -229,6 +230,8 @@ router.patch('/:id/status', requireAuth, requireSeller, async (req, res) => {
             });
         }
 
+        await require('../services/refund.service').assertNoOpenRefund(req.params.id);
+
         // Utiliser les méthodes du service pour les transitions standards
         // Elles gèrent notifications acheteur + livreur + Socket.IO
         const orderService = require('../services/order.service');
@@ -309,6 +312,9 @@ router.patch('/:id/status', requireAuth, requireSeller, async (req, res) => {
             message: `Statut mis à jour: ${STATUS_LABELS[status]}`
         });
     } catch (error) {
+        if (error.status === 409) {
+            return res.status(409).json({ error: error.message });
+        }
         console.error('Error PATCH /seller/orders/:id/status:', error);
         res.status(500).json({ error: error.message || 'Erreur mise à jour statut' });
     }
