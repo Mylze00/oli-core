@@ -9,6 +9,7 @@ import '../../../services/miniapps_page.dart';
 import '../../../oticket/pages/oticket_page.dart';
 import '../../../services/live_shopping_page.dart';
 
+import 'rotating_globe.dart';
 import 'service_glass_panel.dart';
 
 class QuickActionsRow extends ConsumerWidget {
@@ -30,10 +31,10 @@ class QuickActionsRow extends ConsumerWidget {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const AllCategoriesPage()));
               }
           }),
-          _buildImageActionCard(context, isDark, "Demande", "assets/images/megaphone_icon.png", () {
+          _buildCustomIconActionCard(context, isDark, "Demande", const _AnimatedMegaphone(), () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestProductPage()));
-          }, size: 24.0),
-          _buildQuickActionCard(context, isDark, "Service", Icons.public, Colors.blue, () {
+          }),
+          _buildCustomIconActionCard(context, isDark, "Service", const RotatingGlobe(), () {
             showDialog(
               context: context, 
               builder: (_) => const ServiceGlassPanel(),
@@ -108,6 +109,45 @@ class QuickActionsRow extends ConsumerWidget {
                   color: isDark ? Colors.white : Colors.black87,
                   fontSize: 10,
                   fontWeight: FontWeight.w500)
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomIconActionCard(BuildContext context, bool isDark, String title, Widget icon, VoidCallback? onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap ?? () {},
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.black.withOpacity(0.06),
+                shape: BoxShape.circle,
+                border: isDark ? null : Border.all(
+                  color: Colors.white,
+                  width: 1.5
+                ),
+              ),
+              child: icon,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontFamily: 'CreatoDisplay',
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -224,6 +264,52 @@ class QuickActionsRow extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Mégaphone qui donne une courte impulsion, puis reste immobile.
+class _AnimatedMegaphone extends StatefulWidget {
+  const _AnimatedMegaphone();
+
+  @override
+  State<_AnimatedMegaphone> createState() => _AnimatedMegaphoneState();
+}
+
+class _AnimatedMegaphoneState extends State<_AnimatedMegaphone> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 4700));
+
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.14), weight: 5),
+    TweenSequenceItem(tween: Tween(begin: 1.14, end: 1.0), weight: 6),
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.1), weight: 5),
+    TweenSequenceItem(tween: Tween(begin: 1.1, end: 1.0), weight: 6),
+    TweenSequenceItem(tween: ConstantTween(1.0), weight: 78),
+  ]).animate(_controller);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.of(context).disableAnimations) {
+      _controller.stop();
+      _controller.value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Image.asset('assets/images/megaphone_icon.png', width: 24, height: 24, fit: BoxFit.contain),
     );
   }
 }
