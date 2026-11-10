@@ -1,3 +1,4 @@
+import '../../core/theme/oli_glass.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../live_shopping/providers/video_feed_provider.dart';
@@ -15,6 +16,7 @@ class LiveShoppingPage extends ConsumerStatefulWidget {
 class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _commentsOpen = false;
 
   @override
   void initState() {
@@ -54,7 +56,7 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
+      appBar: _commentsOpen ? null : AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
@@ -139,6 +141,8 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
     return PageView.builder(
       controller: _pageController,
       scrollDirection: Axis.vertical,
+      // Le défilement du fil est suspendu pendant la lecture des commentaires
+      physics: _commentsOpen ? const NeverScrollableScrollPhysics() : null,
       itemCount: feedState.videos.length,
       onPageChanged: (index) {
         setState(() => _currentPage = index);
@@ -155,6 +159,7 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
           key: ValueKey(video.id),
           video: video,
           isActive: index == activeIndex,
+          onCommentsChanged: (open) => setState(() => _commentsOpen = open),
         );
       },
     );
@@ -169,13 +174,13 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFFFF6D00).withOpacity(0.1),
+              color: OliPalette.blueOnDark.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.live_tv,
               size: 64,
-              color: Color(0xFFFF6D00),
+              color: OliPalette.blueOnDark,
             ),
           ),
           const SizedBox(height: 24),
@@ -205,7 +210,7 @@ class _LiveShoppingPageState extends ConsumerState<LiveShoppingPage> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF6D00),
+              backgroundColor: OliPalette.blue,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

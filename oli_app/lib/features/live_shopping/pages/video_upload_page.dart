@@ -11,10 +11,10 @@ import 'dart:convert';
 import '../../../config/api_config.dart';
 import '../../../core/router/network/dio_provider.dart';
 import '../../../core/storage/secure_storage_service.dart';
+import '../../../core/theme/oli_glass.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../../../utils/cloudinary_helper.dart';
 
-const _accent = Color(0xFFFF6D00);
 const _megabyte = 1024 * 1024;
 const _maxVideoBytes = 50 * _megabyte;
 const _maxVideoBytesWithSound = 40 * _megabyte;
@@ -22,6 +22,7 @@ const _maxSoundBytes = 15 * _megabyte;
 
 /// Couleurs de la page selon le mode clair ou sombre de l'application.
 class _UploadColors {
+  final Color accent;
   final Color card;
   final Color border;
   final Color text;
@@ -33,6 +34,7 @@ class _UploadColors {
     final text = theme.colorScheme.onSurface;
     final isDark = theme.brightness == Brightness.dark;
     return _UploadColors._(
+      accent: isDark ? OliPalette.blueOnDark : OliPalette.blue,
       card: isDark ? const Color(0xFF1A1A2E) : Colors.white,
       border: isDark ? Colors.white10 : Colors.black12,
       text: text,
@@ -42,6 +44,7 @@ class _UploadColors {
   }
 
   const _UploadColors._({
+    required this.accent,
     required this.card,
     required this.border,
     required this.text,
@@ -369,7 +372,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   backgroundColor: colors.border,
-                  valueColor: const AlwaysStoppedAnimation<Color>(_accent),
+                  valueColor: AlwaysStoppedAnimation<Color>(colors.accent),
                   minHeight: 6,
                 ),
               ),
@@ -431,7 +434,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
           color: colors.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: video != null ? _accent : colors.border,
+            color: video != null ? colors.accent : colors.border,
             width: video != null ? 2 : 1,
           ),
         ),
@@ -439,7 +442,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: video != null
               ? [
-                  const Icon(Icons.videocam, color: _accent, size: 48),
+                  Icon(Icons.videocam, color: colors.accent, size: 48),
                   const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -454,7 +457,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                   const SizedBox(height: 4),
                   TextButton(
                     onPressed: _isUploading ? null : _pickVideo,
-                    child: const Text('Changer la vidéo', style: TextStyle(color: _accent)),
+                    child: Text('Changer la vidéo', style: TextStyle(color: colors.accent)),
                   ),
                 ]
               : [
@@ -492,7 +495,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
           SwitchListTile(
             value: value,
             onChanged: _isUploading ? null : onChanged,
-            activeColor: _accent,
+            activeColor: colors.accent,
             title: Text(title, style: TextStyle(color: colors.text, fontSize: 14, fontWeight: FontWeight.w600)),
             subtitle: Text(subtitle, style: TextStyle(color: colors.faint, fontSize: 12)),
           ),
@@ -524,7 +527,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         if (sound != null)
           Row(
             children: [
-              const Icon(Icons.music_note, color: _accent, size: 20),
+              Icon(Icons.music_note, color: colors.accent, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -546,7 +549,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
             onPressed: _isUploading ? null : _pickSound,
             icon: const Icon(Icons.library_music_outlined, size: 18),
             label: const Text('Choisir un son (MP3, WAV, M4A, AAC)'),
-            style: OutlinedButton.styleFrom(foregroundColor: _accent),
+            style: OutlinedButton.styleFrom(foregroundColor: colors.accent),
           ),
       ],
     );
@@ -564,7 +567,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       }),
       details: [
         if (_loadingProducts)
-          const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _accent))
+          Center(child: CircularProgressIndicator(strokeWidth: 2, color: colors.accent))
         else
           _buildProductSearch(colors),
         if (_selectedProduct != null) ...[
@@ -615,7 +618,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: isSelected ? _accent : colors.text,
+              color: isSelected ? colors.accent : colors.text,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),
           ),
@@ -665,7 +668,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _accent.withOpacity(0.5)),
+        border: Border.all(color: colors.accent.withOpacity(0.5)),
       ),
       child: Row(
         children: [
@@ -685,7 +688,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
                 if (price != null)
                   Text(
                     ref.read(exchangeRateProvider.notifier).formatProductPrice(price),
-                    style: const TextStyle(color: _accent, fontSize: 13, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: colors.accent, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
               ],
             ),
@@ -718,7 +721,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: _accent,
+          backgroundColor: OliPalette.blue,
           foregroundColor: Colors.white,
           disabledBackgroundColor: colors.border,
           disabledForegroundColor: colors.faint,

@@ -1,3 +1,4 @@
+import '../../../core/theme/oli_glass.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
@@ -218,7 +219,7 @@ class _ProductBottomSheetState extends ConsumerState<ProductBottomSheet> {
                             Text(
                               exchangeNotifier.formatProductPrice(video.productPrice!),
                               style: const TextStyle(
-                                color: Color(0xFFFF6D00),
+                                color: OliPalette.blueOnDark,
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -293,7 +294,7 @@ class _ProductBottomSheetState extends ConsumerState<ProductBottomSheet> {
                         icon: const Icon(Icons.add_shopping_cart, size: 18),
                         label: const Text('Ajouter au panier'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF6D00),
+                          backgroundColor: OliPalette.blue,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(

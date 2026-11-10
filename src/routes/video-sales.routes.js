@@ -158,14 +158,18 @@ router.post('/:id/like', requireAuth, async (req, res) => {
 
 /**
  * GET /api/videos/:id/comments
- * Commentaires paginés d'une vidéo
- * Query: ?page=1&limit=20
+ * Commentaires principaux paginés
+ * Query: ?page=1&limit=20&sort=recent|top
  */
 router.get('/:id/comments', requireAuth, async (req, res) => {
     try {
         const page = Math.max(parseInt(req.query.page) || 1, 1);
         const limit = Math.min(parseInt(req.query.limit) || 20, 50);
-        const comments = await videoService.getComments(req.params.id, page, limit);
+        const comments = await videoService.getComments(req.params.id, req.user.id, {
+            page,
+            limit,
+            sort: req.query.sort,
+        });
         res.json({ success: true, comments, page, limit });
     } catch (err) {
         console.error('❌ Erreur commentaires vidéo:', err.message);
@@ -174,23 +178,82 @@ router.get('/:id/comments', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /api/videos/:id/comments
- * Ajouter un commentaire
- * Body: { content }
+ * GET /api/videos/:id/comments/:commentId/replies
+ * Réponses à un commentaire
  */
-router.post('/:id/comments', requireAuth, async (req, res) => {
+router.get('/:id/comments/:commentId/replies', requireAuth, async (req, res) => {
     try {
-        const comment = await videoService.addComment(req.params.id, req.user.id, req.body?.content);
+        const replies = await videoService.getReplies(req.params.id, req.params.commentId, req.user.id);
+        res.json({ success: true, replies });
+    } catch (err) {
+        console.error('❌ Erreur réponses vidéo:', err.message);
+        res.status(500).json({ error: 'Erreur lors du chargement des réponses' });
+    }
+});
+
+/**
+ * POST /api/videos/:id/comments
+ * Ajouter un commentaire ou une réponse, avec image facultative
+ * Body (JSON ou multipart): content, parent_id, image
+ */
+router.post('/:id/comments', requireAuth, (req, res, next) => {
+    genericUpload.single('image')(req, res, function (err) {
+        if (err) {
+            console.error('❌ Multer error in /api/videos/:id/comments:', err);
+            return res.status(400).json({ error: "L'image n'a pas pu être envoyée" });
+        }
+        next();
+    });
+}, async (req, res) => {
+    try {
+        const image = req.file;
+        const isImage = image && (image.mimetype?.startsWith('image/') || image.path?.includes('/image/upload/'));
+        if (image && !isImage) {
+            return res.status(400).json({ error: 'Seules les images sont acceptées' });
+        }
+
+        const comment = await videoService.addComment(req.params.id, req.user.id, req.body?.content, {
+            parentId: req.body?.parent_id,
+            imageUrl: image ? image.path : null,
+        });
         res.status(201).json({ success: true, comment });
     } catch (err) {
         if (err.message === 'INVALID_COMMENT') {
-            return res.status(400).json({ error: 'Le commentaire doit contenir entre 1 et 500 caractères' });
+            return res.status(400).json({ error: 'Le commentaire doit contenir un texte de 500 caractères maximum ou une image' });
+        }
+        if (err.message === 'INVALID_PARENT') {
+            return res.status(400).json({ error: "Le commentaire auquel vous répondez n'existe plus" });
         }
         if (err.message === 'NOT_FOUND') {
             return res.status(404).json({ error: 'Vidéo non disponible' });
         }
         console.error('❌ Erreur ajout commentaire:', err.message);
         res.status(500).json({ error: "Erreur lors de l'ajout du commentaire" });
+    }
+});
+
+/**
+ * POST /api/videos/:id/comments/:commentId/react
+ * Body: { value: 1 | -1 | 0 }
+ */
+router.post('/:id/comments/:commentId/react', requireAuth, async (req, res) => {
+    try {
+        if (!/^\d+$/.test(req.params.commentId)) {
+            return res.status(400).json({ error: 'Identifiant de commentaire invalide' });
+        }
+        const comment = await videoService.reactToComment(
+            req.params.id, req.params.commentId, req.user.id, req.body?.value
+        );
+        res.json({ success: true, comment });
+    } catch (err) {
+        if (err.message === 'INVALID_REACTION') {
+            return res.status(400).json({ error: 'Réaction invalide' });
+        }
+        if (err.message === 'NOT_FOUND') {
+            return res.status(404).json({ error: 'Commentaire non trouvé' });
+        }
+        console.error('❌ Erreur réaction commentaire:', err.message);
+        res.status(500).json({ error: "Erreur lors de l'enregistrement de la réaction" });
     }
 });
 
@@ -203,8 +266,8 @@ router.delete('/:id/comments/:commentId', requireAuth, async (req, res) => {
         if (!/^\d+$/.test(req.params.commentId)) {
             return res.status(400).json({ error: 'Identifiant de commentaire invalide' });
         }
-        await videoService.deleteComment(req.params.id, req.params.commentId, req.user.id);
-        res.json({ success: true });
+        const result = await videoService.deleteComment(req.params.id, req.params.commentId, req.user.id);
+        res.json({ success: true, ...result });
     } catch (err) {
         if (err.message === 'NOT_FOUND') {
             return res.status(404).json({ error: 'Commentaire non trouvé ou non autorisé' });

@@ -26,3 +26,17 @@ CREATE TABLE IF NOT EXISTS video_reports (
 );
 
 CREATE INDEX IF NOT EXISTS idx_video_reports_status ON video_reports(status, created_at DESC);
+
+ALTER TABLE video_comments
+  ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES video_comments(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_video_comments_parent ON video_comments(parent_id);
+
+CREATE TABLE IF NOT EXISTS video_comment_reactions (
+  comment_id INTEGER NOT NULL REFERENCES video_comments(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  value SMALLINT NOT NULL CHECK (value IN (1, -1)),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (comment_id, user_id)
+);
