@@ -9,6 +9,7 @@ import Products from './pages/Products';
 import Orders from './pages/Orders';
 import Disputes from './pages/Disputes';
 import Videos from './pages/Videos';
+import Stickers from './pages/Stickers';
 import Shops from './pages/Shops';
 import Requests from './pages/Requests';
 import AdsManager from './pages/AdsManager';
@@ -43,6 +44,7 @@ function App() {
             <Route path="/orders" element={<Orders />} />
             <Route path="/disputes" element={<Disputes />} />
             <Route path="/videos" element={<Videos />} /> {/* 🎬 */}
+            <Route path="/stickers" element={<Stickers />} /> {/* 😀 */}
             <Route path="/ads" element={<AdsManager />} />
             <Route path="/services" element={<ServicesManager />} />
             <Route path="/ticketing" element={<Ticketing />} /> {/* 🎟️ Billetterie */}

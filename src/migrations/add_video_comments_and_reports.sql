@@ -40,3 +40,17 @@ CREATE TABLE IF NOT EXISTS video_comment_reactions (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (comment_id, user_id)
 );
+
+ALTER TABLE video_comments
+  ADD COLUMN IF NOT EXISTS is_sticker BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS stickers (
+  id SERIAL PRIMARY KEY,
+  pack VARCHAR(60) NOT NULL DEFAULT 'Oli',
+  name VARCHAR(60) NOT NULL,
+  image_url TEXT NOT NULL UNIQUE,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

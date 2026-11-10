@@ -21,6 +21,7 @@ import {
     CpuChipIcon, // 🤖 Icone pour Worker Prix
     ChartBarIcon, // 🔍 Comparateur Prix
     VideoCameraIcon, // 🎬 Modération des vidéos
+    FaceSmileIcon, // 😀 Galerie de stickers
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -36,6 +37,7 @@ const navigation = [
     { name: 'Finances (Commandes)', href: '/finances', icon: CreditCardIcon },
     { name: 'Modération', href: '/disputes', icon: ShieldCheckIcon },
     { name: 'Modération vidéos', href: '/videos', icon: VideoCameraIcon }, // 🎬
+    { name: 'Stickers', href: '/stickers', icon: FaceSmileIcon }, // 😀
     { name: 'Publicités', href: '/ads', icon: MegaphoneIcon },
     { name: 'Services', href: '/services', icon: BoltIcon }, // ✨
     { name: 'Billetterie', href: '/ticketing', icon: TicketIcon }, // 🎟️

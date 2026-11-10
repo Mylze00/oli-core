@@ -14,12 +14,19 @@ const COMMENT_SORTS = {
     top: 'likes_count DESC, c.created_at DESC, c.id DESC',
 };
 const MAX_REPLIES = 100;
+const STARTER_STICKER_BASE_URL = 'https://oli-core.web.app/stickers/oli';
+const STARTER_STICKERS = [
+    ['mbote', 'Mbote'], ['melesi', 'Melesi mingi'], ['malamu', 'Malamu mingi'],
+    ['ntalo_boni', 'Ntalo boni'], ['top', 'Top'], ['bravo', 'Bravo'],
+    ['disponible', 'Disponible'], ['j_achete', "J'achète"], ['livre', 'Bien reçu'],
+    ['promo', 'Promo'], ['merci', 'Merci'], ['je_veux', 'Je le veux'],
+];
 const REPORT_REASONS = ['spam', 'arnaque', 'contenu_choquant', 'contrefacon', 'autre'];
 
 /** Commentaire complet tel que vu par l'utilisateur placé dans le paramètre SQL indiqué. */
 function commentSelect(viewerParam) {
     return `
-        SELECT c.id, c.video_id, c.user_id, c.parent_id, c.content, c.image_url, c.created_at,
+        SELECT c.id, c.video_id, c.user_id, c.parent_id, c.content, c.image_url, c.is_sticker, c.created_at,
                u.name AS user_name, u.avatar_url AS user_avatar,
                c.user_id = v.user_id AS is_creator,
                (SELECT COUNT(*)::int FROM video_comment_reactions r
@@ -137,8 +144,32 @@ class VideoSalesService {
             await pool.query(`
                 ALTER TABLE video_comments
                 ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES video_comments(id) ON DELETE CASCADE,
-                ADD COLUMN IF NOT EXISTS image_url TEXT
+                ADD COLUMN IF NOT EXISTS image_url TEXT,
+                ADD COLUMN IF NOT EXISTS is_sticker BOOLEAN NOT NULL DEFAULT FALSE
             `);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS stickers (
+                    id SERIAL PRIMARY KEY,
+                    pack VARCHAR(60) NOT NULL DEFAULT 'Oli',
+                    name VARCHAR(60) NOT NULL,
+                    image_url TEXT NOT NULL UNIQUE,
+                    status VARCHAR(20) NOT NULL DEFAULT 'active',
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_by INTEGER REFERENCES users(id),
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            `);
+            // Un sticker de départ masqué par l'admin reste masqué aux redémarrages
+            await pool.query(
+                `INSERT INTO stickers (name, image_url, sort_order)
+                 SELECT * FROM unnest($1::varchar[], $2::text[], $3::int[])
+                 ON CONFLICT (image_url) DO NOTHING`,
+                [
+                    STARTER_STICKERS.map(([, name]) => name),
+                    STARTER_STICKERS.map(([file]) => `${STARTER_STICKER_BASE_URL}/${file}.png`),
+                    STARTER_STICKERS.map((_, index) => index),
+                ]
+            );
             await pool.query(`
                 CREATE INDEX IF NOT EXISTS idx_video_comments_parent ON video_comments(parent_id)
             `);
@@ -457,22 +488,73 @@ class VideoSalesService {
     }
 
     /**
+     * @throws {Error} INVALID_STICKER si le sticker n'est pas disponible
+     */
+    async _getActiveStickerUrl(stickerId) {
+        const isValidId = /^\d+$/.test(String(stickerId));
+        const result = isValidId
+            ? await pool.query(`SELECT image_url FROM stickers WHERE id = $1 AND status = 'active'`, [stickerId])
+            : { rows: [] };
+        if (result.rows.length === 0) {
+            throw new Error('INVALID_STICKER');
+        }
+        return result.rows[0].image_url;
+    }
+
+    /** Galerie visible par les utilisateurs */
+    async getStickers() {
+        const result = await pool.query(
+            `SELECT id, pack, name, image_url FROM stickers
+             WHERE status = 'active'
+             ORDER BY pack, sort_order, id`
+        );
+        return result.rows;
+    }
+
+    async listStickersForAdmin() {
+        const result = await pool.query('SELECT * FROM stickers ORDER BY pack, sort_order, id');
+        return result.rows;
+    }
+
+    async createSticker(imageUrl, name, pack, adminId) {
+        const result = await pool.query(
+            `INSERT INTO stickers (name, pack, image_url, created_by, sort_order)
+             VALUES ($1, $2, $3, $4, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM stickers))
+             RETURNING *`,
+            [name.slice(0, 60), (pack || '').trim().slice(0, 60) || 'Oli', imageUrl, adminId]
+        );
+        return result.rows[0];
+    }
+
+    async setStickerStatus(stickerId, status) {
+        const result = await pool.query(
+            'UPDATE stickers SET status = $1 WHERE id = $2 RETURNING *',
+            [status, stickerId]
+        );
+        if (result.rows.length === 0) {
+            throw new Error('NOT_FOUND');
+        }
+        return result.rows[0];
+    }
+
+    /**
      * Ajoute un commentaire, une réponse ou une image sur une vidéo publiée
      * @throws {Error} INVALID_COMMENT si le commentaire est vide ou trop long
      */
-    async addComment(videoId, userId, rawContent, { parentId = null, imageUrl = null } = {}) {
+    async addComment(videoId, userId, rawContent, { parentId = null, imageUrl = null, stickerId = null } = {}) {
         const content = typeof rawContent === 'string' ? rawContent.trim() : '';
-        if ((!content && !imageUrl) || content.length > COMMENT_MAX_LENGTH) {
+        const attachedImage = stickerId ? await this._getActiveStickerUrl(stickerId) : imageUrl;
+        if ((!content && !attachedImage) || content.length > COMMENT_MAX_LENGTH) {
             throw new Error('INVALID_COMMENT');
         }
         await this._getActiveVideoOwner(videoId);
         const rootParentId = await this._resolveParentId(videoId, parentId);
 
         const inserted = await pool.query(
-            `INSERT INTO video_comments (video_id, user_id, content, parent_id, image_url)
-             VALUES ($1, $2, $3, $4, $5)
+            `INSERT INTO video_comments (video_id, user_id, content, parent_id, image_url, is_sticker)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING id`,
-            [videoId, userId, content, rootParentId, imageUrl]
+            [videoId, userId, content, rootParentId, attachedImage, Boolean(stickerId)]
         );
         return this._getCommentForViewer(inserted.rows[0].id, userId);
     }
