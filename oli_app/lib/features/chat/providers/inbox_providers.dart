@@ -118,7 +118,79 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Map<String, dy
       _isLoading = false;
     }
   }
+
+  Future<Options> _authOptions() async {
+    final token = await SecureStorageService().getToken();
+    return Options(headers: {'Authorization': 'Bearer $token'});
+  }
+
+  void _updateLocal(
+    String conversationId,
+    Map<String, dynamic> Function(Map<String, dynamic>) change,
+  ) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncValue.data([
+      for (final conversation in current)
+        if (conversation['conversation_id']?.toString() == conversationId)
+          change(conversation)
+        else
+          conversation,
+    ]);
+  }
+
+  /// Retourne le message d'erreur à afficher, ou null si l'action a réussi.
+  Future<String?> setFlags(String conversationId, Map<String, bool> flags) async {
+    try {
+      await Dio().patch(
+        '${ApiConfig.baseUrl}/chat/conversations/$conversationId/state',
+        data: flags,
+        options: await _authOptions(),
+      );
+      _updateLocal(conversationId, (c) => {...c, ...flags});
+      return null;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      return data is Map ? data['error']?.toString() ?? _actionFailed : _actionFailed;
+    }
+  }
+
+  Future<String?> markRead(String conversationId) async {
+    try {
+      await Dio().post(
+        '${ApiConfig.baseUrl}/chat/conversations/$conversationId/read',
+        options: await _authOptions(),
+      );
+      _updateLocal(conversationId, (c) => {...c, 'unread_count': 0});
+      return null;
+    } on DioException {
+      return _actionFailed;
+    }
+  }
+
+  /// Retire la conversation pour cet utilisateur seulement.
+  /// La ligne disparaît tout de suite ; un échec du serveur la fait revenir.
+  Future<String?> deleteForMe(String conversationId) async {
+    final previous = state.value;
+    if (previous != null) {
+      state = AsyncValue.data(
+        previous.where((c) => c['conversation_id']?.toString() != conversationId).toList(),
+      );
+    }
+    try {
+      await Dio().delete(
+        '${ApiConfig.baseUrl}/chat/conversations/$conversationId',
+        options: await _authOptions(),
+      );
+      return null;
+    } on DioException {
+      if (previous != null) state = AsyncValue.data(previous);
+      return _actionFailed;
+    }
+  }
 }
+
+const _actionFailed = "L'action n'a pas abouti. Vérifiez votre connexion.";
 
 /// Conversations épinglées (Set de otherId)
 final pinnedConversationsProvider =

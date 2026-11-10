@@ -30,9 +30,6 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
   bool _multiSelectMode = false;
   final Set<String> _selectedConvIds = {};
 
-  // Favoris locaux (Set de otherId)
-  final Set<String> _favorites = {};
-
   @override
   void initState() {
     super.initState();
@@ -108,15 +105,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
                   tooltip: 'Supprimer la sélection',
-                  onPressed: _selectedConvIds.isEmpty ? null : () {
-                    setState(() {
-                      _multiSelectMode = false;
-                      _selectedConvIds.clear();
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Conversations supprimées')),
-                    );
-                  },
+                  onPressed: _selectedConvIds.isEmpty ? null : _deleteSelected,
                 ),
               ]
             : [
@@ -127,9 +116,13 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                     _multiSelectMode = true;
                   }),
                 ),
-                IconButton(
+                PopupMenuButton<String>(
                   icon: Icon(Icons.more_vert, color: iconColor),
-                  onPressed: () {},
+                  tooltip: 'Plus d\'options',
+                  onSelected: (_) => _markAllRead(),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'read_all', child: Text('Tout marquer comme lu')),
+                  ],
                 ),
               ],
       ),
@@ -263,9 +256,6 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, stack) => Center(child: Text("Erreur: $err")),
                 data: (allConversations) {
-                  final archived = ref.watch(archivedConversationsProvider);
-                  final pinned = ref.watch(pinnedConversationsProvider);
-
                   // 1. Filtre type (Privé / Market)
                   final filtered = allConversations.where((c) {
                     final isMarket = c['product_id'] != null || c['is_market'] == true;
@@ -279,30 +269,34 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                   // 2. Déduplication par other_id
                   final Map<String, List<Map<String, dynamic>>> grouped = {};
                   for (final c in filtered) {
-                    final key = c['other_id']?.toString() ?? 'unknown';
+                    // Market Chat : une ligne par produit. Privé : une ligne par personne.
+                    final isMarket = c['product_id'] != null || c['is_market'] == true;
+                    final key = isMarket
+                        ? 'conversation_${c['conversation_id']}'
+                        : c['other_id']?.toString() ?? 'unknown';
                     grouped.putIfAbsent(key, () => []).add(c);
                   }
                   var deduped = grouped.values.map((list) => list.first).toList();
 
                   // 3. InboxFilter
                   deduped = deduped.where((c) {
-                    final otherId = c['other_id']?.toString() ?? '';
+                    final isArchived = c['is_archived'] == true;
                     switch (_filter) {
                       case InboxFilter.all:
-                        return !archived.contains(otherId);
+                        return !isArchived;
                       case InboxFilter.unread:
-                        return (c['unread_count'] ?? 0) > 0 && !archived.contains(otherId);
+                        return (c['unread_count'] ?? 0) > 0 && !isArchived;
                       case InboxFilter.favorites:
-                        return _favorites.contains(otherId);
+                        return c['is_favorite'] == true;
                       case InboxFilter.archives:
-                        return archived.contains(otherId);
+                        return isArchived;
                     }
                   }).toList();
 
                   // 4. Tri : épinglées en premier
                   deduped.sort((a, b) {
-                    final aPin = pinned.contains(a['other_id']?.toString() ?? '');
-                    final bPin = pinned.contains(b['other_id']?.toString() ?? '');
+                    final aPin = a['is_pinned'] == true;
+                    final bPin = b['is_pinned'] == true;
                     if (aPin && !bPin) return -1;
                     if (!aPin && bPin) return 1;
                     return 0;
@@ -396,28 +390,17 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                                 ),
                               ) ?? false;
                             } else {
-                              // Swipe droite = Marquer comme lu (pas de dismiss réel)
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Row(
-                                    children: [
-                                      const Icon(Icons.mark_chat_read, color: Colors.white, size: 18),
-                                      const SizedBox(width: 8),
-                                      Text('Conversation avec ${conv['other_name'] ?? ''} marquée comme lue'),
-                                    ],
-                                  ),
-                                  backgroundColor: Colors.blue.shade700,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  duration: const Duration(seconds: 2),
-                                ),
+                              // Swipe droite = Marquer comme lu (la ligne reste affichée)
+                              _showActionResult(
+                                await ref.read(inboxConversationsProvider.notifier).markRead(convId),
+                                'Conversation avec ${conv['other_name'] ?? ''} marquée comme lue',
                               );
-                              return false; // On ne dismissreel pas la tuile
+                              return false;
                             }
                           },
                           onDismissed: (direction) {
                             // Confirmé uniquement pour endToStart (supprimer)
-                            ref.read(inboxConversationsProvider.notifier).fetchConversations();
+                            _deleteConversation(convId);
                           },
                           child: Row(
                             children: [
@@ -439,6 +422,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                                 child: ConversationTile(
                                   conversation: conv,
                                   currentUserId: user.id.toString(),
+                                  onLongPress: _multiSelectMode ? null : () => _showConversationActions(conv),
                                   onTap: () {
                                     if (_multiSelectMode) {
                                       setState(() {
@@ -468,6 +452,111 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
         ],
       ),
       floatingActionButton: null, // Le FloatingActionButton a été remplacé par le bouton "Contacts" en haut
+    );
+  }
+
+  void _showActionResult(String? error, String success) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error ?? success),
+        backgroundColor: error == null ? null : Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _deleteConversation(String conversationId) async {
+    final error = await ref.read(inboxConversationsProvider.notifier).deleteForMe(conversationId);
+    _showActionResult(error, 'Conversation supprimée pour vous');
+  }
+
+  Future<void> _deleteSelected() async {
+    final count = _selectedConvIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer la sélection'),
+        content: Text('Supprimer $count conversation${count > 1 ? 's' : ''} pour vous ? '
+            'Vos interlocuteurs gardent leur historique.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final notifier = ref.read(inboxConversationsProvider.notifier);
+    final ids = _selectedConvIds.toList();
+    setState(() {
+      _multiSelectMode = false;
+      _selectedConvIds.clear();
+    });
+    final errors = await Future.wait(ids.map(notifier.deleteForMe));
+    _showActionResult(
+      errors.firstWhere((e) => e != null, orElse: () => null),
+      'Conversations supprimées pour vous',
+    );
+  }
+
+  Future<void> _markAllRead() async {
+    final notifier = ref.read(inboxConversationsProvider.notifier);
+    final unread = (ref.read(inboxConversationsProvider).value ?? const <Map<String, dynamic>>[])
+        .where((c) => (c['unread_count'] ?? 0) > 0)
+        .map((c) => c['conversation_id'].toString())
+        .toList();
+    final errors = await Future.wait(unread.map(notifier.markRead));
+    _showActionResult(
+      errors.firstWhere((e) => e != null, orElse: () => null),
+      'Conversations marquées comme lues',
+    );
+  }
+
+  Future<void> _setFlag(String conversationId, String flag, bool value, String success) async {
+    final error = await ref.read(inboxConversationsProvider.notifier).setFlags(conversationId, {flag: value});
+    _showActionResult(error, success);
+  }
+
+  void _showConversationActions(Map<String, dynamic> conv) {
+    final id = conv['conversation_id'].toString();
+    final isPinned = conv['is_pinned'] == true;
+    final isFavorite = conv['is_favorite'] == true;
+    final isArchived = conv['is_archived'] == true;
+
+    Widget action(IconData icon, String label, VoidCallback onTap, {Color? color}) => ListTile(
+          leading: Icon(icon, color: color),
+          title: Text(label, style: TextStyle(color: color)),
+          onTap: () {
+            Navigator.pop(context);
+            onTap();
+          },
+        );
+
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            action(Icons.push_pin_outlined, isPinned ? 'Détacher' : 'Épingler',
+                () => _setFlag(id, 'is_pinned', !isPinned, isPinned ? 'Conversation détachée' : 'Conversation épinglée')),
+            action(isFavorite ? Icons.star : Icons.star_border, isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
+                () => _setFlag(id, 'is_favorite', !isFavorite, isFavorite ? 'Retirée des favoris' : 'Ajoutée aux favoris')),
+            action(Icons.archive_outlined, isArchived ? 'Désarchiver' : 'Archiver',
+                () => _setFlag(id, 'is_archived', !isArchived, isArchived ? 'Conversation désarchivée' : 'Conversation archivée')),
+            action(Icons.mark_chat_read_outlined, 'Marquer comme lu', () async {
+              _showActionResult(await ref.read(inboxConversationsProvider.notifier).markRead(id), 'Conversation marquée comme lue');
+            }),
+            action(Icons.delete_outline, 'Supprimer pour moi', () => _deleteConversation(id), color: Colors.red),
+          ],
+        ),
+      ),
     );
   }
 
@@ -610,19 +699,21 @@ class ConversationTile extends StatelessWidget {
   final Map<String, dynamic> conversation;
   final String currentUserId;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const ConversationTile({
     Key? key,
     required this.conversation,
     required this.currentUserId,
     required this.onTap,
+    this.onLongPress,
   }) : super(key: key);
 
   String _formatTimestamp(String? timestamp) {
     if (timestamp == null) return '';
     
     try {
-      final messageDate = DateTime.parse(timestamp);
+      final messageDate = DateTime.parse(timestamp).toLocal();
       final now = DateTime.now();
       final difference = now.difference(messageDate);
 
@@ -651,7 +742,7 @@ class ConversationTile extends StatelessWidget {
     final unreadCount = conversation['unread_count'] ?? 0;
     final productName = conversation['product_name'];
     final isOnline = conversation['is_online'] == true;
-    final timestamp = conversation['last_message_time'];
+    final timestamp = conversation['last_message_time'] ?? conversation['last_time'];
     final otherAvatar = conversation['other_avatar'];
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -662,6 +753,7 @@ class ConversationTile extends StatelessWidget {
           : Colors.transparent, // transparent respects the scaffold background
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
@@ -841,6 +933,10 @@ class _FilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final idleBackground = isDark ? const Color(0xFF2C2C2E) : Colors.grey.shade100;
+    final idleBorder = isDark ? Colors.white24 : Colors.grey.shade300;
+    final idleForeground = isDark ? Colors.white70 : Colors.grey.shade700;
     // On utilise un bleu foncé pour correspondre à la maquette si c'est sélectionné
     final activeColor = const Color(0xFF1565C0); 
 
@@ -850,10 +946,10 @@ class _FilterChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? activeColor : Colors.grey.shade100,
+          color: selected ? activeColor : idleBackground,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? activeColor : Colors.grey.shade300,
+            color: selected ? activeColor : idleBorder,
           ),
         ),
         child: Row(
@@ -863,7 +959,7 @@ class _FilterChip extends StatelessWidget {
               Icon(
                 icon,
                 size: 14,
-                color: selected ? Colors.white : Colors.grey.shade600,
+                color: selected ? Colors.white : idleForeground,
               ),
               const SizedBox(width: 5),
             ],
@@ -872,7 +968,7 @@ class _FilterChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                color: selected ? Colors.white : Colors.grey.shade700,
+                color: selected ? Colors.white : idleForeground,
               ),
             ),
           ],

@@ -4,7 +4,7 @@ import '../../../../providers/exchange_rate_provider.dart';
 
 /// En-tête de contexte produit dans le chat — version améliorée
 /// Affiche image HD, nom, prix, stock et boutons d'action
-class ProductContextHeader extends ConsumerWidget {
+class ProductContextHeader extends ConsumerStatefulWidget {
   final String? productName;
   final double? productPrice;
   final String? productImage;
@@ -23,11 +23,74 @@ class ProductContextHeader extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductContextHeader> createState() => _ProductContextHeaderState();
+}
+
+class _ProductContextHeaderState extends ConsumerState<ProductContextHeader> {
+  bool _isCollapsed = false;
+
+  String? get productName => widget.productName;
+  double? get productPrice => widget.productPrice;
+  String? get productImage => widget.productImage;
+  int? get stockQuantity => widget.stockQuantity;
+  VoidCallback? get onAddToCart => widget.onAddToCart;
+  VoidCallback? get onBuyNow => widget.onBuyNow;
+
+  Widget _buildCollapseButton(Color color) {
+    return IconButton(
+      tooltip: _isCollapsed ? 'Afficher le produit' : 'Réduire le produit',
+      visualDensity: VisualDensity.compact,
+      onPressed: () => setState(() => _isCollapsed = !_isCollapsed),
+      icon: Icon(_isCollapsed ? Icons.expand_more : Icons.expand_less, color: color),
+    );
+  }
+
+  /// Une seule ligne : la discussion récupère la place de la carte.
+  Widget _buildCollapsed(Color surface, Color text, Color muted, Color border, String price, Color accent) {
+    return Container(
+      padding: const EdgeInsets.only(left: 12, right: 4),
+      decoration: BoxDecoration(color: surface, border: Border(bottom: BorderSide(color: border))),
+      child: Row(
+        children: [
+          if (productImage != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.network(
+                productImage!,
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(Icons.image_not_supported, size: 20, color: muted),
+              ),
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              productName ?? 'Produit',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(price, style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 13)),
+          _buildCollapseButton(muted),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     if (productName == null && productImage == null) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
     final hasStock = stockQuantity == null || stockQuantity! > 0;
+    final isDark = theme.brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final text = isDark ? Colors.white : Colors.black87;
+    final muted = isDark ? Colors.white60 : Colors.grey.shade500;
+    final border = isDark ? Colors.white12 : Colors.grey.shade200;
     
     String formattedPrice = '';
     if (productPrice != null) {
@@ -35,10 +98,14 @@ class ProductContextHeader extends ConsumerWidget {
       formattedPrice = exchangeNotifier.formatProductPrice(productPrice!);
     }
 
+    if (_isCollapsed) {
+      return _buildCollapsed(surface, text, muted, border, formattedPrice, theme.primaryColor);
+    }
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        color: surface,
+        border: Border(bottom: BorderSide(color: border)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -83,17 +150,19 @@ class ProductContextHeader extends ConsumerWidget {
                       // Label + stock badge
                       Row(
                         children: [
-                          Icon(Icons.shopping_bag_outlined, size: 12, color: Colors.grey.shade500),
+                          Icon(Icons.shopping_bag_outlined, size: 12, color: muted),
                           const SizedBox(width: 4),
                           Text(
                             'À propos de :',
-                            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                            style: TextStyle(fontSize: 10, color: muted),
                           ),
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: hasStock ? Colors.green.shade50 : Colors.red.shade50,
+                              color: isDark
+                                  ? (hasStock ? Colors.green : Colors.red).withOpacity(0.18)
+                                  : (hasStock ? Colors.green.shade50 : Colors.red.shade50),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
@@ -112,7 +181,9 @@ class ProductContextHeader extends ConsumerWidget {
                                   hasStock ? 'En stock' : 'Rupture',
                                   style: TextStyle(
                                     fontSize: 10,
-                                    color: hasStock ? Colors.green.shade700 : Colors.red.shade700,
+                                    color: hasStock
+                                        ? (isDark ? Colors.greenAccent : Colors.green.shade700)
+                                        : (isDark ? Colors.redAccent : Colors.red.shade700),
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -127,7 +198,8 @@ class ProductContextHeader extends ConsumerWidget {
                       // Product name
                       Text(
                         productName ?? 'Produit',
-                        style: const TextStyle(
+                        style: TextStyle(
+                          color: text,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                           height: 1.2,
@@ -151,6 +223,7 @@ class ProductContextHeader extends ConsumerWidget {
                     ],
                   ),
                 ),
+                _buildCollapseButton(muted),
               ],
             ),
           ),

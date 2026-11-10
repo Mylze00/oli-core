@@ -198,10 +198,13 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
     // Threshold to cancel
     final bool isCancelling = _dragOffset < -80; 
 
+    final isDark = theme.brightness == Brightness.dark;
+    final fieldColor = isDark ? const Color(0xFF2C2C2E) : Colors.grey[100];
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -228,7 +231,7 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     height: 50,
                     decoration: BoxDecoration(
-                      color: Colors.grey[100],
+                      color: fieldColor,
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: Row(
@@ -249,7 +252,7 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
                   )
                 : Container(
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: fieldColor,
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: TextField(

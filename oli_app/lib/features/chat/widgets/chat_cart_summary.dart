@@ -69,7 +69,7 @@ class ChatCartSummary extends ConsumerWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: theme.brightness == Brightness.dark ? const Color(0xFF1A1A1A) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: theme.primaryColor.withOpacity(0.2)),
           boxShadow: [
