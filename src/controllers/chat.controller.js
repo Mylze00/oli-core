@@ -1,5 +1,10 @@
 const pool = require('../config/db');
 const { BASE_URL } = require('../config');
+const presence = require('../services/presence.service');
+
+const MAX_PINNED_CONVERSATIONS = 3;
+const CONVERSATION_FLAGS = ['is_archived', 'is_favorite', 'is_pinned'];
+const HIDDEN_BEFORE = `COALESCE(cp.hidden_at, '-infinity'::timestamptz)`;
 
 // --- HELPER FUNCTIONS ---
 const formatProductImage = (row) => {
@@ -47,8 +52,8 @@ exports.sendInitialMessage = async (req, res) => {
                 SELECT c.id FROM conversations c
                 JOIN conversation_participants cp1 ON cp1.conversation_id = c.id AND cp1.user_id = $1
                 JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id = $2
-                WHERE c.type = 'private' LIMIT 1
-            `, [senderId, recipientId]);
+                WHERE c.type = 'private' AND c.product_id IS NOT DISTINCT FROM $3 LIMIT 1
+            `, [senderId, recipientId, productId || null]);
 
             if (convCheck.rows.length > 0) {
                 conversationId = convCheck.rows[0].id;
@@ -189,11 +194,11 @@ exports.getConversations = async (req, res) => {
     const myId = req.user.id;
     try {
         const result = await pool.query(`
-            SELECT c.id as conversation_id, c.is_market, u.name as other_name, u.avatar_url as other_avatar, u.id as other_id, u.phone as other_phone,
+            SELECT c.id as conversation_id, c.is_market, cp.is_archived, cp.is_favorite, cp.is_pinned, u.name as other_name, u.avatar_url as other_avatar, u.id as other_id, u.phone as other_phone,
                 m.content as last_message, m.type as last_message_type, m.created_at as last_time, m.sender_id as last_sender_id,
                 p.id as product_id, p.name as product_name, p.price as product_price, p.images as product_images_raw,
                 f.status as friendship_status, f.requester_id,
-                (SELECT COUNT(*) FROM messages msg WHERE msg.conversation_id = c.id AND msg.is_read = false AND msg.sender_id != $1) as unread_count
+                (SELECT COUNT(*) FROM messages msg WHERE msg.conversation_id = c.id AND msg.is_read = false AND msg.sender_id != $1 AND msg.created_at > ${HIDDEN_BEFORE}) as unread_count
             FROM conversation_participants cp
             JOIN conversations c ON cp.conversation_id = c.id
             JOIN conversation_participants cp2 ON cp2.conversation_id = c.id AND cp2.user_id != $1
@@ -202,14 +207,17 @@ exports.getConversations = async (req, res) => {
                                     OR (f.requester_id = cp2.user_id AND f.addressee_id = cp.user_id)
             LEFT JOIN products p ON c.product_id = p.id
             LEFT JOIN LATERAL (SELECT content, type, created_at, sender_id FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) m ON true
-            WHERE cp.user_id = $1 ORDER BY m.created_at DESC NULLS LAST
+            WHERE cp.user_id = $1 AND (cp.hidden_at IS NULL OR m.created_at > cp.hidden_at)
+            ORDER BY cp.is_pinned DESC, m.created_at DESC NULLS LAST
         `, [myId]);
 
         const conversations = result.rows.map(row => ({
             ...row,
             product_image: formatProductImage(row),
             product_images_raw: undefined,
-            unread_count: parseInt(row.unread_count) || 0
+            unread_count: parseInt(row.unread_count) || 0,
+            last_message_time: row.last_time,
+            is_online: presence.isOnline(row.other_id)
         }));
         res.json(conversations);
     } catch (err) {
@@ -219,12 +227,148 @@ exports.getConversations = async (req, res) => {
 };
 
 /**
+ * Modifier l'état personnel d'une conversation (archivée, favorite, épinglée)
+ */
+exports.updateConversationState = async (req, res) => {
+    const myId = req.user.id;
+    const { id } = req.params;
+    const changes = CONVERSATION_FLAGS.filter((flag) => typeof req.body?.[flag] === 'boolean');
+
+    if (!/^\d+$/.test(id) || changes.length === 0) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        if (req.body.is_pinned === true) {
+            const pinned = await pool.query(
+                `SELECT COUNT(*)::int AS total FROM conversation_participants
+                 WHERE user_id = $1 AND is_pinned = TRUE AND conversation_id <> $2`,
+                [myId, id]
+            );
+            if (pinned.rows[0].total >= MAX_PINNED_CONVERSATIONS) {
+                return res.status(409).json({ error: 'Vous pouvez épingler 3 conversations au maximum' });
+            }
+        }
+
+        const assignments = changes.map((flag, index) => `${flag} = $${index + 3}`).join(', ');
+        const result = await pool.query(
+            `UPDATE conversation_participants SET ${assignments}
+             WHERE conversation_id = $1 AND user_id = $2
+             RETURNING conversation_id, is_archived, is_favorite, is_pinned`,
+            [id, myId, ...changes.map((flag) => req.body[flag])]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Conversation introuvable' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Erreur updateConversationState:', err);
+        res.status(500).json({ error: 'Erreur' });
+    }
+};
+
+/**
+ * Marquer comme lus les messages reçus dans une conversation
+ */
+exports.markConversationRead = async (req, res) => {
+    const myId = req.user.id;
+    const { id } = req.params;
+    if (!/^\d+$/.test(id)) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        const member = await pool.query(
+            'SELECT 1 FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2',
+            [id, myId]
+        );
+        if (member.rows.length === 0) {
+            return res.status(404).json({ error: 'Conversation introuvable' });
+        }
+
+        const result = await pool.query(
+            `UPDATE messages SET is_read = TRUE
+             WHERE conversation_id = $1 AND sender_id <> $2 AND is_read = FALSE
+             RETURNING sender_id`,
+            [id, myId]
+        );
+
+        const io = req.app.get('io');
+        if (io && result.rowCount > 0) {
+            io.to(`user_${result.rows[0].sender_id}`).emit('messages_read', {
+                conversation_id: Number(id),
+                reader_id: myId,
+                read_count: result.rowCount,
+            });
+        }
+        res.json({ read_count: result.rowCount });
+    } catch (err) {
+        console.error('Erreur markConversationRead:', err);
+        res.status(500).json({ error: 'Erreur' });
+    }
+};
+
+/**
+ * Retirer une conversation pour moi seul : l'autre participant garde son historique.
+ * Elle réapparaît, sans les anciens messages, si un nouveau message arrive.
+ */
+exports.deleteConversationForMe = async (req, res) => {
+    const myId = req.user.id;
+    const { id } = req.params;
+    if (!/^\d+$/.test(id)) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        const result = await pool.query(
+            `UPDATE conversation_participants
+             SET hidden_at = NOW(), is_archived = FALSE, is_favorite = FALSE, is_pinned = FALSE
+             WHERE conversation_id = $1 AND user_id = $2
+             RETURNING conversation_id`,
+            [id, myId]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Conversation introuvable' });
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erreur deleteConversationForMe:', err);
+        res.status(500).json({ error: 'Erreur' });
+    }
+};
+
+/**
+ * Savoir si un interlocuteur est connecté
+ */
+exports.getPresence = async (req, res) => {
+    const myId = req.user.id;
+    const { userId } = req.params;
+    if (!/^\d+$/.test(userId)) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        const shared = await pool.query(
+            `SELECT 1 FROM conversation_participants mine
+             JOIN conversation_participants other ON other.conversation_id = mine.conversation_id
+             WHERE mine.user_id = $1 AND other.user_id = $2
+             LIMIT 1`,
+            [myId, userId]
+        );
+        res.json({ online: shared.rows.length > 0 && presence.isOnline(userId) });
+    } catch (err) {
+        console.error('Erreur getPresence:', err);
+        res.status(500).json({ error: 'Erreur' });
+    }
+};
+
+/**
  * Récupérer les messages d'une conversation
  */
 exports.getMessages = async (req, res) => {
     const myId = req.user.id;
     const { otherUserId } = req.params;
-    const { productId, limit = 50, cursor } = req.query;
+    const { productId, scope, limit = 50, cursor } = req.query;
 
     try {
         let conversationFilter = "";
@@ -236,6 +380,15 @@ exports.getMessages = async (req, res) => {
             cursorCondition = `AND m.id < $${paramIndex}`;
             params.push(parseInt(cursor));
             paramIndex++;
+        }
+
+        // Chaque produit a sa conversation : la discussion privée reste séparée
+        if (productId && /^\d+$/.test(String(productId))) {
+            conversationFilter = `AND cp1.conversation_id IN (SELECT id FROM conversations WHERE product_id = $${paramIndex})`;
+            params.push(parseInt(productId));
+            paramIndex++;
+        } else if (scope === 'private') {
+            conversationFilter = `AND cp1.conversation_id IN (SELECT id FROM conversations WHERE product_id IS NULL)`;
         }
 
         params.push(parseInt(limit));
@@ -254,6 +407,10 @@ exports.getMessages = async (req, res) => {
                 JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
                 WHERE cp1.user_id = $1 AND cp2.user_id = $2 ${conversationFilter}
             )
+            AND m.created_at > COALESCE((
+                SELECT mine.hidden_at FROM conversation_participants mine
+                WHERE mine.conversation_id = m.conversation_id AND mine.user_id = $1
+            ), '-infinity'::timestamptz)
             ${cursorCondition} ORDER BY m.created_at DESC LIMIT $${paramIndex}
         `, params);
 

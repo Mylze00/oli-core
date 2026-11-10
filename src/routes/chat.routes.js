@@ -18,6 +18,10 @@ router.post('/upload', chatUpload.single('chat_file'), chatUploadController.uplo
 router.post('/send', chatController.sendInitialMessage);
 router.post('/messages', chatController.sendMessage);
 router.get('/conversations', chatController.getConversations);
+router.patch('/conversations/:id/state', chatController.updateConversationState);
+router.post('/conversations/:id/read', chatController.markConversationRead);
+router.delete('/conversations/:id', chatController.deleteConversationForMe);
+router.get('/presence/:userId', chatController.getPresence);
 router.get('/messages/:otherUserId', chatController.getMessages);
 
 // Recherche

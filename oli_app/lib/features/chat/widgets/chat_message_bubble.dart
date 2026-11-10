@@ -6,6 +6,7 @@ import '../../../../widgets/auto_refresh_avatar.dart';
 import 'location_message_bubble.dart';
 import 'audio_message_bubble.dart';
 import 'reaction_picker.dart';
+import 'chat_image_viewer.dart';
 import 'message_actions.dart';
 
 class ChatMessageBubble extends StatefulWidget {
@@ -215,6 +216,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
+    final isDark = theme.brightness == Brightness.dark;
 
     // ─── Metadata parsing ────────────
     String? mediaUrl;
@@ -354,7 +356,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                   decoration: BoxDecoration(
                     color: isLocation
                         ? Colors.transparent
-                        : (widget.isMe ? theme.primaryColor : Colors.white),
+                        : (widget.isMe ? theme.primaryColor : (isDark ? const Color(0xFF2C2C2E) : Colors.white)),
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: isLocation
                         ? []
@@ -384,6 +386,15 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                     padding: const EdgeInsets.only(bottom: 6.0),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
+                                      child: GestureDetector(
+                                      onTap: () {
+                                        final url = mediaUrl!;
+                                        Navigator.push(context, MaterialPageRoute(
+                                          builder: (_) => ChatImageViewer(
+                                            imageUrl: url.startsWith('http') ? url : '${ApiConfig.baseUrl}/$url',
+                                          ),
+                                        ));
+                                      },
                                       child: Image.network(
                                         mediaUrl.startsWith('http')
                                             ? mediaUrl
@@ -412,6 +423,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                           );
                                         },
                                       ),
+                                      ),
                                     ),
                                   ),
 
@@ -424,7 +436,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                   Text(
                                     widget.message['content'],
                                     style: TextStyle(
-                                      color: widget.isMe
+                                      color: widget.isMe || isDark
                                           ? Colors.white
                                           : Colors.black87,
                                       fontSize: 15,
@@ -444,7 +456,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                           timeString,
                                           style: TextStyle(
                                             fontSize: 10,
-                                            color: widget.isMe
+                                            color: widget.isMe || isDark
                                                 ? Colors.white.withOpacity(0.7)
                                                 : Colors.black38,
                                           ),

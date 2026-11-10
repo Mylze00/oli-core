@@ -65,6 +65,7 @@ final chatControllerProvider = StateNotifierProvider.family<ChatController, Chat
 });
 
 class ChatController extends StateNotifier<ChatState> {
+  int _loadRun = 0;
   final String otherUserId;
   final String? myId;
   final SocketService _socketService;
@@ -110,6 +111,14 @@ class ChatController extends StateNotifier<ChatState> {
     
     // Vérifier si le message nous concerne
     if (senderId == otherUserId || senderId == myId) {
+      // Un message d'une autre conversation avec cette personne n'a pas sa place ici
+      final incomingConversation = data['conversation_id'] ?? data['conversationId'];
+      if (incomingConversation != null &&
+          state.conversationId != null &&
+          incomingConversation.toString() != state.conversationId.toString()) {
+        return;
+      }
+
       final incomingId = data['id']?.toString();
       
       // 1. Déduplication stricte par ID (String vs Int fix)
@@ -210,16 +219,38 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
+  /// Ouvre la conversation d'un produit, ou la discussion privée sans produit.
+  Future<void> openConversation({String? productId}) async {
+    _productId = productId;
+    state = ChatState(isOtherUserOnline: state.isOtherUserOnline);
+    await Future.wait([loadMessages(), _loadPresence()]);
+  }
+
+  Future<void> _loadPresence() async {
+    try {
+      final token = await _storage.getToken();
+      final response = await _dio.get(
+        '${ApiConfig.baseUrl}/chat/presence/$otherUserId',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      if (mounted) {
+        state = state.copyWith(isOtherUserOnline: response.data['online'] == true);
+      }
+    } catch (e) {
+      debugPrint('Présence indisponible: $e');
+    }
+  }
+
   Future<void> loadMessages({String? productId}) async {
     _productId = productId ?? _productId;
+    // Seul le dernier chargement demandé peut remplir l'écran
+    final run = ++_loadRun;
     
     try {
       final token = await _storage.getToken();
       
       String url = '${ApiConfig.baseUrl}/chat/messages/$otherUserId';
-      if (_productId != null) {
-        url += '?productId=$_productId';
-      }
+      url += _productId != null ? '?productId=$_productId' : '?scope=private';
       
       // [CACHE] 1. Lecture rapide du cache SQLite
       try {
@@ -235,7 +266,7 @@ class ChatController extends StateNotifier<ChatState> {
           final messages = maps.map((m) {
             final raw = jsonDecode(m['raw_data'] as String);
             return Map<String, dynamic>.from(raw);
-          }).toList();
+          }).where((m) => m['product_id']?.toString() == _productId).toList();
           
           int? convId;
           if (messages.isNotEmpty) {
@@ -258,6 +289,8 @@ class ChatController extends StateNotifier<ChatState> {
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       
+      if (run != _loadRun) return;
+
       if (response.statusCode == 200) {
         final data = response.data;
         final messages = List<Map<String, dynamic>>.from(data['messages'] ?? []);

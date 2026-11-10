@@ -104,7 +104,7 @@ io.on('connection', (socket) => {
         socket.join(userRoom);
         console.log(`✅ Room rejointe : ${userRoom}`);
 
-        io.emit('user_online', { userId, online: true });
+        require('./services/presence.service').userConnected(io, userId);
 
         // [CONN] Les livreurs rejoignent la room « deliverers » : les annonces de
         // course leur sont envoyées à eux seuls, et non à tous les utilisateurs.
@@ -297,7 +297,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         if (userId) {
-            io.emit('user_online', { userId, online: false });
+            require('./services/presence.service').userDisconnected(io, userId);
             console.log(`❌ User ${userId} déconnecté`);
         }
     });
@@ -484,6 +484,11 @@ if (process.env.NODE_ENV !== 'test') {
 
             // Taux USD → FC figé sur chaque commande
             await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(14,4)`);
+
+            // État des conversations propre à chaque participant
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_conversation_user_state.sql'), 'utf8'
+            ));
 
             // Demandes de remboursement soumises à l'administrateur
             await pool.query(require('fs').readFileSync(

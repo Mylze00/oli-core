@@ -16,6 +16,7 @@ import '../cart/providers/cart_provider.dart';
 import '../checkout/screens/checkout_page.dart';
 import 'call_screen.dart';
 import 'socket_service.dart';
+import 'providers/inbox_providers.dart';
 import '../auth/providers/auth_controller.dart';
 import '../wallet/providers/wallet_provider.dart';
 class ChatPage extends ConsumerStatefulWidget {
@@ -62,7 +63,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
-      controller.loadMessages(productId: widget.productId);
+      controller.openConversation(productId: widget.productId);
       _scrollToBottom();
     });
   }
@@ -136,13 +137,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     });
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5), // Fond gris clair moderne
+      backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F5),
       appBar: AppBar(
         titleSpacing: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
         elevation: 1,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
@@ -157,7 +158,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               children: [
                 Text(
                   widget.otherName,
-                  style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 Text(
                   chatState.isOtherUserTyping 
@@ -205,7 +206,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: isDark ? Colors.green.withOpacity(0.18) : Colors.green.shade50,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(Icons.phone, color: Colors.green.shade600, size: 22),
@@ -241,17 +242,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: isDark ? Colors.blue.withOpacity(0.18) : Colors.blue.shade50,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(Icons.videocam, color: Colors.blue.shade600, size: 24),
               ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.black54),
-            onPressed: () {},
-          ),
+          _buildConversationMenu(chatState, isDark),
         ],
       ),
       body: Container(
@@ -461,10 +459,68 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  /// Actions de la conversation ouverte, identiques à celles de la liste.
+  Widget _buildConversationMenu(ChatState chatState, bool isDark) {
+    final conversationId = chatState.conversationId?.toString();
+    final conversations = ref.watch(inboxConversationsProvider).value ?? const <Map<String, dynamic>>[];
+    final conversation = conversations.cast<Map<String, dynamic>?>().firstWhere(
+          (c) => c?['conversation_id']?.toString() == conversationId,
+          orElse: () => null,
+        );
+    final isFavorite = conversation?['is_favorite'] == true;
+    final isArchived = conversation?['is_archived'] == true;
+
+    return PopupMenuButton<String>(
+      enabled: conversationId != null,
+      tooltip: "Plus d'options",
+      icon: Icon(Icons.more_vert, color: isDark ? Colors.white70 : Colors.black54),
+      onSelected: (action) => _runConversationAction(action, conversationId!, isFavorite, isArchived),
+      itemBuilder: (_) => [
+        PopupMenuItem(value: 'favorite', child: Text(isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris')),
+        PopupMenuItem(value: 'archive', child: Text(isArchived ? 'Désarchiver' : 'Archiver')),
+        const PopupMenuItem(value: 'delete', child: Text('Supprimer pour moi', style: TextStyle(color: Colors.red))),
+      ],
+    );
+  }
+
+  Future<void> _runConversationAction(String action, String id, bool isFavorite, bool isArchived) async {
+    final notifier = ref.read(inboxConversationsProvider.notifier);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    if (action == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Supprimer la conversation'),
+          content: const Text('La conversation sera retirée pour vous. Votre interlocuteur garde son historique.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      final error = await notifier.deleteForMe(id);
+      messenger.showSnackBar(SnackBar(content: Text(error ?? 'Conversation supprimée pour vous')));
+      if (error == null) navigator.pop();
+      return;
+    }
+
+    final String? error = action == 'favorite'
+        ? await notifier.setFlags(id, {'is_favorite': !isFavorite})
+        : await notifier.setFlags(id, {'is_archived': !isArchived});
+    messenger.showSnackBar(SnackBar(content: Text(error ?? 'Conversation mise à jour')));
+  }
+
   void _showChatTools(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1A1A1A) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
