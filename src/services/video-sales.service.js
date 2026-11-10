@@ -5,9 +5,44 @@
 const pool = require('../config/db');
 
 const COMMENT_MAX_LENGTH = 500;
+const CLOUDINARY_VIDEO_PATH = '/video/upload/';
+// Au-delà, Cloudinary ne transforme plus une vidéo à la volée sur l'offre gratuite
+const MAX_TRANSFORMED_VIDEO_BYTES = 40 * 1024 * 1024;
+const MAX_VIDEO_SECONDS = 600;
 const REPORT_REASONS = ['spam', 'arnaque', 'contenu_choquant', 'contrefacon', 'autre'];
 
 class VideoSalesService {
+
+    /**
+     * Construit l'URL diffusée : qualité optimisée par Cloudinary et, si demandé,
+     * son de la vidéo remplacé par le fichier audio envoyé.
+     *
+     * @param {{videoUrl: string, videoBytes: number, audioPublicId?: string, durationSeconds?: string|number}} media
+     * @throws {Error} AUDIO_UNAVAILABLE sans Cloudinary, AUDIO_VIDEO_TOO_LARGE au-delà de 40 Mo
+     */
+    buildPublishedVideoUrl({ videoUrl, videoBytes, audioPublicId, durationSeconds }) {
+        if (!videoUrl.includes(CLOUDINARY_VIDEO_PATH)) {
+            if (audioPublicId) throw new Error('AUDIO_UNAVAILABLE');
+            return videoUrl;
+        }
+        if (videoBytes > MAX_TRANSFORMED_VIDEO_BYTES) {
+            if (audioPublicId) throw new Error('AUDIO_VIDEO_TOO_LARGE');
+            return videoUrl;
+        }
+
+        const steps = [];
+        if (audioPublicId) {
+            const duration = parseInt(durationSeconds, 10);
+            const isValidDuration = duration > 0 && duration <= MAX_VIDEO_SECONDS;
+            steps.push('ac_none', `l_audio:${audioPublicId.replace(/\//g, ':')}`);
+            // La piste ajoutée est coupée à la longueur de la vidéo
+            if (isValidDuration) steps.push(`du_${duration}`);
+            steps.push('fl_layer_apply');
+        }
+        steps.push('q_auto');
+
+        return videoUrl.replace(CLOUDINARY_VIDEO_PATH, `${CLOUDINARY_VIDEO_PATH}${steps.join('/')}/`);
+    }
 
     /**
      * Vérifie qu'une vidéo est publiée et retourne son propriétaire.

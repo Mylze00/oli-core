@@ -24,7 +24,7 @@ if (isCloudConfigured) {
         cloudinary: cloudinary,
         params: {
             folder: "oli_app",
-            allowed_formats: ["jpg", "jpeg", "png", "webp", "mp4", "mov", "avi", "webm", "mkv", "mp3", "wav"],
+            allowed_formats: ["jpg", "jpeg", "png", "webp", "mp4", "mov", "avi", "webm", "mkv", "mp3", "wav", "m4a", "aac"],
             resource_type: "auto", // Auto-détection (image, video, audio)
         },
     });

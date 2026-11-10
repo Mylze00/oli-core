@@ -1,16 +1,65 @@
+import 'package:dropdown_search/dropdown_search.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:dropdown_search/dropdown_search.dart';
-import '../../../core/router/network/dio_provider.dart';
-import '../../../config/api_config.dart';
-import '../../../core/storage/secure_storage_service.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:video_compress/video_compress.dart';
+import 'package:video_player/video_player.dart';
+import 'dart:convert';
+import '../../../config/api_config.dart';
+import '../../../core/router/network/dio_provider.dart';
+import '../../../core/storage/secure_storage_service.dart';
+import '../../../providers/exchange_rate_provider.dart';
+import '../../../utils/cloudinary_helper.dart';
 
-/// Page d'upload de vidéo de vente
+const _accent = Color(0xFFFF6D00);
+const _megabyte = 1024 * 1024;
+const _maxVideoBytes = 50 * _megabyte;
+const _maxVideoBytesWithSound = 40 * _megabyte;
+const _maxSoundBytes = 15 * _megabyte;
+
+/// Couleurs de la page selon le mode clair ou sombre de l'application.
+class _UploadColors {
+  final Color card;
+  final Color border;
+  final Color text;
+  final Color muted;
+  final Color faint;
+
+  factory _UploadColors.of(BuildContext context) {
+    final theme = Theme.of(context);
+    final text = theme.colorScheme.onSurface;
+    final isDark = theme.brightness == Brightness.dark;
+    return _UploadColors._(
+      card: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+      border: isDark ? Colors.white10 : Colors.black12,
+      text: text,
+      muted: text.withOpacity(0.7),
+      faint: text.withOpacity(0.45),
+    );
+  }
+
+  const _UploadColors._({
+    required this.card,
+    required this.border,
+    required this.text,
+    required this.muted,
+    required this.faint,
+  });
+}
+
+/// Vidéo prête à être envoyée après compression éventuelle.
+class _PreparedVideo {
+  final List<int> bytes;
+  final String filename;
+  final int? durationSeconds;
+
+  const _PreparedVideo(this.bytes, this.filename, this.durationSeconds);
+}
+
+/// Page de publication d'une vidéo de vente
 class VideoUploadPage extends ConsumerStatefulWidget {
   const VideoUploadPage({super.key});
 
@@ -22,11 +71,20 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   XFile? _videoFile;
+  PlatformFile? _soundFile;
+  bool _linkProduct = false;
+  bool _useCustomSound = false;
   bool _isUploading = false;
-  double _uploadProgress = 0;
+  String _uploadStatus = '';
   Map<String, dynamic>? _selectedProduct;
   List<Map<String, dynamic>> _myProducts = [];
   bool _loadingProducts = false;
+
+  bool get _canPublish =>
+      _videoFile != null &&
+      !_isUploading &&
+      (!_linkProduct || _selectedProduct != null) &&
+      (!_useCustomSound || _soundFile != null);
 
   @override
   void initState() {
@@ -74,9 +132,19 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         .toList();
   }
 
+  void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.redAccent : const Color(0xFF00C853),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _pickVideo() async {
-    final picker = ImagePicker();
-    final video = await picker.pickVideo(
+    final video = await ImagePicker().pickVideo(
       source: ImageSource.gallery,
       maxDuration: const Duration(seconds: 60),
     );
@@ -85,21 +153,106 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
     }
   }
 
+  Future<void> _pickSound() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['mp3', 'wav', 'm4a', 'aac'],
+      withData: true,
+    );
+    final file = result?.files.single;
+    if (file == null || !mounted) return;
+
+    if (file.bytes == null || file.size > _maxSoundBytes) {
+      _showMessage('Le fichier son doit faire moins de 15 Mo.', isError: true);
+      return;
+    }
+    setState(() => _soundFile = file);
+  }
+
+  /// Compresse en HD sur mobile. Le navigateur envoie la vidéo telle quelle,
+  /// son optimisation étant alors assurée par Cloudinary.
+  Future<_PreparedVideo> _prepareVideo(XFile video) async {
+    if (kIsWeb) {
+      return _PreparedVideo(
+        await video.readAsBytes(),
+        video.name,
+        await _readWebDuration(video.path),
+      );
+    }
+
+    setState(() => _uploadStatus = 'Compression de la vidéo...');
+    MediaInfo? compressed;
+    try {
+      compressed = await VideoCompress.compressVideo(
+        video.path,
+        quality: VideoQuality.Res1280x720Quality,
+        deleteOrigin: false,
+        includeAudio: !_useCustomSound,
+      );
+    } catch (e) {
+      debugPrint('Compression impossible, envoi de la vidéo originale: $e');
+    }
+
+    final compressedFile = compressed?.file;
+    final durationMs = compressed?.duration;
+    final durationSeconds = durationMs != null && durationMs > 0 ? (durationMs / 1000).ceil() : null;
+
+    if (compressedFile != null && await compressedFile.length() < await video.length()) {
+      return _PreparedVideo(
+        await compressedFile.readAsBytes(),
+        compressedFile.path.split('/').last,
+        durationSeconds,
+      );
+    }
+    return _PreparedVideo(await video.readAsBytes(), video.name, durationSeconds);
+  }
+
+  Future<int?> _readWebDuration(String path) async {
+    final controller = VideoPlayerController.networkUrl(Uri.parse(path));
+    try {
+      await controller.initialize();
+      final seconds = controller.value.duration.inMilliseconds / 1000;
+      return seconds > 0 ? seconds.ceil() : null;
+    } catch (e) {
+      debugPrint('Durée de la vidéo illisible: $e');
+      return null;
+    } finally {
+      await controller.dispose();
+    }
+  }
+
+  /// Retourne le message d'erreur si la taille n'est pas acceptée.
+  String? _sizeError(int bytes) {
+    if (bytes > _maxVideoBytes) {
+      return 'La vidéo dépasse 50 Mo, choisissez-en une plus courte.';
+    }
+    if (_useCustomSound && bytes > _maxVideoBytesWithSound) {
+      return 'Avec un son ajouté, la vidéo doit faire moins de 40 Mo.';
+    }
+    return null;
+  }
+
   Future<void> _uploadVideo() async {
-    if (_videoFile == null) return;
+    final video = _videoFile;
+    if (video == null || !_canPublish) return;
 
     setState(() {
       _isUploading = true;
-      _uploadProgress = 0;
+      _uploadStatus = 'Préparation de la vidéo...';
     });
 
     try {
-      final storage = ref.read(secureStorageProvider);
-      final token = await storage.getToken();
-      
-      final uri = Uri.parse('${ApiConfig.baseUrl}/api/videos');
-      var request = http.MultipartRequest('POST', uri);
-      
+      final prepared = await _prepareVideo(video);
+      final sizeError = _sizeError(prepared.bytes.length);
+      if (sizeError != null) {
+        _showMessage(sizeError, isError: true);
+        return;
+      }
+
+      if (mounted) setState(() => _uploadStatus = 'Publication de la vidéo...');
+
+      final token = await ref.read(secureStorageProvider).getToken();
+      final request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/videos'));
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
       }
@@ -110,99 +263,76 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
       if (_descController.text.isNotEmpty) {
         request.fields['description'] = _descController.text;
       }
-      if (_selectedProduct != null) {
+      if (_linkProduct && _selectedProduct != null) {
         request.fields['product_id'] = _selectedProduct!['id'].toString();
       }
-
-      // -- COMPRESSION DE LA VIDÉO (environ 80% de réduction) --
-      setState(() => _uploadProgress = 0.1);
-
-      // video_compress n'existe pas sur le web : la vidéo y est envoyée telle quelle
-      final mediaInfo = kIsWeb
-          ? null
-          : await VideoCompress.compressVideo(
-              _videoFile!.path,
-              quality: VideoQuality.LowQuality, // Compression agressive
-              deleteOrigin: false, // Garder l'original sur l'appareil
-              includeAudio: true,
-            );
-
-      setState(() => _uploadProgress = 0.4);
-
-      // Si la compression réussit, on prend le fichier compressé, sinon l'original
-      List<int> videoBytes;
-      String filename = _videoFile!.name;
-      
-      if (mediaInfo != null && mediaInfo.file != null) {
-        videoBytes = await mediaInfo.file!.readAsBytes();
-        filename = mediaInfo.file!.path.split('/').last;
-      } else {
-        videoBytes = await _videoFile!.readAsBytes();
+      if (prepared.durationSeconds != null) {
+        request.fields['duration_seconds'] = prepared.durationSeconds.toString();
       }
 
       request.files.add(http.MultipartFile.fromBytes(
         'video',
-        videoBytes,
-        filename: filename,
+        prepared.bytes,
+        filename: prepared.filename,
       ));
-
-      setState(() => _uploadProgress = 0.6);
-
-      // Simulons une progression puisque http.MultipartRequest ne le supporte pas nativement facilement
-      setState(() => _uploadProgress = 0.5);
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-      
-      setState(() => _uploadProgress = 1.0);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎬 Vidéo publiée avec succès !'),
-            backgroundColor: Color(0xFF00C853),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        Navigator.pop(context, true); // true = refresh feed
-      } else {
-        throw Exception(response.body);
+      final sound = _soundFile;
+      if (_useCustomSound && sound != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'audio',
+          sound.bytes!,
+          filename: sound.name,
+        ));
       }
+
+      final response = await http.Response.fromStream(await request.send());
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        _showMessage(_readServerError(response.body), isError: true);
+        return;
+      }
+
+      _showMessage('🎬 Vidéo publiée avec succès !');
+      if (mounted) Navigator.pop(context, true); // true = rafraîchir le fil
     } catch (e) {
-      String message = 'Erreur lors de l\'upload';
-      try {
-        final decoded = jsonDecode(e.toString().replaceAll('Exception: ', ''));
-        message = decoded['message'] ?? decoded['error'] ?? message;
-      } catch (_) {}
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      debugPrint('Erreur publication vidéo: $e');
+      _showMessage("Erreur lors de l'envoi de la vidéo", isError: true);
+    } finally {
+      if (!kIsWeb) {
+        await VideoCompress.deleteAllCache();
       }
+      if (mounted) setState(() => _isUploading = false);
     }
+  }
 
-    if (mounted) setState(() => _isUploading = false);
+  String _readServerError(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      return (decoded['message'] ?? decoded['error'] ?? "Erreur lors de l'envoi").toString();
+    } catch (_) {
+      return "Erreur lors de l'envoi";
+    }
+  }
+
+  String? _productImage(Map<String, dynamic> product) {
+    final images = product['images'];
+    if (images is List && images.isNotEmpty) return images.first?.toString();
+    return (product['imageUrl'] ?? product['image_url'])?.toString();
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = _UploadColors.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A18),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        foregroundColor: colors.text,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.close),
+          onPressed: _isUploading ? null : () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Nouvelle vidéo',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.bold),
         ),
       ),
       body: SingleChildScrollView(
@@ -210,241 +340,390 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Sélection vidéo ──
-            GestureDetector(
-              onTap: _isUploading ? null : _pickVideo,
-              child: Container(
-                height: 200,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A2E),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _videoFile != null ? const Color(0xFFFF6D00) : Colors.white10,
-                    width: _videoFile != null ? 2 : 1,
-                  ),
-                ),
-                child: _videoFile != null
-                    ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.videocam, color: Color(0xFFFF6D00), size: 48),
-                          const SizedBox(height: 12),
-                          Text(
-                            _videoFile!.name,
-                            style: const TextStyle(color: Colors.white70, fontSize: 13),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 4),
-                          TextButton(
-                            onPressed: _isUploading ? null : _pickVideo,
-                            child: const Text(
-                              'Changer la vidéo',
-                              style: TextStyle(color: Color(0xFFFF6D00)),
-                            ),
-                          ),
-                        ],
-                      )
-                    : const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.video_call_outlined, color: Colors.white30, size: 48),
-                          SizedBox(height: 12),
-                          Text(
-                            'Sélectionner une vidéo',
-                            style: TextStyle(color: Colors.white54, fontSize: 14),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Max 60 secondes · 50MB',
-                            style: TextStyle(color: Colors.white24, fontSize: 12),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-
+            _buildVideoPicker(colors),
             const SizedBox(height: 24),
-
-            // ── Titre ──
-            const Text('Titre', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+            _buildLabel('Titre', colors),
             const SizedBox(height: 8),
-            TextField(
+            _buildTextField(
               controller: _titleController,
-              style: const TextStyle(color: Colors.white),
+              hint: 'Décrivez votre vidéo...',
+              colors: colors,
               maxLength: 150,
-              decoration: InputDecoration(
-                hintText: 'Décrivez votre vidéo...',
-                hintStyle: const TextStyle(color: Colors.white24),
-                filled: true,
-                fillColor: const Color(0xFF1A1A2E),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                counterStyle: const TextStyle(color: Colors.white24),
-              ),
             ),
-
             const SizedBox(height: 16),
-
-            // ── Description ──
-            const Text('Description (optionnel)', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+            _buildLabel('Description (optionnel)', colors),
             const SizedBox(height: 8),
-            TextField(
+            _buildTextField(
               controller: _descController,
-              style: const TextStyle(color: Colors.white),
+              hint: 'Ajoutez des détails...',
+              colors: colors,
               maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Ajoutez des détails...',
-                hintStyle: const TextStyle(color: Colors.white24),
-                filled: true,
-                fillColor: const Color(0xFF1A1A2E),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
             ),
-
-            const SizedBox(height: 24),
-
-            // ── Lier un produit ──
-            const Text('Lier un produit', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A2E),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: _loadingProducts
-                  ? const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white24)),
-                    )
-                  : Theme(
-                      data: Theme.of(context).copyWith(
-                        textTheme: const TextTheme(
-                          titleMedium: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      child: DropdownSearch<Map<String, dynamic>>(
-                        asyncItems: _searchProducts,
-                        // Le filtrage est fait par le serveur
-                        filterFn: (_, __) => true,
-                        compareFn: (i, s) => i['id']?.toString() == s['id']?.toString(),
-                        itemAsString: (Map<String, dynamic> u) => u['name']?.toString() ?? 'Produit',
-                        onChanged: (Map<String, dynamic>? data) {
-                          setState(() => _selectedProduct = data);
-                        },
-                        selectedItem: _selectedProduct,
-                        popupProps: PopupProps.menu(
-                          showSearchBox: true,
-                          isFilterOnline: true,
-                          searchFieldProps: TextFieldProps(
-                            style: const TextStyle(color: Colors.black87),
-                            decoration: InputDecoration(
-                              hintText: 'Rechercher un produit...',
-                              filled: true,
-                              fillColor: Colors.white,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            ),
-                          ),
-                          menuProps: const MenuProps(
-                            backgroundColor: Colors.white,
-                          ),
-                          itemBuilder: (context, item, isSelected) {
-                            return ListTile(
-                              title: Text(
-                                item['name']?.toString() ?? 'Produit',
-                                style: TextStyle(
-                                  color: isSelected ? const Color(0xFFFF6D00) : Colors.black87,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                              selected: isSelected,
-                              selectedTileColor: const Color(0xFFFF6D00).withOpacity(0.1),
-                            );
-                          },
-                        ),
-                        dropdownDecoratorProps: DropDownDecoratorProps(
-                          dropdownSearchDecoration: InputDecoration(
-                            hintText: 'Choisir un produit (Vidéo Simple sans produit si vide)',
-                            hintStyle: const TextStyle(color: Colors.white60),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          ),
-                          baseStyle: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ),
-            ),
-
-            const SizedBox(height: 8),
-            const Text(
-              "Recherchez dans tout le catalogue. Si le produit appartient à un autre vendeur, vous recevez 2 % de chaque vente issue de votre vidéo.",
-              style: TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-
+            const SizedBox(height: 16),
+            _buildSoundSection(colors),
+            const SizedBox(height: 16),
+            _buildProductSection(colors),
             const SizedBox(height: 32),
-
-            // ── Progress bar ──
             if (_isUploading) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
-                  value: _uploadProgress,
-                  backgroundColor: Colors.white10,
-                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF6D00)),
+                  backgroundColor: colors.border,
+                  valueColor: const AlwaysStoppedAnimation<Color>(_accent),
                   minHeight: 6,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                '${(_uploadProgress * 100).toInt()}% envoyé...',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-                textAlign: TextAlign.center,
+              Center(
+                child: Text(_uploadStatus, style: TextStyle(color: colors.muted, fontSize: 12)),
               ),
               const SizedBox(height: 16),
             ],
+            _buildPublishButton(colors),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // ── Bouton publier ──
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton.icon(
-                onPressed: _videoFile != null && !_isUploading ? _uploadVideo : null,
-                icon: _isUploading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Icon(Icons.publish, size: 20),
-                label: Text(
-                  _isUploading ? 'Publication en cours...' : 'Publier la vidéo',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6D00),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey[800],
-                  disabledForegroundColor: Colors.white38,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
+  Widget _buildLabel(String label, _UploadColors colors) {
+    return Text(
+      label,
+      style: TextStyle(color: colors.muted, fontSize: 13, fontWeight: FontWeight.w600),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hint,
+    required _UploadColors colors,
+    int? maxLength,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      enabled: !_isUploading,
+      style: TextStyle(color: colors.text),
+      maxLength: maxLength,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: colors.faint),
+        filled: true,
+        fillColor: colors.card,
+        counterStyle: TextStyle(color: colors.faint),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoPicker(_UploadColors colors) {
+    final video = _videoFile;
+    return GestureDetector(
+      onTap: _isUploading ? null : _pickVideo,
+      child: Container(
+        height: 200,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: video != null ? _accent : colors.border,
+            width: video != null ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: video != null
+              ? [
+                  const Icon(Icons.videocam, color: _accent, size: 48),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      video.name,
+                      style: TextStyle(color: colors.muted, fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextButton(
+                    onPressed: _isUploading ? null : _pickVideo,
+                    child: const Text('Changer la vidéo', style: TextStyle(color: _accent)),
+                  ),
+                ]
+              : [
+                  Icon(Icons.video_call_outlined, color: colors.faint, size: 48),
+                  const SizedBox(height: 12),
+                  Text('Sélectionner une vidéo', style: TextStyle(color: colors.muted, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Max 60 secondes · compression automatique',
+                    style: TextStyle(color: colors.faint, fontSize: 12),
+                  ),
+                ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionCard({
+    required _UploadColors colors,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required List<Widget> details,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            value: value,
+            onChanged: _isUploading ? null : onChanged,
+            activeColor: _accent,
+            title: Text(title, style: TextStyle(color: colors.text, fontSize: 14, fontWeight: FontWeight.w600)),
+            subtitle: Text(subtitle, style: TextStyle(color: colors.faint, fontSize: 12)),
+          ),
+          if (value)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: details,
               ),
             ),
-          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSoundSection(_UploadColors colors) {
+    final sound = _soundFile;
+    return _buildOptionCard(
+      colors: colors,
+      title: 'Ajouter un fichier son',
+      subtitle: _useCustomSound ? 'Ce son remplacera celui de la vidéo' : 'La vidéo garde son propre son',
+      value: _useCustomSound,
+      onChanged: (value) => setState(() {
+        _useCustomSound = value;
+        if (!value) _soundFile = null;
+      }),
+      details: [
+        if (sound != null)
+          Row(
+            children: [
+              const Icon(Icons.music_note, color: _accent, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  sound.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: colors.text, fontSize: 13),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Retirer le son',
+                icon: Icon(Icons.close, color: colors.muted, size: 20),
+                onPressed: _isUploading ? null : () => setState(() => _soundFile = null),
+              ),
+            ],
+          )
+        else
+          OutlinedButton.icon(
+            onPressed: _isUploading ? null : _pickSound,
+            icon: const Icon(Icons.library_music_outlined, size: 18),
+            label: const Text('Choisir un son (MP3, WAV, M4A, AAC)'),
+            style: OutlinedButton.styleFrom(foregroundColor: _accent),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildProductSection(_UploadColors colors) {
+    return _buildOptionCard(
+      colors: colors,
+      title: 'Relier un produit',
+      subtitle: _linkProduct ? 'Les spectateurs pourront acheter ce produit' : 'Vidéo publiée sans produit',
+      value: _linkProduct,
+      onChanged: (value) => setState(() {
+        _linkProduct = value;
+        if (!value) _selectedProduct = null;
+      }),
+      details: [
+        if (_loadingProducts)
+          const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _accent))
+        else
+          _buildProductSearch(colors),
+        if (_selectedProduct != null) ...[
+          const SizedBox(height: 12),
+          _buildSelectedProduct(_selectedProduct!, colors),
+        ],
+        const SizedBox(height: 8),
+        Text(
+          "Recherchez dans tout le catalogue. Si le produit appartient à un autre vendeur, vous recevez 2 % de chaque vente issue de votre vidéo.",
+          style: TextStyle(color: colors.faint, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProductSearch(_UploadColors colors) {
+    return DropdownSearch<Map<String, dynamic>>(
+      enabled: !_isUploading,
+      asyncItems: _searchProducts,
+      // Le filtrage est fait par le serveur
+      filterFn: (_, __) => true,
+      compareFn: (i, s) => i['id']?.toString() == s['id']?.toString(),
+      itemAsString: (product) => product['name']?.toString() ?? 'Produit',
+      onChanged: (product) => setState(() => _selectedProduct = product),
+      selectedItem: _selectedProduct,
+      popupProps: PopupProps.menu(
+        showSearchBox: true,
+        isFilterOnline: true,
+        searchFieldProps: TextFieldProps(
+          style: TextStyle(color: colors.text),
+          decoration: InputDecoration(
+            hintText: 'Rechercher un produit...',
+            hintStyle: TextStyle(color: colors.faint),
+            filled: true,
+            fillColor: colors.card,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+        ),
+        menuProps: MenuProps(backgroundColor: colors.card),
+        itemBuilder: (context, product, isSelected) => ListTile(
+          leading: _buildProductThumbnail(product, 40, colors),
+          title: Text(
+            product['name']?.toString() ?? 'Produit',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isSelected ? _accent : colors.text,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ),
+      ),
+      dropdownDecoratorProps: DropDownDecoratorProps(
+        dropdownSearchDecoration: InputDecoration(
+          hintText: 'Choisir un produit',
+          hintStyle: TextStyle(color: colors.faint),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: colors.border),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        ),
+        baseStyle: TextStyle(color: colors.text),
+      ),
+    );
+  }
+
+  /// Miniature en qualité réduite : 120 px suffisent pour un aperçu.
+  Widget _buildProductThumbnail(Map<String, dynamic> product, double size, _UploadColors colors) {
+    final image = _productImage(product);
+    final placeholder = Icon(Icons.image_outlined, color: colors.faint, size: size / 2);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: size,
+        height: size,
+        color: colors.border,
+        child: image == null
+            ? placeholder
+            : Image.network(
+                CloudinaryHelper.xsmall(image),
+                fit: BoxFit.cover,
+                cacheWidth: 120,
+                errorBuilder: (_, __, ___) => placeholder,
+              ),
+      ),
+    );
+  }
+
+  Widget _buildSelectedProduct(Map<String, dynamic> product, _UploadColors colors) {
+    ref.watch(exchangeRateProvider);
+    final price = double.tryParse(product['price']?.toString() ?? '');
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _accent.withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          _buildProductThumbnail(product, 56, colors),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Produit relié', style: TextStyle(color: colors.faint, fontSize: 11)),
+                Text(
+                  product['name']?.toString() ?? 'Produit',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: colors.text, fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                if (price != null)
+                  Text(
+                    ref.read(exchangeRateProvider.notifier).formatProductPrice(price),
+                    style: const TextStyle(color: _accent, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Retirer le produit',
+            icon: Icon(Icons.close, color: colors.muted, size: 20),
+            onPressed: _isUploading ? null : () => setState(() => _selectedProduct = null),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPublishButton(_UploadColors colors) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: ElevatedButton.icon(
+        onPressed: _canPublish ? _uploadVideo : null,
+        icon: _isUploading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              )
+            : const Icon(Icons.publish, size: 20),
+        label: Text(
+          _isUploading ? 'Publication en cours...' : 'Publier la vidéo',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _accent,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: colors.border,
+          disabledForegroundColor: colors.faint,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: 0,
         ),
       ),
     );
