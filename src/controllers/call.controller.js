@@ -1,4 +1,21 @@
 const pool = require('../config/db');
+const callLogService = require('../services/call-log.service');
+
+exports.getCallPeer = async (req, res) => {
+    const { userId } = req.params;
+    if (!/^\d+$/.test(userId)) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        const identity = await callLogService.getCallIdentity(userId);
+        if (!identity) return res.status(404).json({ error: 'Utilisateur introuvable' });
+        res.json(identity);
+    } catch (err) {
+        console.error('Erreur getCallPeer:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+};
 
 exports.getCallHistory = async (req, res) => {
     const myId = req.user.id;

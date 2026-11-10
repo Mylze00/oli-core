@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'dart:async';
@@ -7,7 +8,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
+import '../../../../widgets/verification_badge.dart';
+import '../../core/router/network/dio_provider.dart';
+import 'call_quality_monitor.dart';
 import 'socket_service.dart';
+
+const _outgoingRingTimeout = Duration(seconds: 45);
+const _incomingRingTimeout = Duration(seconds: 60);
+const _connectionTimeout = Duration(seconds: 30);
+const _reconnectionTimeout = Duration(seconds: 20);
+const _qualityCheckInterval = Duration(seconds: 3);
+const _moveMessage = 'Déplacez-vous vers un endroit mieux couvert.';
+
+/// Interlocuteur de l'appel en cours : un seul appel à la fois sur cet appareil.
+class ActiveCall {
+  ActiveCall._();
+
+  static String? peerId;
+}
 
 class CallScreen extends ConsumerStatefulWidget {
   final String otherId;
@@ -57,6 +75,24 @@ class _CallScreenState extends ConsumerState<CallScreen>
   bool _isCallActive = false;
   Timer? _timeoutTimer;
 
+  late final Future<void> _renderersReady;
+  Future<bool>? _webrtcReady;
+  final List<RTCIceCandidate> _pendingCandidates = [];
+  final CallQualityMonitor _qualityMonitor = CallQualityMonitor();
+  Timer? _connectionTimer;
+  Timer? _qualityTimer;
+  bool _hasRemoteDescription = false;
+  bool _isMediaConnected = false;
+  bool _isReconnecting = false;
+  bool _isConnectionWeak = false;
+  bool _hasRestartedConnection = false;
+  bool _isAccepting = false;
+  bool _isClosing = false;
+  bool _isCallInitiated = false;
+
+  late String _displayName;
+  BadgeType? _badgeType;
+
   // Chronomètre
   Timer? _callTimer;
   int _callSeconds = 0;
@@ -70,6 +106,8 @@ class _CallScreenState extends ConsumerState<CallScreen>
   void initState() {
     super.initState();
     _isVideoEnabled = widget.isVideoCall;
+    _displayName = widget.otherName;
+    ActiveCall.peerId = widget.otherId;
 
     _pulseController = AnimationController(
       vsync: this,
@@ -85,15 +123,38 @@ class _CallScreenState extends ConsumerState<CallScreen>
       duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
 
-    _initRenderers();
+    _renderersReady = _initRenderers();
     _setupSocketListeners();
-    
-    if (!widget.isIncoming) {
+    _loadPeerIdentity();
+
+    if (widget.isIncoming) {
+      _timeoutTimer = Timer(_incomingRingTimeout, () {
+        if (!_isCallActive) _endCallCleanup();
+      });
+    } else {
       _startOutgoingCall();
     }
 
     _playRingtone();
   }
+
+  /// Le nom et la certification viennent du serveur, jamais de l'appelant.
+  Future<void> _loadPeerIdentity() async {
+    try {
+      final response = await ref.read(dioProvider).get('/calls/peer/${widget.otherId}');
+      if (!mounted || response.data is! Map) return;
+      setState(() {
+        _displayName = response.data['name']?.toString() ?? _displayName;
+        _badgeType = VerificationBadge.fromUser(response.data);
+      });
+    } catch (e) {
+      debugPrint("Identité de l'interlocuteur non chargée: $e");
+    }
+  }
+
+  bool _isFromPeer(Map<String, dynamic> data) => data['fromId']?.toString() == widget.otherId;
+
+  Future<bool> _prepareWebRTC() => _webrtcReady ??= _setupWebRTC();
 
   Future<void> _playRingtone() async {
     try {
@@ -115,27 +176,68 @@ class _CallScreenState extends ConsumerState<CallScreen>
     await _remoteRenderer.initialize();
   }
 
-  Future<void> _setupWebRTC() async {
+  Future<bool> _setupWebRTC() async {
+    await _renderersReady;
+
     // Request permissions
     await [Permission.microphone, if (widget.isVideoCall) Permission.camera].request();
 
     // Create Peer Connection
     _peerConnection = await createPeerConnection(_iceServers);
 
+    final peerConnection = _peerConnection!;
+
+    peerConnection.onTrack = (RTCTrackEvent event) {
+      if (!mounted) return;
+      if (event.streams.isNotEmpty) {
+        setState(() {
+          _remoteStream = event.streams[0];
+          _remoteRenderer.srcObject = _remoteStream;
+        });
+      }
+    };
+
+    peerConnection.onIceCandidate = (RTCIceCandidate candidate) {
+      ref.read(socketServiceProvider).emit('webrtc_ice_candidate', {
+        'toId': widget.otherId,
+        'candidate': {
+          'candidate': candidate.candidate,
+          'sdpMid': candidate.sdpMid,
+          'sdpMLineIndex': candidate.sdpMLineIndex,
+        }
+      });
+    };
+
+    peerConnection.onIceConnectionState = _handleIceConnectionState;
+
     // Setup Local Stream
     final mediaConstraints = {
-      'audio': true,
+      'audio': kIsWeb
+          ? {'echoCancellation': true, 'noiseSuppression': true, 'autoGainControl': true}
+          : {
+              'optional': [
+                {'googNoiseSuppression': 'true'},
+                {'googEchoCancellation': 'true'},
+                {'echoCancellation': 'true'},
+                {'googAutoGainControl': 'true'},
+                {'googHighpassFilter': 'true'},
+              ],
+            },
       'video': _isVideoEnabled
           ? {
               'facingMode': 'user',
-              'width': {'ideal': 1280},
-              'height': {'ideal': 720},
+              'width': {'ideal': 640},
+              'height': {'ideal': 480},
             }
           : false,
     };
 
     try {
       _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      if (!mounted) {
+        _localStream?.getTracks().forEach((track) => track.stop());
+        return false;
+      }
       _localRenderer.srcObject = _localStream;
 
       for (final track in _localStream?.getTracks() ?? const <MediaStreamTrack>[]) {
@@ -148,139 +250,152 @@ class _CallScreenState extends ConsumerState<CallScreen>
           const SnackBar(content: Text("Impossible d'accéder au micro ou à la caméra.")),
         );
       }
+      _abortCall();
+      return false;
     }
 
-    // Handle Remote Stream
-    _peerConnection?.onTrack = (RTCTrackEvent event) {
-      if (!mounted) return;
-      if (event.streams.isNotEmpty) {
-        setState(() {
-          _remoteStream = event.streams[0];
-          _remoteRenderer.srcObject = _remoteStream;
-        });
-      }
-    };
-
-    // Handle ICE Candidates
-    _peerConnection?.onIceCandidate = (RTCIceCandidate candidate) {
-      ref.read(socketServiceProvider).emit('webrtc_ice_candidate', {
-        'toId': widget.otherId,
-        'candidate': {
-          'candidate': candidate.candidate,
-          'sdpMid': candidate.sdpMid,
-          'sdpMLineIndex': candidate.sdpMLineIndex,
-        }
-      });
-    };
+    return true;
   }
 
   void _setupSocketListeners() {
     final socket = ref.read(socketServiceProvider);
 
     socket.onCallAccepted((data) async {
-      if (mounted) {
-        setState(() {
-          _isCallActive = true;
-          _timeoutTimer?.cancel();
-        });
-        _audioPlayer.stop();
-        _pulseController.stop();
-        _startCallTimer();
+      if (!mounted || !_isFromPeer(data)) return;
+      setState(() => _isCallActive = true);
+      _timeoutTimer?.cancel();
+      _audioPlayer.stop();
+      _pulseController.stop();
+      if (widget.isVideoCall) {
+        setState(() => _isSpeakerOn = true);
+        Helper.setSpeakerphoneOn(true);
       }
+      _startConnectionWait();
+      await _createOffer();
     });
 
     socket.onCallRejected((data) {
-      if (mounted) {
-        _endCallCleanup();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['reason'] == 'blocked'
-                ? "Ce contact vous a bloqué. Votre appel ne peut pas aboutir."
-                : 'Appel refusé'),
-          ),
-        );
-      }
+      if (!mounted || !_isFromPeer(data)) return;
+      final message = switch (data['reason']) {
+        'blocked' => 'Ce contact vous a bloqué. Votre appel ne peut pas aboutir.',
+        'busy' => 'Ce correspondant est déjà en communication.',
+        _ => 'Appel refusé',
+      };
+      _endCallWithMessage(message);
     });
 
     socket.onCallCancelled((data) {
-      if (mounted) _endCallCleanup();
+      if (mounted && _isFromPeer(data)) _endCallCleanup();
     });
 
     socket.onCallEnded((data) {
-      if (mounted) _endCallCleanup();
+      if (mounted && _isFromPeer(data)) _endCallCleanup();
     });
 
     // === WebRTC Signaling ===
     socket.onWebrtcOffer((data) async {
-      if (!_isCallActive) return; // Prevent offer if call not accepted yet
+      if (!mounted || !_isCallActive || !_isFromPeer(data)) return;
       await _handleOffer(data['sdp']);
     });
 
     socket.onWebrtcAnswer((data) async {
-      if (_peerConnection == null) return;
+      if (!mounted || _peerConnection == null || !_isFromPeer(data)) return;
       try {
         final answer = RTCSessionDescription(data['sdp']['sdp'], data['sdp']['type']);
         await _peerConnection?.setRemoteDescription(answer);
+        await _applyPendingCandidates();
       } catch (e) {
         debugPrint("Set Remote Desc (Answer) error: $e");
       }
     });
 
     socket.onWebrtcIceCandidate((data) async {
-      if (_peerConnection == null) return;
+      if (!mounted || !_isFromPeer(data)) return;
+      final received = data['candidate'];
+      final candidate = RTCIceCandidate(received['candidate'], received['sdpMid'], received['sdpMLineIndex']);
+
+      // Trop tôt : le candidat sera appliqué après la description distante
+      if (_peerConnection == null || !_hasRemoteDescription) {
+        _pendingCandidates.add(candidate);
+        return;
+      }
       try {
-        final cand = data['candidate'];
-        await _peerConnection?.addCandidate(RTCIceCandidate(
-          cand['candidate'],
-          cand['sdpMid'],
-          cand['sdpMLineIndex'],
-        ));
+        await _peerConnection?.addCandidate(candidate);
       } catch (e) {
         debugPrint("Add ICE candidate error: $e");
       }
     });
   }
 
-  void _startOutgoingCall() {
-    _timeoutTimer = Timer(const Duration(seconds: 45), () {
-      if (!_isCallActive) {
-        ref.read(socketServiceProvider).emit('webrtc_call_cancel', {'toId': widget.otherId});
-        _endCallCleanup();
+  Future<void> _applyPendingCandidates() async {
+    _hasRemoteDescription = true;
+    final candidates = List<RTCIceCandidate>.of(_pendingCandidates);
+    _pendingCandidates.clear();
+    for (final candidate in candidates) {
+      try {
+        await _peerConnection?.addCandidate(candidate);
+      } catch (e) {
+        debugPrint("Add pending ICE candidate error: $e");
       }
+    }
+  }
+
+  void _startOutgoingCall() {
+    final socket = ref.read(socketServiceProvider);
+
+    // L'appel ne sonne qu'une fois le micro prêt
+    _prepareWebRTC().then((isReady) {
+      if (!isReady || !mounted || _isClosing) return;
+      _isCallInitiated = true;
+      socket.emit('webrtc_call_initiate', {
+        'toId': widget.otherId,
+        'type': widget.isVideoCall ? 'video' : 'audio',
+        'conversationId': widget.conversationId,
+      });
     });
-    // L'appelant (User A) a déjà émis webrtc_call_initiate avant d'ouvrir cet écran
+
+    _timeoutTimer = Timer(_outgoingRingTimeout, () {
+      if (_isCallActive) return;
+      socket.emit('webrtc_call_cancel', {'toId': widget.otherId, 'reason': 'timeout'});
+      socket.emit('webrtc_call_missed', {
+        'toId': widget.otherId,
+        'type': widget.isVideoCall ? 'video' : 'audio',
+        'conversationId': widget.conversationId,
+      });
+      _endCallCleanup();
+    });
   }
 
   Future<void> _acceptCall() async {
-    setState(() => _isCallActive = true);
+    if (_isAccepting) return;
+    _isAccepting = true;
+    _timeoutTimer?.cancel();
     await _audioPlayer.stop();
     _pulseController.stop();
     _slideController.stop();
 
+    // L'autre appareil n'envoie son offre qu'après l'acceptation : le micro doit être prêt avant
+    if (!await _prepareWebRTC() || !mounted) return;
+
+    setState(() => _isCallActive = true);
     if (widget.isVideoCall) {
       setState(() => _isSpeakerOn = true);
       Helper.setSpeakerphoneOn(true);
     }
-    
-    // Notify peer
+
     ref.read(socketServiceProvider).emit('webrtc_call_accept', {
       'callerId': widget.otherId,
     });
-    
-    _startCallTimer();
-    await _setupWebRTC();
+    _startConnectionWait();
   }
 
-  // Caller creates offer AFTER getting the accept event
-  // Wait! Let's make Caller A create the offer as soon as Call is Accepted.
-  Future<void> _createOffer() async {
-    await _setupWebRTC();
-    if (_peerConnection == null) return;
+  Future<void> _createOffer({bool restartIce = false}) async {
+    if (!await _prepareWebRTC() || _peerConnection == null) return;
 
     try {
-      RTCSessionDescription offer = await _peerConnection!.createOffer();
+      final offer = await _peerConnection!.createOffer(restartIce ? {'iceRestart': true} : {});
       await _peerConnection!.setLocalDescription(offer);
-      
+
       ref.read(socketServiceProvider).emit('webrtc_offer', {
         'toId': widget.otherId,
         'sdp': {'sdp': offer.sdp, 'type': offer.type}
@@ -291,14 +406,15 @@ class _CallScreenState extends ConsumerState<CallScreen>
   }
 
   Future<void> _handleOffer(Map<String, dynamic> sdpMap) async {
-    if (_peerConnection == null) return;
+    if (!await _prepareWebRTC() || _peerConnection == null) return;
     try {
       final offer = RTCSessionDescription(sdpMap['sdp'], sdpMap['type']);
       await _peerConnection?.setRemoteDescription(offer);
-      
+      await _applyPendingCandidates();
+
       final answer = await _peerConnection!.createAnswer();
       await _peerConnection!.setLocalDescription(answer);
-      
+
       ref.read(socketServiceProvider).emit('webrtc_answer', {
         'toId': widget.otherId,
         'sdp': {'sdp': answer.sdp, 'type': answer.type}
@@ -306,6 +422,79 @@ class _CallScreenState extends ConsumerState<CallScreen>
     } catch (e) {
       debugPrint("Handle offer error: $e");
     }
+  }
+
+  void _handleIceConnectionState(RTCIceConnectionState state) {
+    if (!mounted || _isClosing) return;
+
+    if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
+        state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
+      _onMediaConnected();
+    } else if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+      _onConnectionLost();
+    } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+      _onConnectionLost();
+      if (!widget.isIncoming && !_hasRestartedConnection) {
+        _hasRestartedConnection = true;
+        _createOffer(restartIce: true);
+      }
+    }
+  }
+
+  void _startConnectionWait() {
+    _connectionTimer?.cancel();
+    _connectionTimer = Timer(_connectionTimeout, () => _endForLostConnection('Connexion impossible. $_moveMessage'));
+  }
+
+  void _onMediaConnected() {
+    _connectionTimer?.cancel();
+    _hasRestartedConnection = false;
+    final isFirstConnection = !_isMediaConnected;
+    setState(() {
+      _isMediaConnected = true;
+      _isReconnecting = false;
+    });
+    if (isFirstConnection) {
+      _startCallTimer();
+      _startQualityChecks();
+    }
+  }
+
+  void _onConnectionLost() {
+    if (!_isMediaConnected) return;
+    setState(() => _isReconnecting = true);
+    _connectionTimer?.cancel();
+    _connectionTimer = Timer(_reconnectionTimeout, () => _endForLostConnection('La connexion a été perdue. $_moveMessage'));
+  }
+
+  void _endForLostConnection(String message) {
+    ref.read(socketServiceProvider).emit('webrtc_call_ended', {'toId': widget.otherId});
+    _endCallWithMessage(message);
+  }
+
+  void _startQualityChecks() {
+    _qualityTimer = Timer.periodic(_qualityCheckInterval, (_) async {
+      final peerConnection = _peerConnection;
+      if (peerConnection == null || !mounted || _isReconnecting) return;
+      try {
+        final isWeak = _qualityMonitor.update(await peerConnection.getStats()) == CallQuality.poor;
+        if (mounted && isWeak != _isConnectionWeak) setState(() => _isConnectionWeak = isWeak);
+      } catch (e) {
+        debugPrint('Mesure de la connexion impossible: $e');
+      }
+    });
+  }
+
+  void _abortCall() {
+    final socket = ref.read(socketServiceProvider);
+    if (widget.isIncoming) {
+      socket.emit('webrtc_call_reject', {'callerId': widget.otherId});
+    } else if (_isCallActive) {
+      socket.emit('webrtc_call_ended', {'toId': widget.otherId});
+    } else if (_isCallInitiated) {
+      socket.emit('webrtc_call_cancel', {'toId': widget.otherId});
+    }
+    _endCallCleanup();
   }
 
   void _rejectCall() {
@@ -318,38 +507,46 @@ class _CallScreenState extends ConsumerState<CallScreen>
   void _endCall() {
     final socket = ref.read(socketServiceProvider);
     if (!_isCallActive && !widget.isIncoming) {
-      socket.emit('webrtc_call_cancel', {'toId': widget.otherId});
-      socket.emit('webrtc_call_missed', {
-        'toId': widget.otherId,
-        'type': widget.isVideoCall ? 'video' : 'audio',
-        'conversationId': widget.conversationId,
-      });
+      if (_isCallInitiated) {
+        socket.emit('webrtc_call_cancel', {'toId': widget.otherId});
+        socket.emit('webrtc_call_missed', {
+          'toId': widget.otherId,
+          'type': widget.isVideoCall ? 'video' : 'audio',
+          'conversationId': widget.conversationId,
+        });
+      }
     } else {
       socket.emit('webrtc_call_ended', {'toId': widget.otherId});
     }
     _endCallCleanup();
   }
 
+  void _endCallWithMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    _endCallCleanup();
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void _endCallCleanup() {
+    if (_isClosing) return;
+    _isClosing = true;
+
     _timeoutTimer?.cancel();
+    _connectionTimer?.cancel();
+    _qualityTimer?.cancel();
     _callTimer?.cancel();
     _audioPlayer.stop();
-    
+
     _localStream?.getTracks().forEach((track) => track.stop());
     _remoteStream?.getTracks().forEach((track) => track.stop());
     _peerConnection?.close();
-    
+
     if (mounted) {
       Navigator.pop(context);
     }
   }
 
   void _startCallTimer() {
-    // If I'm the caller, create the offer now
-    if (!widget.isIncoming) {
-      _createOffer();
-    }
-    
     _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _callSeconds++);
     });
@@ -363,7 +560,10 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
   @override
   void dispose() {
+    if (ActiveCall.peerId == widget.otherId) ActiveCall.peerId = null;
     _timeoutTimer?.cancel();
+    _connectionTimer?.cancel();
+    _qualityTimer?.cancel();
     _callTimer?.cancel();
     _pulseController.dispose();
     _slideController.dispose();
@@ -459,29 +659,59 @@ class _CallScreenState extends ConsumerState<CallScreen>
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 48),
+                SizedBox(height: _isReconnecting || _isConnectionWeak ? 12 : 48),
 
                 Text(
-                  _isCallActive
-                      ? _formattedCallTime
-                      : (widget.isIncoming ? 'Appel entrant...' : 'Appel en cours...'),
+                  _isReconnecting
+                      ? 'Reconnexion...'
+                      : (_isMediaConnected
+                          ? _formattedCallTime
+                          : (_isCallActive
+                              ? 'Connexion...'
+                              : (widget.isIncoming ? 'Appel entrant...' : 'Appel en cours...'))),
                   style: TextStyle(
-                    color: _isCallActive ? Colors.greenAccent : Colors.white54,
+                    color: _isMediaConnected && !_isReconnecting ? Colors.greenAccent : Colors.white54,
                     fontSize: 15,
-                    fontWeight: _isCallActive ? FontWeight.bold : FontWeight.normal,
+                    fontWeight: _isMediaConnected ? FontWeight.bold : FontWeight.normal,
                     letterSpacing: 1.2,
                   ),
                 ),
 
+                if (_isReconnecting || _isConnectionWeak)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                    child: _ConnectionWarning(
+                      message: _isReconnecting
+                          ? 'Connexion perdue. $_moveMessage'
+                          : 'Connexion faible. $_moveMessage',
+                    ),
+                  ),
+
                 const SizedBox(height: 12),
 
-                Text(
-                  widget.otherName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      if (_badgeType != null) ...[
+                        const SizedBox(width: 8),
+                        VerificationBadge(type: _badgeType!, size: 26),
+                      ],
+                    ],
                   ),
                 ),
 
@@ -512,8 +742,14 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
                 const SizedBox(height: 40),
 
+                // La photo se réduit sur les petits écrans pour laisser la place aux boutons
                 if (!_isVideoEnabled)
-                  AnimatedBuilder(
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: AnimatedBuilder(
                     animation: _pulseAnimation,
                     builder: (context, child) {
                       final scale = _isCallActive ? 1.0 : _pulseAnimation.value;
@@ -573,8 +809,11 @@ class _CallScreenState extends ConsumerState<CallScreen>
                       );
                     },
                   ),
-
-                const Spacer(),
+                      ),
+                    ),
+                  )
+                else
+                  const Spacer(),
 
                 if (widget.isIncoming && !_isCallActive)
                   _buildIncomingButtons()
@@ -750,6 +989,32 @@ class _CallScreenState extends ConsumerState<CallScreen>
           Text(
             label,
             style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionWarning extends StatelessWidget {
+  final String message;
+
+  const _ConnectionWarning({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xE6B45309),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.signal_cellular_connected_no_internet_4_bar, color: Colors.white, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

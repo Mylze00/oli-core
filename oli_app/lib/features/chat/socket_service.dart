@@ -99,22 +99,18 @@ class SocketService {
     _socket!.on('webrtc_call_incoming', (data) {
       if (data is Map) {
         debugPrint("📞 APPEL ENTRANT REÇU: $data");
-        final context = globalNavigatorKey.currentContext;
-        if (context != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CallScreen(
-                otherId: data['fromId']?.toString() ?? data['callerId']?.toString() ?? '',
-                otherName: data['callerName']?.toString() ?? 'Utilisateur',
-                otherAvatarUrl: data['callerAvatar']?.toString(),
-                isVideoCall: data['type'] == 'video',
-                isIncoming: true,
-                conversationId: data['conversationId']?.toString(),
-              ),
-            ),
-          );
+        final callerId = data['fromId']?.toString() ?? data['callerId']?.toString() ?? '';
+        if (ActiveCall.peerId != null && ActiveCall.peerId != callerId) {
+          emit('webrtc_call_reject', {'callerId': callerId, 'reason': 'busy'});
+          return;
         }
+        openIncomingCallScreen({
+          'callerId': callerId,
+          'callerName': data['callerName']?.toString() ?? 'Utilisateur OLI',
+          'callerAvatar': data['callerAvatar']?.toString() ?? '',
+          'callType': data['type']?.toString() ?? 'audio',
+          'conversationId': data['conversationId']?.toString() ?? '',
+        });
       }
     });
 

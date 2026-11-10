@@ -191,13 +191,6 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                 final conversationId = chatState.messages.isNotEmpty
                     ? chatState.messages.first['conversation_id']?.toString()
                     : null;
-                ref.read(socketServiceProvider).emit('webrtc_call_initiate', {
-                  'toId': widget.otherId,
-                  'callerName': authState.userData?['name'] ?? 'Utilisateur',
-                  'callerAvatar': authState.userData?['avatar_url'] ?? '',
-                  'type': 'audio',
-                  'conversationId': conversationId,
-                });
                 Navigator.push(context, MaterialPageRoute(
                   builder: (_) => CallScreen(
                     otherId: widget.otherId,
@@ -227,13 +220,6 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                 final conversationId = chatState.messages.isNotEmpty
                     ? chatState.messages.first['conversation_id']?.toString()
                     : null;
-                ref.read(socketServiceProvider).emit('webrtc_call_initiate', {
-                  'toId': widget.otherId,
-                  'callerName': authState.userData?['name'] ?? 'Utilisateur',
-                  'callerAvatar': authState.userData?['avatar_url'] ?? '',
-                  'type': 'video',
-                  'conversationId': conversationId,
-                });
                 Navigator.push(context, MaterialPageRoute(
                   builder: (_) => CallScreen(
                     otherId: widget.otherId,

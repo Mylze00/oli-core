@@ -22,11 +22,15 @@ final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>()
 // Ouvrir CallScreen depuis n'importe quel contexte (FCM, Socket)
 void openIncomingCallScreen(Map<String, String> callData) {
   final context = globalNavigatorKey.currentContext;
-  if (context == null) return;
+  final callerId = callData['callerId'] ?? '';
+  // Le même appel arrive par la connexion en direct et par la notification
+  if (context == null || ActiveCall.peerId != null) return;
+  ActiveCall.peerId = callerId;
+
   Navigator.of(context, rootNavigator: true).push(
     MaterialPageRoute(
       builder: (_) => CallScreen(
-        otherId:        callData['callerId'] ?? '',
+        otherId:        callerId,
         otherName:      callData['callerName'] ?? 'Utilisateur OLI',
         otherAvatarUrl: callData['callerAvatar'],
         conversationId: callData['conversationId'],

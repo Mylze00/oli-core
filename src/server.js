@@ -94,6 +94,8 @@ io.use((socket, next) => {
     }
 });
 
+const callLogService = require('./services/call-log.service');
+
 // --- SOCKET.IO EVENTS ---
 io.on('connection', (socket) => {
     const userId = socket.user ? socket.user.id : null;
@@ -196,11 +198,13 @@ io.on('connection', (socket) => {
 
     // ── 5. WEBRTC CALL SIGNALING ─────────────────────────────────────────
     socket.on('webrtc_call_initiate', async (data) => {
-        const { toId, callerName, callerAvatar, type, conversationId } = data;
+        const { toId, type, conversationId } = data;
         if (!userId || !toId) return;
         const targetRoom = 'user_' + toId;
+        let caller = null;
 
         try {
+            caller = await callLogService.getCallIdentity(userId);
             const blocked = await pool.query(
                 'SELECT 1 FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2',
                 [toId, userId]
@@ -213,6 +217,7 @@ io.on('connection', (socket) => {
             console.error('[CALL] Vérification du blocage impossible:', e.message);
             return;
         }
+        if (!caller) return;
 
         try {
             await pool.query(
@@ -227,8 +232,8 @@ io.on('connection', (socket) => {
         // 1. Relayer via Socket.IO (si User B connecte)
         socket.to(targetRoom).emit('webrtc_call_incoming', {
             fromId: userId,
-            callerName: callerName || 'Utilisateur OLI',
-            callerAvatar: callerAvatar || '',
+            callerName: caller.name,
+            callerAvatar: caller.avatar_url || '',
             type: type || 'audio',
             conversationId: conversationId || '',
         });
@@ -238,8 +243,8 @@ io.on('connection', (socket) => {
             const fcmService = require('./services/fcm.service');
             await fcmService.sendCallNotification(parseInt(toId), {
                 callerId: String(userId),
-                callerName: callerName || 'Utilisateur OLI',
-                callerAvatar: callerAvatar || '',
+                callerName: caller.name,
+                callerAvatar: caller.avatar_url || '',
                 callType: type || 'audio',
                 conversationId: String(conversationId || ''),
             });
@@ -264,24 +269,9 @@ io.on('connection', (socket) => {
         socket.to('user_' + data.toId).emit('webrtc_ice_candidate', { fromId: userId, candidate: data.candidate });
     });
 
-    async function updateCallStatus(callerId, receiverId, status, isEnded = false) {
+    async function logCall(update) {
         try {
-            let setClause = `status = $3`;
-            if (isEnded) {
-                setClause += `, ended_at = NOW()`;
-                if (status === 'answered') {
-                   setClause += `, duration_seconds = EXTRACT(EPOCH FROM (NOW() - created_at))`;
-                }
-            }
-            await pool.query(`
-                UPDATE call_logs 
-                SET ${setClause}
-                WHERE id = (
-                    SELECT id FROM call_logs 
-                    WHERE caller_id = $1 AND receiver_id = $2 
-                    ORDER BY created_at DESC LIMIT 1
-                )
-            `, [callerId, receiverId, status]);
+            await update();
         } catch (e) {
             console.error('[CALL LOG] Update error:', e.message);
         }
@@ -290,26 +280,30 @@ io.on('connection', (socket) => {
     // Accepter l'appel
     socket.on('webrtc_call_accept', async (data) => {
         if (!userId || !data.callerId) return;
-        await updateCallStatus(data.callerId, userId, 'answered', false);
+        await logCall(() => callLogService.markCallAnswered(data.callerId, userId));
         socket.to('user_' + data.callerId).emit('webrtc_call_accepted', { fromId: userId });
+        // Les autres appareils de la même personne cessent de sonner
+        socket.to('user_' + userId).emit('webrtc_call_cancelled', { fromId: data.callerId });
     });
 
     socket.on('webrtc_call_reject', async (data) => {
         if (!userId || !data.callerId) return;
-        await updateCallStatus(data.callerId, userId, 'rejected', true);
-        socket.to('user_' + data.callerId).emit('webrtc_call_rejected', { fromId: userId });
+        const isBusy = data.reason === 'busy';
+        await logCall(() => callLogService.updateCallStatus(data.callerId, userId, isBusy ? 'missed' : 'rejected'));
+        socket.to('user_' + data.callerId).emit('webrtc_call_rejected', { fromId: userId, reason: isBusy ? 'busy' : undefined });
+        if (!isBusy) socket.to('user_' + userId).emit('webrtc_call_cancelled', { fromId: data.callerId });
     });
 
     socket.on('webrtc_call_cancel', async (data) => {
         if (!userId || !data.toId) return;
-        await updateCallStatus(userId, data.toId, 'cancelled', true);
+        const status = data.reason === 'timeout' ? 'missed' : 'cancelled';
+        await logCall(() => callLogService.updateCallStatus(userId, data.toId, status));
         socket.to('user_' + data.toId).emit('webrtc_call_cancelled', { fromId: userId });
     });
 
     socket.on('webrtc_call_ended', async (data) => {
         if (!userId || !data.toId) return;
-        await updateCallStatus(userId, data.toId, 'answered', true);
-        await updateCallStatus(data.toId, userId, 'answered', true);
+        await logCall(() => callLogService.finishAnsweredCall(userId, data.toId));
         socket.to('user_' + data.toId).emit('webrtc_call_ended', { fromId: userId });
     });
 
@@ -528,6 +522,9 @@ if (process.env.NODE_ENV !== 'test') {
             await pool.query(require('fs').readFileSync(
                 require('path').join(__dirname, 'migrations/add_user_contacts.sql'), 'utf8'
             ));
+
+            // Début réel de la conversation, pour calculer la durée d'un appel
+            await pool.query(`ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS answered_at TIMESTAMPTZ`);
 
             // Moment où un message atteint l'appareil du destinataire
             await pool.query(require('fs').readFileSync(
