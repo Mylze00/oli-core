@@ -53,10 +53,13 @@ router.get('/my', requireAuth, async (req, res) => {
 /**
  * POST /api/videos
  * Upload d'une vidéo de vente
- * Body (multipart): video, product_id, title, description
+ * Body (multipart): video, audio (optionnel), duration_seconds, product_id, title, description
  */
 router.post('/', requireAuth, (req, res, next) => {
-    genericUpload.single('video')(req, res, function (err) {
+    genericUpload.fields([
+        { name: 'video', maxCount: 1 },
+        { name: 'audio', maxCount: 1 },
+    ])(req, res, function (err) {
         if (err) {
             console.error('❌ Multer error in /api/videos:', err);
             return res.status(400).json({ error: "Erreur de fichier", message: err.message });
@@ -65,11 +68,18 @@ router.post('/', requireAuth, (req, res, next) => {
     });
 }, async (req, res) => {
     try {
-        if (!req.file) {
+        const videoFile = req.files?.video?.[0];
+        const audioFile = req.files?.audio?.[0];
+        if (!videoFile) {
             return res.status(400).json({ error: "Erreur d'upload", message: "Aucune vidéo fournie" });
         }
 
-        const videoUrl = req.file.path || req.file.url || req.file.secure_url || req.file.location;
+        const videoUrl = videoService.buildPublishedVideoUrl({
+            videoUrl: videoFile.path || videoFile.url || videoFile.secure_url || videoFile.location,
+            videoBytes: videoFile.size,
+            audioPublicId: audioFile?.filename,
+            durationSeconds: req.body.duration_seconds,
+        });
         const thumbnailUrl = null; // Cloudinary peut générer un thumbnail automatiquement
 
         const { product_id, title, description } = req.body;
@@ -89,6 +99,18 @@ router.post('/', requireAuth, (req, res, next) => {
             return res.status(403).json({
                 error: 'Limite atteinte',
                 message: 'Vous avez atteint la limite de 3 vidéos par mois. Obtenez la certification pour un accès illimité.'
+            });
+        }
+        if (err.message === 'AUDIO_VIDEO_TOO_LARGE') {
+            return res.status(400).json({
+                error: 'Vidéo trop lourde',
+                message: 'Avec un son ajouté, la vidéo doit faire moins de 40 Mo.'
+            });
+        }
+        if (err.message === 'AUDIO_UNAVAILABLE') {
+            return res.status(400).json({
+                error: 'Son indisponible',
+                message: "L'ajout d'un son n'est pas disponible pour le moment."
             });
         }
         if (err.message === 'INVALID_PRODUCT') {
