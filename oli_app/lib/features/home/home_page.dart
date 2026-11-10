@@ -230,10 +230,10 @@ class _OliBottomNav extends StatelessWidget {
             OliGlassSurface(
               borderRadius: BorderRadius.circular(40),
               blur: 28,
-              // En mode clair, le fond reste assez opaque pour garder les libellés lisibles
-              tint: isDark ? const Color(0x40000000) : const Color(0xC7FFFFFF),
-              borderColor: isDark ? const Color(0x33FFFFFF) : const Color(0x14000000),
-              reflection: isDark ? 0.16 : 0.0,
+              // En mode clair, le bleu léger et le contour détachent le verre des pages blanches
+              tint: isDark ? const Color(0x40000000) : const Color(0x99E3EFFA),
+              borderColor: isDark ? const Color(0x33FFFFFF) : const Color(0x591E7DBA),
+              reflection: isDark ? 0.16 : 0.55,
               shadows: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.18),

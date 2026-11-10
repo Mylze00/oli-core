@@ -252,19 +252,22 @@ class OliGlassSurface extends StatelessWidget {
               color: tint,
               border: Border.all(color: borderColor),
             ),
-            foregroundDecoration: BoxDecoration(
-              borderRadius: borderRadius,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: reflection),
-                  Colors.white.withValues(alpha: 0),
-                ],
-                stops: const [0, 0.55],
+            // Le reflet reste sous le contenu pour ne pas délaver icônes et libellés
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: borderRadius,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withValues(alpha: reflection),
+                    Colors.white.withValues(alpha: 0),
+                  ],
+                  stops: const [0, 0.55],
+                ),
               ),
+              child: child,
             ),
-            child: child,
           ),
         ),
       ),
