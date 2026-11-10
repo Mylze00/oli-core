@@ -12,6 +12,7 @@ import 'widgets/chat_cart_summary.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
 import '../../config/api_config.dart';
 import 'package:dio/dio.dart';
+import '../../core/theme/oli_colors.dart';
 import '../../core/router/network/dio_provider.dart';
 import '../cart/providers/cart_provider.dart';
 import '../checkout/screens/checkout_page.dart';
@@ -47,6 +48,8 @@ class ChatPage extends ConsumerStatefulWidget {
 }
 
 class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver {
+  static const _darkPatternOpacity = 0.7;
+
   ChatController? _chatController;
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
@@ -126,8 +129,8 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
     final chatState = ref.watch(chatControllerProvider(widget.otherId));
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    // Utiliser bgd.jpg comme arrière-plan
-    final bgImage = "assets/images/bgd.jpg";
+    // Chaque mode a son image : un fond clair assombri donnerait un gris terne
+    final bgImage = isDark ? "assets/images/chat_bg_new.png" : "assets/images/bgd.jpg";
 
     // Écouteur pour scroll automatique lors de nouveaux messages
     ref.listen(chatControllerProvider(widget.otherId), (previous, next) {
@@ -141,8 +144,10 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
       backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F5),
       appBar: AppBar(
         titleSpacing: 0,
-        backgroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-        elevation: 1,
+        backgroundColor: isDark ? OliChatDarkColors.bar : Colors.white,
+        elevation: isDark ? 0 : 1,
+        scrolledUnderElevation: isDark ? 0 : null,
+        surfaceTintColor: isDark ? Colors.transparent : null,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
           onPressed: () => Navigator.pop(context),
@@ -259,7 +264,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
           image: DecorationImage(
             image: AssetImage(bgImage),
             fit: BoxFit.cover,
-            opacity: isDark ? 0.2 : 0.4, // Transparence pour que ce soit subtil
+            opacity: isDark ? _darkPatternOpacity : 0.4,
           ),
         ),
         child: Column(

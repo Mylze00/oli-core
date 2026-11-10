@@ -1,5 +1,14 @@
 import 'package:flutter/material.dart';
 
+/// Couleurs de la discussion en mode sombre.
+class OliChatDarkColors {
+  OliChatDarkColors._();
+
+  /// En-tête et barre de saisie, au-dessus du fond quasi noir.
+  static const Color bar = Color(0xFF14181D);
+  static const Color receivedBubble = Color(0xFF262B31);
+}
+
 /// Couleurs du mode clair, partagées entre les écrans.
 class OliLightColors {
   OliLightColors._();

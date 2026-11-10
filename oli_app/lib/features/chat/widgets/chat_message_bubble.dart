@@ -8,6 +8,7 @@ import 'location_message_bubble.dart';
 import 'audio_message_bubble.dart';
 import 'reaction_picker.dart';
 import 'cash_note_bubble.dart';
+import '../../../core/theme/oli_colors.dart';
 import 'chat_image_viewer.dart';
 import 'progressive_chat_image.dart';
 import 'message_actions.dart';
@@ -422,7 +423,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                   decoration: BoxDecoration(
                     color: isCardMessage
                         ? Colors.transparent
-                        : (widget.isMe ? theme.primaryColor : (isDark ? const Color(0xFF2C2C2E) : Colors.white)),
+                        : (widget.isMe ? theme.primaryColor : (isDark ? OliChatDarkColors.receivedBubble : Colors.white)),
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: isCardMessage
                         ? []
@@ -516,9 +517,11 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                   timeString,
                                   color: isImageOnly
                                       ? (isDark ? Colors.white70 : Colors.black54)
-                                      : (widget.isMe || isDark
-                                          ? Colors.white.withOpacity(0.7)
-                                          : Colors.black38),
+                                      : (widget.isMe && isDark
+                                          ? Colors.white.withOpacity(0.9)
+                                          : (widget.isMe || isDark
+                                              ? Colors.white.withOpacity(0.7)
+                                              : Colors.black38)),
                                   readColor: theme.primaryColor,
                                   readOnBlueBubble: !isImageOnly,
                                 ),

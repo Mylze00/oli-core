@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/oli_colors.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
@@ -199,12 +200,12 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
     final bool isCancelling = _dragOffset < -80; 
 
     final isDark = theme.brightness == Brightness.dark;
-    final fieldColor = isDark ? const Color(0xFF2C2C2E) : Colors.grey[100];
+    final fieldColor = isDark ? OliChatDarkColors.receivedBubble : Colors.grey[100];
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+        color: isDark ? OliChatDarkColors.bar : Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/oli_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../providers/exchange_rate_provider.dart';
 
@@ -87,7 +88,7 @@ class _ProductContextHeaderState extends ConsumerState<ProductContextHeader> {
     final theme = Theme.of(context);
     final hasStock = stockQuantity == null || stockQuantity! > 0;
     final isDark = theme.brightness == Brightness.dark;
-    final surface = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final surface = isDark ? OliChatDarkColors.bar : Colors.white;
     final text = isDark ? Colors.white : Colors.black87;
     final muted = isDark ? Colors.white60 : Colors.grey.shade500;
     final border = isDark ? Colors.white12 : Colors.grey.shade200;
