@@ -1,22 +1,28 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/router/network/dio_provider.dart';
+import '../../../core/theme/oli_glass.dart';
 import '../../auth/providers/auth_controller.dart';
+import '../../chat/chat_page.dart';
+import '../../../core/user/user_provider.dart';
 import '../services/contacts_match_service.dart';
 import '../utils/phone_normalizer.dart';
 
-/// Un contact du carnet, avec son numéro normalisé.
-class _ContactEntry {
+/// Un contact du carnet, avec son numéro normalisé et son compte Oli s'il en a un.
+class _AddressBookEntry {
   final String phone;
   final String displayName;
-  const _ContactEntry({required this.phone, required this.displayName});
+  final ContactMatch? account;
+
+  const _AddressBookEntry({required this.phone, required this.displayName, this.account});
 }
 
-/// « Trouver mes contacts » : affiche les contacts déjà sur Oli et permet d'inviter les autres
-/// par lien. Les contacts non inscrits ne quittent jamais le téléphone.
+/// Contacts de l'utilisateur : ajout par numéro, ouverture de la discussion et invitation.
+/// Les contacts non inscrits ne quittent jamais le téléphone.
 class ContactsInvitePage extends ConsumerStatefulWidget {
   const ContactsInvitePage({super.key});
 
@@ -26,38 +32,146 @@ class ContactsInvitePage extends ConsumerStatefulWidget {
 
 class _ContactsInvitePageState extends ConsumerState<ContactsInvitePage> {
   static const String _inviteBaseUrl = 'https://oli-core.web.app/';
+  static const String _invalidNumberMessage = 'Numéro invalide. Exemple : 0812345678 ou +243812345678.';
 
-  bool _loading = false;
+  final TextEditingController _numberController = TextEditingController();
+
+  List<ContactMatch> _contacts = [];
+  bool _isLoadingContacts = true;
+  bool _contactsLoadFailed = false;
+
+  bool _isAdding = false;
+  String? _numberError;
+  String? _notOnOliPhone;
+
+  bool _isSyncing = false;
+  bool _hasSynced = false;
   bool _permissionDenied = false;
-  String? _error;
-  List<_ContactEntry> _onOli = [];
-  List<_ContactEntry> _notOnOli = [];
+  String? _syncError;
+  List<_AddressBookEntry> _bookOnOli = [];
+  List<_AddressBookEntry> _bookNotOnOli = [];
 
-  /// Sur web, pas d'accès au carnet d'adresses : l'utilisateur saisit lui-même les numéros.
-  bool _webEntry = false;
-  final TextEditingController _phonesController = TextEditingController();
+  ContactsMatchService get _service => ContactsMatchService(ref.read(dioProvider));
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadContacts());
   }
 
   @override
   void dispose() {
-    _phonesController.dispose();
+    _numberController.dispose();
     super.dispose();
   }
 
-  Future<void> _start() async {
-    if (kIsWeb) {
+  Future<void> _loadContacts() async {
+    setState(() {
+      _isLoadingContacts = true;
+      _contactsLoadFailed = false;
+    });
+    try {
+      final contacts = await _service.fetchContacts();
+      if (mounted) setState(() => _contacts = contacts);
+    } catch (e) {
+      debugPrint('Erreur de chargement des contacts: $e');
+      if (mounted) setState(() => _contactsLoadFailed = true);
+    } finally {
+      if (mounted) setState(() => _isLoadingContacts = false);
+    }
+  }
+
+  void _storeContact(ContactMatch contact) {
+    _contacts = [..._contacts.where((c) => c.id != contact.id), contact]
+      ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _addNumber() async {
+    final phone = normalizePhone(_numberController.text.trim());
+    if (phone == null) {
       setState(() {
-        _webEntry = true;
-        _error = null;
+        _numberError = _invalidNumberMessage;
+        _notOnOliPhone = null;
       });
       return;
     }
 
+    setState(() {
+      _isAdding = true;
+      _numberError = null;
+      _notOnOliPhone = null;
+    });
+    try {
+      final contact = await _service.addContact(phone);
+      if (!mounted) return;
+      setState(() {
+        _storeContact(contact);
+        _numberController.clear();
+      });
+      _showMessage('${contact.displayName} a été ajouté à vos contacts');
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _applyAddError(e, phone));
+    } finally {
+      if (mounted) setState(() => _isAdding = false);
+    }
+  }
+
+  void _applyAddError(DioException error, String phone) {
+    final code = error.response?.data is Map ? error.response?.data['code'] : null;
+    switch (code) {
+      case 'not_on_oli':
+        _notOnOliPhone = phone;
+      case 'own_number':
+        _numberError = "C'est votre propre numéro.";
+      case 'invalid_phone':
+        _numberError = _invalidNumberMessage;
+      case 'rate_limited':
+        _numberError = "Trop d'ajouts de contacts. Réessayez plus tard.";
+      default:
+        _numberError = "Impossible d'ajouter ce contact. Réessayez plus tard.";
+    }
+  }
+
+  Future<void> _addFromAddressBook(_AddressBookEntry entry) async {
+    try {
+      final contact = await _service.addContact(entry.phone);
+      if (mounted) setState(() => _storeContact(contact));
+    } on DioException {
+      if (mounted) _showMessage("Impossible d'ajouter ce contact. Réessayez plus tard.");
+    }
+  }
+
+  Future<void> _removeContact(ContactMatch contact) async {
+    try {
+      await _service.removeContact(contact.id);
+      if (mounted) setState(() => _contacts = _contacts.where((c) => c.id != contact.id).toList());
+    } on DioException {
+      if (mounted) _showMessage('Impossible de retirer ce contact. Réessayez plus tard.');
+    }
+  }
+
+  void _openChat(ContactMatch contact) {
+    final myId = ref.read(userProvider).value?.id.toString();
+    if (myId == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatPage(
+          myId: myId,
+          otherId: contact.id.toString(),
+          otherName: contact.displayName,
+          otherAvatarUrl: contact.avatarUrl,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _syncAddressBook() async {
     final consent = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -73,16 +187,11 @@ class _ContactsInvitePageState extends ConsumerState<ContactsInvitePage> {
         ],
       ),
     );
+    if (consent != true || !mounted) return;
 
-    if (consent != true) {
-      if (mounted) Navigator.pop(context);
-      return;
-    }
-
-    if (!mounted) return;
     setState(() {
-      _loading = true;
-      _error = null;
+      _isSyncing = true;
+      _syncError = null;
       _permissionDenied = false;
     });
 
@@ -96,78 +205,33 @@ class _ContactsInvitePageState extends ConsumerState<ContactsInvitePage> {
       final contacts = await FlutterContacts.getContacts(withProperties: true);
 
       // Un seul contact par numéro normalisé
-      final byPhone = <String, _ContactEntry>{};
+      final namesByPhone = <String, String>{};
       for (final c in contacts) {
         for (final p in c.phones) {
           final normalized = normalizePhone(p.number);
-          if (normalized != null && !byPhone.containsKey(normalized)) {
-            byPhone[normalized] = _ContactEntry(phone: normalized, displayName: c.displayName);
-          }
+          if (normalized != null) namesByPhone.putIfAbsent(normalized, () => c.displayName);
         }
       }
 
-      await _matchAndShow(byPhone);
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Impossible de synchroniser vos contacts. Réessayez plus tard.');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+      final matches = await _service.matchPhones(namesByPhone.keys.toList());
+      final accounts = {for (final m in matches) m.phone: m};
+      final entries = namesByPhone.entries
+          .map((e) => _AddressBookEntry(phone: e.key, displayName: e.value, account: accounts[e.key]))
+          .toList()
+        ..sort((a, b) => a.displayName.compareTo(b.displayName));
 
-  /// Interroge le serveur sur les numéros et sépare les contacts inscrits des autres.
-  Future<void> _matchAndShow(Map<String, _ContactEntry> byPhone) async {
-    final service = ContactsMatchService(ref.read(dioProvider));
-    final matches = await service.matchPhones(byPhone.keys.toList());
-    final matchedPhones = matches.map((m) => m.phone).toSet();
-
-    final onOli = byPhone.values.where((e) => matchedPhones.contains(e.phone)).toList()
-      ..sort((a, b) => a.displayName.compareTo(b.displayName));
-    final notOnOli = byPhone.values.where((e) => !matchedPhones.contains(e.phone)).toList()
-      ..sort((a, b) => a.displayName.compareTo(b.displayName));
-
-    if (mounted) {
-      setState(() {
-        _onOli = onOli;
-        _notOnOli = notOnOli;
-      });
-    }
-  }
-
-  /// Web : l'utilisateur saisit les numéros (séparés par des virgules, espaces ou retours à la ligne).
-  Future<void> _submitWebPhones() async {
-    final raw = _phonesController.text.split(RegExp(r'[,;\s]+'));
-    final byPhone = <String, _ContactEntry>{};
-    var invalid = 0;
-    for (final r in raw) {
-      if (r.trim().isEmpty) continue;
-      final normalized = normalizePhone(r);
-      if (normalized == null) {
-        invalid++;
-      } else if (!byPhone.containsKey(normalized)) {
-        byPhone[normalized] = _ContactEntry(phone: normalized, displayName: normalized);
-      }
-    }
-
-    if (byPhone.isEmpty) {
-      setState(() => _error = 'Aucun numéro valide. Exemple : 0812345678 ou +243812345678.');
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      await _matchAndShow(byPhone);
-      if (invalid > 0 && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$invalid numéro(s) ignoré(s) car invalide(s).')),
-        );
+      if (mounted) {
+        setState(() {
+          _bookOnOli = entries.where((e) => e.account != null).toList();
+          _bookNotOnOli = entries.where((e) => e.account == null).toList();
+          _hasSynced = true;
+        });
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Impossible de vérifier ces numéros. Réessayez plus tard.');
+      debugPrint('Erreur de synchronisation des contacts: $e');
+      if (mounted) setState(() => _syncError = 'Impossible de synchroniser vos contacts. Réessayez plus tard.');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _isSyncing = false);
     }
   }
 
@@ -181,7 +245,7 @@ class _ContactsInvitePageState extends ConsumerState<ContactsInvitePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Trouver mes contacts'),
+        title: const Text('Contacts'),
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
@@ -190,100 +254,193 @@ class _ContactsInvitePageState extends ConsumerState<ContactsInvitePage> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: RefreshIndicator(
+        onRefresh: _loadContacts,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
+            _buildAddByNumber(),
+            _sectionTitle('Mes contacts${_isLoadingContacts ? '' : ' (${_contacts.length})'}'),
+            _buildMyContacts(),
+            if (!kIsWeb) ...[
+              _sectionTitle('Carnet du téléphone'),
+              _buildAddressBook(),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildBody() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-
-    if (_webEntry) return _buildWebEntry();
-
-    if (_permissionDenied) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'L\'accès à vos contacts est refusé. Vous pouvez l\'autoriser dans les réglages de votre téléphone.',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  Widget _buildAddByNumber() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              ElevatedButton(onPressed: _start, child: const Text('Réessayer')),
+              Expanded(
+                child: TextField(
+                  controller: _numberController,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _isAdding ? null : _addNumber(),
+                  decoration: InputDecoration(
+                    labelText: 'Numéro',
+                    hintText: '0812345678',
+                    errorText: _numberError,
+                    errorMaxLines: 2,
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 96,
+                height: 56,
+                child: ElevatedButton(
+                  style: oliPrimaryButtonStyle(),
+                  onPressed: _isAdding ? null : _addNumber,
+                  child: _isAdding
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text('Ajouter'),
+                ),
+              ),
             ],
           ),
+          if (_notOnOliPhone != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.person_off_outlined),
+              title: Text("$_notOnOliPhone n'est pas encore sur Oli"),
+              trailing: TextButton(onPressed: _invite, child: const Text('Inviter')),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMyContacts() {
+    if (_isLoadingContacts) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_contactsLoadFailed) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text('Impossible de charger vos contacts.', textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            TextButton(onPressed: _loadContacts, child: const Text('Réessayer')),
+          ],
+        ),
+      );
+    }
+    if (_contacts.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Text('Aucun contact pour le moment. Ajoutez-en un avec son numéro.'),
+      );
+    }
+    return Column(
+      children: _contacts
+          .map((contact) => ListTile(
+                leading: _avatar(contact.displayName, contact.avatarUrl),
+                title: Text(contact.displayName, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(contact.phone),
+                onTap: () => _openChat(contact),
+                trailing: PopupMenuButton<void>(
+                  tooltip: 'Options du contact',
+                  itemBuilder: (_) => [
+                    PopupMenuItem<void>(
+                      onTap: () => _removeContact(contact),
+                      child: const Text('Retirer des contacts'),
+                    ),
+                  ],
+                ),
+              ))
+          .toList(),
+    );
+  }
+
+  Widget _buildAddressBook() {
+    if (_isSyncing) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final message = _permissionDenied
+        ? "L'accès à vos contacts est refusé. Vous pouvez l'autoriser dans les réglages de votre téléphone."
+        : _syncError;
+
+    if (!_hasSynced || message != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (message != null) ...[
+              Text(message),
+              const SizedBox(height: 8),
+            ],
+            OutlinedButton.icon(
+              onPressed: _syncAddressBook,
+              icon: const Icon(Icons.contacts_outlined),
+              label: const Text('Trouver mes contacts du téléphone'),
+            ),
+          ],
         ),
       );
     }
 
-    return ListView(
+    final savedIds = _contacts.map((c) => c.id).toSet();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Déjà sur Oli (${_onOli.length})'),
-        if (_onOli.isEmpty)
+        if (_bookOnOli.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text('Aucun de vos contacts n\'est encore sur Oli.'),
           ),
-        ..._onOli.map((e) => ListTile(
-              leading: CircleAvatar(child: Text(_initial(e.displayName))),
-              title: Text(e.displayName),
-              subtitle: Text(e.phone),
-              trailing: const Icon(Icons.check_circle, color: Colors.green),
-            )),
-        _sectionTitle('Inviter sur Oli (${_notOnOli.length})'),
-        ..._notOnOli.map((e) => ListTile(
-              leading: CircleAvatar(child: Text(_initial(e.displayName))),
-              title: Text(e.displayName),
-              subtitle: Text(e.phone),
+        ..._bookOnOli.map((entry) {
+          final account = entry.account!;
+          return ListTile(
+            leading: _avatar(entry.displayName, account.avatarUrl),
+            title: Text(entry.displayName, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text(entry.phone),
+            onTap: () => _openChat(account),
+            trailing: savedIds.contains(account.id)
+                ? const Icon(Icons.check_circle, color: Colors.green)
+                : TextButton(onPressed: () => _addFromAddressBook(entry), child: const Text('Ajouter')),
+          );
+        }),
+        ..._bookNotOnOli.map((entry) => ListTile(
+              leading: _avatar(entry.displayName, null),
+              title: Text(entry.displayName, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(entry.phone),
               trailing: TextButton(onPressed: _invite, child: const Text('Inviter')),
             )),
       ],
     );
   }
 
-  Widget _buildWebEntry() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'Saisissez les numéros de téléphone de vos contacts, séparés par des virgules ou des retours à la ligne. '
-          'Les numéros sont envoyés pour vérifier s\'ils sont déjà inscrits sur Oli, puis ne sont pas conservés.',
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _phonesController,
-          minLines: 4,
-          maxLines: 8,
-          keyboardType: TextInputType.phone,
-          decoration: const InputDecoration(
-            hintText: '0812345678, +243998765432',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        if (_error != null) ...[
-          const SizedBox(height: 12),
-          Text(_error!, style: const TextStyle(color: Colors.red)),
-        ],
-        const SizedBox(height: 12),
-        ElevatedButton(onPressed: _submitWebPhones, child: const Text('Vérifier les numéros')),
-        if (_onOli.isNotEmpty || _notOnOli.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Text('Déjà sur Oli (${_onOli.length}) : ${_onOli.map((e) => e.phone).join(', ')}'),
-          const SizedBox(height: 8),
-          Text('Non inscrits (${_notOnOli.length}) : ${_notOnOli.map((e) => e.phone).join(', ')}'),
-        ],
-      ],
+  Widget _avatar(String name, String? avatarUrl) {
+    final hasImage = avatarUrl != null && avatarUrl.startsWith('http');
+    return CircleAvatar(
+      backgroundImage: hasImage ? NetworkImage(avatarUrl) : null,
+      onBackgroundImageError: hasImage ? (_, __) {} : null,
+      child: hasImage ? null : Text(_initial(name)),
     );
   }
 

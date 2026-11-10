@@ -8,6 +8,7 @@ class ApiConfig {
   // --- Auth ---
   static const String auth = '$baseUrl/auth';
   static const String contactsMatch = '$baseUrl/contacts/match';
+  static const String contacts = '$baseUrl/contacts';
   static const String authSendOtp = '$baseUrl/auth/send-otp';
   static const String authVerifyOtp = '$baseUrl/auth/verify-otp';
   static const String authMe = '$baseUrl/auth/me';

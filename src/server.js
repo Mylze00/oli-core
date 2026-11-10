@@ -490,6 +490,11 @@ if (process.env.NODE_ENV !== 'test') {
                 require('path').join(__dirname, 'migrations/add_conversation_user_state.sql'), 'utf8'
             ));
 
+            // Liste de contacts de chaque utilisateur
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_user_contacts.sql'), 'utf8'
+            ));
+
             // Demandes de remboursement soumises à l'administrateur
             await pool.query(require('fs').readFileSync(
                 require('path').join(__dirname, 'migrations/add_refund_requests.sql'), 'utf8'

@@ -190,7 +190,8 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                         iconBgColor: Colors.blue,
                         label: 'Contacts',
                         isDark: isDark,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactsInvitePage())), // Trouver mes contacts (invitation par lien)
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactsInvitePage()))
+                            .then((_) => ref.read(inboxConversationsProvider.notifier).fetchConversations()),
                       ),
                       const SizedBox(width: 8),
                       _buildActionButton(
