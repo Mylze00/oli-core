@@ -105,6 +105,7 @@ io.on('connection', (socket) => {
         console.log(`✅ Room rejointe : ${userRoom}`);
 
         require('./services/presence.service').userConnected(io, userId);
+        require('./services/message-delivery.service').markPendingDelivered(io, userId);
 
         // [CONN] Les livreurs rejoignent la room « deliverers » : les annonces de
         // course leur sont envoyées à eux seuls, et non à tous les utilisateurs.
@@ -526,6 +527,11 @@ if (process.env.NODE_ENV !== 'test') {
             // Liste de contacts de chaque utilisateur
             await pool.query(require('fs').readFileSync(
                 require('path').join(__dirname, 'migrations/add_user_contacts.sql'), 'utf8'
+            ));
+
+            // Moment où un message atteint l'appareil du destinataire
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_message_delivered_at.sql'), 'utf8'
             ));
 
             // Silence, marquage non lu et blocage dans la messagerie

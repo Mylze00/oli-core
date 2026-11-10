@@ -168,7 +168,23 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
 
   // ─── Time + read ticks ────────────────────────────────────────────────────
 
-  Widget _buildTimeRow(String timeString, {required Color color, required Color readColor}) {
+  Widget _buildReadTicks(Color color, {required bool onBlueBubble}) {
+    final ticks = Icon(Icons.done_all, size: onBlueBubble ? 12 : 14, color: color);
+    if (!onBlueBubble) return ticks;
+    // Des coches bleues resteraient invisibles sur la bulle bleue
+    return Container(
+      padding: const EdgeInsets.all(1.5),
+      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+      child: ticks,
+    );
+  }
+
+  Widget _buildTimeRow(
+    String timeString, {
+    required Color color,
+    required Color readColor,
+    bool readOnBlueBubble = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
@@ -182,7 +198,9 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
             if (widget.message['id'].toString().startsWith('temp_'))
               Icon(Icons.access_time, size: 12, color: color)
             else if (widget.message['is_read'] == true)
-              Icon(Icons.done_all, size: 14, color: readColor)
+              _buildReadTicks(readColor, onBlueBubble: readOnBlueBubble)
+            else if (widget.message['delivered_at'] != null)
+              Icon(Icons.done_all, size: 14, color: color)
             else
               Icon(Icons.check, size: 14, color: color),
           ],
@@ -501,7 +519,8 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                       : (widget.isMe || isDark
                                           ? Colors.white.withOpacity(0.7)
                                           : Colors.black38),
-                                  readColor: isImageOnly ? theme.primaryColor : Colors.lightBlueAccent,
+                                  readColor: theme.primaryColor,
+                                  readOnBlueBubble: !isImageOnly,
                                 ),
                               ],
                             ),

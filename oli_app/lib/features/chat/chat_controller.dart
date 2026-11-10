@@ -81,6 +81,7 @@ class ChatController extends StateNotifier<ChatState> {
   String? _productId;
 
   static const _uploadProgressStep = 0.02;
+  static const _readReceiptDelay = Duration(milliseconds: 300);
   static const _typingRefreshInterval = Duration(seconds: 3);
   static const _typingIdleDelay = Duration(seconds: 4);
   static const _typingExpiryDelay = Duration(seconds: 7);
@@ -88,6 +89,8 @@ class ChatController extends StateNotifier<ChatState> {
   DateTime? _lastTypingSentAt;
   Timer? _typingIdleTimer;
   Timer? _typingExpiryTimer;
+  Timer? _readReceiptTimer;
+  bool _isScreenActive = false;
 
   ChatController(this.otherUserId, this.myId, this._socketService, this._ref) : super(ChatState()) {
     _initChat();
@@ -106,6 +109,7 @@ class ChatController extends StateNotifier<ChatState> {
       
       // Écouter les reçus de lecture
       _socketService.on('messages_read', _handleMessagesRead);
+      _socketService.on('messages_delivered', _handleMessagesDelivered);
       
       // Écouter le statut en ligne (global ou spécifique)
       _socketService.on('user_online', _handleUserOnline);
@@ -167,15 +171,16 @@ class ChatController extends StateNotifier<ChatState> {
       final newMessages = [...state.messages, data];
       state = state.copyWith(messages: newMessages);
       _forceCacheUpdate(newMessages);
+      if (senderId == otherUserId) _scheduleReadReceipt();
     }
   }
 
   void _handleMessagesRead(dynamic rawData) {
-    if (rawData is! Map<String, dynamic>) return;
+    if (!mounted || rawData is! Map<String, dynamic>) return;
     final data = rawData;
     
     // Si l'autre utilisateur a lu la conversation
-    if (data['conversation_id'] == state.conversationId && data['reader_id'].toString() == otherUserId) {
+    if (data['conversation_id'].toString() == state.conversationId.toString() && data['reader_id'].toString() == otherUserId) {
       // On marque tous NOS messages comme lus
       final updatedMessages = state.messages.map((m) {
         if (m['sender_id'].toString() == myId && (m['is_read'] == false || m['is_read'] == null)) {
@@ -186,6 +191,62 @@ class ChatController extends StateNotifier<ChatState> {
       
       state = state.copyWith(messages: updatedMessages);
       _forceCacheUpdate(updatedMessages);
+    }
+  }
+
+  void _handleMessagesDelivered(dynamic rawData) {
+    if (!mounted || rawData is! Map<String, dynamic>) return;
+    if (rawData['conversation_id'].toString() != state.conversationId.toString() ||
+        rawData['recipient_id'].toString() != otherUserId) {
+      return;
+    }
+
+    final deliveredAt = DateTime.now().toIso8601String();
+    state = state.copyWith(messages: [
+      for (final m in state.messages)
+        if (m['sender_id'].toString() == myId && m['delivered_at'] == null)
+          {...m, 'delivered_at': deliveredAt}
+        else
+          m,
+    ]);
+  }
+
+  /// Appelé par la page : un message n'est lu que si la discussion est réellement à l'écran.
+  void setScreenActive(bool isActive) {
+    _isScreenActive = isActive;
+    if (isActive) {
+      _scheduleReadReceipt();
+    } else {
+      _readReceiptTimer?.cancel();
+    }
+  }
+
+  bool _isUnreadFromOther(Map<String, dynamic> message) =>
+      message['sender_id'].toString() == otherUserId && message['is_read'] != true;
+
+  void _scheduleReadReceipt() {
+    if (!_isScreenActive) return;
+    _readReceiptTimer?.cancel();
+    _readReceiptTimer = Timer(_readReceiptDelay, _sendReadReceipt);
+  }
+
+  Future<void> _sendReadReceipt() async {
+    final conversationId = state.conversationId;
+    if (!mounted || !_isScreenActive || conversationId == null || !state.messages.any(_isUnreadFromOther)) return;
+
+    try {
+      final token = await _storage.getToken();
+      await _dio.post(
+        '${ApiConfig.baseUrl}/chat/conversations/$conversationId/read',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      if (!mounted) return;
+      state = state.copyWith(messages: [
+        for (final m in state.messages)
+          if (_isUnreadFromOther(m)) {...m, 'is_read': true} else m,
+      ]);
+    } catch (e) {
+      debugPrint('❌ Accusé de lecture non envoyé: $e');
     }
   }
 
@@ -565,6 +626,19 @@ class ChatController extends StateNotifier<ChatState> {
             requesterId: resData['requester_id'],
           );
         }
+
+        // La réponse confirme l'envoi, même si l'événement en direct n'arrive pas
+        final savedMessage = resData['message'];
+        if (mounted && savedMessage is Map && state.messages.any((m) => m['id'] == tempId)) {
+          final alreadyReceived = state.messages.any((m) => m['id']?.toString() == savedMessage['id']?.toString());
+          state = state.copyWith(messages: [
+            for (final m in state.messages)
+              if (m['id'] != tempId)
+                m
+              else if (!alreadyReceived)
+                Map<String, dynamic>.from(savedMessage),
+          ]);
+        }
       }
     } catch (e) {
       debugPrint('❌ Erreur sendMessage: $e');
@@ -637,6 +711,7 @@ class ChatController extends StateNotifier<ChatState> {
     _typingUnsubscribe?.call();
     _typingIdleTimer?.cancel();
     _typingExpiryTimer?.cancel();
+    _readReceiptTimer?.cancel();
     super.dispose();
   }
 }

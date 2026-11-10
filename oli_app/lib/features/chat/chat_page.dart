@@ -46,7 +46,8 @@ class ChatPage extends ConsumerStatefulWidget {
   ConsumerState<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends ConsumerState<ChatPage> {
+class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver {
+  ChatController? _chatController;
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
@@ -61,16 +62,27 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void initState() {
     super.initState();
     _effectiveAvatarUrl = widget.otherAvatarUrl;
+    WidgetsBinding.instance.addObserver(this);
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
+      _chatController = controller;
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      controller.setScreenActive(lifecycle == null || lifecycle == AppLifecycleState.resumed);
       controller.openConversation(productId: widget.productId);
       _scrollToBottom();
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _chatController?.setScreenActive(state == AppLifecycleState.resumed);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _chatController?.setScreenActive(false);
     _scrollController.dispose();
     super.dispose();
   }

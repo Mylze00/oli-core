@@ -128,9 +128,9 @@ exports.sendInitialMessage = async (req, res) => {
         const msgContent = content || (type === 'location' ? '📍 Position partagée' : content);
 
         const msgResult = await pool.query(
-            `INSERT INTO messages (conversation_id, sender_id, content, type, metadata, latitude, longitude) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [conversationId, senderId, msgContent, type, JSON.stringify(msgMetadata), latitude || null, longitude || null]
+            `INSERT INTO messages (conversation_id, sender_id, content, type, metadata, latitude, longitude, delivered_at) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [conversationId, senderId, msgContent, type, JSON.stringify(msgMetadata), latitude || null, longitude || null, presence.isOnline(recipientId) ? new Date() : null]
         );
 
         const newMessage = msgResult.rows[0];
@@ -205,8 +205,8 @@ exports.sendMessage = async (req, res) => {
         messageMetadata = await attestCashTransfer(messageMetadata, { conversationId, senderId, recipientId });
 
         const msgResult = await pool.query(
-            `INSERT INTO messages (conversation_id, sender_id, content, type, amount, reply_to_id, metadata, latitude, longitude) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            `INSERT INTO messages (conversation_id, sender_id, content, type, amount, reply_to_id, metadata, latitude, longitude, delivered_at) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
             [
                 conversationId,
                 senderId,
@@ -216,7 +216,8 @@ exports.sendMessage = async (req, res) => {
                 replyToId,
                 JSON.stringify(messageMetadata),
                 (type === 'location' && latitude) ? parseFloat(latitude) : null,
-                (type === 'location' && longitude) ? parseFloat(longitude) : null
+                (type === 'location' && longitude) ? parseFloat(longitude) : null,
+                presence.isOnline(recipientId) ? new Date() : null
             ]
         );
 
