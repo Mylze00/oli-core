@@ -50,6 +50,51 @@ router.get('/stickers', requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/videos/upload-ticket
+ * Autorise l'envoi direct d'une vidéo ou d'un son vers Cloudinary
+ * Body: { kind: 'video' | 'audio' }
+ */
+router.post('/upload-ticket', requireAuth, async (req, res) => {
+    try {
+        res.json({ success: true, ...await videoService.createUploadTicket(req.user.id, req.body?.kind) });
+    } catch (err) {
+        if (err.message === 'LIMIT_REACHED') {
+            return res.status(403).json({
+                error: 'Limite atteinte',
+                message: 'Vous avez atteint la limite de 3 vidéos par mois. Obtenez la certification pour un accès illimité.'
+            });
+        }
+        if (err.message === 'INVALID_KIND') {
+            return res.status(400).json({ error: 'Type de fichier invalide' });
+        }
+        if (err.message === 'UPLOAD_UNAVAILABLE') {
+            return res.status(503).json({ error: 'Envoi indisponible', message: "L'envoi de vidéos est momentanément indisponible." });
+        }
+        console.error('❌ Erreur autorisation envoi:', err.message);
+        res.status(500).json({ error: "Erreur lors de la préparation de l'envoi" });
+    }
+});
+
+/**
+ * GET /api/videos/creators/:userId
+ * Score, statistiques et vidéos d'un créateur
+ */
+router.get('/creators/:userId', requireAuth, async (req, res) => {
+    try {
+        if (!/^\d+$/.test(req.params.userId)) {
+            return res.status(400).json({ error: 'Identifiant invalide' });
+        }
+        res.json({ success: true, ...await videoService.getCreatorProfile(req.params.userId, req.user.id) });
+    } catch (err) {
+        if (err.message === 'NOT_FOUND') {
+            return res.status(404).json({ error: 'Créateur introuvable' });
+        }
+        console.error('❌ Erreur profil créateur:', err.message);
+        res.status(500).json({ error: 'Erreur lors du chargement du profil' });
+    }
+});
+
+/**
  * GET /api/videos/my
  * Mes vidéos
  */
@@ -81,6 +126,17 @@ router.post('/', requireAuth, (req, res, next) => {
     });
 }, async (req, res) => {
     try {
+        if (req.body?.video_public_id) {
+            const media = await videoService.resolveDirectUpload(
+                req.user.id, req.body.video_public_id, req.body.audio_public_id
+            );
+            const video = await videoService.createVideo(
+                req.user.id, media.videoUrl, media.thumbnailUrl,
+                req.body.product_id, req.body.title, req.body.description, media.durationSeconds
+            );
+            return res.status(201).json({ success: true, video });
+        }
+
         const videoFile = req.files?.video?.[0];
         const audioFile = req.files?.audio?.[0];
         if (!videoFile) {
@@ -113,6 +169,12 @@ router.post('/', requireAuth, (req, res, next) => {
                 error: 'Limite atteinte',
                 message: 'Vous avez atteint la limite de 3 vidéos par mois. Obtenez la certification pour un accès illimité.'
             });
+        }
+        if (err.message === 'INVALID_UPLOAD') {
+            return res.status(400).json({ error: 'Fichier invalide', message: "La vidéo envoyée est introuvable. Réessayez l'envoi." });
+        }
+        if (err.message === 'VIDEO_TOO_LARGE') {
+            return res.status(400).json({ error: 'Vidéo trop lourde', message: 'La vidéo dépasse 100 Mo.' });
         }
         if (err.message === 'AUDIO_VIDEO_TOO_LARGE') {
             return res.status(400).json({

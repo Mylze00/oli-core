@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../core/router/network/dio_provider.dart';
+import '../models/creator_profile_model.dart';
 import '../models/video_sale_model.dart';
 
 /// État du feed vidéo
@@ -153,6 +154,12 @@ class VideoFeedNotifier extends StateNotifier<VideoFeedState> {
     });
   }
 
+  /// Ajoute une vidéo ouverte depuis un profil pour que ses réactions fonctionnent
+  void ensureVideo(VideoSale video) {
+    if (state.videos.any((v) => v.id == video.id)) return;
+    state = state.copyWith(videos: [...state.videos, video]);
+  }
+
   /// Retire une vidéo du fil affiché
   void removeVideo(String videoId) {
     state = state.copyWith(
@@ -175,6 +182,13 @@ final commentStickersProvider = FutureProvider<List<CommentSticker>>((ref) async
   final response = await ref.read(dioProvider).get('/api/videos/stickers');
   final stickers = (response.data['stickers'] as List).cast<Map<String, dynamic>>();
   return stickers.map(CommentSticker.fromJson).toList();
+});
+
+/// Score et vidéos d'un créateur
+final creatorProfileProvider =
+    FutureProvider.autoDispose.family<CreatorProfile, String>((ref, userId) async {
+  final response = await ref.read(dioProvider).get('/api/videos/creators/$userId');
+  return CreatorProfile.fromJson(response.data as Map<String, dynamic>);
 });
 
 /// Providers Riverpod

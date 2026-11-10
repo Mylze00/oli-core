@@ -19,6 +19,8 @@ const _commentsAnimation = Duration(milliseconds: 280);
 
 /// Part de la hauteur gardée par la vidéo quand les commentaires sont ouverts.
 const _reducedVideoRatio = 0.34;
+const _maxVideoLoadAttempts = 8;
+const _videoLoadRetryDelay = Duration(seconds: 8);
 
 /// Carte vidéo plein écran style TikTok
 class VideoPlayerCard extends ConsumerStatefulWidget {
@@ -49,6 +51,9 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
   bool _likesBurstPlayed = false;
   bool _showLikesBurst = false;
   Timer? _viewTimer;
+  Timer? _reloadTimer;
+  int _loadAttempts = 0;
+  bool _loadFailed = false;
 
   @override
   void initState() {
@@ -57,6 +62,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
   }
 
   void _initVideo() {
+    _loadAttempts++;
     _controller = VideoPlayerController.networkUrl(
       Uri.parse(widget.video.videoUrl),
     )..initialize().then((_) {
@@ -65,7 +71,22 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
           _controller.setLooping(true);
           _syncPlayback();
         }
+      }).catchError((Object error) {
+        debugPrint('Vidéo non disponible (essai $_loadAttempts): $error');
+        if (mounted) _scheduleVideoReload();
       });
+  }
+
+  /// Une vidéo récente peut être encore en cours de conversion par Cloudinary.
+  void _scheduleVideoReload() {
+    if (_loadAttempts >= _maxVideoLoadAttempts) {
+      setState(() => _loadFailed = true);
+      return;
+    }
+    _reloadTimer = Timer(_videoLoadRetryDelay, () {
+      _controller.dispose();
+      if (mounted) _initVideo();
+    });
   }
 
   /// Aligne la lecture sur l'état de la carte : visible, non recouverte, non mise en pause.
@@ -128,6 +149,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
   @override
   void dispose() {
     _viewTimer?.cancel();
+    _reloadTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -345,8 +367,10 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
                   ),
                 ),
               )
-            : const Center(
-                child: CircularProgressIndicator(color: Colors.white24, strokeWidth: 2),
+            : Center(
+                child: _loadFailed
+                    ? const Text('Vidéo indisponible', style: TextStyle(color: Colors.white54))
+                    : const CircularProgressIndicator(color: Colors.white24, strokeWidth: 2),
               ),
       ),
     );
