@@ -1,3 +1,4 @@
+import '../widgets/oticket_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -107,14 +108,14 @@ class _OrganizerScanPageState extends ConsumerState<OrganizerScanPage> {
                   width: 220,
                   height: 220,
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFF7C4DFF), width: 3),
+                    border: Border.all(color: Colors.white, width: 3),
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
                 if (_busy)
                   Container(
                     color: Colors.black54,
-                    child: const Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF))),
+                    child: const Center(child: CircularProgressIndicator(color: Colors.white)),
                   ),
               ],
             ),
@@ -193,7 +194,7 @@ class _OrganizerScanPageState extends ConsumerState<OrganizerScanPage> {
           ),
           const SizedBox(width: 8),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C4DFF)),
+            style: ElevatedButton.styleFrom(backgroundColor: oticketDarkBlue),
             onPressed: () {
               if (ctrl.text.trim().isNotEmpty) _handleCode(ctrl.text.trim());
             },
