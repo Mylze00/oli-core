@@ -7,6 +7,8 @@ const exchangeRateRepository = require('../repositories/exchange-rate.repository
 
 const EXCHANGE_RATE_API_URL = 'https://api.exchangerate-api.com/v4/latest';
 const CACHE_DURATION_MS = 3600000; // 1 heure
+const MAX_ORDER_RATE_AGE_MS = 24 * 3600000; // 24 heures
+const API_SOURCE = 'exchangerate-api';
 
 class ExchangeRateService {
     constructor() {
@@ -16,37 +18,77 @@ class ExchangeRateService {
         };
     }
 
+    _isCacheFresh() {
+        return Boolean(this.cache.rate && this.cache.timestamp
+            && (Date.now() - this.cache.timestamp) < CACHE_DURATION_MS);
+    }
+
+    /**
+     * Interroge l'API externe, enregistre le taux et met à jour le cache.
+     * @throws {Error} si l'API ou l'enregistrement échoue
+     */
+    async _fetchAndStoreRate(baseCurrency = 'USD') {
+        console.log(`[EXCHANGE] Récupération du taux depuis l'API pour ${baseCurrency}...`);
+        const response = await axios.get(`${EXCHANGE_RATE_API_URL}/${baseCurrency}`, {
+            timeout: 5000
+        });
+
+        if (!response.data || !response.data.rates) {
+            throw new Error('Réponse API invalide');
+        }
+
+        const cdfRate = response.data.rates.CDF;
+        if (!cdfRate) {
+            throw new Error('Taux CDF non disponible dans la réponse API');
+        }
+
+        await exchangeRateRepository.saveRate(baseCurrency, 'CDF', cdfRate, API_SOURCE);
+
+        this.cache = {
+            rate: cdfRate,
+            timestamp: Date.now()
+        };
+
+        console.log(`✅ [EXCHANGE] Taux mis à jour: 1 ${baseCurrency} = ${cdfRate} CDF`);
+        return cdfRate;
+    }
+
+    /**
+     * Taux USD → FC à figer sur une commande.
+     * Contrairement à fetchLiveRate, n'utilise jamais un taux ancien ni un taux par défaut :
+     * un taux erroné ferait débiter ou créditer un montant faux.
+     *
+     * @returns {Promise<number>} 1 USD = X FC
+     * @throws {Error} RATE_UNAVAILABLE si aucun taux de moins de 24 h n'est disponible
+     */
+    async getRateForOrder() {
+        if (this._isCacheFresh()) {
+            return this.cache.rate;
+        }
+
+        try {
+            return await this._fetchAndStoreRate('USD');
+        } catch (error) {
+            console.error('❌ [EXCHANGE] Taux en direct indisponible pour la commande:', error.message);
+        }
+
+        const latest = await exchangeRateRepository.getLatestRate('USD', 'CDF');
+        const isRecent = latest
+            && latest.source === API_SOURCE
+            && (Date.now() - new Date(latest.fetched_at).getTime()) <= MAX_ORDER_RATE_AGE_MS;
+        if (isRecent) {
+            return parseFloat(latest.rate);
+        }
+
+        throw new Error('RATE_UNAVAILABLE');
+    }
+
     /**
      * Récupérer le taux en temps réel depuis l'API externe
      */
     async fetchLiveRate(baseCurrency = 'USD') {
         try {
-            console.log(`[EXCHANGE] Récupération du taux depuis l'API pour ${baseCurrency}...`);
-            const response = await axios.get(`${EXCHANGE_RATE_API_URL}/${baseCurrency}`, {
-                timeout: 5000
-            });
-
-            if (response.data && response.data.rates) {
-                const cdfRate = response.data.rates.CDF;
-
-                if (!cdfRate) {
-                    throw new Error('Taux CDF non disponible dans la réponse API');
-                }
-
-                // Sauvegarder en base de données
-                await exchangeRateRepository.saveRate(baseCurrency, 'CDF', cdfRate, 'exchangerate-api');
-
-                // Mettre à jour le cache
-                this.cache = {
-                    rate: cdfRate,
-                    timestamp: Date.now()
-                };
-
-                console.log(`✅ [EXCHANGE] Taux mis à jour: 1 ${baseCurrency} = ${cdfRate} CDF`);
-                return cdfRate;
-            }
-
-            throw new Error('Réponse API invalide');
+            return await this._fetchAndStoreRate(baseCurrency);
         } catch (error) {
             console.error(`❌ [EXCHANGE] Erreur lors de la récupération du taux:`, error.message);
 
@@ -67,25 +109,15 @@ class ExchangeRateService {
      * Obtenir le taux actuel (avec cache)
      */
     async getCurrentRate(fromCurrency = 'USD', toCurrency = 'CDF') {
-        // Vérifier le cache
-        const now = Date.now();
-        if (this.cache.rate && this.cache.timestamp && (now - this.cache.timestamp) < CACHE_DURATION_MS) {
-            console.log(`[EXCHANGE] Utilisation du cache (${Math.round((now - this.cache.timestamp) / 1000)}s)`);
-            return this.cache.rate;
+        const isUsdToCdf = fromCurrency === 'USD' && toCurrency === 'CDF';
+        const isCdfToUsd = fromCurrency === 'CDF' && toCurrency === 'USD';
+        if (!isUsdToCdf && !isCdfToUsd) {
+            throw new Error(`Conversion ${fromCurrency} → ${toCurrency} non supportée`);
         }
 
-        // Si le cache est expiré, récupérer un nouveau taux
-        if (fromCurrency === 'USD' && toCurrency === 'CDF') {
-            return await this.fetchLiveRate('USD');
-        }
-
-        // Pour CDF → USD, inverser le taux
-        if (fromCurrency === 'CDF' && toCurrency === 'USD') {
-            const usdToCdf = await this.fetchLiveRate('USD');
-            return 1 / usdToCdf;
-        }
-
-        throw new Error(`Conversion ${fromCurrency} → ${toCurrency} non supportée`);
+        // Le cache contient toujours le taux USD → CDF
+        const usdToCdf = this._isCacheFresh() ? this.cache.rate : await this.fetchLiveRate('USD');
+        return isCdfToUsd ? 1 / usdToCdf : usdToCdf;
     }
 
     /**

@@ -2,6 +2,8 @@ const orderRepository = require('../repositories/order.repository');
 const walletService = require('./wallet.service');
 const notificationService = require('./notification.service');
 const deliveryRepo = require('../repositories/delivery.repository');
+const exchangeRateService = require('./exchange-rate.service');
+const { orderAmountToWallet } = require('../utils/order-currency');
 const pool = require('../config/db');
 const crypto = require('crypto');
 
@@ -34,6 +36,10 @@ class OrderService {
         const safeDeliveryFee = Math.max(0, parseFloat(deliveryFee) || 0);
         const totalAmount = itemsTotal + safeDeliveryFee;
 
+        // Taux figé pour toute la vie de la commande (débit, crédits et remboursement)
+        const exchangeRate = await this._getOrderExchangeRate();
+        const walletAmount = orderAmountToWallet(totalAmount, exchangeRate);
+
         // LOGIQUE PAIEMENT INSTANTANÉ (wallet & mobile_money)
         let paymentStatus = 'pending';
         let orderStatus = 'pending';
@@ -41,7 +47,7 @@ class OrderService {
         if (paymentMethod === 'wallet') {
             try {
                 // Débiter le wallet avant de créer la commande en base
-                await walletService.payOrder(userId, totalAmount, null); // orderId connu après création
+                await walletService.payOrder(userId, walletAmount, null); // orderId connu après création
                 paymentStatus = 'completed';
                 orderStatus = 'paid';
             } catch (err) {
@@ -64,19 +70,20 @@ class OrderService {
                 deliveryAddress || null,
                 paymentMethod || 'wallet',
                 safeDeliveryFee,
-                deliveryMethodId || null
+                deliveryMethodId || null,
+                exchangeRate
             );
         } catch (createErr) {
             // [FIN C2] Le wallet a déjà été débité : on rembourse si la commande n'existe pas
             if (paymentStatus === 'completed') {
                 const walletRepository = require('../repositories/wallet.repository');
-                await walletRepository.performDeposit(userId, totalAmount, {
+                await walletRepository.performDeposit(userId, walletAmount, {
                     type: 'refund',
                     provider: 'WALLET',
                     reference: `REFUND_ORDER_FAIL_${userId}_${Date.now()}`,
                     description: `Remboursement : commande non créée (${createErr.message})`,
                 });
-                console.error(`↩️ Commande non créée : remboursement de ${totalAmount} FC à l'utilisateur #${userId}`);
+                console.error(`↩️ Commande non créée : remboursement de ${walletAmount} FC à l'utilisateur #${userId}`);
             }
             throw createErr;
         }
@@ -136,6 +143,21 @@ class OrderService {
         const err = new Error(message);
         err.status = 400;
         return err;
+    }
+
+    /**
+     * Récupère le taux USD → FC à figer sur la commande.
+     * Sans taux fiable, la commande est refusée avant tout débit.
+     */
+    async _getOrderExchangeRate() {
+        try {
+            return await exchangeRateService.getRateForOrder();
+        } catch (err) {
+            console.error('❌ Commande refusée, taux de change indisponible:', err.message);
+            const unavailable = new Error('Le taux de change est momentanément indisponible. Réessayez dans quelques instants.');
+            unavailable.status = 503;
+            throw unavailable;
+        }
     }
 
     /**
@@ -1009,8 +1031,10 @@ class OrderService {
      */
     async _creditSellersForOrder(orderId) {
         const itemsResult = await pool.query(
-            `SELECT p.seller_id, oi.product_price, oi.quantity, oi.origin_video_id, vs.user_id AS video_creator_id
+            `SELECT p.seller_id, oi.product_price, oi.quantity, oi.origin_video_id, vs.user_id AS video_creator_id,
+                    o.exchange_rate
              FROM order_items oi
+             JOIN orders o ON o.id = oi.order_id
              JOIN products p ON oi.product_id::integer = p.id
              LEFT JOIN video_sales vs ON oi.origin_video_id = vs.id
              WHERE oi.order_id = $1 AND p.seller_id IS NOT NULL`,
@@ -1022,6 +1046,7 @@ class OrderService {
             return;
         }
 
+        const exchangeRate = itemsResult.rows[0].exchange_rate;
         const sellerTotals = {};
         const videoCreatorTotals = {};
 
@@ -1049,7 +1074,8 @@ class OrderService {
         }
 
         // Payer les vendeurs
-        for (const [sellerId, amount] of Object.entries(sellerTotals)) {
+        for (const [sellerId, usdAmount] of Object.entries(sellerTotals)) {
+            const amount = orderAmountToWallet(usdAmount, exchangeRate);
             if (amount <= 0) continue;
             try {
                 await walletService.creditSeller(sellerId, amount, orderId);
@@ -1059,7 +1085,8 @@ class OrderService {
         }
 
         // Payer les créateurs de vidéos (Affiliation 2%)
-        for (const [creatorId, amount] of Object.entries(videoCreatorTotals)) {
+        for (const [creatorId, usdAmount] of Object.entries(videoCreatorTotals)) {
+            const amount = orderAmountToWallet(usdAmount, exchangeRate);
             if (amount <= 0) continue;
             try {
                 const walletRepository = require('../repositories/wallet.repository');

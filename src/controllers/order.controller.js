@@ -7,6 +7,9 @@ exports.create = async (req, res) => {
         res.status(201).json({ message: "Commande créée", order });
     } catch (error) {
         console.error("Erreur création commande:", error);
+        if (error.status === 503) {
+            return res.status(503).json({ error: error.message });
+        }
         // Erreurs métier (produit introuvable, quantité invalide, etc.) : 400 avec message clair
         if (error.status === 400 || error.message === "Items requis" || error.message.startsWith("Chaque item")) {
             return res.status(400).json({ error: error.message });
