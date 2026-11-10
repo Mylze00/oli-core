@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../main.dart';
 import 'call_screen.dart';
+import '../../core/services/native_call_service.dart';
 
 final socketServiceProvider = Provider<SocketService>((ref) {
   return SocketService();
@@ -99,6 +100,9 @@ class SocketService {
     _socket!.on('webrtc_call_incoming', (data) {
       if (data is Map) {
         debugPrint("📞 APPEL ENTRANT REÇU: $data");
+        // Application en arrière-plan : l'écran natif d'Android sonne déjà
+        if (NativeCallService.isSupported && WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) return;
+
         final callerId = data['fromId']?.toString() ?? data['callerId']?.toString() ?? '';
         if (ActiveCall.peerId != null && ActiveCall.peerId != callerId) {
           emit('webrtc_call_reject', {'callerId': callerId, 'reason': 'busy'});

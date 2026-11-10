@@ -1,15 +1,17 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'dart:async';
 import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' hide AndroidAudioMode;
 import 'package:permission_handler/permission_handler.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
 import '../../../../widgets/verification_badge.dart';
 import '../../core/router/network/dio_provider.dart';
+import '../../core/services/native_call_service.dart';
+import '../../core/user/user_provider.dart';
 import 'call_quality_monitor.dart';
 import 'socket_service.dart';
 
@@ -35,6 +37,9 @@ class CallScreen extends ConsumerStatefulWidget {
   final bool isVideoCall;
   final bool isIncoming;
 
+  /// L'appel a déjà été accepté depuis l'écran natif du téléphone.
+  final bool autoAccept;
+
   const CallScreen({
     super.key,
     required this.otherId,
@@ -43,6 +48,7 @@ class CallScreen extends ConsumerStatefulWidget {
     this.otherAvatarUrl,
     this.isVideoCall = false,
     this.isIncoming = false,
+    this.autoAccept = false,
   });
 
   @override
@@ -127,7 +133,9 @@ class _CallScreenState extends ConsumerState<CallScreen>
     _setupSocketListeners();
     _loadPeerIdentity();
 
-    if (widget.isIncoming) {
+    if (widget.autoAccept) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _acceptCall());
+    } else if (widget.isIncoming) {
       _timeoutTimer = Timer(_incomingRingTimeout, () {
         if (!_isCallActive) _endCallCleanup();
       });
@@ -135,7 +143,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
       _startOutgoingCall();
     }
 
-    _playRingtone();
+    if (!widget.autoAccept) _playRingtone();
   }
 
   /// Le nom et la certification viennent du serveur, jamais de l'appelant.
@@ -152,6 +160,59 @@ class _CallScreenState extends ConsumerState<CallScreen>
     }
   }
 
+  static final _ringbackAudioContext = AudioContext(
+    android: const AudioContextAndroid(
+      isSpeakerphoneOn: false,
+      stayAwake: false,
+      contentType: AndroidContentType.speech,
+      usageType: AndroidUsageType.voiceCommunicationSignalling,
+      audioFocus: AndroidAudioFocus.none,
+      audioMode: AndroidAudioMode.inCommunication,
+    ),
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.playAndRecord,
+      options: const [AVAudioSessionOptions.allowBluetooth],
+    ),
+  );
+
+  Future<void> _prepareCallAudio() async {
+    if (kIsWeb) return;
+    try {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        await Helper.setAndroidAudioConfiguration(AndroidAudioConfiguration.communication);
+      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await Helper.setAppleAudioIOMode(AppleAudioIOMode.localAndRemote);
+      }
+    } catch (e) {
+      debugPrint('Configuration audio impossible: $e');
+    }
+  }
+
+  /// La sonnerie vient de s'arrêter : l'audio repasse à la conversation.
+  Future<void> _restoreCallAudioRoute() async {
+    if (kIsWeb) return;
+    try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await Helper.setAppleAudioIOMode(AppleAudioIOMode.localAndRemote, preferSpeakerOutput: _isSpeakerOn);
+      }
+      await Helper.setSpeakerphoneOn(_isSpeakerOn);
+    } catch (e) {
+      debugPrint('Sortie audio non appliquée: $e');
+    }
+  }
+
+  /// Après un démarrage par l'écran natif, la connexion en direct n'est pas encore ouverte.
+  Future<bool> _ensureSocketConnected() async {
+    final socket = ref.read(socketServiceProvider);
+    for (var attempt = 0; attempt < 50 && mounted; attempt++) {
+      if (socket.isConnected) return true;
+      final userId = ref.read(userProvider).value?.id.toString();
+      if (userId != null) await socket.connect(userId);
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+    return socket.isConnected;
+  }
+
   bool _isFromPeer(Map<String, dynamic> data) => data['fromId']?.toString() == widget.otherId;
 
   Future<bool> _prepareWebRTC() => _webrtcReady ??= _setupWebRTC();
@@ -159,6 +220,8 @@ class _CallScreenState extends ConsumerState<CallScreen>
   Future<void> _playRingtone() async {
     try {
       await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+      // Sans ce réglage, la tonalité d'attente coupe le mode audio de l'appel sur téléphone
+      if (!kIsWeb && !widget.isIncoming) await _audioPlayer.setAudioContext(_ringbackAudioContext);
       if (widget.isIncoming) {
         // Sonnerie d'appel entrant
         await _audioPlayer.play(AssetSource('sounds/ringtone.mp3'));
@@ -178,6 +241,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
   Future<bool> _setupWebRTC() async {
     await _renderersReady;
+    await _prepareCallAudio();
 
     // Request permissions
     await [Permission.microphone, if (widget.isVideoCall) Permission.camera].request();
@@ -264,12 +328,10 @@ class _CallScreenState extends ConsumerState<CallScreen>
       if (!mounted || !_isFromPeer(data)) return;
       setState(() => _isCallActive = true);
       _timeoutTimer?.cancel();
-      _audioPlayer.stop();
+      await _audioPlayer.stop();
       _pulseController.stop();
-      if (widget.isVideoCall) {
-        setState(() => _isSpeakerOn = true);
-        Helper.setSpeakerphoneOn(true);
-      }
+      if (widget.isVideoCall) setState(() => _isSpeakerOn = true);
+      await _restoreCallAudioRoute();
       _startConnectionWait();
       await _createOffer();
     });
@@ -377,11 +439,15 @@ class _CallScreenState extends ConsumerState<CallScreen>
     // L'autre appareil n'envoie son offre qu'après l'acceptation : le micro doit être prêt avant
     if (!await _prepareWebRTC() || !mounted) return;
 
-    setState(() => _isCallActive = true);
-    if (widget.isVideoCall) {
-      setState(() => _isSpeakerOn = true);
-      Helper.setSpeakerphoneOn(true);
+    if (!await _ensureSocketConnected() || !mounted) {
+      if (mounted) _endCallWithMessage('Connexion impossible. $_moveMessage');
+      return;
     }
+    if (widget.autoAccept) NativeCallService.endForCaller(widget.otherId);
+
+    setState(() => _isCallActive = true);
+    if (widget.isVideoCall) setState(() => _isSpeakerOn = true);
+    await _restoreCallAudioRoute();
 
     ref.read(socketServiceProvider).emit('webrtc_call_accept', {
       'callerId': widget.otherId,

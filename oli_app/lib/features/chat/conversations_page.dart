@@ -825,7 +825,7 @@ class ConversationTile extends StatelessWidget {
     final otherName = conversation['other_name'] ?? 'Utilisateur';
     final isTyping = conversation['is_typing'] == true;
     final lastMessage = isTyping
-        ? "En train d'écrire…"
+        ? (conversation['is_recording'] == true ? 'Enregistre un vocal…' : "En train d'écrire…")
         : (isLocked ? 'Discussion verrouillée' : (conversation['last_message'] ?? ''));
     final unreadCount = conversation['unread_count'] ?? 0;
     final productName = conversation['product_name'];

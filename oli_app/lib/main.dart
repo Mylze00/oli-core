@@ -8,6 +8,7 @@ import 'features/auth/screens/login_page.dart';
 import 'features/home/home_page.dart';
 import 'features/auth/providers/auth_controller.dart';
 import 'core/services/fcm_service.dart';
+import 'core/services/native_call_service.dart';
 import 'core/services/hive_cache_service.dart';
 import 'core/services/database_helper.dart'; // SQLite
 import 'app/theme/theme_provider.dart';
@@ -20,7 +21,7 @@ import 'core/theme/oli_colors.dart';
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
 
 // Ouvrir CallScreen depuis n'importe quel contexte (FCM, Socket)
-void openIncomingCallScreen(Map<String, String> callData) {
+void openIncomingCallScreen(Map<String, String> callData, {bool autoAccept = false}) {
   final context = globalNavigatorKey.currentContext;
   final callerId = callData['callerId'] ?? '';
   // Le même appel arrive par la connexion en direct et par la notification
@@ -36,9 +37,18 @@ void openIncomingCallScreen(Map<String, String> callData) {
         conversationId: callData['conversationId'],
         isVideoCall:    callData['callType'] == 'video',
         isIncoming:     true,
+        autoAccept:     autoAccept,
       ),
     ),
   );
+}
+
+/// « Décrocher » peut avoir lancé l'application : on attend que l'interface existe.
+Future<void> _openAcceptedCall(Map<String, String> callData) async {
+  for (var attempt = 0; attempt < 50 && globalNavigatorKey.currentContext == null; attempt++) {
+    await Future.delayed(const Duration(milliseconds: 200));
+  }
+  openIncomingCallScreen(callData, autoAccept: true);
 }
 
 void main() async {
@@ -65,6 +75,8 @@ void main() async {
 
   // Brancher le callback d'appel entrant sur le navigateur global
   FcmService().onIncomingCall = openIncomingCallScreen;
+  NativeCallService.listen(_openAcceptedCall);
+  NativeCallService.requestPermissionsOnce();
 
   await EasyLocalization.ensureInitialized();
 

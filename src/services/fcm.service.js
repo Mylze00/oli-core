@@ -161,6 +161,29 @@ class FcmService {
     }
 
     /**
+     * Arrête la sonnerie native quand l'appelant raccroche avant la réponse.
+     */
+    async sendCallCancelled(userId, callerId) {
+        if (!initialized || !admin) return;
+
+        try {
+            const result = await db.query(
+                "SELECT token FROM device_tokens WHERE user_id = $1 AND platform = 'android'",
+                [userId]
+            );
+            if (result.rows.length === 0) return;
+
+            await admin.messaging().sendEachForMulticast({
+                data: { oli_notification_type: 'call_cancelled', caller_id: String(callerId) },
+                tokens: result.rows.map((r) => r.token),
+                android: { priority: 'high', ttl: 30000 },
+            });
+        } catch (err) {
+            console.warn('[FCM] Annulation d\'appel non envoyée:', err.message);
+        }
+    }
+
+    /**
      * Notification d'appel entrant — HAUTE PRIORITE
      * Utilise un message "data-only" pour Android full-screen intent
      * et content-available pour iOS VoIP-like wakeup
@@ -202,17 +225,10 @@ class FcmService {
                 // Pas de "notification" block -> data-only -> Flutter le gere
                 data: callPayload,
                 tokens: tokens,
+                // Sans bloc « notification » : Android doit réveiller l'application pour la faire sonner
                 android: {
                     priority: 'high',
                     ttl: 30000, // 30 secondes max (appel)
-                    // Full-screen intent sur Android (ecran verrouille)
-                    notification: {
-                        channelId: 'oli_calls',
-                        priority: 'max',
-                        defaultVibrateTimings: false,
-                        vibrateTimingsMillis: [0, 500, 200, 500],
-                        visibility: 'PUBLIC',
-                    },
                 },
                 apns: {
                     headers: {

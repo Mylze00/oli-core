@@ -34,10 +34,12 @@ class ChatState {
     this.requesterId,
     this.isOtherUserOnline = false,
     this.isOtherUserTyping = false,
+    this.isOtherUserRecording = false,
   });
 
   final bool isOtherUserOnline;
   final bool isOtherUserTyping;
+  final bool isOtherUserRecording;
 
   ChatState copyWith({
     bool? isLoading, 
@@ -48,6 +50,7 @@ class ChatState {
     int? requesterId,
     bool? isOtherUserOnline,
     bool? isOtherUserTyping,
+    bool? isOtherUserRecording,
   }) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
@@ -58,6 +61,7 @@ class ChatState {
       requesterId: requesterId ?? this.requesterId,
       isOtherUserOnline: isOtherUserOnline ?? this.isOtherUserOnline,
       isOtherUserTyping: isOtherUserTyping ?? this.isOtherUserTyping,
+      isOtherUserRecording: isOtherUserRecording ?? this.isOtherUserRecording,
     );
   }
 }
@@ -129,7 +133,7 @@ class ChatController extends StateNotifier<ChatState> {
 
     if (senderId == otherUserId && state.isOtherUserTyping) {
       _typingExpiryTimer?.cancel();
-      state = state.copyWith(isOtherUserTyping: false);
+      state = state.copyWith(isOtherUserTyping: false, isOtherUserRecording: false);
     }
     
     // Vérifier si le message nous concerne
@@ -271,10 +275,13 @@ class ChatController extends StateNotifier<ChatState> {
     if (isTyping) {
       // L'indicateur s'efface seul si l'autre personne perd sa connexion
       _typingExpiryTimer = Timer(_typingExpiryDelay, () {
-        if (mounted) state = state.copyWith(isOtherUserTyping: false);
+        if (mounted) state = state.copyWith(isOtherUserTyping: false, isOtherUserRecording: false);
       });
     }
-    state = state.copyWith(isOtherUserTyping: isTyping);
+    state = state.copyWith(
+      isOtherUserTyping: isTyping,
+      isOtherUserRecording: isTyping && data['activity'] == 'recording',
+    );
   }
 
   /// Le signal n'est répété que toutes les 3 secondes, pas à chaque touche.
@@ -295,6 +302,16 @@ class ChatController extends StateNotifier<ChatState> {
       _emitTyping(true);
     }
     _typingIdleTimer = Timer(_typingIdleDelay, () => sendTyping(false));
+  }
+
+  /// Répété régulièrement pendant l'enregistrement, qui peut durer plusieurs minutes.
+  void sendRecording(bool isRecording) {
+    if (state.conversationId == null) return;
+    _socketService.emit('typing', {
+      'conversationId': state.conversationId,
+      'isTyping': isRecording,
+      'activity': 'recording',
+    });
   }
 
   void _emitTyping(bool isTyping) {
@@ -439,6 +456,64 @@ class ChatController extends StateNotifier<ChatState> {
         state = state.copyWith(isLoading: false, error: "Erreur de chargement: $e");
       }
     }
+  }
+
+  /// Affiche le vocal tout de suite, puis l'envoie.
+  Future<bool> sendVoice(
+    XFile file, {
+    required Duration duration,
+    String? replyToId,
+    String? productId,
+    String? productName,
+    String? productImage,
+    double? productPrice,
+  }) async {
+    if (myId == null) return false;
+
+    const content = '🎤 Message vocal';
+    final placeholderId = 'temp_upload_${DateTime.now().millisecondsSinceEpoch}';
+    var lastProgress = 0.0;
+
+    state = state.copyWith(messages: [
+      ...state.messages,
+      {
+        'id': placeholderId,
+        'sender_id': int.parse(myId!),
+        'content': content,
+        'type': 'audio',
+        'created_at': DateTime.now().toIso8601String(),
+        'local_audio': true,
+        'duration_ms': duration.inMilliseconds,
+        'upload_progress': 0.0,
+      },
+    ]);
+
+    final url = await uploadImage(file, onProgress: (progress) {
+      if (!mounted || (progress - lastProgress < _uploadProgressStep && progress < 1)) return;
+      lastProgress = progress;
+      state = state.copyWith(messages: [
+        for (final m in state.messages)
+          if (m['id'] == placeholderId) {...m, 'upload_progress': progress} else m,
+      ]);
+    });
+
+    if (!mounted) return url != null;
+    state = state.copyWith(messages: state.messages.where((m) => m['id'] != placeholderId).toList());
+    if (url == null) return false;
+
+    sendMessage(
+      content: content,
+      mediaUrl: url,
+      mediaType: 'audio',
+      type: 'audio',
+      customMetadata: {'duration_ms': duration.inMilliseconds},
+      replyToId: replyToId,
+      productId: productId,
+      productName: productName,
+      productImage: productImage,
+      productPrice: productPrice,
+    );
+    return true;
   }
 
   /// Affiche l'image tout de suite, puis l'affine au fil de l'envoi.

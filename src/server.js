@@ -188,6 +188,7 @@ io.on('connection', (socket) => {
                     userId,
                     conversationId,
                     isTyping: payload.isTyping === true,
+                    activity: payload.activity === 'recording' ? 'recording' : 'typing',
                 });
             }
         } catch (e) {
@@ -299,6 +300,7 @@ io.on('connection', (socket) => {
         const status = data.reason === 'timeout' ? 'missed' : 'cancelled';
         await logCall(() => callLogService.updateCallStatus(userId, data.toId, status));
         socket.to('user_' + data.toId).emit('webrtc_call_cancelled', { fromId: userId });
+        require('./services/fcm.service').sendCallCancelled(parseInt(data.toId), userId);
     });
 
     socket.on('webrtc_call_ended', async (data) => {

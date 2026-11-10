@@ -67,13 +67,15 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Map<String, dy
     _typingExpiryTimers.remove(conversationId)?.cancel();
     if (isTyping) {
       _typingExpiryTimers[conversationId] =
-          Timer(_typingExpiryDelay, () => _setTyping(conversationId, false));
+          Timer(_typingExpiryDelay, () => _setTyping(conversationId, false, false));
     }
-    _setTyping(conversationId, isTyping);
+    _setTyping(conversationId, isTyping, isTyping && data['activity'] == 'recording');
   }
 
-  void _setTyping(String conversationId, bool isTyping) {
-    if (mounted) _updateLocal(conversationId, (c) => {...c, 'is_typing': isTyping});
+  void _setTyping(String conversationId, bool isTyping, bool isRecording) {
+    if (mounted) {
+      _updateLocal(conversationId, (c) => {...c, 'is_typing': isTyping, 'is_recording': isRecording});
+    }
   }
 
   @override

@@ -437,6 +437,12 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                   ),
                   child: isLocation
                       ? LocationMessageBubble(metadata: metaMap!, isMe: widget.isMe)
+                      : widget.message['local_audio'] == true
+                          ? AudioUploadingBubble(
+                              progress: (widget.message['upload_progress'] as num?)?.toDouble() ?? 0,
+                              durationMs: (widget.message['duration_ms'] as num?)?.toInt() ?? 0,
+                              isMe: widget.isMe,
+                            )
                       : cashAmount != null
                           ? CashNoteBubble(
                               amountFc: cashAmount,
@@ -451,7 +457,11 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                             )
                       : (mediaType == 'audio' ||
                               (mediaUrl != null && mediaUrl.endsWith('.m4a')))
-                          ? AudioMessageBubble(audioUrl: mediaUrl!, isMe: widget.isMe)
+                          ? AudioMessageBubble(
+                              audioUrl: mediaUrl!,
+                              isMe: widget.isMe,
+                              durationMs: (metaMap?['duration_ms'] as num?)?.toInt(),
+                            )
                           : Column(
                               crossAxisAlignment: isImageOnly && widget.isMe
                                   ? CrossAxisAlignment.end

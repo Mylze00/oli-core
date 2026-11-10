@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:dio/dio.dart';
 import '../../config/api_config.dart';
 import '../storage/secure_storage_service.dart';
+import 'native_call_service.dart';
 
 // NavigatorKey global pour naviguer depuis le background handler
 final GlobalKey<NavigatorState> fcmNavigatorKey = GlobalKey<NavigatorState>();
@@ -19,6 +20,17 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final isIncomingCall = data['oli_notification_type'] == 'incoming_call';
 
   debugPrint('[FCM BG] Message reçu: type=${data['oli_notification_type']}');
+
+  if (NativeCallService.isSupported) {
+    if (isIncomingCall) {
+      await NativeCallService.showIncoming(data);
+      return;
+    }
+    if (data['oli_notification_type'] == 'call_cancelled') {
+      await NativeCallService.endForCaller(data['caller_id']?.toString() ?? '');
+      return;
+    }
+  }
 
   final localNotifications = FlutterLocalNotificationsPlugin();
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -202,6 +214,8 @@ class FcmService {
       debugPrint('[FCM] Foreground message: ${message.data}');
       final data = message.data;
 
+      if (data['oli_notification_type'] == 'call_cancelled') return;
+
       if (data['oli_notification_type'] == 'incoming_call') {
         // Déclencher directement le CallScreen si callback défini
         if (onIncomingCall != null) {
@@ -213,7 +227,8 @@ class FcmService {
             'conversationId': data['conversation_id'] ?? '',
           });
         }
-        _showCallNotification(data);
+        // Sur Android, l'écran d'appel sonne déjà dans l'application
+        if (!NativeCallService.isSupported) _showCallNotification(data);
       } else {
         _showLocalNotification(message);
       }

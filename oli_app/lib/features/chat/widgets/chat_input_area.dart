@@ -1,25 +1,64 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/theme/oli_colors.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
 
+const _maxRecordingDuration = Duration(minutes: 5);
+const _minRecordingDuration = Duration(milliseconds: 800);
+const _cancelDragDistance = -80.0;
+const _lockDragDistance = -70.0;
+const _recordingSignalEverySeconds = 3;
+const _holdHint = 'Maintenez le bouton pour enregistrer un vocal';
+
+/// Un vocal prêt à être envoyé.
+class VoiceRecording {
+  final String path;
+  final String fileName;
+  final String mimeType;
+  final Duration duration;
+
+  const VoiceRecording({
+    required this.path,
+    required this.fileName,
+    required this.mimeType,
+    required this.duration,
+  });
+}
+
+class _VoiceFormat {
+  final AudioEncoder encoder;
+  final String extension;
+  final String mimeType;
+
+  const _VoiceFormat(this.encoder, this.extension, this.mimeType);
+}
+
+const _voiceFormats = [
+  _VoiceFormat(AudioEncoder.aacLc, 'm4a', 'audio/mp4'),
+  _VoiceFormat(AudioEncoder.opus, 'webm', 'audio/webm'),
+];
+
+enum _VoiceState { idle, holding, locked, review }
 
 class ChatInputArea extends StatefulWidget {
   final Function(String) onSendMessage;
-  final Function(String)? onAudioRecorded; // New callback
+  final void Function(VoiceRecording recording)? onVoiceRecorded;
   final VoidCallback onShowTools;
   final Function(bool)? onTyping;
+  final void Function(bool isRecording)? onRecording;
 
   const ChatInputArea({
     super.key,
     required this.onSendMessage,
     required this.onShowTools,
-    this.onAudioRecorded,
+    this.onVoiceRecorded,
     this.onTyping,
+    this.onRecording,
   });
 
   @override
@@ -28,18 +67,20 @@ class ChatInputArea extends StatefulWidget {
 
 class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
-  
-  // Audio Recording State
+
   final AudioRecorder _audioRecorder = AudioRecorder();
-  bool _isRecording = false;
-  bool _isLocked = false; // For future "lock" feature if needed, currently used for visual state
+  final AudioPlayer _reviewPlayer = AudioPlayer();
+  _VoiceState _voiceState = _VoiceState.idle;
+  _VoiceFormat? _voiceFormat;
+  bool _isStarting = false;
+  bool _isPressing = false;
+  bool _isReviewPlaying = false;
   double _dragOffset = 0.0;
   DateTime? _startTime;
   Timer? _timer;
   Duration _recordDuration = Duration.zero;
-  String? _currentPath;
+  String? _reviewPath;
 
-  // Animation for Mic scaling
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
 
@@ -47,21 +88,25 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
   void initState() {
     super.initState();
     _controller.addListener(_onTextChanged);
-    
+
     _animController = AnimationController(
-       vsync: this,
-       duration: const Duration(milliseconds: 200),
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
     );
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
       CurvedAnimation(parent: _animController, curve: Curves.easeOut),
     );
+
+    _reviewPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) setState(() => _isReviewPlaying = state == PlayerState.playing);
+    });
   }
 
   void _onTextChanged() {
     setState(() {}); // Refresh for icon change
-    
+
     if (widget.onTyping != null) {
-       widget.onTyping!(_controller.text.isNotEmpty);
+      widget.onTyping!(_controller.text.isNotEmpty);
     }
   }
 
@@ -71,7 +116,11 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
     _controller.dispose();
     _animController.dispose();
     _timer?.cancel();
+    if (_voiceState == _VoiceState.holding || _voiceState == _VoiceState.locked) {
+      widget.onRecording?.call(false);
+    }
     _audioRecorder.dispose();
+    _reviewPlayer.dispose();
     super.dispose();
   }
 
@@ -83,106 +132,210 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
     }
   }
 
+  void _showHint(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 2)));
+  }
+
   // --- AUDIO RECORDING ---
 
-  Future<bool> _checkPermission() async {
-     if (kIsWeb) return true; // Web asks on usage
-     
-     // Check mic permission
-     if (await Permission.microphone.request().isGranted) {
-       return true;
-     }
-     return false;
+  /// Tous les navigateurs n'enregistrent pas le même format.
+  Future<_VoiceFormat?> _chooseFormat() async {
+    if (_voiceFormat != null) return _voiceFormat;
+    for (final format in _voiceFormats) {
+      if (await _audioRecorder.isEncoderSupported(format.encoder)) {
+        return _voiceFormat = format;
+      }
+    }
+    return null;
   }
 
   Future<void> _startRecording() async {
+    if (_isStarting || _voiceState != _VoiceState.idle) return;
+    _isStarting = true;
+    _isPressing = true;
+
     try {
-      final hasPermission = await _checkPermission();
-      if (!hasPermission) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permission micro requise')));
+      if (!await _audioRecorder.hasPermission()) {
+        _showHint("Autorisez l'accès au micro pour enregistrer un vocal");
         return;
       }
 
-      String? path;
-      if (!kIsWeb) {
-        final Directory appDir = await getApplicationDocumentsDirectory();
-        final String fileName = 'audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        _currentPath = '${appDir.path}/$fileName';
-        path = _currentPath;
-      } else {
-        _currentPath = null; // Web handles path internally (Blob)
+      // La demande d'autorisation interrompt l'appui : ne jamais enregistrer sans doigt posé
+      if (!_isPressing) {
+        _showHint(_holdHint);
+        return;
       }
 
-      await _audioRecorder.start(
-        const RecordConfig(),
-        path: path ?? '',
-      );
+      final format = await _chooseFormat();
+      if (format == null) {
+        _showHint('Cet appareil ne permet pas d\'enregistrer un vocal');
+        return;
+      }
 
+      String path = '';
+      if (!kIsWeb) {
+        final Directory appDir = await getApplicationDocumentsDirectory();
+        path = '${appDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.${format.extension}';
+      }
+
+      await _audioRecorder.start(RecordConfig(encoder: format.encoder), path: path);
+
+      if (!_isPressing) {
+        await _audioRecorder.cancel();
+        return;
+      }
+      if (!mounted) return;
+
+      HapticFeedback.mediumImpact();
       setState(() {
-        _isRecording = true;
+        _voiceState = _VoiceState.holding;
         _startTime = DateTime.now();
         _recordDuration = Duration.zero;
         _dragOffset = 0.0;
       });
+      widget.onRecording?.call(true);
 
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        setState(() {
-          _recordDuration = Duration(seconds: timer.tick);
-        });
-      });
-
+      _timer = Timer.periodic(const Duration(seconds: 1), _onRecordingTick);
       _animController.forward();
-      // Haptic feedback could be added here
-      
     } catch (e) {
       debugPrint("Error starting record: $e");
+      _showHint("Impossible de démarrer l'enregistrement");
+    } finally {
+      _isStarting = false;
     }
   }
 
-  Future<void> _stopRecording({bool cancel = false}) async {
-    if (!_isRecording) return;
+  void _onRecordingTick(Timer timer) {
+    if (!mounted) return;
+    final elapsed = DateTime.now().difference(_startTime!);
+    setState(() => _recordDuration = elapsed);
 
+    if (timer.tick % _recordingSignalEverySeconds == 0) widget.onRecording?.call(true);
+
+    if (elapsed >= _maxRecordingDuration) {
+      _showHint('Durée maximale de 5 minutes atteinte');
+      if (_voiceState == _VoiceState.locked) {
+        _stopToReview();
+      } else {
+        _sendHeldRecording();
+      }
+    }
+  }
+
+  Duration get _elapsed => _startTime == null ? Duration.zero : DateTime.now().difference(_startTime!);
+
+  void _resetRecordingUi() {
     _timer?.cancel();
     _animController.reverse();
+    widget.onRecording?.call(false);
+  }
 
-    String? path;
-    try {
-      path = await _audioRecorder.stop();
-    } catch (e) {
-      debugPrint("Error stopping record: $e");
-    }
+  void _emitRecording(String path, Duration duration) {
+    final format = _voiceFormat;
+    if (format == null) return;
+    widget.onVoiceRecorded?.call(VoiceRecording(
+      path: path,
+      fileName: 'audio_message.${format.extension}',
+      mimeType: format.mimeType,
+      duration: duration,
+    ));
+  }
 
+  Future<void> _sendHeldRecording() async {
+    if (_voiceState != _VoiceState.holding) return;
+    final duration = _elapsed;
+    _resetRecordingUi();
     setState(() {
-      _isRecording = false;
+      _voiceState = _VoiceState.idle;
       _dragOffset = 0.0;
     });
 
-    if (cancel) {
-      if (path != null) {
-        try { File(path).delete().ignore(); } catch (_) {}
-      }
-    } else {
-      // Logic: If duration is too short (< 1s), cancel it to avoid accidental taps
-      if (_recordDuration.inMilliseconds < 800) {
-         if (path != null) {
-           try { File(path).delete().ignore(); } catch (_) {}
-         }
-         // Optional: Show "Hold to record" hint
-      } else {
-        if (path != null && widget.onAudioRecorded != null) {
-          widget.onAudioRecorded!(path);
-        }
-      }
+    if (duration < _minRecordingDuration) {
+      await _audioRecorder.cancel();
+      _showHint(_holdHint);
+      return;
+    }
+
+    final path = await _audioRecorder.stop();
+    if (path != null) _emitRecording(path, duration);
+  }
+
+  Future<void> _discardRecording() async {
+    _resetRecordingUi();
+    setState(() {
+      _voiceState = _VoiceState.idle;
+      _dragOffset = 0.0;
+    });
+    await _audioRecorder.cancel();
+  }
+
+  void _lockRecording() {
+    HapticFeedback.mediumImpact();
+    _animController.reverse();
+    setState(() {
+      _voiceState = _VoiceState.locked;
+      _dragOffset = 0.0;
+    });
+  }
+
+  Future<void> _stopToReview() async {
+    _recordDuration = _elapsed;
+    _resetRecordingUi();
+    final path = await _audioRecorder.stop();
+    if (!mounted) return;
+    setState(() {
+      _reviewPath = path;
+      _voiceState = path == null ? _VoiceState.idle : _VoiceState.review;
+    });
+  }
+
+  Future<void> _toggleReviewPlayback() async {
+    if (_isReviewPlaying) {
+      await _reviewPlayer.pause();
+      return;
+    }
+    final path = _reviewPath;
+    if (path == null) return;
+    await _reviewPlayer.play(kIsWeb ? UrlSource(path) : DeviceFileSource(path));
+  }
+
+  Future<void> _closeReview({required bool send}) async {
+    await _reviewPlayer.stop();
+    final path = _reviewPath;
+    if (!mounted) return;
+    setState(() {
+      _voiceState = _VoiceState.idle;
+      _reviewPath = null;
+    });
+    if (path == null) return;
+
+    if (send) {
+      _emitRecording(path, _recordDuration);
+    } else if (!kIsWeb) {
+      File(path).delete().ignore();
     }
   }
 
-  void _updateDragOffset(double dx) {
-    // We track horizontal drag. If user drags Left logic.
-    setState(() {
-      _dragOffset = dx;
-    });
-    
-    // If dragged far enough to left, we could show visual "Cancel" state
+  void _onPressMove(LongPressMoveUpdateDetails details) {
+    if (_voiceState != _VoiceState.holding) return;
+    if (details.offsetFromOrigin.dy < _lockDragDistance) {
+      _lockRecording();
+      return;
+    }
+    setState(() => _dragOffset = details.offsetFromOrigin.dx);
+  }
+
+  void _onPressEnd() {
+    _isPressing = false;
+    if (_voiceState != _VoiceState.holding) return;
+    if (_dragOffset < _cancelDragDistance) {
+      _discardRecording();
+    } else {
+      _sendHeldRecording();
+    }
   }
 
   String _formatDuration(Duration d) {
@@ -196,8 +349,9 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bool hasText = _controller.text.isNotEmpty;
-    // Threshold to cancel
-    final bool isCancelling = _dragOffset < -80; 
+    final bool isIdle = _voiceState == _VoiceState.idle;
+    final bool isHolding = _voiceState == _VoiceState.holding;
+    final bool isCancelling = _dragOffset < _cancelDragDistance;
 
     final isDark = theme.brightness == Brightness.dark;
     final fieldColor = isDark ? OliChatDarkColors.receivedBubble : Colors.grey[100];
@@ -217,108 +371,153 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
       child: SafeArea(
         child: Row(
           children: [
-            // If Text: Show Add Button
-            // If Recording: Hide Add Button
-             if (!_isRecording)
+            if (isIdle)
               IconButton(
                 icon: Icon(Icons.add_circle_outline, color: theme.primaryColor, size: 28),
                 onPressed: widget.onShowTools,
               ),
 
-             // Main Content Area
-             Expanded(
-               child: _isRecording 
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: fieldColor,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.mic, color: Colors.red, size: 24),
-                        const SizedBox(width: 10),
-                        Text(
-                          _formatDuration(_recordDuration),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Expanded(
+              child: isIdle
+                  ? Container(
+                      decoration: BoxDecoration(
+                        color: fieldColor,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: TextField(
+                        controller: _controller,
+                        decoration: const InputDecoration(
+                          hintText: 'Message...',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          isDense: true,
                         ),
-                        const Spacer(),
-                        if (isCancelling)
-                           const Text("Relâcher pour annuler", style: TextStyle(color: Colors.red))
-                        else
-                           const Text("<< Glisser pour annuler", style: TextStyle(color: Colors.grey)),
-                      ],
+                        textInputAction: TextInputAction.send,
+                        minLines: 1,
+                        maxLines: 4,
+                        onSubmitted: (_) => _handleSend(),
+                      ),
+                    )
+                  : Container(
+                      padding: EdgeInsets.symmetric(horizontal: isHolding ? 16 : 4),
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: fieldColor,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: isHolding
+                          ? _buildHoldingContent(isCancelling)
+                          : _buildLockedOrReviewContent(theme),
                     ),
-                  )
-                : Container(
-                  decoration: BoxDecoration(
-                    color: fieldColor,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(
-                      hintText: 'Message...',
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      isDense: true,
-                    ),
-                    textInputAction: TextInputAction.send,
-                    minLines: 1,
-                    maxLines: 4,
-                    onSubmitted: (_) => _handleSend(),
-                  ),
-                ),
-             ),
-            
-            const SizedBox(width: 8),
+            ),
 
-            // Send or Mic Button
-            // If text -> Send Button (Tap)
-            // If no text -> Mic Button (Long Press)
-            if (hasText) 
-               Container(
-                  decoration: BoxDecoration(
-                    color: theme.primaryColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                    onPressed: _handleSend,
-                    constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-                    padding: EdgeInsets.zero,
-                  ),
-                )
-            else
-               GestureDetector(
-                 onLongPressStart: (_) => _startRecording(),
-                 onLongPressMoveUpdate: (details) => _updateDragOffset(details.offsetFromOrigin.dx),
-                 onLongPressEnd: (details) {
-                    bool shouldCancel = _dragOffset < -80; // Customizable threshold
-                    _stopRecording(cancel: shouldCancel);
-                 },
-                 child: ScaleTransition(
-                   scale: _scaleAnimation,
-                   child: Container(
-                      width: 48, 
+            if (isIdle || isHolding) const SizedBox(width: 8),
+
+            if (hasText && isIdle)
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.primaryColor,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                  onPressed: _handleSend,
+                  constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+                  padding: EdgeInsets.zero,
+                ),
+              )
+            else if (isIdle || isHolding)
+              Semantics(
+                button: true,
+                label: 'Maintenir pour enregistrer un vocal',
+                child: GestureDetector(
+                  onTap: () => _showHint(_holdHint),
+                  onLongPressStart: (_) => _startRecording(),
+                  onLongPressMoveUpdate: _onPressMove,
+                  onLongPressEnd: (_) => _onPressEnd(),
+                  onLongPressCancel: _onPressEnd,
+                  child: ScaleTransition(
+                    scale: _scaleAnimation,
+                    child: Container(
+                      width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: _isRecording ? (isCancelling ? Colors.red : Colors.redAccent) : theme.primaryColor,
+                        color: isHolding ? (isCancelling ? Colors.red : Colors.redAccent) : theme.primaryColor,
                         shape: BoxShape.circle,
-                        boxShadow: _isRecording ? [BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 10, spreadRadius: 2)] : [],
+                        boxShadow: isHolding
+                            ? [BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 10, spreadRadius: 2)]
+                            : [],
                       ),
                       child: Icon(
-                        _isRecording ? (isCancelling ? Icons.delete : Icons.mic) : Icons.mic, 
-                        color: Colors.white, 
-                        size: 24
+                        isHolding && isCancelling ? Icons.delete : Icons.mic,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
-                 ),
-               ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildHoldingContent(bool isCancelling) {
+    return Row(
+      children: [
+        const Icon(Icons.mic, color: Colors.red, size: 24),
+        const SizedBox(width: 10),
+        Text(_formatDuration(_recordDuration), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            isCancelling ? 'Relâcher pour annuler' : '← Annuler   ↑ Verrouiller',
+            textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: isCancelling ? Colors.red : Colors.grey, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLockedOrReviewContent(ThemeData theme) {
+    final isReview = _voiceState == _VoiceState.review;
+    return Row(
+      children: [
+        IconButton(
+          tooltip: 'Supprimer',
+          icon: const Icon(Icons.delete_outline, color: Colors.red),
+          onPressed: isReview ? () => _closeReview(send: false) : _discardRecording,
+        ),
+        if (isReview)
+          IconButton(
+            tooltip: _isReviewPlaying ? 'Mettre en pause' : 'Réécouter',
+            icon: Icon(_isReviewPlaying ? Icons.pause : Icons.play_arrow, color: theme.primaryColor),
+            onPressed: _toggleReviewPlayback,
+          )
+        else
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Icon(Icons.mic, color: Colors.red, size: 22),
+          ),
+        Text(_formatDuration(_recordDuration), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const Spacer(),
+        if (isReview)
+          IconButton(
+            tooltip: 'Envoyer',
+            icon: Icon(Icons.send, color: theme.primaryColor),
+            onPressed: () => _closeReview(send: true),
+          )
+        else
+          IconButton(
+            tooltip: "Arrêter l'enregistrement",
+            icon: Icon(Icons.stop_circle, color: theme.primaryColor, size: 30),
+            onPressed: _stopToReview,
+          ),
+      ],
     );
   }
 }

@@ -168,7 +168,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                 ),
                 Text(
                   chatState.isOtherUserTyping 
-                      ? "Écrit..." 
+                      ? (chatState.isOtherUserRecording ? "Enregistre un vocal..." : "Écrit...")
                       : (chatState.isOtherUserOnline ? "En ligne" : "Hors ligne"),
                   style: TextStyle(
                     color: chatState.isOtherUserTyping 
@@ -381,7 +381,9 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
             ChatInputArea(
               onSendMessage: _sendMessage,
               onShowTools: () => _showChatTools(context),
-              onAudioRecorded: (path) => _sendAudioMessage(path),
+              onVoiceRecorded: _sendVoice,
+              onRecording: (isRecording) =>
+                  ref.read(chatControllerProvider(widget.otherId).notifier).sendRecording(isRecording),
               onTyping: (isTyping) {
                  ref.read(chatControllerProvider(widget.otherId).notifier).sendTyping(isTyping);
               },
@@ -576,45 +578,24 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
     );
   }
 
-  Future<void> _sendAudioMessage(String path) async {
-    setState(() => _isUploading = true);
-    try {
-      final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
-      
-      String? url;
-      
-      if (path.isEmpty) {
-        setState(() => _isUploading = false);
-        return;
-      }
+  Future<void> _sendVoice(VoiceRecording recording) async {
+    final replyToId = _replyToMessage?['id']?.toString();
+    setState(() => _replyToMessage = null);
 
-      // Cas Mobile/Desktop et Web (Blob URL géré par XFile)
-      // On ajoute un nom de fichier par défaut pour le Web où le blob n'a pas d'extension
-      final xFile = XFile(path, name: 'audio_message.m4a', mimeType: 'audio/mp4');
-      
-      url = await controller.uploadImage(xFile); // Use existing upload logic
+    final sent = await ref.read(chatControllerProvider(widget.otherId).notifier).sendVoice(
+      XFile(recording.path, name: recording.fileName, mimeType: recording.mimeType),
+      duration: recording.duration,
+      replyToId: replyToId,
+      productId: widget.productId,
+      productName: widget.productName,
+      productImage: widget.productImage,
+      productPrice: widget.productPrice,
+    );
 
-      setState(() => _isUploading = false);
-
-      if (url != null) {
-        controller.sendMessage(
-          content: "🎤 Message vocal",
-          mediaUrl: url,
-          mediaType: 'audio',
-          type: 'audio',
-          productId: widget.productId,
-          productName: widget.productName,
-          productImage: widget.productImage,
-          productPrice: widget.productPrice,
-          replyToId: _replyToMessage?['id']?.toString(),
-        );
-        setState(() => _replyToMessage = null);
-      } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de l\'envoi de l\'audio')));
-      }
-    } catch (e) {
-      setState(() => _isUploading = false);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+    if (!sent && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Échec de l'envoi du vocal")),
+      );
     }
   }
 
