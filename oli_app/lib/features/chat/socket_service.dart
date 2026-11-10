@@ -15,6 +15,7 @@ class SocketService {
   IO.Socket? _socket;
   final _storage = SecureStorageService();
   bool _isConnected = false;
+  Future<void>? _connecting;
   
   IO.Socket get socket {
     if (_socket == null) throw Exception("Socket non initialisé.");
@@ -23,7 +24,12 @@ class SocketService {
 
   bool get isConnected => _isConnected;
 
-  Future<void> connect(String userId) async {
+  /// Des appels simultanés partagent la même connexion au lieu d'ouvrir deux sockets.
+  Future<void> connect(String userId) {
+    return _connecting ??= _connect(userId).whenComplete(() => _connecting = null);
+  }
+
+  Future<void> _connect(String userId) async {
     final token = await _storage.getToken();
     // CRUCIAL : Doit correspondre à io.to(`user_${recipientId}`) du serveur
     final roomName = "user_$userId"; 
@@ -130,6 +136,9 @@ class SocketService {
   // Callbacks spécifiques pour l'appel (peuvent être enregistrés par CallScreen)
   Function(Map<String, dynamic>)? _callAcceptHandler;
   Function(Map<String, dynamic>)? _callRejectHandler;
+  static const _pendingBlockedCallLifetime = Duration(seconds: 30);
+  Map<String, dynamic>? _pendingBlockedCall;
+  DateTime? _pendingBlockedCallAt;
   Function(Map<String, dynamic>)? _callCancelHandler;
   Function(Map<String, dynamic>)? _callEndHandler;
   
@@ -145,6 +154,15 @@ class SocketService {
   }
   VoidCallback onCallRejected(Function(Map<String, dynamic>) callback) {
     _callRejectHandler = callback;
+
+    // L'appel part avant l'ouverture de l'écran : le refus peut déjà être arrivé
+    final pending = _pendingBlockedCall;
+    final receivedAt = _pendingBlockedCallAt;
+    _pendingBlockedCall = null;
+    _pendingBlockedCallAt = null;
+    if (pending != null && receivedAt != null && DateTime.now().difference(receivedAt) < _pendingBlockedCallLifetime) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => callback(pending));
+    }
     return () => _callRejectHandler = null;
   }
   VoidCallback onCallCancelled(Function(Map<String, dynamic>) callback) {
@@ -173,7 +191,14 @@ class SocketService {
     if (_callAcceptHandler != null && data is Map) _callAcceptHandler!(Map<String, dynamic>.from(data));
   }
   void _onCallRejected(dynamic data) {
-    if (_callRejectHandler != null && data is Map) _callRejectHandler!(Map<String, dynamic>.from(data));
+    if (data is! Map) return;
+    final rejection = Map<String, dynamic>.from(data);
+    if (_callRejectHandler != null) {
+      _callRejectHandler!(rejection);
+    } else if (rejection['reason'] == 'blocked') {
+      _pendingBlockedCall = rejection;
+      _pendingBlockedCallAt = DateTime.now();
+    }
   }
   void _onCallCancelled(dynamic data) {
     if (_callCancelHandler != null && data is Map) _callCancelHandler!(Map<String, dynamic>.from(data));

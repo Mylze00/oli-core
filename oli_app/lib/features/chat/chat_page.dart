@@ -90,32 +90,20 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       final XFile? image = await _picker.pickImage(source: source, imageQuality: 70);
       if (image == null) return;
 
-      setState(() => _isUploading = true);
-      
-      final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
-      final url = await controller.uploadImage(image);
+      final sent = await ref.read(chatControllerProvider(widget.otherId).notifier).sendImage(
+        image,
+        productId: widget.productId,
+        productName: widget.productName,
+        productImage: widget.productImage,
+        productPrice: widget.productPrice,
+      );
 
-      setState(() => _isUploading = false);
-
-      if (url != null) {
-        controller.sendMessage(
-          content: "",
-          mediaUrl: url,
-          mediaType: 'image',
-          productId: widget.productId,
-          productName: widget.productName,
-          productImage: widget.productImage,
-          productPrice: widget.productPrice,
+      if (!sent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Échec de l'envoi de l'image")),
         );
-      } else {
-        if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text("Échec de l'upload")),
-           );
-        }
       }
     } catch (e) {
-      setState(() => _isUploading = false);
       debugPrint("Erreur pickImage: $e");
     }
   }

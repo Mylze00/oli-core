@@ -4,7 +4,33 @@ const presence = require('../services/presence.service');
 const { attestCashTransfer } = require('../services/cash-message.service');
 
 const MAX_PINNED_CONVERSATIONS = 3;
-const CONVERSATION_FLAGS = ['is_archived', 'is_favorite', 'is_pinned'];
+const CONVERSATION_FLAGS = ['is_archived', 'is_favorite', 'is_pinned', 'marked_unread'];
+
+// Expressions SQL fixes : la durée reçue sert uniquement de clé
+const MUTE_UNTIL_SQL = new Map([
+    ['8h', "NOW() + INTERVAL '8 hours'"],
+    ['1w', "NOW() + INTERVAL '7 days'"],
+    ['always', "'9999-12-31'::timestamptz"],
+    ['off', 'NULL'],
+]);
+
+async function getBlockBetween(senderId, recipientId) {
+    const { rows } = await pool.query(
+        `SELECT blocker_id FROM user_blocks
+         WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)`,
+        [senderId, recipientId]
+    );
+    return {
+        senderBlockedRecipient: rows.some((r) => String(r.blocker_id) === String(senderId)),
+        recipientBlockedSender: rows.some((r) => String(r.blocker_id) === String(recipientId)),
+    };
+}
+
+const YOU_BLOCKED_RESPONSE = { error: 'Débloquez ce contact pour lui écrire', code: 'you_blocked' };
+const BLOCKED_BY_RECIPIENT_RESPONSE = {
+    error: "Ce contact vous a bloqué. Votre message ne peut pas lui être distribué.",
+    code: 'blocked_by_recipient',
+};
 const HIDDEN_BEFORE = `COALESCE(cp.hidden_at, '-infinity'::timestamptz)`;
 
 // --- HELPER FUNCTIONS ---
@@ -44,6 +70,18 @@ exports.sendInitialMessage = async (req, res) => {
     const senderId = req.user.id;
 
     try {
+        const block = await getBlockBetween(senderId, recipientId);
+        if (block.senderBlockedRecipient) return res.status(403).json(YOU_BLOCKED_RESPONSE);
+        if (block.recipientBlockedSender) return res.status(403).json(BLOCKED_BY_RECIPIENT_RESPONSE);
+
+        if (existingConvId) {
+            const members = await pool.query(
+                'SELECT COUNT(*)::int AS total FROM conversation_participants WHERE conversation_id = $1 AND user_id = ANY($2::int[])',
+                [existingConvId, [senderId, recipientId]]
+            );
+            if (members.rows[0].total !== 2) return res.status(403).json({ error: 'Conversation non autorisée' });
+        }
+
         let conversationId = existingConvId;
         let friendshipStatus = 'pending';
         let requesterId = senderId;
@@ -149,13 +187,20 @@ exports.sendMessage = async (req, res) => {
     }
 
     try {
-        if (!recipientId) {
-            const partRes = await pool.query(
-                "SELECT user_id FROM conversation_participants WHERE conversation_id = $1 AND user_id != $2",
-                [conversationId, senderId]
-            );
-            if (partRes.rows.length > 0) recipientId = partRes.rows[0].user_id;
+        // Le destinataire vient de la conversation : un identifiant envoyé par le client contournerait le blocage
+        const participants = await pool.query(
+            'SELECT user_id FROM conversation_participants WHERE conversation_id = $1',
+            [conversationId]
+        );
+        if (!participants.rows.some((r) => String(r.user_id) === String(senderId))) {
+            return res.status(403).json({ error: 'Conversation non autorisée' });
         }
+        const other = participants.rows.find((r) => String(r.user_id) !== String(senderId));
+        recipientId = other ? other.user_id : null;
+
+        const block = await getBlockBetween(senderId, recipientId);
+        if (block.senderBlockedRecipient) return res.status(403).json(YOU_BLOCKED_RESPONSE);
+        if (block.recipientBlockedSender) return res.status(403).json(BLOCKED_BY_RECIPIENT_RESPONSE);
 
         messageMetadata = await attestCashTransfer(messageMetadata, { conversationId, senderId, recipientId });
 
@@ -197,7 +242,10 @@ exports.getConversations = async (req, res) => {
     const myId = req.user.id;
     try {
         const result = await pool.query(`
-            SELECT c.id as conversation_id, c.is_market, cp.is_archived, cp.is_favorite, cp.is_pinned, u.name as other_name, u.avatar_url as other_avatar, u.id as other_id, u.phone as other_phone,
+            SELECT c.id as conversation_id, c.is_market, cp.is_archived, cp.is_favorite, cp.is_pinned, cp.marked_unread,
+                (cp.muted_until IS NOT NULL AND cp.muted_until > NOW()) as is_muted,
+                EXISTS (SELECT 1 FROM user_blocks b WHERE b.blocker_id = $1 AND b.blocked_id = u.id) as is_blocked,
+                u.name as other_name, u.avatar_url as other_avatar, u.id as other_id, u.phone as other_phone,
                 m.content as last_message, m.type as last_message_type, m.created_at as last_time, m.sender_id as last_sender_id,
                 p.id as product_id, p.name as product_name, p.price as product_price, p.images as product_images_raw,
                 f.status as friendship_status, f.requester_id,
@@ -218,7 +266,7 @@ exports.getConversations = async (req, res) => {
             ...row,
             product_image: formatProductImage(row),
             product_images_raw: undefined,
-            unread_count: parseInt(row.unread_count) || 0,
+            unread_count: Math.max(parseInt(row.unread_count) || 0, row.marked_unread ? 1 : 0),
             last_message_time: row.last_time,
             is_online: presence.isOnline(row.other_id)
         }));
@@ -257,7 +305,7 @@ exports.updateConversationState = async (req, res) => {
         const result = await pool.query(
             `UPDATE conversation_participants SET ${assignments}
              WHERE conversation_id = $1 AND user_id = $2
-             RETURNING conversation_id, is_archived, is_favorite, is_pinned`,
+             RETURNING conversation_id, is_archived, is_favorite, is_pinned, marked_unread`,
             [id, myId, ...changes.map((flag) => req.body[flag])]
         );
         if (result.rows.length === 0) {
@@ -266,6 +314,66 @@ exports.updateConversationState = async (req, res) => {
         res.json(result.rows[0]);
     } catch (err) {
         console.error('Erreur updateConversationState:', err);
+        res.status(500).json({ error: 'Erreur' });
+    }
+};
+
+/**
+ * Couper ou réactiver les notifications d'une conversation
+ */
+exports.setConversationMute = async (req, res) => {
+    const { id } = req.params;
+    const untilSql = MUTE_UNTIL_SQL.get(req.body?.duration);
+    if (!/^\d+$/.test(id) || !untilSql) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        const result = await pool.query(
+            `UPDATE conversation_participants SET muted_until = ${untilSql}
+             WHERE conversation_id = $1 AND user_id = $2
+             RETURNING (muted_until IS NOT NULL AND muted_until > NOW()) AS is_muted`,
+            [id, req.user.id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Conversation introuvable' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Erreur setConversationMute:', err);
+        res.status(500).json({ error: 'Erreur' });
+    }
+};
+
+exports.blockUser = async (req, res) => {
+    const { userId } = req.params;
+    if (!/^\d+$/.test(userId) || userId === String(req.user.id)) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        await pool.query(
+            'INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [req.user.id, userId]
+        );
+        res.json({ is_blocked: true });
+    } catch (err) {
+        console.error('Erreur blockUser:', err);
+        res.status(500).json({ error: 'Erreur' });
+    }
+};
+
+exports.unblockUser = async (req, res) => {
+    const { userId } = req.params;
+    if (!/^\d+$/.test(userId)) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        await pool.query('DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2', [req.user.id, userId]);
+        res.json({ is_blocked: false });
+    } catch (err) {
+        console.error('Erreur unblockUser:', err);
         res.status(500).json({ error: 'Erreur' });
     }
 };
@@ -288,6 +396,11 @@ exports.markConversationRead = async (req, res) => {
         if (member.rows.length === 0) {
             return res.status(404).json({ error: 'Conversation introuvable' });
         }
+
+        await pool.query(
+            'UPDATE conversation_participants SET marked_unread = FALSE WHERE conversation_id = $1 AND user_id = $2',
+            [id, myId]
+        );
 
         const result = await pool.query(
             `UPDATE messages SET is_read = TRUE
@@ -419,6 +532,10 @@ exports.getMessages = async (req, res) => {
 
         if (result.rows.length > 0) {
             const convId = result.rows[0].conversation_id;
+            await pool.query(
+                'UPDATE conversation_participants SET marked_unread = FALSE WHERE conversation_id = $1 AND user_id = $2 AND marked_unread',
+                [convId, myId]
+            );
             const updateResult = await pool.query("UPDATE messages SET is_read = true WHERE conversation_id = $1 AND sender_id = $2 AND is_read = false RETURNING id", [convId, otherUserId]);
 
             // 🔥 NOUVEAU : Notifier l'expéditeur que ses messages ont été lus

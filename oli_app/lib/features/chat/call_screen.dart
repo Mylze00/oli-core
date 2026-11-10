@@ -193,7 +193,11 @@ class _CallScreenState extends ConsumerState<CallScreen>
       if (mounted) {
         _endCallCleanup();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Appel refusé')),
+          SnackBar(
+            content: Text(data['reason'] == 'blocked'
+                ? "Ce contact vous a bloqué. Votre appel ne peut pas aboutir."
+                : 'Appel refusé'),
+          ),
         );
       }
     });

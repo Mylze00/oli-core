@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart' show ScaffoldMessenger, SnackBar, Text;
+import '../../main.dart' show globalNavigatorKey;
+import 'widgets/progressive_chat_image.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'dart:convert';
@@ -77,6 +80,7 @@ class ChatController extends StateNotifier<ChatState> {
   VoidCallback? _typingUnsubscribe;
   String? _productId;
 
+  static const _uploadProgressStep = 0.02;
   static const _typingRefreshInterval = Duration(seconds: 3);
   static const _typingIdleDelay = Duration(seconds: 4);
   static const _typingExpiryDelay = Duration(seconds: 7);
@@ -376,7 +380,60 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  Future<String?> uploadImage(XFile file) async {
+  /// Affiche l'image tout de suite, puis l'affine au fil de l'envoi.
+  Future<bool> sendImage(
+    XFile file, {
+    String? productId,
+    String? productName,
+    String? productImage,
+    double? productPrice,
+  }) async {
+    if (myId == null) return false;
+
+    final bytes = await file.readAsBytes();
+    final placeholderId = 'temp_upload_${DateTime.now().millisecondsSinceEpoch}';
+    var lastProgress = 0.0;
+
+    state = state.copyWith(messages: [
+      ...state.messages,
+      {
+        'id': placeholderId,
+        'sender_id': int.parse(myId!),
+        'content': '',
+        'type': 'media',
+        'created_at': DateTime.now().toIso8601String(),
+        'local_image': bytes,
+        'upload_progress': 0.0,
+      },
+    ]);
+
+    final url = await uploadImage(file, onProgress: (progress) {
+      if (!mounted || (progress - lastProgress < _uploadProgressStep && progress < 1)) return;
+      lastProgress = progress;
+      state = state.copyWith(messages: [
+        for (final m in state.messages)
+          if (m['id'] == placeholderId) {...m, 'upload_progress': progress} else m,
+      ]);
+    });
+
+    if (!mounted) return url != null;
+    state = state.copyWith(messages: state.messages.where((m) => m['id'] != placeholderId).toList());
+    if (url == null) return false;
+
+    SentImageCache.put(url, bytes);
+    sendMessage(
+      content: '',
+      mediaUrl: url,
+      mediaType: 'image',
+      productId: productId,
+      productName: productName,
+      productImage: productImage,
+      productPrice: productPrice,
+    );
+    return true;
+  }
+
+  Future<String?> uploadImage(XFile file, {void Function(double progress)? onProgress}) async {
     try {
       final token = await _storage.getToken();
       
@@ -396,6 +453,9 @@ class ChatController extends StateNotifier<ChatState> {
         '${ApiConfig.baseUrl}/chat/upload',
         data: formData,
         options: Options(headers: {'Authorization': 'Bearer $token'}),
+        onSendProgress: (sent, total) {
+          if (total > 0) onProgress?.call(sent / total);
+        },
       );
 
       if (response.statusCode == 200) {
@@ -508,6 +568,15 @@ class ChatController extends StateNotifier<ChatState> {
       }
     } catch (e) {
       debugPrint('❌ Erreur sendMessage: $e');
+      final errorData = e is DioException ? e.response?.data : null;
+      if (errorData is Map && const {'you_blocked', 'blocked_by_recipient'}.contains(errorData['code'])) {
+        final context = globalNavigatorKey.currentContext;
+        if (context != null) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(content: Text(errorData['error'].toString())),
+          );
+        }
+      }
       state = state.copyWith(
         // On ne met PAS de state.error global car cela remplace toute la liste des messages
         // par l'icône d'erreur (ce qui était le bug d'UI).

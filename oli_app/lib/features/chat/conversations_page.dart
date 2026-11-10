@@ -1,11 +1,16 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../contacts/screens/contacts_invite_page.dart';
 import 'chat_page.dart';
 import 'socket_service.dart';
 import 'providers/inbox_providers.dart';
+import 'services/conversation_lock.dart';
+import 'widgets/conversation_context_menu.dart';
+import '../../core/theme/oli_glass.dart';
 import '../feed/presentation/feed_tab_view.dart';
 import '../../config/api_config.dart';
 import '../../core/user/user_provider.dart';
@@ -59,6 +64,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider).value;
     final conversationsAsync = ref.watch(inboxConversationsProvider);
+    final lockedConversations = ref.watch(lockedConversationsProvider);
     final theme = Theme.of(context);
 
     final isDark = theme.brightness == Brightness.dark;
@@ -416,10 +422,11 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                                   },
                                 ),
                               Expanded(
-                                child: ConversationTile(
+                                child: Builder(builder: (tileContext) => ConversationTile(
                                   conversation: conv,
                                   currentUserId: user.id.toString(),
-                                  onLongPress: _multiSelectMode ? null : () => _showConversationActions(conv),
+                                  isLocked: lockedConversations.contains(convId),
+                                  onLongPress: _multiSelectMode ? null : () => _showConversationActions(conv, tileContext),
                                   onTap: () {
                                     if (_multiSelectMode) {
                                       setState(() {
@@ -434,7 +441,7 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
 
                                     _openConversation(context, conv, user.id.toString());
                                   },
-                                ),
+                                )),
                               ),
                             ],
                           ),
@@ -520,40 +527,112 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
     _showActionResult(error, success);
   }
 
-  void _showConversationActions(Map<String, dynamic> conv) {
+  Future<void> _setMute(String conversationId, String duration, String success) async {
+    final error = await ref.read(inboxConversationsProvider.notifier).setMute(conversationId, duration);
+    _showActionResult(error, success);
+  }
+
+  Future<void> _setBlocked(String otherUserId, bool blocked) async {
+    final error = await ref.read(inboxConversationsProvider.notifier).setBlocked(otherUserId, blocked);
+    _showActionResult(error, blocked ? 'Contact bloqué' : 'Contact débloqué');
+  }
+
+  Future<void> _setLocked(String conversationId, bool locked) async {
+    final done = await ref.read(lockedConversationsProvider.notifier).setLocked(conversationId, locked);
+    _showActionResult(
+      done ? null : "Identité non confirmée. Vérifiez qu'un verrouillage est actif sur ce téléphone.",
+      locked ? 'Discussion verrouillée' : 'Discussion déverrouillée',
+    );
+  }
+
+  void _showConversationActions(Map<String, dynamic> conv, BuildContext tileContext) {
+    final tileBox = tileContext.findRenderObject() as RenderBox?;
+    if (tileBox == null) return;
+    HapticFeedback.mediumImpact();
+
     final id = conv['conversation_id'].toString();
+    final otherId = conv['other_id']?.toString();
     final isPinned = conv['is_pinned'] == true;
     final isFavorite = conv['is_favorite'] == true;
     final isArchived = conv['is_archived'] == true;
+    final isMuted = conv['is_muted'] == true;
+    final isBlocked = conv['is_blocked'] == true;
+    final isLocked = ref.read(lockedConversationsProvider).contains(id);
+    final hasUnread = ((conv['unread_count'] ?? 0) as num) > 0;
+    final notifier = ref.read(inboxConversationsProvider.notifier);
 
-    Widget action(IconData icon, String label, VoidCallback onTap, {Color? color}) => ListTile(
-          leading: Icon(icon, color: color),
-          title: Text(label, style: TextStyle(color: color)),
-          onTap: () {
-            Navigator.pop(context);
-            onTap();
-          },
-        );
-
-    showModalBottomSheet<void>(
+    showConversationContextMenu(
       context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            action(Icons.push_pin_outlined, isPinned ? 'Détacher' : 'Épingler',
-                () => _setFlag(id, 'is_pinned', !isPinned, isPinned ? 'Conversation détachée' : 'Conversation épinglée')),
-            action(isFavorite ? Icons.star : Icons.star_border, isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
-                () => _setFlag(id, 'is_favorite', !isFavorite, isFavorite ? 'Retirée des favoris' : 'Ajoutée aux favoris')),
-            action(Icons.archive_outlined, isArchived ? 'Désarchiver' : 'Archiver',
-                () => _setFlag(id, 'is_archived', !isArchived, isArchived ? 'Conversation désarchivée' : 'Conversation archivée')),
-            action(Icons.mark_chat_read_outlined, 'Marquer comme lu', () async {
-              _showActionResult(await ref.read(inboxConversationsProvider.notifier).markRead(id), 'Conversation marquée comme lue');
-            }),
-            action(Icons.delete_outline, 'Supprimer pour moi', () => _deleteConversation(id), color: Colors.red),
-          ],
-        ),
+      anchor: tileBox.localToGlobal(Offset.zero) & tileBox.size,
+      preview: ConversationTile(
+        conversation: conv,
+        currentUserId: ref.read(userProvider).value?.id.toString() ?? '',
+        isLocked: isLocked,
+        onTap: () {},
       ),
+      items: [
+        hasUnread
+            ? ConversationMenuItem(
+                icon: Icons.mark_chat_read_outlined,
+                label: 'Marquer comme lu',
+                onTap: () async => _showActionResult(await notifier.markRead(id), 'Conversation marquée comme lue'),
+              )
+            : ConversationMenuItem(
+                icon: Icons.mark_chat_unread_outlined,
+                label: 'Marquer comme non lu',
+                onTap: () => _setFlag(id, 'marked_unread', true, 'Conversation marquée comme non lue'),
+              ),
+        ConversationMenuItem(
+          icon: Icons.archive_outlined,
+          label: isArchived ? 'Désarchiver' : 'Archiver',
+          onTap: () => _setFlag(id, 'is_archived', !isArchived, isArchived ? 'Conversation désarchivée' : 'Conversation archivée'),
+        ),
+        isMuted
+            ? ConversationMenuItem(
+                icon: Icons.notifications_active_outlined,
+                label: 'Réactiver les notifications',
+                onTap: () => _setMute(id, 'off', 'Notifications réactivées'),
+              )
+            : ConversationMenuItem(
+                icon: Icons.notifications_off_outlined,
+                label: 'Mode silencieux',
+                submenu: [
+                  ConversationMenuItem(icon: Icons.schedule, label: '8 heures', onTap: () => _setMute(id, '8h', 'Silence activé pour 8 heures')),
+                  ConversationMenuItem(icon: Icons.date_range, label: '1 semaine', onTap: () => _setMute(id, '1w', 'Silence activé pour 1 semaine')),
+                  ConversationMenuItem(icon: Icons.all_inclusive, label: 'Toujours', onTap: () => _setMute(id, 'always', 'Silence activé')),
+                ],
+              ),
+        // L'empreinte et Face ID n'existent que dans l'application installée
+        if (!kIsWeb)
+          ConversationMenuItem(
+            icon: isLocked ? Icons.lock_open_outlined : Icons.lock_outline,
+            label: isLocked ? 'Déverrouiller la discussion' : 'Verrouiller la discussion',
+            onTap: () => _setLocked(id, !isLocked),
+          ),
+        ConversationMenuItem(
+          icon: isFavorite ? Icons.favorite : Icons.favorite_border,
+          label: isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
+          onTap: () => _setFlag(id, 'is_favorite', !isFavorite, isFavorite ? 'Retirée des favoris' : 'Ajoutée aux favoris'),
+        ),
+        ConversationMenuItem(
+          icon: Icons.push_pin_outlined,
+          label: isPinned ? 'Détacher' : 'Épingler',
+          onTap: () => _setFlag(id, 'is_pinned', !isPinned, isPinned ? 'Conversation détachée' : 'Conversation épinglée'),
+        ),
+        if (otherId != null)
+          ConversationMenuItem(
+            icon: Icons.block,
+            label: isBlocked ? 'Débloquer' : 'Bloquer',
+            isDanger: !isBlocked,
+            onTap: () => _setBlocked(otherId, !isBlocked),
+          ),
+        ConversationMenuItem(
+          icon: Icons.delete_outline,
+          label: 'Supprimer pour moi',
+          isDanger: true,
+          onTap: () => _deleteConversation(id),
+        ),
+      ],
     );
   }
 
@@ -604,7 +683,14 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
     );
   }
 
-  void _openConversation(BuildContext context, Map<String, dynamic> conv, String myUserId) {
+  Future<void> _openConversation(BuildContext context, Map<String, dynamic> conv, String myUserId) async {
+    final locks = ref.read(lockedConversationsProvider.notifier);
+    if (ref.read(lockedConversationsProvider).contains(conv['conversation_id'].toString()) &&
+        !await locks.authenticate('Confirmez pour ouvrir cette discussion')) {
+      return;
+    }
+    if (!context.mounted) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -697,6 +783,7 @@ class ConversationTile extends StatelessWidget {
   final String currentUserId;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final bool isLocked;
 
   const ConversationTile({
     Key? key,
@@ -704,6 +791,7 @@ class ConversationTile extends StatelessWidget {
     required this.currentUserId,
     required this.onTap,
     this.onLongPress,
+    this.isLocked = false,
   }) : super(key: key);
 
   String _formatTimestamp(String? timestamp) {
@@ -735,9 +823,10 @@ class ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final otherName = conversation['other_name'] ?? 'Utilisateur';
-    final lastMessage = conversation['is_typing'] == true
+    final isTyping = conversation['is_typing'] == true;
+    final lastMessage = isTyping
         ? "En train d'écrire…"
-        : (conversation['last_message'] ?? '');
+        : (isLocked ? 'Discussion verrouillée' : (conversation['last_message'] ?? ''));
     final unreadCount = conversation['unread_count'] ?? 0;
     final productName = conversation['product_name'];
     final isOnline = conversation['is_online'] == true;
@@ -745,6 +834,7 @@ class ConversationTile extends StatelessWidget {
     final otherAvatar = conversation['other_avatar'];
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final typingColor = isDark ? OliPalette.blueOnDark : OliPalette.blue;
 
     return Material(
       color: unreadCount > 0 
@@ -815,6 +905,11 @@ class ConversationTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (conversation['is_muted'] == true)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6, right: 4),
+                            child: Icon(Icons.notifications_off_outlined, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                          ),
                         Text(
                           _formatTimestamp(timestamp),
                           style: TextStyle(
@@ -851,9 +946,9 @@ class ConversationTile extends StatelessWidget {
                               lastMessage,
                               style: TextStyle(
                                 fontSize: 14,
-                                color: unreadCount > 0 
+                                color: isTyping ? typingColor : (unreadCount > 0 
                                     ? (isDark ? Colors.white : Colors.black87) 
-                                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                                    : (isDark ? Colors.grey[400] : Colors.grey[600])),
                                 fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
                               ),
                               maxLines: 1,
@@ -869,9 +964,9 @@ class ConversationTile extends StatelessWidget {
                         lastMessage,
                         style: TextStyle(
                           fontSize: 13,
-                          color: unreadCount > 0 
+                          color: isTyping ? typingColor : (unreadCount > 0 
                               ? (isDark ? Colors.white : Colors.black87) 
-                              : (isDark ? Colors.grey[500] : OliLightColors.textSecondary),
+                              : (isDark ? Colors.grey[500] : OliLightColors.textSecondary)),
                           fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
                         ),
                         maxLines: 1,

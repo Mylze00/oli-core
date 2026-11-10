@@ -217,6 +217,7 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Map<String, dy
         options: await _authOptions(),
       );
       _updateLocal(conversationId, (c) => {...c, ...flags});
+      if (flags.containsKey('marked_unread')) fetchConversations();
       return null;
     } on DioException catch (e) {
       final data = e.response?.data;
@@ -231,6 +232,39 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Map<String, dy
         options: await _authOptions(),
       );
       _updateLocal(conversationId, (c) => {...c, 'unread_count': 0});
+      return null;
+    } on DioException {
+      return _actionFailed;
+    }
+  }
+
+  /// [duration] vaut 8h, 1w, always ou off.
+  Future<String?> setMute(String conversationId, String duration) async {
+    try {
+      await Dio().put(
+        '${ApiConfig.baseUrl}/chat/conversations/$conversationId/mute',
+        data: {'duration': duration},
+        options: await _authOptions(),
+      );
+      _updateLocal(conversationId, (c) => {...c, 'is_muted': duration != 'off'});
+      return null;
+    } on DioException {
+      return _actionFailed;
+    }
+  }
+
+  Future<String?> setBlocked(String otherUserId, bool blocked) async {
+    final url = '${ApiConfig.baseUrl}/chat/blocks/$otherUserId';
+    try {
+      final options = await _authOptions();
+      blocked ? await Dio().post(url, options: options) : await Dio().delete(url, options: options);
+      final current = state.value;
+      if (current != null) {
+        state = AsyncValue.data([
+          for (final c in current)
+            c['other_id']?.toString() == otherUserId ? {...c, 'is_blocked': blocked} : c,
+        ]);
+      }
       return null;
     } on DioException {
       return _actionFailed;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import '../../../../config/api_config.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
 import 'location_message_bubble.dart';
@@ -8,6 +9,7 @@ import 'audio_message_bubble.dart';
 import 'reaction_picker.dart';
 import 'cash_note_bubble.dart';
 import 'chat_image_viewer.dart';
+import 'progressive_chat_image.dart';
 import 'message_actions.dart';
 
 class ChatMessageBubble extends StatefulWidget {
@@ -283,7 +285,15 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
 
     final cashTransfer = metaMap?['cash_transfer'];
     final cashAmount = cashTransfer is Map ? num.tryParse('${cashTransfer['amount_fc']}') : null;
-    final isCardMessage = isLocation || cashAmount != null;
+    final localImage = widget.message['local_image'] as Uint8List?;
+    final messageContent = widget.message['content']?.toString() ?? '';
+    // Une image sans légende s'affiche seule, sans bulle autour
+    final isImageOnly = localImage != null ||
+        (mediaUrl != null &&
+            mediaType != 'audio' &&
+            !mediaUrl.endsWith('.m4a') &&
+            (messageContent.isEmpty || messageContent == '📷 Image'));
+    final isCardMessage = isLocation || cashAmount != null || isImageOnly;
 
     final reactions = _parseReactions();
     final replyContext = _buildReplyContext();
@@ -424,16 +434,28 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                               (mediaUrl != null && mediaUrl.endsWith('.m4a')))
                           ? AudioMessageBubble(audioUrl: mediaUrl!, isMe: widget.isMe)
                           : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: isImageOnly && widget.isMe
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // ── Image en cours d'envoi ──
+                                if (localImage != null)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: UploadingChatImage(
+                                      bytes: localImage,
+                                      progress: (widget.message['upload_progress'] as num?)?.toDouble() ?? 0,
+                                    ),
+                                  ),
+
                                 // ── Reply-to context ──
                                 if (replyContext != null) replyContext,
 
                                 // ── Image / Media ──
                                 if (mediaUrl != null && mediaType != 'audio')
                                   Padding(
-                                    padding: const EdgeInsets.only(bottom: 6.0),
+                                    padding: EdgeInsets.only(bottom: isImageOnly ? 0 : 6.0),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
                                       child: GestureDetector(
@@ -445,33 +467,10 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                           ),
                                         ));
                                       },
-                                      child: Image.network(
-                                        mediaUrl.startsWith('http')
+                                      child: ProgressiveChatImage(
+                                        url: mediaUrl.startsWith('http')
                                             ? mediaUrl
                                             : '${ApiConfig.baseUrl}/$mediaUrl',
-                                        height: 200,
-                                        width: double.infinity,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (c, e, s) => Container(
-                                          height: 150,
-                                          color: Colors.grey[300],
-                                          child: const Center(
-                                              child: Icon(Icons.broken_image,
-                                                  color: Colors.grey)),
-                                        ),
-                                        loadingBuilder:
-                                            (ctx, child, loadingProgress) {
-                                          if (loadingProgress == null)
-                                            return child;
-                                          return Container(
-                                            height: 200,
-                                            width: double.infinity,
-                                            color: Colors.black12,
-                                            child: const Center(
-                                                child:
-                                                    CircularProgressIndicator()),
-                                          );
-                                        },
                                       ),
                                       ),
                                     ),
@@ -497,10 +496,12 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                 // ── Time + Read ticks ──
                                 _buildTimeRow(
                                   timeString,
-                                  color: widget.isMe || isDark
-                                      ? Colors.white.withOpacity(0.7)
-                                      : Colors.black38,
-                                  readColor: Colors.lightBlueAccent,
+                                  color: isImageOnly
+                                      ? (isDark ? Colors.white70 : Colors.black54)
+                                      : (widget.isMe || isDark
+                                          ? Colors.white.withOpacity(0.7)
+                                          : Colors.black38),
+                                  readColor: isImageOnly ? theme.primaryColor : Colors.lightBlueAccent,
                                 ),
                               ],
                             ),

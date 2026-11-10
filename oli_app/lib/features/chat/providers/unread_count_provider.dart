@@ -45,7 +45,8 @@ class UnreadCountNotifier extends StateNotifier<int> {
         final List<dynamic> data = jsonDecode(res.body);
         final total = data.fold<int>(
           0,
-          (sum, conv) => sum + (int.tryParse(conv['unread_count'].toString()) ?? 0),
+          // Une conversation en silence ne compte plus dans le badge
+          (sum, conv) => conv['is_muted'] == true ? sum : sum + (int.tryParse(conv['unread_count'].toString()) ?? 0),
         );
         if (total != state) {
           state = total;

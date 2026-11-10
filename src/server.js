@@ -173,7 +173,11 @@ io.on('connection', (socket) => {
                    FROM conversation_participants me
                    JOIN conversation_participants other
                      ON other.conversation_id = me.conversation_id AND other.user_id <> me.user_id
-                  WHERE me.conversation_id = $1 AND me.user_id = $2`,
+                  WHERE me.conversation_id = $1 AND me.user_id = $2
+                    AND NOT EXISTS (
+                        SELECT 1 FROM user_blocks b
+                        WHERE b.blocker_id = other.user_id AND b.blocked_id = me.user_id
+                    )`,
                 [conversationId, userId]
             );
             for (const { user_id: otherId } of rows) {
@@ -194,6 +198,20 @@ io.on('connection', (socket) => {
         const { toId, callerName, callerAvatar, type, conversationId } = data;
         if (!userId || !toId) return;
         const targetRoom = 'user_' + toId;
+
+        try {
+            const blocked = await pool.query(
+                'SELECT 1 FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2',
+                [toId, userId]
+            );
+            if (blocked.rows.length > 0) {
+                socket.emit('webrtc_call_rejected', { fromId: toId, reason: 'blocked' });
+                return;
+            }
+        } catch (e) {
+            console.error('[CALL] Vérification du blocage impossible:', e.message);
+            return;
+        }
 
         try {
             await pool.query(
@@ -508,6 +526,11 @@ if (process.env.NODE_ENV !== 'test') {
             // Liste de contacts de chaque utilisateur
             await pool.query(require('fs').readFileSync(
                 require('path').join(__dirname, 'migrations/add_user_contacts.sql'), 'utf8'
+            ));
+
+            // Silence, marquage non lu et blocage dans la messagerie
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_conversation_mute_and_blocks.sql'), 'utf8'
             ));
 
             // Un transfert d'argent ne produit qu'un seul billet dans la messagerie
