@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -228,30 +229,46 @@ class WalletNotifier extends StateNotifier<WalletState> {
     }
   }
 
+  /// Transfert P2P vers le compte [receiverId].
+  /// [idempotencyKey] : clé unique de cet envoi (voir [newTransferKey]). Si la
+  /// requête est rejouée (réseau coupé, double appui), le serveur ne débite
+  /// qu'une seule fois.
   Future<bool> transfer({
     required double amount,
-    required String recipientPhone,
+    required int receiverId,
+    required String idempotencyKey,
     String? note,
   }) async {
-    return _performTransaction(ApiConfig.walletTransfer, {
-      'amount': amount,
-      'recipient_phone': recipientPhone,
-      if (note != null && note.isNotEmpty) 'note': note,
-    });
+    return _performTransaction(
+      ApiConfig.walletTransfer,
+      {
+        'amount': amount,
+        'receiverId': receiverId,
+        if (note != null && note.isNotEmpty) 'note': note,
+      },
+      headers: {'Idempotency-Key': idempotencyKey},
+    );
   }
 
-  Future<Map<String, dynamic>?> resolveRecipient(String identifier) async {
+  /// Cherche un compte Oli par numéro (0812…, +243…) ou ID Oli (OLI-1234-5678).
+  /// Renvoie le compte trouvé, ou un message d'erreur à afficher.
+  Future<({Map<String, dynamic>? user, String? error})> resolveRecipient(
+      String identifier) async {
     try {
       final response = await _dio.get(
         ApiConfig.walletResolveRecipient,
         queryParameters: {'identifier': identifier},
       );
       if (response.statusCode == 200 && response.data['success'] == true) {
-        return response.data['user'];
+        return (user: Map<String, dynamic>.from(response.data['user'] as Map), error: null);
       }
-      return null;
-    } catch (e) {
-      return null;
+      return (user: null, error: 'Aucun compte Oli trouvé');
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final message = data is Map ? data['error']?.toString() : null;
+      return (user: null, error: message ?? 'Recherche impossible. Vérifiez votre connexion.');
+    } catch (_) {
+      return (user: null, error: 'Recherche impossible. Vérifiez votre connexion.');
     }
   }
 
@@ -271,10 +288,12 @@ class WalletNotifier extends StateNotifier<WalletState> {
     });
   }
 
-  Future<bool> _performTransaction(String url, Map<String, dynamic> body) async {
+  Future<bool> _performTransaction(String url, Map<String, dynamic> body,
+      {Map<String, String>? headers}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final response = await _dio.post(url, data: body);
+      final response = await _dio.post(url,
+          data: body, options: headers == null ? null : Options(headers: headers));
 
       if (response.statusCode == 200) {
         await loadWalletData();
@@ -293,4 +312,12 @@ class WalletNotifier extends StateNotifier<WalletState> {
       return false;
     }
   }
+}
+
+/// Nouvelle clé anti-doublon pour un envoi d'argent (32 caractères aléatoires).
+/// À générer une fois par envoi et à réutiliser si l'utilisateur réessaie.
+String newTransferKey() {
+  final random = Random.secure();
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  return List.generate(32, (_) => chars[random.nextInt(chars.length)]).join();
 }

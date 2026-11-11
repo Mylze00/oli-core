@@ -13,6 +13,11 @@ import '../../../providers/exchange_rate_provider.dart';
 import 'deposit_status_dialog.dart';
 import 'withdraw_status_dialog.dart';
 import '../../../core/theme/oli_glass.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import '../../../core/router/network/dio_provider.dart';
+import '../../contacts/services/contacts_match_service.dart';
+import '../../contacts/utils/phone_normalizer.dart';
+import '../utils/payment_qr.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper global
@@ -158,6 +163,9 @@ class _RetirerSheetState extends ConsumerState<RetirerSheet> {
 // ─────────────────────────────────────────────────────────────────────────────
 // ③ ENVOYER — Contact ou QR Code
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// Parcours : choix du mode → choix du destinataire (contacts Oli, carnet,
+// saisie ou QR) → formulaire de montant commun → transfert par id du compte.
 class EnvoyerSheet extends ConsumerStatefulWidget {
   const EnvoyerSheet({super.key});
 
@@ -167,9 +175,33 @@ class EnvoyerSheet extends ConsumerStatefulWidget {
 
 class _EnvoyerSheetState extends ConsumerState<EnvoyerSheet> {
   String? _mode; // 'contact' | 'qr'
+  _TransferRecipient? _recipient;
+  double? _requestedAmount; // montant demandé par un QR (facultatif)
+
+  void _onRecipientSelected(_TransferRecipient recipient, {double? amount}) {
+    setState(() {
+      _recipient = recipient;
+      _requestedAmount = amount;
+    });
+  }
+
+  void _changeRecipient() {
+    setState(() {
+      _recipient = null;
+      _requestedAmount = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_recipient != null) {
+      return _TransferAmountForm(
+        recipient: _recipient!,
+        initialAmount: _requestedAmount,
+        onChangeRecipient: _changeRecipient,
+      );
+    }
+
     if (_mode == null) {
       return _DarkSheet(
         title: 'Envoyer de l\'argent',
@@ -182,7 +214,7 @@ class _EnvoyerSheetState extends ConsumerState<EnvoyerSheet> {
             _BigOptionTile(
               icon: Icons.contacts_outlined,
               title: 'Sélectionner un contact',
-              subtitle: 'Envoyer par numéro de téléphone',
+              subtitle: 'Vos contacts Oli, numéro ou ID Oli',
               color: const Color(0xFF1E7DBA),
               onTap: () => setState(() => _mode = 'contact'),
             ),
@@ -201,26 +233,44 @@ class _EnvoyerSheetState extends ConsumerState<EnvoyerSheet> {
     }
 
     if (_mode == 'contact') {
-      return _TransferContactForm(ref: ref);
+      return _RecipientPicker(onSelected: _onRecipientSelected);
     }
 
-    return _TransferQrScanner(ref: ref);
+    return _TransferQrScanner(onResolved: _onRecipientSelected);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ④ RECEVOIR — QR Code unique
 // ─────────────────────────────────────────────────────────────────────────────
-class RecevoirSheet extends ConsumerWidget {
+//
+// Le QR contient l'ID Oli (oli://pay?u=OLI-1234-5678), jamais le numéro de
+// téléphone. Il est fixe et peut être imprimé ; un montant facultatif peut y
+// être ajouté (…&amount=5000).
+class RecevoirSheet extends ConsumerStatefulWidget {
   const RecevoirSheet({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authControllerProvider);
-    final phone = authState.userData?['phone'] ?? '';
-    final name = authState.userData?['name'] ?? 'Utilisateur';
-    // QR data : Format sécurisé contenant uniquement l'identifiant (encodé pour préserver le +)
-    final qrData = 'oli://pay?id=${Uri.encodeComponent(phone)}';
+  ConsumerState<RecevoirSheet> createState() => _RecevoirSheetState();
+}
+
+class _RecevoirSheetState extends ConsumerState<RecevoirSheet> {
+  final _amountCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final userData = ref.watch(authControllerProvider).userData;
+    final idOli = userData?['id_oli']?.toString() ?? '';
+    final phone = userData?['phone']?.toString() ?? '';
+    final name = userData?['name']?.toString() ?? 'Utilisateur';
+    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.'));
+    final qrData = buildPaymentQrData(idOli: idOli, phone: phone, amount: amount);
 
     return _DarkSheet(
       title: 'Recevoir de l\'argent',
@@ -230,7 +280,7 @@ class RecevoirSheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 8),
-          // QR Card
+          // Carte QR
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -246,12 +296,24 @@ class RecevoirSheet extends ConsumerWidget {
             ),
             child: Column(
               children: [
-                QrImageView(
-                  data: qrData,
-                  version: QrVersions.auto,
-                  size: 200,
-                  backgroundColor: Colors.white,
-                ),
+                if (qrData != null)
+                  QrImageView(
+                    data: qrData,
+                    version: QrVersions.auto,
+                    size: 200,
+                    backgroundColor: Colors.white,
+                  )
+                else
+                  const SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Text(
+                        'QR indisponible : identifiant du compte manquant.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Color(0xFF6B7280)),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 Text(
                   name,
@@ -261,24 +323,47 @@ class RecevoirSheet extends ConsumerWidget {
                     color: Color(0xFF0D1B2A),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  phone,
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-                ),
+                if (idOli.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    idOli,
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                  ),
+                ],
+                if (amount != null && amount > 0) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Montant demandé : ${amount.toStringAsFixed(0)} FC',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1E7DBA),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          // Copier l'identifiant
+          const SizedBox(height: 16),
+          // Montant facultatif intégré au QR
+          _GlassField(
+            controller: _amountCtrl,
+            hint: 'Montant à demander en FC (facultatif)',
+            icon: Icons.request_quote_outlined,
+            keyboardType: TextInputType.number,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 12),
+          // Copier l'ID Oli (ou le numéro pour un ancien compte sans ID)
           GestureDetector(
             onTap: () {
-              Clipboard.setData(ClipboardData(text: phone));
+              final value = idOli.isNotEmpty ? idOli : phone;
+              Clipboard.setData(ClipboardData(text: value));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Numéro copié !'),
+                SnackBar(
+                  content: Text(idOli.isNotEmpty ? 'ID Oli copié !' : 'Numéro copié !'),
                   behavior: SnackBarBehavior.floating,
-                  backgroundColor: Color(0xFF22C55E),
+                  backgroundColor: const Color(0xFF22C55E),
                 ),
               );
             },
@@ -295,12 +380,15 @@ class RecevoirSheet extends ConsumerWidget {
                 children: [
                   const Icon(Icons.copy_rounded, color: Colors.white70, size: 16),
                   const SizedBox(width: 8),
-                  Text(
-                    'Copier mon numéro : $phone',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      idOli.isNotEmpty ? 'Copier mon ID Oli : $idOli' : 'Copier mon numéro : $phone',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -311,7 +399,8 @@ class RecevoirSheet extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              'Montrez ce QR ou partagez votre numéro pour recevoir un paiement.',
+              'Montrez ce QR ou partagez votre ID Oli pour recevoir un paiement. '
+              'Votre numéro de téléphone n\'apparaît pas dans le QR.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 11),
             ),
@@ -626,42 +715,453 @@ class HistoriqueSheet extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Formulaire — Envoi par contact (numéro de téléphone)
+// Destinataire d'un envoi (compte Oli vérifié par le serveur)
 // ─────────────────────────────────────────────────────────────────────────────
-class _TransferContactForm extends ConsumerStatefulWidget {
-  final WidgetRef ref;
-  const _TransferContactForm({required this.ref});
+class _TransferRecipient {
+  final int id;
+  final String name;
+  final String? avatarUrl;
 
-  @override
-  ConsumerState<_TransferContactForm> createState() =>
-      _TransferContactFormState();
+  /// Numéro (complet pour un contact, masqué sinon) ou ID Oli.
+  final String? subtitle;
+
+  const _TransferRecipient({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+    this.subtitle,
+  });
+
+  /// Réponse de GET /wallet/resolve-recipient.
+  factory _TransferRecipient.fromResolved(Map<String, dynamic> json) {
+    final name = (json['name'] ?? '').toString().trim();
+    return _TransferRecipient(
+      id: (json['id'] as num).toInt(),
+      name: name.isEmpty ? 'Utilisateur Oli' : name,
+      avatarUrl: json['avatar_url']?.toString(),
+      subtitle: (json['phone'] ?? json['phone_masked'] ?? json['id_oli'])?.toString(),
+    );
+  }
+
+  /// Contact de « Mes contacts » ou du carnet (déjà un compte Oli).
+  factory _TransferRecipient.fromContact(ContactMatch contact) => _TransferRecipient(
+        id: contact.id,
+        name: contact.displayName,
+        avatarUrl: contact.avatarUrl,
+        subtitle: contact.phone.isEmpty ? null : contact.phone,
+      );
 }
 
-class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
-  final _phoneCtrl = TextEditingController();
-  final _amountCtrl = TextEditingController();
+/// Avatar rond : photo du compte ou initiale du nom.
+class _RecipientAvatar extends StatelessWidget {
+  final String name;
+  final String? avatarUrl;
+  final double size;
+
+  const _RecipientAvatar({required this.name, this.avatarUrl, this.size = 40});
+
+  @override
+  Widget build(BuildContext context) {
+    final url = avatarUrl;
+    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: OliPalette.blue.withOpacity(0.25),
+      foregroundImage: url != null && url.startsWith('http') ? NetworkImage(url) : null,
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: size * 0.4,
+        ),
+      ),
+    );
+  }
+}
+
+/// Ligne de contact touchable.
+class _ContactRow extends StatelessWidget {
+  final String name;
+  final String? subtitle;
+  final String? avatarUrl;
+  final VoidCallback onTap;
+
+  const _ContactRow({
+    required this.name,
+    required this.onTap,
+    this.subtitle,
+    this.avatarUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            _RecipientAvatar(name: name, avatarUrl: avatarUrl),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: OliPalette.textSecondary, fontSize: 12),
+                    ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: OliPalette.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Titre de section (« Mes contacts Oli », « Dans votre carnet »).
+class _SectionLabel extends StatelessWidget {
+  final String text;
+
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 6),
+      child: Text(
+        text.toUpperCase(),
+        style: const TextStyle(
+          color: OliPalette.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Choix du destinataire : Mes contacts Oli, carnet du téléphone, ou saisie
+// ─────────────────────────────────────────────────────────────────────────────
+class _RecipientPicker extends ConsumerStatefulWidget {
+  final void Function(_TransferRecipient recipient, {double? amount}) onSelected;
+
+  const _RecipientPicker({required this.onSelected});
+
+  @override
+  ConsumerState<_RecipientPicker> createState() => _RecipientPickerState();
+}
+
+class _RecipientPickerState extends ConsumerState<_RecipientPicker> {
+  final _searchCtrl = TextEditingController();
+  List<ContactMatch> _contacts = const [];
+  List<ContactMatch> _bookMatches = const [];
+  bool _loadingContacts = true;
+  bool _syncingBook = false;
+  bool _resolving = false;
+  String? _error;
+
+  ContactsMatchService get _contactsService => ContactsMatchService(ref.read(dioProvider));
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContacts();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadContacts() async {
+    try {
+      final contacts = await _contactsService.fetchContacts();
+      if (mounted) setState(() => _contacts = contacts);
+    } catch (e) {
+      debugPrint('Erreur chargement contacts: $e');
+    } finally {
+      if (mounted) setState(() => _loadingContacts = false);
+    }
+  }
+
+  /// Comptes Oli présents dans le carnet du téléphone (avec consentement).
+  Future<void> _syncAddressBook() async {
+    final consent = await showOliConfirmDialog(
+      context,
+      title: 'Chercher dans mon carnet',
+      message: 'Oli va lire les numéros de votre carnet pour trouver ceux qui ont un compte Oli. '
+          'Les numéros sont envoyés de façon sécurisée et ne sont pas conservés.',
+      confirmLabel: 'Continuer',
+    );
+    if (!consent || !mounted) return;
+
+    setState(() {
+      _syncingBook = true;
+      _error = null;
+    });
+    try {
+      final granted = await FlutterContacts.requestPermission(readonly: true);
+      if (!granted) {
+        if (mounted) setState(() => _error = 'Accès aux contacts refusé.');
+        return;
+      }
+      final phoneContacts = await FlutterContacts.getContacts(withProperties: true);
+      final phones = <String>{};
+      for (final c in phoneContacts) {
+        for (final p in c.phones) {
+          final normalized = normalizePhone(p.number);
+          if (normalized != null) phones.add(normalized);
+        }
+      }
+      final matches = await _contactsService.matchPhones(phones.toList());
+      final known = _contacts.map((c) => c.id).toSet();
+      if (mounted) {
+        setState(() {
+          _bookMatches = matches.where((m) => !known.contains(m.id)).toList()
+            ..sort((a, b) => a.displayName.compareTo(b.displayName));
+          if (matches.isEmpty) _error = 'Aucun contact de votre carnet n\'est encore sur Oli.';
+        });
+      }
+    } catch (e) {
+      debugPrint('Erreur lecture du carnet: $e');
+      if (mounted) setState(() => _error = 'Impossible de lire votre carnet. Réessayez plus tard.');
+    } finally {
+      if (mounted) setState(() => _syncingBook = false);
+    }
+  }
+
+  /// Recherche d'un numéro ou d'un ID Oli saisi.
+  Future<void> _resolveTyped([String? value]) async {
+    final code = parsePaymentCode(value ?? _searchCtrl.text);
+    if (code == null) {
+      setState(() => _error = 'Saisissez un numéro (0812…, +243…) ou un ID Oli (OLI-1234-5678).');
+      return;
+    }
+    setState(() {
+      _resolving = true;
+      _error = null;
+    });
+    final result = await ref.read(walletProvider.notifier).resolveRecipient(code.identifier);
+    if (!mounted) return;
+    setState(() => _resolving = false);
+    final user = result.user;
+    if (user == null) {
+      setState(() => _error = result.error);
+      return;
+    }
+    widget.onSelected(_TransferRecipient.fromResolved(user), amount: code.amount);
+  }
+
+  bool _matches(ContactMatch c, String query) {
+    if (query.isEmpty) return true;
+    final q = query.toLowerCase();
+    final digits = query.replaceAll(RegExp(r'\D'), '');
+    return c.displayName.toLowerCase().contains(q) ||
+        (digits.length >= 3 && c.phone.replaceAll(RegExp(r'\D'), '').contains(digits));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _searchCtrl.text.trim();
+    final contacts = _contacts.where((c) => _matches(c, query)).toList();
+    final bookMatches = _bookMatches.where((c) => _matches(c, query)).toList();
+    final typedCode = parsePaymentCode(query);
+
+    return _DarkSheet(
+      title: 'Choisir un destinataire',
+      icon: Icons.contacts_outlined,
+      iconColor: const Color(0xFF1E7DBA),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 8),
+          _GlassField(
+            controller: _searchCtrl,
+            hint: 'Nom, numéro ou ID Oli',
+            icon: Icons.person_search_rounded,
+            keyboardType: TextInputType.text,
+            onChanged: (_) => setState(() => _error = null),
+            onSubmitted: _resolveTyped,
+          ),
+
+          // Numéro ou ID Oli reconnu : envoi direct après vérification
+          if (typedCode != null) ...[
+            const SizedBox(height: 10),
+            InkWell(
+              onTap: _resolving ? null : _resolveTyped,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: oliGlassCardDecoration(highlighted: true, radius: 14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.send_rounded, color: OliPalette.blueOnDark, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Envoyer à ${typedCode.identifier}',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    if (_resolving)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: OliPalette.blueOnDark),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(_error!, style: const TextStyle(color: OliPalette.danger, fontSize: 12)),
+            ),
+
+          // Carnet du téléphone (indisponible sur le web)
+          if (!kIsWeb) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _syncingBook ? null : _syncAddressBook,
+              style: oliSecondaryButtonStyle(),
+              icon: _syncingBook
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.import_contacts_rounded, size: 18),
+              label: const Text('Chercher dans mon carnet'),
+            ),
+          ],
+
+          // Mes contacts Oli
+          const _SectionLabel('Mes contacts Oli'),
+          if (_loadingContacts)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator(color: OliPalette.blueOnDark)),
+            )
+          else if (contacts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                _contacts.isEmpty
+                    ? 'Aucun contact pour l\'instant. Recherchez un numéro ou un ID Oli : '
+                        'les personnes à qui vous envoyez de l\'argent sont ajoutées ici.'
+                    : 'Aucun contact ne correspond.',
+                style: const TextStyle(color: OliPalette.textSecondary, fontSize: 13),
+              ),
+            )
+          else
+            ...contacts.map((c) => _ContactRow(
+                  name: c.displayName,
+                  subtitle: c.phone,
+                  avatarUrl: c.avatarUrl,
+                  onTap: () => widget.onSelected(_TransferRecipient.fromContact(c)),
+                )),
+
+          // Comptes Oli trouvés dans le carnet
+          if (bookMatches.isNotEmpty) ...[
+            const _SectionLabel('Dans votre carnet'),
+            ...bookMatches.map((c) => _ContactRow(
+                  name: c.displayName,
+                  subtitle: c.phone,
+                  avatarUrl: c.avatarUrl,
+                  onTap: () => widget.onSelected(_TransferRecipient.fromContact(c)),
+                )),
+          ],
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Formulaire de montant (commun au contact et au QR)
+// ─────────────────────────────────────────────────────────────────────────────
+class _TransferAmountForm extends ConsumerStatefulWidget {
+  final _TransferRecipient recipient;
+  final double? initialAmount;
+  final VoidCallback onChangeRecipient;
+
+  const _TransferAmountForm({
+    required this.recipient,
+    required this.onChangeRecipient,
+    this.initialAmount,
+  });
+
+  @override
+  ConsumerState<_TransferAmountForm> createState() => _TransferAmountFormState();
+}
+
+class _TransferAmountFormState extends ConsumerState<_TransferAmountForm> {
+  static const double _minAmount = 100; // identique au serveur
+  late final TextEditingController _amountCtrl;
   final _noteCtrl = TextEditingController();
+
+  /// Même clé pour toutes les tentatives de cet envoi : le serveur ne débite
+  /// qu'une fois, même si l'utilisateur réessaie après une coupure réseau.
+  final String _transferKey = newTransferKey();
   bool _isLoading = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialAmount;
+    _amountCtrl = TextEditingController(text: initial == null ? '' : initial.toStringAsFixed(0));
+  }
+
+  @override
   void dispose() {
-    _phoneCtrl.dispose();
     _amountCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _send() async {
-    final phone = _phoneCtrl.text.trim();
     final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.'));
-
-    if (phone.isEmpty) {
-      setState(() => _error = 'Numéro requis');
-      return;
-    }
     if (amount == null || amount <= 0) {
       setState(() => _error = 'Montant invalide');
+      return;
+    }
+    if (amount < _minAmount) {
+      setState(() => _error = 'Montant minimum : ${_minAmount.toStringAsFixed(0)} FC');
+      return;
+    }
+
+    final name = widget.recipient.name;
+    final fee = (amount * 0.01).roundToDouble();
+    final confirmed = await biometricService.authenticate(
+      reason: 'Envoyer ${amount.toStringAsFixed(0)} FC à $name ?\n(+ ${fee.toStringAsFixed(0)} FC de frais)',
+    );
+    if (!confirmed) {
+      setState(() => _error = 'Authentification annulée');
       return;
     }
 
@@ -669,77 +1169,87 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
       _isLoading = true;
       _error = null;
     });
-
-    // 1. Résolution sécurisée du destinataire
-    final resolvedUser = await ref.read(walletProvider.notifier).resolveRecipient(phone);
-    if (resolvedUser == null) {
-      setState(() {
-        _isLoading = false;
-        _error = 'Destinataire introuvable ou non autorisé';
-      });
-      return;
-    }
-
-    final recipientName = resolvedUser['name'] ?? 'Utilisateur';
-    
-    // 2. Confirmation biométrique avec le VRAI nom
-    final fee = amount * 0.01;
-    final confirmed = await biometricService.authenticate(
-      reason: 'Envoyer ${amount.toStringAsFixed(0)} FC à $recipientName ?\n(+ ${fee.toStringAsFixed(0)} FC de frais)',
-    );
-
-    if (!confirmed) {
-      setState(() {
-        _isLoading = false;
-        _error = 'Authentification annulée';
-      });
-      return;
-    }
-
+    final note = _noteCtrl.text.trim();
     final ok = await ref.read(walletProvider.notifier).transfer(
           amount: amount,
-          recipientPhone: phone,
-          note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+          receiverId: widget.recipient.id,
+          idempotencyKey: _transferKey,
+          note: note.isEmpty ? null : note,
         );
-
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (mounted) {
-      if (ok) {
-        HapticFeedback.mediumImpact();
-        AudioPlayer().play(AssetSource('images/kaching.mp3'));
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transfert effectué avec succès !'),
-            backgroundColor: Color(0xFF22C55E),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } else {
-        setState(
-            () => _error = ref.read(walletProvider).error ?? 'Erreur de transfert');
-      }
+    if (ok) {
+      HapticFeedback.mediumImpact();
+      AudioPlayer().play(AssetSource('images/kaching.mp3'));
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.pop(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${amount.toStringAsFixed(0)} FC envoyés à $name'),
+          backgroundColor: const Color(0xFF22C55E),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      setState(() => _error = ref.read(walletProvider).error ?? 'Erreur de transfert');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final recipient = widget.recipient;
     return _DarkSheet(
-      title: 'Envoyer par contact',
-      icon: Icons.contacts_outlined,
+      title: 'Envoyer de l\'argent',
+      icon: Icons.send_rounded,
       iconColor: const Color(0xFF1E7DBA),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 8),
-          _GlassField(
-            controller: _phoneCtrl,
-            hint: 'Identifiant (@pseudo, numéro ou ID)',
-            icon: Icons.person_search_rounded,
-            keyboardType: TextInputType.text,
+          // Destinataire vérifié
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: oliGlassCardDecoration(highlighted: true, radius: 14),
+            child: Row(
+              children: [
+                _RecipientAvatar(name: recipient.name, avatarUrl: recipient.avatarUrl, size: 44),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              recipient.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.verified_rounded, color: OliPalette.blueOnDark, size: 16),
+                        ],
+                      ),
+                      if (recipient.subtitle != null)
+                        Text(
+                          recipient.subtitle!,
+                          style: const TextStyle(color: OliPalette.textSecondary, fontSize: 12),
+                        ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: _isLoading ? null : widget.onChangeRecipient,
+                  child: const Text('Changer', style: TextStyle(color: OliPalette.blueOnDark)),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           _GlassField(
             controller: _amountCtrl,
             hint: 'Montant (FC)',
@@ -751,11 +1261,11 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
             builder: (context, value, _) {
               final amt = double.tryParse(value.text.replaceAll(',', '.')) ?? 0;
               if (amt <= 0) return const SizedBox(height: 10);
-              final fee = amt * 0.01;
+              final fee = (amt * 0.01).roundToDouble();
               return Padding(
                 padding: const EdgeInsets.only(top: 4, bottom: 6),
                 child: Text(
-                  'Frais de transfert OLI (1%) : +${fee.toStringAsFixed(0)} FC',
+                  'Frais de transfert OLI (1 %) : +${fee.toStringAsFixed(0)} FC',
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
                 ),
               );
@@ -763,16 +1273,14 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
           ),
           _GlassField(
             controller: _noteCtrl,
-            hint: 'Motif (optionnel)',
+            hint: 'Motif (facultatif)',
             icon: Icons.notes_rounded,
+            maxLength: 140,
           ),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                _error!,
-                style: const TextStyle(color: Color(0xFFF87171), fontSize: 12),
-              ),
+              child: Text(_error!, style: const TextStyle(color: OliPalette.danger, fontSize: 12)),
             ),
           const SizedBox(height: 20),
           _ActionButton(
@@ -791,39 +1299,23 @@ class _TransferContactFormState extends ConsumerState<_TransferContactForm> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Scanner QR pour l'envoi
 // ─────────────────────────────────────────────────────────────────────────────
-/// Extrait l'identifiant (numéro de téléphone) d'un lien QR `oli://pay?id=…`
-/// ou d'un numéro saisi directement (0812… ou +243…). Renvoie null si invalide.
-String? _identifierFrom(String typed) {
-  final uri = Uri.tryParse(typed);
-  if (uri != null && uri.scheme == 'oli') {
-    if (uri.host == 'pay') return uri.queryParameters['id']?.replaceAll(' ', '+');
-    if (uri.host == 'transfer') return uri.queryParameters['phone']?.replaceAll(' ', '+');
-    return null;
-  }
-  var s = typed.replaceAll(RegExp(r'[\s\-().]'), '');
-  if (s.startsWith('00')) s = '+${s.substring(2)}';
-  if (s.startsWith('0')) s = '+243${s.substring(1)}';
-  return RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(s) ? s : null;
-}
-
 class _TransferQrScanner extends ConsumerStatefulWidget {
-  final WidgetRef ref;
-  const _TransferQrScanner({required this.ref});
+  final void Function(_TransferRecipient recipient, {double? amount}) onResolved;
+
+  const _TransferQrScanner({required this.onResolved});
 
   @override
   ConsumerState<_TransferQrScanner> createState() => _TransferQrScannerState();
 }
 
 class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
-  String? _scannedPhone;
-  String? _scannedName;
-  final _amountCtrl = TextEditingController();
   bool _isLoading = false;
   String? _error;
+  String? _lastRaw; // évite de retraiter le même QR à chaque image de la caméra
   bool _hasPermission = false;
   bool _isPermissionChecked = false;
-  bool _scanStarted = false; // Web/iOS : la caméra démarre après un tap
-  int _retry = 0; // Incrémenté pour relancer le lecteur
+  bool _scanStarted = false; // Web : la caméra démarre après un appui
+  int _retry = 0; // incrémenté pour relancer le lecteur
 
   @override
   void initState() {
@@ -847,89 +1339,37 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
       setState(() {
         _hasPermission = status.isGranted;
         _isPermissionChecked = true;
-        if (!status.isGranted) {
-          _error = 'Accès à la caméra refusé. Veuillez l\'autoriser dans les paramètres.';
-        }
       });
     }
   }
 
-  @override
-  void dispose() {
-    _amountCtrl.dispose();
-    super.dispose();
-  }
+  Future<void> _handleCode(String raw, {bool typed = false}) async {
+    if (_isLoading) return;
+    if (!typed && raw == _lastRaw) return;
+    _lastRaw = raw;
 
-  void _handleScannedQr(String raw) async {
-    final identifier = _identifierFrom(raw.trim());
-    if (identifier == null) {
-      setState(() => _error = 'QR code ou numéro invalide');
+    final code = parsePaymentCode(raw);
+    if (code == null) {
+      setState(() => _error = typed
+          ? 'Saisissez un numéro (0812…, +243…) ou un ID Oli (OLI-1234-5678).'
+          : 'Ce QR code n\'est pas un QR de paiement Oli.');
       return;
     }
-    try {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
 
-      // Résolution sécurisée
-      final resolvedUser = await ref.read(walletProvider.notifier).resolveRecipient(identifier);
-      
-      setState(() => _isLoading = false);
-
-      if (resolvedUser != null) {
-        setState(() {
-          _scannedPhone = identifier;
-          _scannedName = resolvedUser['name'] ?? 'Utilisateur certifié';
-        });
-      } else {
-        setState(() => _error = 'Destinataire introuvable');
-      }
-    } catch (_) {
-      setState(() {
-        _isLoading = false;
-        _error = 'Format QR invalide';
-      });
-    }
-  }
-
-  Future<void> _send() async {
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.'));
-    if (amount == null || amount <= 0) {
-      setState(() => _error = 'Montant invalide');
-      return;
-    }
-    
-    final fee = amount * 0.01;
-    final confirmed = await biometricService.authenticate(
-      reason: 'Envoyer ${amount.toStringAsFixed(0)} FC à $_scannedName ?\n(+ ${fee.toStringAsFixed(0)} FC de frais)',
-    );
-    if (!confirmed) {
-      setState(() => _error = 'Authentification annulée');
-      return;
-    }
-    setState(() { _isLoading = true; _error = null; });
-    final ok = await ref.read(walletProvider.notifier).transfer(
-          amount: amount,
-          recipientPhone: _scannedPhone!,
-        );
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    final result = await ref.read(walletProvider.notifier).resolveRecipient(code.identifier);
+    if (!mounted) return;
     setState(() => _isLoading = false);
-    if (mounted) {
-      if (ok) {
-        HapticFeedback.mediumImpact();
-        AudioPlayer().play(AssetSource('images/kaching.mp3'));
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transfert réussi !'),
-            backgroundColor: Color(0xFF22C55E),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } else {
-        setState(() => _error = ref.read(walletProvider).error ?? 'Erreur');
-      }
+
+    final user = result.user;
+    if (user == null) {
+      setState(() => _error = result.error);
+      return;
     }
+    widget.onResolved(_TransferRecipient.fromResolved(user), amount: code.amount);
   }
 
   @override
@@ -942,86 +1382,87 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 8),
-          if (_scannedPhone == null) ...[
-            Container(
-              height: 250,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E7DBA).withOpacity(0.4)),
-              ),
-              clipBehavior: Clip.hardEdge,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (!_isPermissionChecked)
-                    const CircularProgressIndicator(color: Color(0xFF1E7DBA))
-                  else if (_hasPermission && kIsWeb && !_scanStarted)
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.qr_code_scanner_rounded, color: Colors.white54, size: 40),
-                        const SizedBox(height: 10),
-                        TextButton(
-                          onPressed: () => setState(() => _scanStarted = true),
-                          child: const Text('Activer la caméra', style: TextStyle(color: Color(0xFF1E7DBA), fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    )
-                  else if (_hasPermission)
-                    MobileScanner(
-                      key: ValueKey('scanner-$_retry'),
-                      errorBuilder: (context, error) => Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 40),
-                              const SizedBox(height: 10),
-                              const Text(
-                                'Caméra indisponible. Autorisez la caméra dans le navigateur, puis réessayez, ou utilisez la saisie du numéro.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Détail : ${error.errorCode.name}',
-                                style: const TextStyle(color: Colors.white38, fontSize: 11),
-                              ),
-                              TextButton(
-                                onPressed: () => setState(() => _retry++),
-                                child: const Text('Réessayer', style: TextStyle(color: Color(0xFF1E7DBA))),
-                              ),
-                            ],
-                          ),
+          Container(
+            height: 250,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF1E7DBA).withOpacity(0.4)),
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (!_isPermissionChecked)
+                  const CircularProgressIndicator(color: Color(0xFF1E7DBA))
+                else if (_hasPermission && kIsWeb && !_scanStarted)
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.qr_code_scanner_rounded, color: Colors.white54, size: 40),
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: () => setState(() => _scanStarted = true),
+                        child: const Text('Activer la caméra',
+                            style: TextStyle(color: Color(0xFF1E7DBA), fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  )
+                else if (_hasPermission)
+                  MobileScanner(
+                    key: ValueKey('scanner-$_retry'),
+                    errorBuilder: (context, error) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 40),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Caméra indisponible. Autorisez la caméra, puis réessayez, ou saisissez le numéro ou l\'ID Oli.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Détail : ${error.errorCode.name}',
+                              style: const TextStyle(color: Colors.white38, fontSize: 11),
+                            ),
+                            TextButton(
+                              onPressed: () => setState(() => _retry++),
+                              child: const Text('Réessayer', style: TextStyle(color: Color(0xFF1E7DBA))),
+                            ),
+                          ],
                         ),
                       ),
-                      onDetect: (capture) {
-                        final List<Barcode> barcodes = capture.barcodes;
-                        for (final barcode in barcodes) {
-                          if (barcode.rawValue != null && _scannedPhone == null && !_isLoading) {
-                            _handleScannedQr(barcode.rawValue!);
-                            break;
-                          }
-                        }
-                      },
-                    )
-                  else
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.no_photography_rounded, color: Colors.white54, size: 40),
-                        const SizedBox(height: 12),
-                        const Text('Caméra bloquée', style: TextStyle(color: Colors.white54)),
-                        TextButton(
-                          onPressed: () => openAppSettings(),
-                          child: const Text('Ouvrir les paramètres', style: TextStyle(color: Color(0xFF1E7DBA))),
-                        ),
-                      ],
                     ),
-                  if (_hasPermission)
-                    Container(
+                    onDetect: (capture) {
+                      for (final barcode in capture.barcodes) {
+                        final raw = barcode.rawValue;
+                        if (raw != null) {
+                          _handleCode(raw);
+                          break;
+                        }
+                      }
+                    },
+                  )
+                else
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.no_photography_rounded, color: Colors.white54, size: 40),
+                      const SizedBox(height: 12),
+                      const Text('Caméra bloquée', style: TextStyle(color: Colors.white54)),
+                      TextButton(
+                        onPressed: () => openAppSettings(),
+                        child: const Text('Ouvrir les paramètres', style: TextStyle(color: Color(0xFF1E7DBA))),
+                      ),
+                    ],
+                  ),
+                if (_hasPermission)
+                  IgnorePointer(
+                    child: Container(
                       decoration: BoxDecoration(
                         border: Border.all(color: const Color(0xFF1E7DBA).withOpacity(0.8), width: 2),
                         borderRadius: BorderRadius.circular(12),
@@ -1029,92 +1470,34 @@ class _TransferQrScannerState extends ConsumerState<_TransferQrScanner> {
                       width: 180,
                       height: 180,
                     ),
-                  if (_isLoading)
-                    Container(
-                      color: Colors.black54,
-                      child: const Center(
-                        child: CircularProgressIndicator(color: Color(0xFF1E7DBA)),
-                      ),
+                  ),
+                if (_isLoading)
+                  Container(
+                    color: Colors.black54,
+                    child: const Center(
+                      child: CircularProgressIndicator(color: Color(0xFF1E7DBA)),
                     ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            // Champ manuel (fallback / dev)  
-            _GlassField(
-              hint: 'Ou saisir le numéro du destinataire',
-              icon: Icons.link,
-              onSubmitted: _handleScannedQr,
-            ),
-          ] else ...[
-            // Destinataire confirmé
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF22C55E).withOpacity(0.10),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: const Color(0xFF22C55E).withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle_rounded,
-                      color: Color(0xFF22C55E), size: 32),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_scannedName ?? 'Destinataire',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14)),
-                      Text(_scannedPhone!,
-                          style: TextStyle(
-                              color: Colors.white.withOpacity(0.5),
-                              fontSize: 12)),
-                    ],
                   ),
-                ],
+              ],
+            ),
+          ),
+          // Erreurs de lecture visibles pendant le scan
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: OliPalette.danger, fontSize: 12),
               ),
             ),
-            const SizedBox(height: 12),
-            _GlassField(
-              controller: _amountCtrl,
-              hint: 'Montant (FC)',
-              icon: Icons.attach_money_rounded,
-              keyboardType: TextInputType.number,
-            ),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _amountCtrl,
-              builder: (context, value, _) {
-                final amt = double.tryParse(value.text.replaceAll(',', '.')) ?? 0;
-                if (amt <= 0) return const SizedBox(height: 12);
-                final fee = amt * 0.01;
-                return Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 8),
-                  child: Text(
-                    'Frais de transfert OLI (1%) : +${fee.toStringAsFixed(0)} FC',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
-                  ),
-                );
-              },
-            ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(_error!,
-                    style: const TextStyle(
-                        color: Color(0xFFF87171), fontSize: 12)),
-              ),
-            const SizedBox(height: 16),
-            _ActionButton(
-              label: _isLoading ? 'Envoi...' : 'Confirmer l\'envoi',
-              color: const Color(0xFF1E7DBA),
-              isLoading: _isLoading,
-              onTap: _send,
-            ),
-          ],
+          const SizedBox(height: 12),
+          // Saisie manuelle (caméra indisponible, QR abîmé…)
+          _GlassField(
+            hint: 'Ou saisir un numéro ou un ID Oli',
+            icon: Icons.keyboard_rounded,
+            onSubmitted: (value) => _handleCode(value, typed: true),
+          ),
           const SizedBox(height: 24),
         ],
       ),

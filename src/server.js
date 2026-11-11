@@ -548,6 +548,11 @@ if (process.env.NODE_ENV !== 'test') {
                 require('path').join(__dirname, 'migrations/add_refund_requests.sql'), 'utf8'
             ));
 
+            // Clés anti-doublon des transferts P2P
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_wallet_transfer_requests.sql'), 'utf8'
+            ));
+
             // Bannières du fil d'accueil (image + lien ou vidéo compressée)
             await pool.query(require('fs').readFileSync(
                 require('path').join(__dirname, 'migrations/add_feed_banners.sql'), 'utf8'

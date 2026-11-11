@@ -14,21 +14,9 @@ const pool = require('../config/db');
 
 const router = express.Router();
 
-const MAX_PHONES_PER_REQUEST = 1000;
-const E164 = /^\+[1-9]\d{7,14}$/;
+const { normalizePhone } = require('../utils/phone');
 
-/**
- * Normalise un numéro en format international (E.164).
- * Par défaut, un numéro local commençant par 0 est rattaché à la RDC (+243).
- * Renvoie null si le numéro n'est pas valide.
- */
-function normalizePhone(raw) {
-    if (typeof raw !== 'string') return null;
-    let s = raw.replace(/[\s\-().]/g, '');
-    if (s.startsWith('00')) s = '+' + s.slice(2);
-    if (s.startsWith('0') && !s.startsWith('+')) s = '+243' + s.slice(1);
-    return E164.test(s) ? s : null;
-}
+const MAX_PHONES_PER_REQUEST = 1000;
 
 // Limite par utilisateur (et non par IP) : 20 synchronisations par heure
 const contactsMatchLimiter = rateLimit({

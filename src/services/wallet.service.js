@@ -346,7 +346,15 @@ class WalletService {
      * Supporte USD et FC (Francs Congolais).
      * Atomique : si le crédit échoue, le débit est annulé.
      */
-    async transferToUser(senderIdRaw, receiverIdRaw, amountRaw, currency = 'FC', io = null) {
+    /**
+     * Transfert P2P entre deux comptes Oli.
+     * @param {object} [options]
+     * @param {string|null} [options.note]           Motif, enregistré dans l'historique des deux comptes.
+     * @param {string|null} [options.idempotencyKey] Clé unique de l'envoi : si la même clé revient,
+     *                                               le résultat déjà enregistré est renvoyé sans débiter.
+     */
+    async transferToUser(senderIdRaw, receiverIdRaw, amountRaw, currency = 'FC', io = null, options = {}) {
+        const { note = null, idempotencyKey = null } = options;
         const senderId = parseInt(senderIdRaw);
         const receiverId = parseInt(receiverIdRaw);
         let amount = parseFloat(amountRaw);
@@ -385,12 +393,36 @@ class WalletService {
         );
         const usersMap = {};
         usersRes.rows.forEach(u => { usersMap[u.id] = u; });
+        if (!usersMap[receiverId]) throw new Error('Destinataire introuvable');
         const senderName = usersMap[senderId]?.name || `#${senderId}`;
         const receiverName = usersMap[receiverId]?.name || `#${receiverId}`;
+        const noteSuffix = note ? ` — Motif : ${note}` : '';
 
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+
+            // — Anti-doublon : la clé est réservée dans la même transaction que le débit.
+            //   Si elle existe déjà, on renvoie le résultat enregistré sans rien débiter.
+            if (idempotencyKey) {
+                const reserved = await client.query(
+                    `INSERT INTO wallet_transfer_requests (sender_id, idempotency_key)
+                     VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING sender_id`,
+                    [senderId, idempotencyKey]
+                );
+                if (!reserved.rows.length) {
+                    await client.query('ROLLBACK');
+                    const previous = await pool.query(
+                        `SELECT result FROM wallet_transfer_requests
+                         WHERE sender_id = $1 AND idempotency_key = $2`,
+                        [senderId, idempotencyKey]
+                    );
+                    if (previous.rows[0]?.result) {
+                        return { ...previous.rows[0].result, replayed: true };
+                    }
+                    throw new Error('Ce transfert est déjà en cours de traitement');
+                }
+            }
 
             // — Débit expéditeur (montant + frais)
             const senderWallet = await walletRepository._getOrCreateWallet(senderId, client);
@@ -406,7 +438,7 @@ class WalletService {
                 walletId: senderWallet.id, userId: senderId, type: 'transfer',
                 amount: -totalDebit, balanceBefore: senderBalance, balanceAfter: newSenderBalance, // [FIX #7]
                 provider: 'P2P', reference,
-                description: `Envoi à ${receiverName} (frais ${feeAmount} FC inclus)`,
+                description: `Envoi à ${receiverName} (frais ${feeAmount} FC inclus)${noteSuffix}`,
             });
 
             // — Crédit destinataire (montant net, sans les frais)
@@ -419,10 +451,36 @@ class WalletService {
                 walletId: receiverWallet.id, userId: receiverId, type: 'transfer',
                 amount, balanceBefore: parseFloat(receiverWallet.balance), balanceAfter: newReceiverBalance, // [FIX #7]
                 provider: 'P2P', reference,
-                description: `Reçu de ${senderName}`,
+                description: `Reçu de ${senderName}${noteSuffix}`,
             });
 
+            const result = {
+                success: true,
+                amountFC: amount,
+                feeFC: feeAmount,
+                totalDebitFC: totalDebit,
+                currency: 'FC',
+                reference,
+                receiverName,
+                senderNewBalance: newSenderBalance,
+                receiverNewBalance: newReceiverBalance,
+            };
+            if (idempotencyKey) {
+                await client.query(
+                    `UPDATE wallet_transfer_requests SET result = $3
+                     WHERE sender_id = $1 AND idempotency_key = $2`,
+                    [senderId, idempotencyKey, JSON.stringify(result)]
+                );
+            }
+
             await client.query('COMMIT');
+
+            // — Le destinataire rejoint « Mes contacts » de l'expéditeur (non-bloquant)
+            pool.query(
+                `INSERT INTO user_contacts (owner_id, contact_id) VALUES ($1, $2)
+                 ON CONFLICT DO NOTHING`,
+                [senderId, receiverId]
+            ).catch(e => console.warn('⚠️ Contact non ajouté après transfert:', e.message));
 
             // — Frais → Banque OLI (non-bloquant, hors transaction)
             if (feeAmount > 0) {
@@ -451,17 +509,7 @@ class WalletService {
 
             console.log(`💸 Transfert P2P: #${senderId}(${senderName}) → #${receiverId}(${receiverName}) — ${amount.toFixed(0)} FC (frais: ${feeAmount} FC)`);
 
-            return {
-                success: true,
-                amountFC: amount,
-                feeFC: feeAmount,
-                totalDebitFC: totalDebit,
-                currency: 'FC',
-                reference,
-                receiverName,
-                senderNewBalance: newSenderBalance,
-                receiverNewBalance: newReceiverBalance,
-            };
+            return result;
 
         } catch (err) {
             await client.query('ROLLBACK');

@@ -11,6 +11,7 @@
  *   GET  /status/:orderId      — Polling statut d'un paiement Mobile Money
  */
 const walletService  = require('../services/wallet.service');
+const { normalizePhone, maskPhone } = require('../utils/phone');
 const unipesaService = require('../services/unipesa.service');
 const walletRepo     = require('../repositories/wallet.repository');
 const { FC_TO_USD_FALLBACK } = require('../config/index');
@@ -303,44 +304,91 @@ exports.withdraw = async (req, res) => {
 };
 
 // ─── Transfert P2P ───────────────────────────────────────────────────────────
-//
-// Body attendu : { receiverId: number, amount: number, currency?: 'USD'|'FC' }
 
+const ID_OLI = /^OLI-\d{4}-\d{4}$/;
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_.:-]{8,80}$/;
+const MAX_NOTE_LENGTH = 140;
+
+/**
+ * GET /api/wallet/resolve-recipient?identifier=…
+ *
+ * Trouve un compte Oli par numéro de téléphone (0812…, +243…, 243…) ou par
+ * ID Oli (OLI-1234-5678). Exclut les comptes supprimés et son propre compte.
+ * Le numéro n'est renvoyé en entier que si la personne est déjà dans
+ * « Mes contacts » ; sinon il est masqué (+243 81•• ••• 678).
+ */
 exports.resolveRecipient = async (req, res) => {
     try {
-        const { identifier } = req.query;
-        if (!identifier) {
-            return res.status(400).json({ success: false, error: 'Identifier is required' });
-        }
-        let cleanIdentifier = identifier.trim();
-        // Si l'identifiant commence par un espace (cas classique du '+' parsé en espace dans les query params URL)
-        // on le remplace par un '+'
-        if (identifier.startsWith(' ')) {
-            cleanIdentifier = '+' + identifier.trim();
-        } else if (!cleanIdentifier.startsWith('+')) {
-            // Optionnel: On peut aussi rajouter le + s'il est manquant et que c'est un numéro (commence par 243 par ex)
-            if (cleanIdentifier.startsWith('243')) {
-                cleanIdentifier = '+' + cleanIdentifier;
-            }
+        const raw = String(req.query.identifier || '');
+        if (!raw.trim()) {
+            return res.status(400).json({ success: false, error: 'Identifiant requis', code: 'missing_identifier' });
         }
 
         const pool = require('../config/db');
-        const { rows } = await pool.query(
-            'SELECT id, name, phone FROM users WHERE phone = $1 OR phone = $2',
-            [identifier, cleanIdentifier]
-        );
-        
-        if (rows.length > 0) {
-            return res.json({ success: true, user: rows[0] });
+        const idOli = raw.trim().toUpperCase();
+        let condition;
+        let value;
+        if (ID_OLI.test(idOli)) {
+            condition = 'UPPER(u.id_oli) = $1';
+            value = idOli;
         } else {
-            return res.status(404).json({ success: false, error: 'Utilisateur introuvable' });
+            // Un « + » mal encodé dans l'URL arrive comme un espace : normalizePhone le gère.
+            const phone = normalizePhone(raw);
+            if (!phone) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Numéro ou ID Oli invalide',
+                    code: 'invalid_identifier',
+                });
+            }
+            condition = 'u.phone = $1';
+            value = phone;
         }
+
+        const { rows } = await pool.query(
+            `SELECT u.id, u.name, u.avatar_url, u.id_oli, u.phone,
+                    EXISTS (SELECT 1 FROM user_contacts c
+                            WHERE c.owner_id = $2 AND c.contact_id = u.id) AS is_contact
+             FROM users u
+             WHERE ${condition} AND u.deleted_at IS NULL
+             LIMIT 1`,
+            [value, req.user.id]
+        );
+
+        const user = rows[0];
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'Aucun compte Oli trouvé', code: 'not_found' });
+        }
+        if (String(user.id) === String(req.user.id)) {
+            return res.status(400).json({ success: false, error: "C'est votre propre compte", code: 'own_account' });
+        }
+
+        res.json({
+            success: true,
+            user: {
+                id: user.id,
+                name: user.name,
+                avatar_url: user.avatar_url,
+                id_oli: user.id_oli,
+                is_contact: user.is_contact,
+                phone_masked: maskPhone(user.phone),
+                // Numéro complet seulement pour un contact déjà enregistré
+                ...(user.is_contact ? { phone: user.phone } : {}),
+            },
+        });
     } catch (err) {
         console.error('Erreur resolveRecipient:', err.message);
         res.status(500).json({ success: false, error: 'Erreur serveur' });
     }
 };
 
+/**
+ * POST /api/wallet/transfer
+ *
+ * Body : { receiverId, amount, currency?: 'FC'|'USD', note? }
+ *        (recipient_phone accepté pour les anciennes versions de l'app)
+ * En-tête facultatif : Idempotency-Key — une même clé n'est débitée qu'une fois.
+ */
 exports.transfer = async (req, res) => {
     const { receiverId, recipient_phone, amount, currency, note } = req.body;
 
@@ -348,23 +396,30 @@ exports.transfer = async (req, res) => {
         return res.status(400).json({ success: false, error: 'Montant invalide' });
     }
     if (!receiverId && !recipient_phone) {
-        return res.status(400).json({ success: false, error: 'ID ou numéro de téléphone du destinataire requis' });
+        return res.status(400).json({ success: false, error: 'Destinataire requis' });
     }
+
+    const idempotencyKey = req.get('Idempotency-Key') || req.body.idempotency_key || null;
+    if (idempotencyKey && !IDEMPOTENCY_KEY.test(idempotencyKey)) {
+        return res.status(400).json({ success: false, error: 'Clé de transfert invalide' });
+    }
+
+    const cleanNote = typeof note === 'string' && note.trim()
+        ? note.trim().slice(0, MAX_NOTE_LENGTH)
+        : null;
 
     try {
         let finalReceiverId = receiverId ? parseInt(receiverId) : null;
 
-        // Résolution par numéro de téléphone
+        // Anciennes versions : destinataire désigné par son numéro
         if (!finalReceiverId && recipient_phone) {
+            const phone = normalizePhone(String(recipient_phone));
             const pool = require('../config/db');
-            const { rows } = await pool.query(
-                'SELECT id, name FROM users WHERE phone = $1', [recipient_phone]
-            );
+            const { rows } = phone
+                ? await pool.query('SELECT id FROM users WHERE phone = $1 AND deleted_at IS NULL', [phone])
+                : { rows: [] };
             if (!rows.length) {
-                return res.status(404).json({
-                    success: false,
-                    error: `Aucun utilisateur OLI avec le numéro ${recipient_phone}`,
-                });
+                return res.status(404).json({ success: false, error: 'Aucun compte Oli avec ce numéro' });
             }
             finalReceiverId = rows[0].id;
         }
@@ -374,7 +429,8 @@ exports.transfer = async (req, res) => {
             finalReceiverId,
             parseFloat(amount),
             currency || 'FC',
-            req.app.get('io')
+            req.app.get('io'),
+            { note: cleanNote, idempotencyKey }
         );
         res.json({
             success: true,

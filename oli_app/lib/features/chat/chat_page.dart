@@ -1,3 +1,4 @@
+import '../../core/theme/oli_glass.dart'; // verre bleu des feuilles d'envoi
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -623,6 +624,8 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
     final noteController = TextEditingController(); // Added note controller
     String selectedCurrency = 'USD';
     bool isSending = false;
+    // Même clé pour toutes les tentatives de cet envoi : jamais débité deux fois.
+    final transferKey = newTransferKey();
 
     showModalBottomSheet(
       context: context,
@@ -631,15 +634,13 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Container(
-              padding: EdgeInsets.only(
-                left: 24, right: 24, top: 24,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-              ),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
+            // Même verre bleu nuit que les feuilles du portefeuille (oli_glass.dart).
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: OliGlassPanel(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -647,11 +648,11 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                   Container(
                     width: 40, height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   // Header
                   Row(
@@ -659,10 +660,10 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          shape: BoxShape.circle,
+                          color: OliPalette.blue.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(Icons.send, color: Colors.green.shade700, size: 28),
+                        child: const Icon(Icons.send_rounded, color: OliPalette.blue, size: 26),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -671,11 +672,11 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                           children: [
                             const Text(
                               'Envoyer du cash',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'CreatoDisplay', color: Colors.black87),
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'CreatoDisplay', color: Colors.white),
                             ),
                             Text(
                               'vers ${widget.otherName}',
-                              style: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontFamily: 'CreatoDisplay'),
+                              style: const TextStyle(fontSize: 14, color: OliPalette.textSecondary, fontFamily: 'CreatoDisplay'),
                             ),
                             const SizedBox(height: 4),
                             Consumer(
@@ -683,7 +684,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                                 final walletState = ref.watch(walletProvider);
                                 return Text(
                                   'Solde: ${walletState.balance.toStringAsFixed(0)} FC',
-                                  style: const TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.w600, fontFamily: 'CreatoDisplay'),
+                                  style: const TextStyle(fontSize: 13, color: OliPalette.blueOnDark, fontWeight: FontWeight.w600, fontFamily: 'CreatoDisplay'),
                                 );
                               },
                             ),
@@ -692,7 +693,12 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  // Séparateur, comme sous l'en-tête des feuilles du portefeuille
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 16),
+                    height: 1,
+                    color: Colors.white.withValues(alpha: 0.07),
+                  ),
 
                   // Currency toggle
                   SegmentedButton<String>(
@@ -707,10 +713,18 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                     style: ButtonStyle(
                       backgroundColor: WidgetStateProperty.resolveWith((states) {
                         if (states.contains(WidgetState.selected)) {
-                          return Colors.green.shade100;
+                          return OliPalette.blue;
                         }
-                        return Colors.grey.shade100;
+                        return Colors.white.withValues(alpha: 0.06);
                       }),
+                      foregroundColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return Colors.white;
+                        }
+                        return OliPalette.textSecondary;
+                      }),
+                      iconColor: const WidgetStatePropertyAll(Colors.white),
+                      side: const WidgetStatePropertyAll(BorderSide(color: OliPalette.hairline)),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -720,24 +734,29 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                     controller: amountController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     autofocus: true,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                    cursorColor: OliPalette.blueOnDark,
                     textAlign: TextAlign.center,
                     decoration: InputDecoration(
                       hintText: selectedCurrency == 'USD' ? '0.00' : '0',
-                      hintStyle: TextStyle(fontSize: 28, color: Colors.grey.shade300),
+                      hintStyle: TextStyle(fontSize: 28, color: Colors.white.withValues(alpha: 0.25)),
                       prefixText: selectedCurrency == 'USD' ? '\$ ' : '',
                       suffixText: selectedCurrency == 'FC' ? ' FC' : '',
-                      prefixStyle: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green),
-                      suffixStyle: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green),
+                      prefixStyle: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: OliPalette.blueOnDark),
+                      suffixStyle: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: OliPalette.blueOnDark),
                       filled: true,
-                      fillColor: Colors.grey.shade50,
+                      fillColor: Colors.white.withValues(alpha: 0.08),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: Colors.grey.shade200),
+                        borderSide: const BorderSide(color: OliPalette.hairline),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: OliPalette.hairline),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Colors.green, width: 2),
+                        borderSide: const BorderSide(color: OliPalette.blueOnDark, width: 1.5),
                       ),
                     ),
                   ),
@@ -746,17 +765,26 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                   // Comment field
                   TextField(
                     controller: noteController,
-                    style: const TextStyle(fontFamily: 'CreatoDisplay', fontSize: 16, color: Colors.black87),
+                    style: const TextStyle(fontFamily: 'CreatoDisplay', fontSize: 16, color: Colors.white),
+                    cursorColor: OliPalette.blueOnDark,
                     decoration: InputDecoration(
                       hintText: 'Commentaire de commande (Optionnel)',
-                      hintStyle: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontFamily: 'CreatoDisplay'),
+                      hintStyle: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.4), fontFamily: 'CreatoDisplay'),
                       filled: true,
-                      fillColor: Colors.grey.shade100,
+                      fillColor: Colors.white.withValues(alpha: 0.06),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide.none,
                       ),
-                      prefixIcon: Icon(Icons.notes, color: Colors.grey.shade600),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: OliPalette.blueOnDark, width: 1.5),
+                      ),
+                      prefixIcon: Icon(Icons.notes, color: Colors.white.withValues(alpha: 0.4)),
                     ),
                   ),
 
@@ -765,7 +793,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         "Converti en FC au taux du jour au moment de l'envoi",
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontFamily: 'CreatoDisplay'),
+                        style: const TextStyle(fontSize: 12, color: OliPalette.textSecondary, fontFamily: 'CreatoDisplay'),
                       ),
                     ),
 
@@ -798,6 +826,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                               'currency': selectedCurrency,
                               if (noteController.text.trim().isNotEmpty) 'note': noteController.text.trim(),
                             },
+                            options: Options(headers: {'Idempotency-Key': transferKey}),
                           );
 
                           if (response.statusCode == 200) {
@@ -867,12 +896,15 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                           : const Icon(Icons.send),
                       label: Text(isSending ? 'Envoi en cours...' : 'Envoyer'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: OliPalette.blue,
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: OliPalette.blue.withValues(alpha: 0.5),
+                        disabledForegroundColor: Colors.white70,
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'CreatoDisplay'),
                       ),
                     ),
                   ),
@@ -883,15 +915,17 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.shield, size: 14, color: Colors.grey.shade400),
+                      Icon(Icons.shield, size: 14, color: Colors.white.withValues(alpha: 0.4)),
                       const SizedBox(width: 4),
                       Text(
                         'Transfert sécurisé via Oli Wallet',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                        style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.4)),
                       ),
                     ],
                   ),
                 ],
+              ),
+              ),
               ),
             );
           },

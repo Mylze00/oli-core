@@ -28,7 +28,11 @@
 const express          = require('express');
 const router           = express.Router();
 const walletController = require('../controllers/wallet.controller');
-const { walletOperationLimiter } = require('../middlewares/rate-limiter.middleware');
+const {
+    walletOperationLimiter,
+    walletTransferLimiter,
+    recipientLookupLimiter,
+} = require('../middlewares/rate-limiter.middleware');
 
 // ─── GET /api/wallet/balance ─────────────────────────────────────────────────
 // Solde actuel du wallet de l'utilisateur connecté.
@@ -80,13 +84,14 @@ router.post('/deposit-card', walletController.depositCard);
 router.post('/withdraw', walletOperationLimiter, walletController.withdraw);
 
 // ─── GET /api/wallet/resolve-recipient ───────────────────────────────────────
-// Résoudre un utilisateur par son numéro de téléphone ou email
-// Query: ?identifier=+243992000001
-router.get('/resolve-recipient', walletController.resolveRecipient);
+// Trouver un compte Oli par numéro (0812…, +243…) ou ID Oli (OLI-1234-5678)
+// Query: ?identifier=+243992000001 — limité par utilisateur
+router.get('/resolve-recipient', recipientLookupLimiter, walletController.resolveRecipient);
 
 // ─── POST /api/wallet/transfer ───────────────────────────────────────────────
 // Transfert P2P entre utilisateurs OLI (interne — pas de Mobile Money).
-// Body: { receiverId: number, amount: number, currency?: 'FC'|'USD' }
-router.post('/transfer', walletController.transfer);
+// Body: { receiverId: number, amount: number, currency?: 'FC'|'USD', note?: string }
+// En-tête Idempotency-Key : une même clé n'est jamais débitée deux fois.
+router.post('/transfer', walletTransferLimiter, walletController.transfer);
 
 module.exports = router;
