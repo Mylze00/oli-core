@@ -270,6 +270,12 @@ io.on('connection', (socket) => {
         socket.to('user_' + data.toId).emit('webrtc_ice_candidate', { fromId: userId, candidate: data.candidate });
     });
 
+    // Caméra coupée ou rallumée pendant un appel vidéo
+    socket.on('webrtc_video_state', (data) => {
+        if (!userId || !data || !data.toId) return;
+        socket.to('user_' + data.toId).emit('webrtc_video_state', { fromId: userId, enabled: data.enabled === true });
+    });
+
     async function logCall(update) {
         try {
             await update();

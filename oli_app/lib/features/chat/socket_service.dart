@@ -131,6 +131,7 @@ class SocketService {
     _socket!.on('webrtc_offer', (data) => _onWebrtcOffer(data));
     _socket!.on('webrtc_answer', (data) => _onWebrtcAnswer(data));
     _socket!.on('webrtc_ice_candidate', (data) => _onWebrtcIceCandidate(data));
+    _socket!.on('webrtc_video_state', (data) => _onWebrtcVideoState(data));
   }
 
   // Callbacks spécifiques pour l'appel (peuvent être enregistrés par CallScreen)
@@ -146,6 +147,7 @@ class SocketService {
   Function(Map<String, dynamic>)? _webrtcOfferHandler;
   Function(Map<String, dynamic>)? _webrtcAnswerHandler;
   Function(Map<String, dynamic>)? _webrtcIceCandidateHandler;
+  Function(Map<String, dynamic>)? _webrtcVideoStateHandler;
 
 
   VoidCallback onCallAccepted(Function(Map<String, dynamic>) callback) {
@@ -186,6 +188,11 @@ class SocketService {
     _webrtcIceCandidateHandler = callback;
     return () => _webrtcIceCandidateHandler = null;
   }
+  /// L'autre appareil a coupé ou rallumé sa caméra.
+  VoidCallback onWebrtcVideoState(Function(Map<String, dynamic>) callback) {
+    _webrtcVideoStateHandler = callback;
+    return () => _webrtcVideoStateHandler = null;
+  }
 
   void _onCallAccepted(dynamic data) {
     if (_callAcceptHandler != null && data is Map) _callAcceptHandler!(Map<String, dynamic>.from(data));
@@ -214,6 +221,9 @@ class SocketService {
   }
   void _onWebrtcIceCandidate(dynamic data) {
     if (_webrtcIceCandidateHandler != null && data is Map) _webrtcIceCandidateHandler!(Map<String, dynamic>.from(data));
+  }
+  void _onWebrtcVideoState(dynamic data) {
+    if (_webrtcVideoStateHandler != null && data is Map) _webrtcVideoStateHandler!(Map<String, dynamic>.from(data));
   }
 
   // Callbacks séparés pour messages et statuts (#9)

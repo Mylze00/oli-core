@@ -26,7 +26,7 @@ const _iceServersTimeout = Duration(seconds: 4);
 
 /// Relevé temporaire, à retirer une fois le son des appels validé sur de vrais téléphones.
 const _showCallDiagnostics = true;
-const _callDiagnosticsVersion = 'diag-2';
+const _callDiagnosticsVersion = 'diag-3';
 const _diagnosticsInterval = Duration(seconds: 2);
 
 /// Interlocuteur de l'appel en cours : un seul appel à la fois sur cet appareil.
@@ -82,7 +82,24 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
   bool _isMuted = false;
   bool _isSpeakerOn = false;
+
+  /// Ma caméra envoie une image (indépendant de ce que l'autre envoie).
   bool _isVideoEnabled = false;
+  bool _isFrontCamera = true;
+  bool _isOpeningCamera = false;
+
+  /// Caméra ouverte en cours d'appel, quand elle n'a pas pu l'être au départ.
+  MediaStream? _cameraStream;
+
+  /// L'autre appareil envoie une piste vidéo, et sa caméra n'est pas coupée.
+  bool _hasRemoteVideo = false;
+  bool _isRemoteCameraOn = true;
+  bool get _showRemoteVideo => _hasRemoteVideo && _isRemoteCameraOn;
+
+  List<MediaStreamTrack> get _localVideoTracks => [
+        ...?_localStream?.getVideoTracks(),
+        ...?_cameraStream?.getVideoTracks(),
+      ];
 
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isCallActive = false;
@@ -110,6 +127,8 @@ class _CallScreenState extends ConsumerState<CallScreen>
   final Set<String> _remoteCandidateTypes = {};
   int _audioBytesSent = 0;
   int _audioBytesReceived = 0;
+  int _videoBytesSent = 0;
+  int _videoBytesReceived = 0;
   bool _hasMicrophoneTrack = false;
   Timer? _diagnosticsTimer;
 
@@ -366,12 +385,13 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
       peerConnection.onTrack = (RTCTrackEvent event) {
         if (!mounted) return;
-        if (event.streams.isNotEmpty) {
-          setState(() {
-            _remoteStream = event.streams[0];
-            _remoteRenderer.srcObject = _remoteStream;
-          });
-        }
+        if (event.streams.isEmpty) return;
+        setState(() {
+          _remoteStream = event.streams[0];
+          // Réaffecté à chaque piste : la vidéo peut arriver après le son
+          _remoteRenderer.srcObject = _remoteStream;
+          if (event.track.kind == 'video') _hasRemoteVideo = true;
+        });
       };
 
       peerConnection.onIceCandidate = (RTCIceCandidate candidate) {
@@ -390,6 +410,13 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
       for (final track in stream.getTracks()) {
         await peerConnection.addTrack(track, stream);
+      }
+      // Sans caméra, l'appelant réserve quand même une voie vidéo pour recevoir celle de l'autre
+      if (widget.isVideoCall && !widget.isIncoming && stream.getVideoTracks().isEmpty) {
+        await peerConnection.addTransceiver(
+          kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+          init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+        );
       }
       if (mounted) setState(() {});
       _startDiagnostics();
@@ -413,17 +440,19 @@ class _CallScreenState extends ConsumerState<CallScreen>
           ],
         };
 
-  /// Micro (et caméra pour la vidéo). Si la caméra échoue, l'appel passe en audio.
+  static const Map<String, dynamic> _videoConstraints = {
+    'facingMode': 'user',
+    'width': {'ideal': 640},
+    'height': {'ideal': 480},
+  };
+
+  /// Micro (et caméra pour la vidéo). Si la caméra échoue, l'appel continue sans elle.
   Future<MediaStream> _openLocalStream() async {
     if (_isVideoEnabled) {
       try {
         return await navigator.mediaDevices.getUserMedia({
           'audio': _audioConstraints,
-          'video': {
-            'facingMode': 'user',
-            'width': {'ideal': 640},
-            'height': {'ideal': 480},
-          },
+          'video': _videoConstraints,
         });
       } catch (e) {
         debugPrint('Caméra indisponible, appel en audio: $e');
@@ -472,6 +501,11 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
     socket.onCallEnded((data) {
       if (mounted && _isFromPeer(data)) _endCallCleanup();
+    });
+
+    socket.onWebrtcVideoState((data) {
+      if (!mounted || !_isFromPeer(data)) return;
+      setState(() => _isRemoteCameraOn = data['enabled'] == true);
     });
 
     // === WebRTC Signaling ===
@@ -624,16 +658,26 @@ class _CallScreenState extends ConsumerState<CallScreen>
       try {
         var sent = _audioBytesSent;
         var received = _audioBytesReceived;
+        var videoSent = _videoBytesSent;
+        var videoReceived = _videoBytesReceived;
         for (final report in await peerConnection.getStats()) {
           final kind = report.values['kind'] ?? report.values['mediaType'];
-          if (kind != 'audio') continue;
-          if (report.type == 'outbound-rtp') sent = int.tryParse('${report.values['bytesSent']}') ?? sent;
-          if (report.type == 'inbound-rtp') received = int.tryParse('${report.values['bytesReceived']}') ?? received;
+          final bytesSent = int.tryParse('${report.values['bytesSent']}');
+          final bytesReceived = int.tryParse('${report.values['bytesReceived']}');
+          if (kind == 'audio') {
+            if (report.type == 'outbound-rtp') sent = bytesSent ?? sent;
+            if (report.type == 'inbound-rtp') received = bytesReceived ?? received;
+          } else if (kind == 'video') {
+            if (report.type == 'outbound-rtp') videoSent = bytesSent ?? videoSent;
+            if (report.type == 'inbound-rtp') videoReceived = bytesReceived ?? videoReceived;
+          }
         }
         if (mounted) {
           setState(() {
             _audioBytesSent = sent;
             _audioBytesReceived = received;
+            _videoBytesSent = videoSent;
+            _videoBytesReceived = videoReceived;
           });
         }
       } catch (e) {
@@ -645,10 +689,14 @@ class _CallScreenState extends ConsumerState<CallScreen>
   String get _diagnosticsText {
     String kilobytes(int bytes) => '${(bytes / 1024).toStringAsFixed(0)} Ko';
     String types(Set<String> values) => values.isEmpty ? 'aucun' : values.join('+');
+    final video = widget.isVideoCall
+        ? '\nvidéo : caméra ${_isVideoEnabled ? 'oui' : 'non'} · envoyé ${kilobytes(_videoBytesSent)} · '
+            'reçu ${kilobytes(_videoBytesReceived)} · autre ${_hasRemoteVideo ? (_isRemoteCameraOn ? 'oui' : 'coupée') : 'aucune'}'
+        : '';
     return '$_callDiagnosticsVersion · ${widget.isIncoming ? 'reçoit' : 'appelle'} · ICE $_iceStateLabel\n'
         'local ${types(_localCandidateTypes)} · distant ${types(_remoteCandidateTypes)} · '
         'micro ${_hasMicrophoneTrack ? 'oui' : 'non'} · relais $_relayServerCount\n'
-        'envoyé ${kilobytes(_audioBytesSent)} · reçu ${kilobytes(_audioBytesReceived)}';
+        'son : envoyé ${kilobytes(_audioBytesSent)} · reçu ${kilobytes(_audioBytesReceived)}$video';
   }
 
   void _handleIceConnectionState(RTCIceConnectionState state) {
@@ -685,6 +733,8 @@ class _CallScreenState extends ConsumerState<CallScreen>
     if (isFirstConnection) {
       _startCallTimer();
       _startQualityChecks();
+      // Une caméra coupée pendant la sonnerie doit être connue de l'autre dès la connexion
+      if (widget.isVideoCall) _sendVideoState();
     }
   }
 
@@ -768,6 +818,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
     _audioPlayer.stop();
 
     _localStream?.getTracks().forEach((track) => track.stop());
+    _cameraStream?.getTracks().forEach((track) => track.stop());
     _remoteStream?.getTracks().forEach((track) => track.stop());
     _peerConnection?.close();
 
@@ -802,6 +853,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
     _audioPlayer.dispose();
     
     _localStream?.getTracks().forEach((t) => t.stop());
+    _cameraStream?.getTracks().forEach((t) => t.stop());
     _remoteStream?.getTracks().forEach((t) => t.stop());
     _peerConnection?.close();
     
@@ -818,11 +870,72 @@ class _CallScreenState extends ConsumerState<CallScreen>
     });
   }
 
-  void _toggleVideo() {
+  Future<void> _toggleVideo() async {
+    final tracks = _localVideoTracks;
+    if (tracks.isEmpty) return _startCamera();
     setState(() => _isVideoEnabled = !_isVideoEnabled);
-    _localStream?.getVideoTracks().forEach((track) {
+    for (final track in tracks) {
       track.enabled = _isVideoEnabled;
+    }
+    _sendVideoState();
+  }
+
+  /// L'autre affiche « Caméra désactivée » au lieu d'une image noire.
+  void _sendVideoState() {
+    ref.read(socketServiceProvider).emit('webrtc_video_state', {
+      'toId': widget.otherId,
+      'enabled': _isVideoEnabled,
     });
+  }
+
+  /// L'appel a démarré sans caméra : on l'ouvre maintenant et on renégocie la connexion.
+  Future<void> _startCamera() async {
+    final localStream = _localStream;
+    final peerConnection = _peerConnection;
+    if (_isOpeningCamera || localStream == null || peerConnection == null) return;
+    _isOpeningCamera = true;
+    try {
+      if (!kIsWeb && !(await Permission.camera.request()).isGranted) {
+        _showMessage('Caméra refusée. Autorisez-la dans les réglages du téléphone.');
+        return;
+      }
+      final cameraStream = await navigator.mediaDevices.getUserMedia({'audio': false, 'video': _videoConstraints});
+      if (!mounted || _isClosing) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      _cameraStream = cameraStream;
+      // Même flux que le micro : l'autre reçoit le son et l'image ensemble
+      await peerConnection.addTrack(cameraStream.getVideoTracks().first, localStream);
+      _localRenderer.srcObject = cameraStream;
+      setState(() {
+        _isVideoEnabled = true;
+        _isFrontCamera = true;
+      });
+      _sendVideoState();
+      await _createOffer();
+    } catch (e) {
+      debugPrint('Caméra non ouverte: $e');
+      _showMessage("Impossible d'ouvrir la caméra.");
+    } finally {
+      _isOpeningCamera = false;
+    }
+  }
+
+  Future<void> _switchCamera() async {
+    final tracks = _localVideoTracks;
+    if (tracks.isEmpty) return;
+    try {
+      await Helper.switchCamera(tracks.first);
+      if (mounted) setState(() => _isFrontCamera = !_isFrontCamera);
+    } catch (e) {
+      debugPrint('Changement de caméra impossible: $e');
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
   
   Future<void> _toggleSpeaker() async {
@@ -845,7 +958,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
           // ── 1. Fond flouté avec avatar ──
           if (widget.otherAvatarUrl != null &&
               widget.otherAvatarUrl!.isNotEmpty &&
-              !_isVideoEnabled)
+              !_showRemoteVideo)
             Image.network(
               widget.otherAvatarUrl!,
               fit: BoxFit.cover,
@@ -854,7 +967,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
           else
             _buildGradientBg(),
 
-          if (!_isVideoEnabled)
+          if (!_showRemoteVideo)
             BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
               child: Container(
@@ -872,8 +985,8 @@ class _CallScreenState extends ConsumerState<CallScreen>
               ),
             ),
 
-          // Appel audio : le lecteur du flux distant reste présent, invisible, pour que le son soit joué
-          if (!_isVideoEnabled)
+          // Sans image distante, le lecteur reste présent, invisible, pour que le son soit joué
+          if (!_showRemoteVideo)
             Positioned(
               left: 0,
               top: 0,
@@ -882,11 +995,17 @@ class _CallScreenState extends ConsumerState<CallScreen>
               child: IgnorePointer(child: Opacity(opacity: 0.01, child: RTCVideoView(_remoteRenderer))),
             ),
 
-          // ── 2. Flux Vidéo ──
-          if (_isVideoEnabled)
+          // ── 2. Flux Vidéo ── l'image de l'autre ne dépend pas de ma caméra
+          if (_showRemoteVideo)
             RTCVideoView(
               _remoteRenderer,
               objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            ),
+
+          if (widget.isVideoCall && _hasRemoteVideo && !_isRemoteCameraOn)
+            const Align(
+              alignment: Alignment(0, 0.25),
+              child: _VideoOffLabel(),
             ),
 
           if (_isVideoEnabled)
@@ -897,7 +1016,12 @@ class _CallScreenState extends ConsumerState<CallScreen>
               height: 140,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: RTCVideoView(_localRenderer, mirror: true),
+                // Miroir seulement pour la caméra avant, comme un miroir de salle de bain
+                child: RTCVideoView(
+                  _localRenderer,
+                  mirror: _isFrontCamera,
+                  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                ),
               ),
             ),
 
@@ -1178,6 +1302,14 @@ class _CallScreenState extends ConsumerState<CallScreen>
                   isActive: !_isVideoEnabled,
                   onTap: _toggleVideo,
                 ),
+              // Le navigateur ne sait pas remplacer la caméra envoyée
+              if (widget.isVideoCall && !kIsWeb && _isVideoEnabled)
+                _buildControlButton(
+                  icon: Icons.cameraswitch,
+                  label: 'Retourner',
+                  isActive: false,
+                  onTap: _switchCamera,
+                ),
             ],
           ),
         ),
@@ -1302,6 +1434,27 @@ class _ConnectionWarning extends StatelessWidget {
           Expanded(
             child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// L'autre a coupé sa caméra : on le dit au lieu d'afficher une image noire.
+class _VideoOffLabel extends StatelessWidget {
+  const _VideoOffLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.videocam_off, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Text('Caméra désactivée', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
         ],
       ),
     );
