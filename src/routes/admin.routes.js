@@ -38,6 +38,7 @@ router.use('/shops', shopsRoutes);
 router.use('/requests', requestsRoutes);
 router.use('/services', servicesRoutes);
 router.use('/ads', adsRoutes); // 📢 Publicités
+router.use('/feed-banners', require('./admin/feed-banners.routes')); // 🖼️ Bannières du fil d'accueil
 router.use('/verifications', require('./admin/verifications.routes'));
 router.use('/support', supportRoutes); // 🆕
 router.use('/database', databaseRoutes); // 🗄️ Gestion DB

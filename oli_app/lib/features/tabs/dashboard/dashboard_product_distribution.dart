@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../../../core/services/hive_cache_service.dart';
 import '../../../models/product_model.dart';
 
 /// Mixin qui encapsule toute la logique de distribution des produits admin
@@ -11,6 +12,12 @@ mixin DashboardProductDistribution {
     'Paire', 'Lot', 'Set', 'Kit', 'Nouveau', 'Promo', 'Super', 'Pack',
     'Mini', 'La', 'Le', 'Les',
   ];
+
+  /// Clé de stockage local de la Sélection (mot-clé + ids + date du tirage).
+  static const String _selectionCacheKey = 'dashboard_selection';
+
+  /// La Sélection ne change qu'une fois toutes les 12 heures.
+  static const Duration selectionLifetime = Duration(hours: 12);
 
   // ── Caches (calculés une seule fois) ────────────────────────────────────
   String cachedSelectionKeyword = '';
@@ -57,17 +64,30 @@ mixin DashboardProductDistribution {
       }
     }
 
-    final validKeys = groupedProducts.keys
-        .where((k) => groupedProducts[k]!.length >= 3)
-        .toList();
-    if (validKeys.isNotEmpty) {
-      validKeys.shuffle(random);
-      cachedSelectionKeyword = validKeys.first;
-      cachedSelectionProducts =
-          groupedProducts[cachedSelectionKeyword]!.take(15).toList();
-      for (var p in cachedSelectionProducts) {
-        usedIds.add(p.id);
+    // Sélection mémorisée : on la réutilise tant qu'elle a moins de 12 h,
+    // même après un pull-to-refresh ou un redémarrage de l'app.
+    final saved = _loadSaved(_selectionCacheKey, allProducts,
+        minCount: 3, requireKeyword: true);
+    if (saved != null) {
+      cachedSelectionKeyword = saved.key;
+      cachedSelectionProducts = saved.value;
+    } else {
+      final validKeys = groupedProducts.keys
+          .where((k) => groupedProducts[k]!.length >= 3)
+          .toList();
+      if (validKeys.isNotEmpty) {
+        // Tirage vraiment aléatoire : la graine de [random] dépend de la liste,
+        // elle redonnerait toujours le même mot-clé.
+        validKeys.shuffle(Random());
+        cachedSelectionKeyword = validKeys.first;
+        cachedSelectionProducts =
+            groupedProducts[cachedSelectionKeyword]!.take(15).toList();
+        _save(_selectionCacheKey, cachedSelectionProducts,
+            keyword: cachedSelectionKeyword);
       }
+    }
+    for (var p in cachedSelectionProducts) {
+      usedIds.add(p.id);
     }
 
     // Méthode locale pour piocher sans doublon
@@ -118,7 +138,46 @@ mixin DashboardProductDistribution {
     distributionComputed = true;
   }
 
+  /// Relit un tirage stocké sous [key] s'il a moins de [selectionLifetime].
+  /// Retourne (mot-clé, produits encore présents dans [allProducts] et absents
+  /// de [excludedIds]), ou null si le tirage est expiré, absent, ou s'il reste
+  /// moins de [minCount] produits (ou pas de mot-clé si [requireKeyword]).
+  MapEntry<String, List<Product>>? _loadSaved(
+    String key,
+    List<Product> allProducts, {
+    required int minCount,
+    Set<String> excludedIds = const {},
+    bool requireKeyword = false,
+  }) {
+    final raw = HiveCacheService.getCache(key);
+    if (raw is! Map) return null;
+    final savedAt = DateTime.tryParse(raw['savedAt']?.toString() ?? '');
+    final ids = (raw['ids'] as List?)?.map((e) => e.toString()).toList();
+    if (savedAt == null || ids == null) return null;
+    if (DateTime.now().difference(savedAt) >= selectionLifetime) return null;
+
+    final byId = {for (final p in allProducts) p.id: p};
+    final products = [
+      for (final id in ids)
+        if (byId[id] != null && !excludedIds.contains(id)) byId[id]!,
+    ];
+    if (products.length < minCount) return null;
+    final keyword = raw['keyword']?.toString() ?? '';
+    if (requireKeyword && keyword.isEmpty) return null;
+    return MapEntry(keyword, products);
+  }
+
+  /// Mémorise un tirage avec l'heure du tirage.
+  void _save(String key, List<Product> products, {String keyword = ''}) {
+    HiveCacheService.setCache(key, {
+      'keyword': keyword,
+      'ids': products.map((p) => p.id).toList(),
+      'savedAt': DateTime.now().toIso8601String(),
+    });
+  }
+
   /// Remet à zéro les caches (ex: lors d'un pull-to-refresh).
+  /// La Sélection stockée est conservée : elle sera relue au prochain calcul.
   void resetDistribution() {
     distributionComputed = false;
     cachedSelectionKeyword = '';

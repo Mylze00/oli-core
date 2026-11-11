@@ -6,26 +6,36 @@ import '../../../../core/router/network/dio_provider.dart';
 import '../../../../core/services/hive_cache_service.dart';
 import '../../../../models/product_model.dart';
 
-/// Top Classement personnalisé, conservé sur l'appareil pendant 12 heures.
+/// Top Classement personnalisé, conservé sur l'appareil pendant 3 heures.
 ///
 /// Le backend tire au hasard parmi les produits de l'accueil, en excluant
 /// les produits vus récemment et les catégories favorites de l'utilisateur.
-/// Tant que le tirage a moins de 12 heures, l'ouverture de l'application
-/// réaffiche les mêmes produits sans appel réseau. Passé ce délai, un nouveau
-/// tirage est demandé à l'ouverture ; en cas d'échec, l'ancien reste affiché.
+/// Tant que le tirage a moins de 3 heures, l'ouverture de l'application ET
+/// le pull-to-refresh réaffichent les mêmes produits (donc les mêmes images,
+/// déjà en cache) sans appel réseau. Passé ce délai, un nouveau tirage est
+/// demandé ; en cas d'échec, l'ancien reste affiché.
 ///
-/// Pour forcer un nouveau tirage (pull-to-refresh) :
-/// `ref.read(discoverRandomProvider.notifier).refresh()`.
+/// - Pull-to-refresh / retour sur l'accueil : `refreshIfExpired()`.
+/// - Forcer un nouveau tirage : `refresh()`.
 class DiscoverRandomNotifier extends StateNotifier<List<Product>> {
   static const String _cacheKey = 'home_top_ranking_cache';
-  static const Duration _validity = Duration(hours: 12);
+  static const Duration _validity = Duration(hours: 3);
+
+  DateTime? _fetchedAt;
 
   final Dio _dio;
   bool _isFetching = false;
 
   DiscoverRandomNotifier(this._dio) : super(const []) {
-    final fetchedAt = _restoreFromCache();
-    if (state.isEmpty || _isExpired(fetchedAt)) refresh();
+    _fetchedAt = _restoreFromCache();
+    refreshIfExpired();
+  }
+
+  /// Demande un nouveau tirage seulement si le classement actuel a 3 h ou
+  /// plus (ou s'il n'y en a pas). Sinon ne fait rien : le classement reste.
+  Future<void> refreshIfExpired() async {
+    if (state.isNotEmpty && !_isExpired(_fetchedAt)) return;
+    await refresh();
   }
 
   bool _isExpired(DateTime? fetchedAt) {
@@ -70,10 +80,12 @@ class DiscoverRandomNotifier extends StateNotifier<List<Product>> {
       final products = _parse(items);
       if (products.isEmpty) return;
 
+      final now = DateTime.now();
       await HiveCacheService.setCache(_cacheKey, {
-        'fetchedAt': DateTime.now().millisecondsSinceEpoch,
+        'fetchedAt': now.millisecondsSinceEpoch,
         'items': items,
       });
+      _fetchedAt = now;
       if (mounted) state = products;
     } catch (e) {
       debugPrint('⚠️ discover-random indisponible: $e');

@@ -16,6 +16,7 @@ import {
     XCircle 
 } from 'lucide-react';
 import api from '../services/api';
+import FeedBannersManager from '../components/ads/FeedBannersManager';
 
 function AdsManager() {
     const [ads, setAds] = useState([]);
@@ -510,6 +511,9 @@ function AdsManager() {
                     </div>
                 )}
             </div>
+
+            {/* ── Bannières du fil d'accueil (image + lien ou vidéo) ── */}
+            <FeedBannersManager />
         </div>
     );
 }

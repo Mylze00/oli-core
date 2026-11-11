@@ -548,6 +548,11 @@ if (process.env.NODE_ENV !== 'test') {
                 require('path').join(__dirname, 'migrations/add_refund_requests.sql'), 'utf8'
             ));
 
+            // Bannières du fil d'accueil (image + lien ou vidéo compressée)
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_feed_banners.sql'), 'utf8'
+            ));
+
             // Créer la table notifications si elle n'existe pas
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS notifications (

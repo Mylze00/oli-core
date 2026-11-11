@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../../core/services/oli_image_cache.dart';
 import 'package:flutter/material.dart';
 import '../../../../utils/price_color.dart';
 import '../../../marketplace/presentation/pages/product_details_page.dart';
@@ -554,6 +555,7 @@ class TopRankingProductCard extends ConsumerWidget {
               aspectRatio: 1,
               child: product.images.isNotEmpty
                   ? CachedNetworkImage(
+                      cacheManager: OliImageCache.instance,
                       imageUrl: CloudinaryHelper.card(product.images.first),
                       fit: BoxFit.cover,
                       memCacheWidth: 540, // décodage à la résolution servie (540 px)

@@ -26,6 +26,7 @@ import 'widgets/horizontal_product_section.dart';
 import 'widgets/product_sections.dart'; // VerifiedShopProductsSection
 import 'widgets/ranking_section.dart';
 import 'providers/discover_random_provider.dart'; // Top Classement personnalisé (tirage aléatoire)
+import 'providers/feed_banners_provider.dart'; // Bannières du fil gérées depuis l'admin
 import '../../marketplace/presentation/widgets/market_product_card.dart';
 
 // Logique métier extraite
@@ -491,7 +492,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                 ref.read(topSellersProvider.notifier).fetchTopSellers(shuffle: true),
                 ref.read(verifiedShopsProductsProvider.notifier).fetchVerifiedShopsProducts(),
                 ref.read(brandedProductsProvider.notifier).fetchBrandedProducts(),
-                ref.read(discoverRandomProvider.notifier).refresh(),
+                // Top Classement : nouveau tirage seulement après 3 h
+                ref.read(discoverRandomProvider.notifier).refreshIfExpired(),
+                ref.read(feedBannersProvider.notifier).refresh(),
               ]);
               setState(() {
                 _rankingVisibleCount = _rankingBatchSize;
@@ -551,8 +554,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                         title: 'Sélection : $cachedSelectionKeyword',
                         subtitle: 'Inspiration pour vous',
                         products: deduplicatedSelection,
-                        badgeText: 'NEW',
-                        badgeColor: const Color(0xFF40C4FF),
+                        accentColor: const Color(0xFF40C4FF),
                         searchKeyword: cachedSelectionKeyword,
                         onProductTap: _navigateToProduct,
                       ),
@@ -604,7 +606,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
 
                 ...RankingSectionHelper.buildSlivers(
                     deduplicatedRanking.take(_rankingVisibleCount).toList(), textColor,
-                    brandedProducts: deduplicatedBranded),
+                    brandedProducts: deduplicatedBranded,
+                    feedBanners: ref.watch(feedBannersProvider)),
 
                 const SliverPadding(padding: EdgeInsets.only(bottom: 4)),
 

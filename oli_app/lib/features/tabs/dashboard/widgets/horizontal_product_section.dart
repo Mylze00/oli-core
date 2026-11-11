@@ -1,3 +1,5 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../../../core/services/oli_image_cache.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
@@ -6,7 +8,7 @@ import '../../../../providers/exchange_rate_provider.dart';
 import '../../../../utils/cloudinary_helper.dart';
 
 /// Widget réutilisable pour afficher une section horizontale de produits
-/// avec titre, sous-titre, badge et scroll horizontal.
+/// avec titre, sous-titre et scroll horizontal.
 ///
 /// - Adapte automatiquement ses couleurs au thème (dark/light)
 /// - Mène vers MarketView filtrée par mot-clé au tap sur la flèche
@@ -16,8 +18,8 @@ class HorizontalProductSection extends ConsumerWidget {
   final String subtitle;
   final List<Product> products;
   final List<Color>? gradient;
-  final String badgeText;
-  final Color badgeColor;
+  /// Couleur d'accent du prix en mode sombre.
+  final Color accentColor;
   final String? searchKeyword;
   final void Function(Product) onProductTap;
 
@@ -27,8 +29,7 @@ class HorizontalProductSection extends ConsumerWidget {
     required this.subtitle,
     required this.products,
     this.gradient,
-    required this.badgeText,
-    required this.badgeColor,
+    required this.accentColor,
     this.searchKeyword,
     required this.onProductTap,
   });
@@ -41,7 +42,9 @@ class HorizontalProductSection extends ConsumerWidget {
     final containerBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
     final containerBorderColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
     final productNameColor = isDark ? Colors.white70 : Colors.grey.shade600;
-    final priceColor = isDark ? badgeColor : const Color(0xFFFF6B6B); // Coral red
+    final placeholderColor =
+        isDark ? const Color(0xFF1A1A1A) : Colors.grey.shade200;
+    final priceColor = isDark ? accentColor : const Color(0xFFFF6B6B); // Coral red
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -102,87 +105,40 @@ class HorizontalProductSection extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Image + badge
+                        // Image (cache disque + mémoire via CachedNetworkImage)
                         Expanded(
-                          child: Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: product.images.isNotEmpty
-                                    ? Image.network(
-                                        CloudinaryHelper.small(
-                                            product.images.first),
-                                        fit: BoxFit.cover,
-                                        width: double.infinity,
-                                        height: double.infinity,
-                                        frameBuilder: (context, child, frame,
-                                            wasSynchronouslyLoaded) {
-                                          if (wasSynchronouslyLoaded) {
-                                            return child;
-                                          }
-                                          return AnimatedOpacity(
-                                            opacity:
-                                                frame == null ? 0.0 : 1.0,
-                                            duration: const Duration(
-                                                milliseconds: 400),
-                                            curve: Curves.easeOut,
-                                            child: child,
-                                          );
-                                        },
-                                        loadingBuilder: (context, child,
-                                            loadingProgress) {
-                                          if (loadingProgress == null) {
-                                            return child;
-                                          }
-                                          return Container(
-                                            color: isDark
-                                                ? const Color(0xFF1A1A1A)
-                                                : Colors.grey[200],
-                                            child: const Center(
-                                              child: SizedBox(
-                                                width: 14,
-                                                height: 14,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                        color: Colors.grey),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                        errorBuilder: (ctx, err, stack) =>
-                                            const Center(
-                                              child: Icon(Icons.broken_image,
-                                                  size: 20,
-                                                  color: Colors.grey),
-                                            ),
-                                      )
-                                    : const Center(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: product.images.isNotEmpty
+                                ? CachedNetworkImage(
+                                    cacheManager: OliImageCache.instance,
+                                    // 330 px ≈ 3 × 110 px logiques : net sur écrans haute densité
+                                    imageUrl: CloudinaryHelper.card(
+                                        product.images.first,
+                                        width: 330,
+                                        height: 330),
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    memCacheWidth: 330,
+                                    fadeInDuration:
+                                        const Duration(milliseconds: 300),
+                                    placeholder: (_, __) =>
+                                        Container(color: placeholderColor),
+                                    errorWidget: (_, __, ___) => Container(
+                                      color: placeholderColor,
+                                      child: const Center(
+                                        child: Icon(Icons.broken_image,
+                                            size: 20, color: Colors.grey),
+                                      ),
+                                    ),
+                                  )
+                                : Container(
+                                    color: placeholderColor,
+                                    child: const Center(
                                         child: Icon(Icons.image,
                                             color: Colors.grey)),
-                              ),
-                              // Badge en haut à gauche
-                              Positioned(
-                                top: 0,
-                                left: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 5, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: badgeColor,
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(6),
-                                      bottomRight: Radius.circular(6),
-                                    ),
                                   ),
-                                  child: Text(badgeText,
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold)),
-                                ),
-                              ),
-                            ],
                           ),
                         ),
 

@@ -22,6 +22,7 @@ class ApiConfig {
   static const String productsGoodDeals = '$baseUrl/products/good-deals';
   static const String productsBranded = '$baseUrl/products/branded';
   static const String ads = '$baseUrl/ads';
+  static const String feedBanners = '$baseUrl/ads/feed-banners'; // bannières du fil d'accueil
   
   // --- Orders ---
   static const String orders = '$baseUrl/orders';

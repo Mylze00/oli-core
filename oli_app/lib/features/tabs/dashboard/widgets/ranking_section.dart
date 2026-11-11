@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../models/product_model.dart';
 import 'product_sections.dart'; // TopRankingGrid + BrandedCircleSection
+import 'feed_banner_tile.dart';
+import '../providers/feed_banners_provider.dart';
 
 /// Helper pour construire la section "Top Classement" de la page d'accueil.
 ///
@@ -57,15 +59,20 @@ class RankingSectionHelper {
   /// [allProducts]     : tous les produits à afficher (déjà triés/limités).
   /// [textColor]       : couleur du texte selon le thème (dark/light).
   /// [brandedProducts] : produits brandCertified pour la section circulaire.
+  /// [feedBanners]     : bannières gérées depuis l'admin. Elles prennent la
+  ///                     place de la bannière fintech, à tour de rôle ; sans
+  ///                     bannière, la bannière fintech locale est affichée.
   static List<Widget> buildSlivers(
     List<Product> allProducts,
     Color textColor, {
     List<Product> brandedProducts = const [],
+    List<FeedBanner> feedBanners = const [],
   }) {
     final List<Widget> slivers = [];
     int index = 0;
     int promoIndex = 0;
     int brandedSlotCount = 0; // Compteur pour rotation titre + tranche produits
+    int feedBannerSlotCount = 0; // Rotation des bannières gérées depuis l'admin
 
     // Titres rotatifs pour les sections brandées
     const brandedTitles = ['À la une', 'Branding Original', 'Produit Original'];
@@ -115,16 +122,20 @@ class RankingSectionHelper {
 
       promoIndex++;
 
-      if (isEmptyContent && bgImg != null) {
+      if (isEmptyContent && bgImg != null && feedBanners.isNotEmpty) {
+        final banner = feedBanners[feedBannerSlotCount % feedBanners.length];
+        feedBannerSlotCount++;
         slivers.add(SliverToBoxAdapter(
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            clipBehavior: Clip.antiAlias,
+          child: FeedBannerTile(key: ValueKey('feed-banner-${banner.id}'), banner: banner),
+        ));
+      } else if (isEmptyContent && bgImg != null) {
+        slivers.add(SliverToBoxAdapter(
+          // Même écart (10 px) et même arrondi (6 px) que les cartes produits.
+          // Le bloc suivant ajoute déjà 8 px en haut, d'où les 2 px en bas.
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 2),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(6),
               child: Image.asset(
                 bgImg,
                 fit: BoxFit.fill,
