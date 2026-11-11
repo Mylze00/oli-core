@@ -26,7 +26,7 @@ const _iceServersTimeout = Duration(seconds: 4);
 
 /// Relevé temporaire, à retirer une fois le son des appels validé sur de vrais téléphones.
 const _showCallDiagnostics = true;
-const _callDiagnosticsVersion = 'diag-1';
+const _callDiagnosticsVersion = 'diag-2';
 const _diagnosticsInterval = Duration(seconds: 2);
 
 /// Interlocuteur de l'appel en cours : un seul appel à la fois sur cet appareil.
@@ -104,6 +104,8 @@ class _CallScreenState extends ConsumerState<CallScreen>
   bool _isCallInitiated = false;
 
   String _iceStateLabel = 'New';
+  /// Nombre de relais TURN reçus du serveur : 0 explique un appel bloqué sur « Connexion… ».
+  int _relayServerCount = 0;
   final Set<String> _localCandidateTypes = {};
   final Set<String> _remoteCandidateTypes = {};
   int _audioBytesSent = 0;
@@ -172,7 +174,10 @@ class _CallScreenState extends ConsumerState<CallScreen>
     try {
       final response = await ref.read(dioProvider).get('/calls/ice-servers').timeout(_iceServersTimeout);
       final servers = response.data is Map ? response.data['iceServers'] : null;
-      if (servers is List && servers.isNotEmpty) return {'iceServers': servers};
+      if (servers is List && servers.isNotEmpty) {
+        _relayServerCount = servers.where((s) => s is Map && '${s['urls']}'.contains('turn')).length;
+        return {'iceServers': servers};
+      }
     } catch (e) {
       debugPrint('Serveurs de connexion non chargés: $e');
     }
@@ -642,7 +647,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
     String types(Set<String> values) => values.isEmpty ? 'aucun' : values.join('+');
     return '$_callDiagnosticsVersion · ${widget.isIncoming ? 'reçoit' : 'appelle'} · ICE $_iceStateLabel\n'
         'local ${types(_localCandidateTypes)} · distant ${types(_remoteCandidateTypes)} · '
-        'micro ${_hasMicrophoneTrack ? 'oui' : 'non'}\n'
+        'micro ${_hasMicrophoneTrack ? 'oui' : 'non'} · relais $_relayServerCount\n'
         'envoyé ${kilobytes(_audioBytesSent)} · reçu ${kilobytes(_audioBytesReceived)}';
   }
 

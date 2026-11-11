@@ -17,9 +17,52 @@ function readRelayServers() {
     }
 }
 
+const CLOUDFLARE_TURN_TTL_SECONDS = 4 * 60 * 60;
+const CLOUDFLARE_TURN_TIMEOUT_MS = 3000;
+
+/**
+ * Identifiants de relais temporaires Cloudflare : sans relais, les appels entre
+ * réseaux mobiles (NAT opérateur) restent bloqués sur « Connexion… ».
+ */
+async function fetchCloudflareRelayServers() {
+    const keyId = process.env.CLOUDFLARE_TURN_KEY_ID;
+    const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
+    if (!keyId || !apiToken) return [];
+
+    try {
+        const response = await fetch(
+            `https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`,
+            {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ttl: CLOUDFLARE_TURN_TTL_SECONDS }),
+                signal: AbortSignal.timeout(CLOUDFLARE_TURN_TIMEOUT_MS),
+            }
+        );
+        if (!response.ok) {
+            console.error('Relais Cloudflare refusé:', response.status);
+            return [];
+        }
+        const data = await response.json();
+        const servers = Array.isArray(data.iceServers) ? data.iceServers : [data.iceServers];
+        // Les clients web refusent le port 53 : on ne garde que les adresses utilisables partout.
+        return servers.filter(Boolean).map((server) => ({
+            ...server,
+            urls: [].concat(server.urls).filter((url) => !/:53(\?|$)/.test(url)),
+        }));
+    } catch (err) {
+        console.error('Relais Cloudflare indisponible:', err.message);
+        return [];
+    }
+}
+
 /** Serveurs de connexion des appels : le relais se configure sans republier l'application. */
-exports.getIceServers = (req, res) => {
-    res.json({ iceServers: [...DEFAULT_ICE_SERVERS, ...readRelayServers()] });
+exports.getIceServers = async (req, res) => {
+    const relayServers = [...(await fetchCloudflareRelayServers()), ...readRelayServers()];
+    if (relayServers.length === 0) {
+        console.warn('Aucun relais TURN configuré : les appels entre réseaux mobiles échoueront');
+    }
+    res.json({ iceServers: [...DEFAULT_ICE_SERVERS, ...relayServers] });
 };
 
 /** Refus depuis l'écran natif, quand l'application n'a pas de connexion en direct. */
