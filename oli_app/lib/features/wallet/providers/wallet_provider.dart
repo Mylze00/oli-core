@@ -245,8 +245,10 @@ class WalletNotifier extends StateNotifier<WalletState> {
         'amount': amount,
         'receiverId': receiverId,
         if (note != null && note.isNotEmpty) 'note': note,
+        // Dans le corps et non en en-tête : sur le web, un en-tête personnalisé passe
+        // par le contrôle CORS, qui faisait échouer l'envoi avant même le serveur
+        'idempotency_key': idempotencyKey,
       },
-      headers: {'Idempotency-Key': idempotencyKey},
     );
   }
 
@@ -288,12 +290,10 @@ class WalletNotifier extends StateNotifier<WalletState> {
     });
   }
 
-  Future<bool> _performTransaction(String url, Map<String, dynamic> body,
-      {Map<String, String>? headers}) async {
+  Future<bool> _performTransaction(String url, Map<String, dynamic> body) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final response = await _dio.post(url,
-          data: body, options: headers == null ? null : Options(headers: headers));
+      final response = await _dio.post(url, data: body);
 
       if (response.statusCode == 200) {
         await loadWalletData();

@@ -1103,8 +1103,9 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                               'amount': amount,
                               'currency': selectedCurrency,
                               if (noteController.text.trim().isNotEmpty) 'note': noteController.text.trim(),
+                              // Dans le corps : un en-tête personnalisé est bloqué par le contrôle CORS sur le web
+                              'idempotency_key': transferKey,
                             },
-                            options: Options(headers: {'Idempotency-Key': transferKey}),
                           );
 
                           if (response.statusCode == 200) {

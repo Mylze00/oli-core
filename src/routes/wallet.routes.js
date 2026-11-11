@@ -91,7 +91,7 @@ router.get('/resolve-recipient', recipientLookupLimiter, walletController.resolv
 // ─── POST /api/wallet/transfer ───────────────────────────────────────────────
 // Transfert P2P entre utilisateurs OLI (interne — pas de Mobile Money).
 // Body: { receiverId: number, amount: number, currency?: 'FC'|'USD', note?: string }
-// En-tête Idempotency-Key : une même clé n'est jamais débitée deux fois.
+// Clé idempotency_key (corps) ou en-tête Idempotency-Key : une même clé n'est jamais débitée deux fois.
 router.post('/transfer', walletTransferLimiter, walletController.transfer);
 
 module.exports = router;
