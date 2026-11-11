@@ -7,6 +7,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' hide AndroidAudioMode;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
 import '../../../../widgets/verification_badge.dart';
 import '../../core/router/network/dio_provider.dart';
@@ -110,6 +111,9 @@ class _CallScreenState extends ConsumerState<CallScreen>
   bool _hasMicrophoneTrack = false;
   Timer? _diagnosticsTimer;
 
+  /// Navigateur : la sonnerie attend un premier toucher de l'utilisateur.
+  bool _needsSoundUnlock = false;
+
   late String _displayName;
   BadgeType? _badgeType;
 
@@ -142,6 +146,9 @@ class _CallScreenState extends ConsumerState<CallScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
+
+    // Comme un vrai appel : l'écran ne s'éteint pas pendant la sonnerie et la conversation
+    WakelockPlus.enable().catchError((Object e) => debugPrint('Écran allumé impossible: $e'));
 
     _renderersReady = _initRenderers();
     _setupSocketListeners();
@@ -255,9 +262,69 @@ class _CallScreenState extends ConsumerState<CallScreen>
         // Tonalité d'attente (calling)
         await _audioPlayer.play(AssetSource('sounds/calling.mp3'));
       }
+      if (_needsSoundUnlock && mounted) setState(() => _needsSoundUnlock = false);
     } catch (e) {
-      debugPrint("Erreur lecture sonnerie (vérifiez que les fichiers ringtone.mp3 et calling.mp3 existent dans assets/sounds/) : $e");
+      debugPrint('Sonnerie non jouée : $e');
+      // Le navigateur bloque le son tant que la page n'a pas été touchée
+      if (kIsWeb && mounted && !_isCallActive) setState(() => _needsSoundUnlock = true);
     }
+  }
+
+  /// Premier toucher sur le navigateur : la sonnerie peut enfin jouer.
+  void _unlockSound() {
+    if (!_needsSoundUnlock || _isCallActive || _isClosing) return;
+    _playRingtone();
+  }
+
+  /// Sur téléphone, le micro doit être autorisé par le système avant tout appel.
+  /// Le navigateur, lui, pose la question au moment d'ouvrir le micro.
+  Future<bool> _ensureMicrophonePermission() async {
+    if (kIsWeb) return true;
+    final statuses = await [Permission.microphone, if (_isVideoEnabled) Permission.camera].request();
+    if (_isVideoEnabled && statuses[Permission.camera]?.isGranted != true) {
+      // Sans caméra, l'appel continue en audio
+      setState(() => _isVideoEnabled = false);
+    }
+    final microphone = statuses[Permission.microphone];
+    if (microphone?.isGranted == true || microphone?.isLimited == true) return true;
+    if (mounted && microphone?.isPermanentlyDenied == true) await _showMicrophoneSettingsDialog();
+    return false;
+  }
+
+  Future<void> _showMicrophoneSettingsDialog() {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Micro bloqué'),
+        content: const Text("Oli a besoin du micro pour l'appel. Autorisez-le dans les réglages du téléphone."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              openAppSettings();
+            },
+            child: const Text('Ouvrir les réglages'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Message compréhensible selon la raison pour laquelle le micro n'a pas pu s'ouvrir.
+  String _microphoneErrorMessage(Object error) {
+    final text = error.toString();
+    if (text.contains('NotAllowed') || text.contains('Permission') || text.contains('denied')) {
+      return kIsWeb
+          ? "Micro refusé. Autorisez-le avec l'icône à gauche de l'adresse du site, puis rappelez."
+          : 'Micro refusé. Autorisez-le dans les réglages du téléphone.';
+    }
+    if (text.contains('NotFound') || text.contains('DevicesNotFound')) return 'Aucun micro détecté sur cet appareil.';
+    if (text.contains('NotReadable') || text.contains('TrackStart')) {
+      return 'Le micro est déjà utilisé par une autre application.';
+    }
+    if (text.contains('Secure') || text.contains('secure')) return "L'appel nécessite une connexion sécurisée (https).";
+    return "Impossible d'ouvrir le micro.";
   }
 
   Future<void> _initRenderers() async {
@@ -266,88 +333,107 @@ class _CallScreenState extends ConsumerState<CallScreen>
   }
 
   Future<bool> _setupWebRTC() async {
-    await _renderersReady;
-    await _prepareCallAudio();
-
-    // Request permissions
-    await [Permission.microphone, if (widget.isVideoCall) Permission.camera].request();
-
-    // Create Peer Connection
-    _peerConnection = await createPeerConnection(await _loadIceServers());
-
-    final peerConnection = _peerConnection!;
-
-    peerConnection.onTrack = (RTCTrackEvent event) {
-      if (!mounted) return;
-      if (event.streams.isNotEmpty) {
-        setState(() {
-          _remoteStream = event.streams[0];
-          _remoteRenderer.srcObject = _remoteStream;
-        });
-      }
-    };
-
-    peerConnection.onIceCandidate = (RTCIceCandidate candidate) {
-      _recordCandidateType(_localCandidateTypes, candidate.candidate);
-      ref.read(socketServiceProvider).emit('webrtc_ice_candidate', {
-        'toId': widget.otherId,
-        'candidate': {
-          'candidate': candidate.candidate,
-          'sdpMid': candidate.sdpMid,
-          'sdpMLineIndex': candidate.sdpMLineIndex,
-        }
-      });
-    };
-
-    peerConnection.onIceConnectionState = _handleIceConnectionState;
-
-    // Setup Local Stream
-    final mediaConstraints = {
-      'audio': kIsWeb
-          ? {'echoCancellation': true, 'noiseSuppression': true, 'autoGainControl': true}
-          : {
-              'optional': [
-                {'googNoiseSuppression': 'true'},
-                {'googEchoCancellation': 'true'},
-                {'echoCancellation': 'true'},
-                {'googAutoGainControl': 'true'},
-                {'googHighpassFilter': 'true'},
-              ],
-            },
-      'video': _isVideoEnabled
-          ? {
-              'facingMode': 'user',
-              'width': {'ideal': 640},
-              'height': {'ideal': 480},
-            }
-          : false,
-    };
-
     try {
-      _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-      if (!mounted) {
-        _localStream?.getTracks().forEach((track) => track.stop());
+      await _renderersReady;
+      await _prepareCallAudio();
+
+      if (!await _ensureMicrophonePermission()) {
+        _failSetup('Micro refusé. Autorisez-le dans les réglages du téléphone.');
         return false;
       }
-      _localRenderer.srcObject = _localStream;
 
-      for (final track in _localStream?.getTracks() ?? const <MediaStreamTrack>[]) {
-        await _peerConnection?.addTrack(track, _localStream!);
+      // Le micro s'ouvre d'abord : c'est lui qui déclenche la demande du navigateur
+      final stream = await _openLocalStream();
+      if (!mounted || _isClosing) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
       }
-      _hasMicrophoneTrack = _localStream?.getAudioTracks().isNotEmpty ?? false;
+      _localStream = stream;
+      _localRenderer.srcObject = stream;
+      _hasMicrophoneTrack = stream.getAudioTracks().isNotEmpty;
+      if (!_hasMicrophoneTrack) {
+        _failSetup('Aucun micro détecté sur cet appareil.');
+        return false;
+      }
+
+      _peerConnection = await createPeerConnection(await _loadIceServers());
+      final peerConnection = _peerConnection!;
+
+      peerConnection.onTrack = (RTCTrackEvent event) {
+        if (!mounted) return;
+        if (event.streams.isNotEmpty) {
+          setState(() {
+            _remoteStream = event.streams[0];
+            _remoteRenderer.srcObject = _remoteStream;
+          });
+        }
+      };
+
+      peerConnection.onIceCandidate = (RTCIceCandidate candidate) {
+        _recordCandidateType(_localCandidateTypes, candidate.candidate);
+        ref.read(socketServiceProvider).emit('webrtc_ice_candidate', {
+          'toId': widget.otherId,
+          'candidate': {
+            'candidate': candidate.candidate,
+            'sdpMid': candidate.sdpMid,
+            'sdpMLineIndex': candidate.sdpMLineIndex,
+          }
+        });
+      };
+
+      peerConnection.onIceConnectionState = _handleIceConnectionState;
+
+      for (final track in stream.getTracks()) {
+        await peerConnection.addTrack(track, stream);
+      }
+      if (mounted) setState(() {});
       _startDiagnostics();
+      return true;
     } catch (e) {
-      debugPrint("MediaStream Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Impossible d'accéder au micro ou à la caméra.")),
-        );
-      }
-      _abortCall();
+      debugPrint('Préparation de l\'appel impossible: $e');
+      _failSetup(_microphoneErrorMessage(e));
       return false;
     }
+  }
 
-    return true;
+  Map<String, dynamic> get _audioConstraints => kIsWeb
+      ? {'echoCancellation': true, 'noiseSuppression': true, 'autoGainControl': true}
+      : {
+          'optional': [
+            {'googNoiseSuppression': 'true'},
+            {'googEchoCancellation': 'true'},
+            {'echoCancellation': 'true'},
+            {'googAutoGainControl': 'true'},
+            {'googHighpassFilter': 'true'},
+          ],
+        };
+
+  /// Micro (et caméra pour la vidéo). Si la caméra échoue, l'appel passe en audio.
+  Future<MediaStream> _openLocalStream() async {
+    if (_isVideoEnabled) {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          'audio': _audioConstraints,
+          'video': {
+            'facingMode': 'user',
+            'width': {'ideal': 640},
+            'height': {'ideal': 480},
+          },
+        });
+      } catch (e) {
+        debugPrint('Caméra indisponible, appel en audio: $e');
+        if (mounted) setState(() => _isVideoEnabled = false);
+      }
+    }
+    return navigator.mediaDevices.getUserMedia({'audio': _audioConstraints, 'video': false});
+  }
+
+  /// L'appel ne peut pas démarrer : on prévient l'autre appareil et on explique pourquoi.
+  void _failSetup(String message) {
+    if (!mounted || _isClosing) return;
+    final messenger = ScaffoldMessenger.of(context);
+    _abortCall();
+    messenger.showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 5)));
   }
 
   void _setupSocketListeners() {
@@ -667,6 +753,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
   void _endCallCleanup() {
     if (_isClosing) return;
     _isClosing = true;
+    WakelockPlus.disable().catchError((Object _) {});
 
     _timeoutTimer?.cancel();
     _connectionTimer?.cancel();
@@ -699,6 +786,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
   @override
   void dispose() {
     if (ActiveCall.peerId == widget.otherId) ActiveCall.peerId = null;
+    WakelockPlus.disable().catchError((Object _) {});
     _timeoutTimer?.cancel();
     _connectionTimer?.cancel();
     _qualityTimer?.cancel();
@@ -732,10 +820,14 @@ class _CallScreenState extends ConsumerState<CallScreen>
     });
   }
   
-  void _toggleSpeaker() {
+  Future<void> _toggleSpeaker() async {
     setState(() => _isSpeakerOn = !_isSpeakerOn);
-    // Haut-parleur : un seul appel, indépendant du nombre de pistes
-    Helper.setSpeakerphoneOn(_isSpeakerOn);
+    try {
+      // Haut-parleur : un seul appel, indépendant du nombre de pistes
+      await Helper.setSpeakerphoneOn(_isSpeakerOn);
+    } catch (e) {
+      debugPrint('Haut-parleur non appliqué: $e');
+    }
   }
 
   @override
@@ -775,6 +867,16 @@ class _CallScreenState extends ConsumerState<CallScreen>
               ),
             ),
 
+          // Appel audio : le lecteur du flux distant reste présent, invisible, pour que le son soit joué
+          if (!_isVideoEnabled)
+            Positioned(
+              left: 0,
+              top: 0,
+              width: 1,
+              height: 1,
+              child: IgnorePointer(child: Opacity(opacity: 0.01, child: RTCVideoView(_remoteRenderer))),
+            ),
+
           // ── 2. Flux Vidéo ──
           if (_isVideoEnabled)
             RTCVideoView(
@@ -791,6 +893,30 @@ class _CallScreenState extends ConsumerState<CallScreen>
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: RTCVideoView(_localRenderer, mirror: true),
+              ),
+            ),
+
+          if (_needsSoundUnlock)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _unlockSound,
+                child: Align(
+                  alignment: const Alignment(0, -0.35),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.volume_up, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Flexible(child: Text('Touchez pour activer la sonnerie', style: TextStyle(color: Colors.white))),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
 
@@ -1032,12 +1158,14 @@ class _CallScreenState extends ConsumerState<CallScreen>
                 isActive: _isMuted,
                 onTap: _toggleMute,
               ),
-              _buildControlButton(
-                icon: _isSpeakerOn ? Icons.volume_up : Icons.volume_off,
-                label: 'Haut-parl.',
-                isActive: _isSpeakerOn,
-                onTap: _toggleSpeaker,
-              ),
+              // Le navigateur choisit lui-même la sortie du son
+              if (!kIsWeb)
+                _buildControlButton(
+                  icon: _isSpeakerOn ? Icons.volume_up : Icons.volume_off,
+                  label: 'Haut-parl.',
+                  isActive: _isSpeakerOn,
+                  onTap: _toggleSpeaker,
+                ),
               if (widget.isVideoCall)
                 _buildControlButton(
                   icon: _isVideoEnabled ? Icons.videocam : Icons.videocam_off,

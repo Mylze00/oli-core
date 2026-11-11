@@ -13,8 +13,11 @@ import '../widgets/ticket_widget.dart';
 import 'event_detail_page.dart';
 import 'ticket_detail_page.dart';
 
-const _pageBlue = Color(0xFF072561);
-const _hubBlue = Color(0xFF051A45);
+/// Fond à motifs de la billetterie ; sa couleur unie sert le temps du chargement.
+const _backgroundImage = 'assets/images/oticket_bg.png';
+const _pageBlue = Color(0xFF051941);
+/// Même bleu que la bande unie qui termine le visuel du fond.
+const _hubBlue = Color(0xFF072561);
 const _roundButtonColor = Color(0xFF0A0A18);
 const _designPageWidth = 925.0;
 const _headerHeight = 150.0;
@@ -60,8 +63,17 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
     _myTickets = ticketsAsync.valueOrNull ?? const [];
 
     return OTicketFont(
-      child: Scaffold(
-        backgroundColor: _pageBlue,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: _pageBlue,
+          image: DecorationImage(
+            image: AssetImage(_backgroundImage),
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+          ),
+        ),
+        child: Scaffold(
+        backgroundColor: Colors.transparent,
         appBar: _buildHeader(),
         body: TabBarView(
           controller: _tabController,
@@ -74,6 +86,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
             ),
           ],
         ),
+      ),
       ),
     );
   }

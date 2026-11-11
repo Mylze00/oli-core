@@ -21,6 +21,7 @@ router.get('/conversations', chatController.getConversations);
 router.patch('/conversations/:id/state', chatController.updateConversationState);
 router.post('/conversations/:id/read', chatController.markConversationRead);
 router.put('/conversations/:id/mute', chatController.setConversationMute);
+router.put('/conversations/:id/ephemeral', chatController.setConversationEphemeral);
 router.post('/blocks/:userId', chatController.blockUser);
 router.delete('/blocks/:userId', chatController.unblockUser);
 router.delete('/conversations/:id', chatController.deleteConversationForMe);
@@ -33,5 +34,10 @@ router.get('/users', chatController.searchUsers);
 // Réactions sur un message
 router.put('/messages/:messageId/react', chatController.reactToMessage);
 router.post('/messages/:messageId/played', chatController.markVoicePlayed);
+
+// Actions du menu d'un message
+router.patch('/messages/:messageId', chatController.editMessage);
+router.delete('/messages/:messageId', chatController.deleteMessage);
+router.post('/messages/:messageId/forward', chatController.forwardMessage);
 
 module.exports = router;

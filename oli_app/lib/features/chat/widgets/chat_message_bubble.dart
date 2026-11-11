@@ -11,12 +11,19 @@ import 'cash_note_bubble.dart';
 import '../../../core/theme/oli_colors.dart';
 import 'chat_image_viewer.dart';
 import 'progressive_chat_image.dart';
-import 'message_actions.dart';
+import 'conversation_context_menu.dart';
+import '../chat_controller.dart';
+import '../../../core/theme/oli_glass.dart';
+
+/// Retrait du menu sous la bulle : à droite pour mes messages, après l'avatar sinon.
+const _menuInsetMine = 8.0;
+const _menuInsetOther = 44.0;
 
 class ChatMessageBubble extends StatefulWidget {
   final Map<String, dynamic> message;
   final bool isMe;
   final String? otherAvatarUrl;
+  final String? myAvatarUrl;
   final String currentUserId;
   final Function(Map<String, dynamic> message)? onSwipeReply;
   final Function(String messageId, String emoji)? onReact;
@@ -31,6 +38,7 @@ class ChatMessageBubble extends StatefulWidget {
     required this.isMe,
     required this.currentUserId,
     this.otherAvatarUrl,
+    this.myAvatarUrl,
     this.onSwipeReply,
     this.onReact,
     this.onForward,
@@ -47,7 +55,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     with SingleTickerProviderStateMixin {
   late AnimationController _swipeController;
   late Animation<Offset> _swipeAnimation;
-  OverlayEntry? _reactionOverlay;
+  final GlobalKey _rowKey = GlobalKey();
   double _dragOffset = 0;
   bool _hasTriggered = false;
 
@@ -69,7 +77,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
 
   @override
   void dispose() {
-    _removeReactionOverlay();
     _swipeController.dispose();
     super.dispose();
   }
@@ -105,54 +112,108 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     });
   }
 
-  // ─── Reaction Overlay ─────────────────────────────────────────────────────
+  // ─── Menu du message (appui long) ─────────────────────────────────────────
 
-  void _showReactionPicker(BuildContext context) {
-    _removeReactionOverlay();
-    HapticFeedback.heavyImpact();
-
-    final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-    final position = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
-
-    _reactionOverlay = OverlayEntry(
-      builder: (ctx) {
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: _removeReactionOverlay,
-          child: Stack(
-            children: [
-              Positioned(
-                top: position.dy - 60,
-                left: widget.isMe ? null : position.dx,
-                right: widget.isMe
-                    ? MediaQuery.of(ctx).size.width - position.dx - size.width
-                    : null,
-                child: ReactionPicker(
-                  position: position,
-                  isMe: widget.isMe,
-                  onReactionSelected: (emoji) {
-                    _removeReactionOverlay();
-                    final msgId = widget.message['id']?.toString();
-                    if (msgId != null && widget.onReact != null) {
-                      widget.onReact!(msgId, emoji);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    Overlay.of(context).insert(_reactionOverlay!);
+  Duration? _messageAge() {
+    final createdAt = DateTime.tryParse(widget.message['created_at']?.toString() ?? '');
+    return createdAt == null ? null : DateTime.now().difference(createdAt);
   }
 
-  void _removeReactionOverlay() {
-    _reactionOverlay?.remove();
-    _reactionOverlay = null;
+  void _copyText() {
+    Clipboard.setData(ClipboardData(text: widget.message['content']?.toString() ?? ''));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Message copié'), duration: Duration(seconds: 1)));
+  }
+
+  void _openMessageMenu(
+    Widget preview, {
+    required bool isDeleted,
+    required bool isPlainText,
+    required bool isCash,
+  }) {
+    final box = _rowKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+
+    final id = widget.message['id']?.toString();
+    final isSent = isServerMessageId(id);
+    final isLive = isSent && !isDeleted;
+    final age = _messageAge();
+    final content = widget.message['content']?.toString() ?? '';
+    final isTextType = (widget.message['type'] ?? 'text') == 'text';
+    final canEdit = widget.isMe && isLive && isPlainText && isTextType && age != null && age < kMessageEditWindow;
+    final canDeleteForAll = widget.isMe && isLive && !isCash && age != null && age < kMessageDeleteForAllWindow;
+
+    final items = [
+      if (isLive && widget.onSwipeReply != null)
+        ConversationMenuItem(
+          icon: Icons.reply_rounded,
+          label: 'Répondre',
+          onTap: () => widget.onSwipeReply!(widget.message),
+        ),
+      if (!isDeleted && isPlainText && content.isNotEmpty)
+        ConversationMenuItem(icon: Icons.copy_rounded, label: 'Copier', onTap: _copyText),
+      if (isLive && !isCash && widget.onForward != null)
+        ConversationMenuItem(
+          icon: Icons.forward_rounded,
+          label: 'Transférer',
+          onTap: () => widget.onForward!(widget.message),
+        ),
+      if (canEdit && widget.onEdit != null)
+        ConversationMenuItem(
+          icon: Icons.edit_outlined,
+          label: 'Modifier',
+          onTap: () => widget.onEdit!(widget.message),
+        ),
+      if (isSent && widget.onDelete != null)
+        ConversationMenuItem(
+          icon: Icons.delete_outline_rounded,
+          label: 'Supprimer pour moi',
+          isDanger: true,
+          onTap: () => widget.onDelete!(id!, forAll: false),
+        ),
+      if (canDeleteForAll && widget.onDelete != null)
+        ConversationMenuItem(
+          icon: Icons.delete_forever_outlined,
+          label: 'Supprimer pour tous',
+          isDanger: true,
+          onTap: () => widget.onDelete!(id!, forAll: true),
+        ),
+    ];
+    if (items.isEmpty) return;
+
+    HapticFeedback.mediumImpact();
+    showConversationContextMenu(
+      context: context,
+      anchor: box.localToGlobal(Offset.zero) & box.size,
+      preview: preview,
+      items: items,
+      keepAnchorPosition: true,
+      alignEnd: widget.isMe,
+      menuInset: widget.isMe ? _menuInsetMine : _menuInsetOther,
+      header: isLive && widget.onReact != null
+          ? (close) => _ReactionBar(
+                onSelected: (emoji) {
+                  close();
+                  widget.onReact!(id!, emoji);
+                },
+              )
+          : null,
+    );
+  }
+
+  Widget _buildForwardedLabel(Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.forward_rounded, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text('Transféré', style: TextStyle(fontSize: 12, color: color, fontStyle: FontStyle.italic)),
+        ],
+      ),
+    );
   }
 
   // ─── Reactions parsing ────────────────────────────────────────────────────
@@ -195,6 +256,8 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          if (widget.message['edited_at'] != null && widget.message['deleted_at'] == null)
+            Text('modifié  ', style: TextStyle(fontSize: 10, color: color, fontStyle: FontStyle.italic)),
           if (timeString.isNotEmpty)
             Text(timeString, style: TextStyle(fontSize: 10, color: color)),
           if (widget.isMe) ...[
@@ -291,7 +354,15 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
       } catch (e) { /* ignore */ }
     }
 
-    final bool isLocation = widget.message['type'] == 'location' ||
+    final isDeleted = widget.message['deleted_at'] != null || metaMap?['deleted'] == true;
+    if (isDeleted) {
+      metaMap = null;
+      mediaUrl = null;
+      mediaType = null;
+    }
+    final isForwarded = metaMap?['forwarded'] == true;
+
+    final bool isLocation = !isDeleted && widget.message['type'] == 'location' ||
         (metaMap != null &&
             metaMap.containsKey('lat') &&
             metaMap.containsKey('lng'));
@@ -307,7 +378,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
 
     final cashTransfer = metaMap?['cash_transfer'];
     final cashAmount = cashTransfer is Map ? num.tryParse('${cashTransfer['amount_fc']}') : null;
-    final localImage = widget.message['local_image'] as Uint8List?;
+    final localImage = isDeleted ? null : widget.message['local_image'] as Uint8List?;
     final messageContent = widget.message['content']?.toString() ?? '';
     // Une image sans légende s'affiche seule, sans bulle autour
     final isImageOnly = localImage != null ||
@@ -321,79 +392,13 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
         (mediaUrl != null && mediaUrl.endsWith('.m4a'));
     final waveform = (metaMap?['waveform'] as List?)?.map((v) => (v as num).toInt()).toList();
 
+    final isPlainText = !isLocation && cashAmount == null && !isVoice && mediaUrl == null && localImage == null;
+
     final reactions = _parseReactions();
     final replyContext = _buildReplyContext();
 
-    // ─── The bubble itself ───────────
-    final bubble = GestureDetector(
-      onLongPress: () {
-        HapticFeedback.mediumImpact();
-        // Calculer si l'utilisateur peut encore éditer (15 min)
-        bool canEdit = false;
-        if (widget.message['created_at'] != null) {
-          try {
-            final sent = DateTime.parse(widget.message['created_at']);
-            canEdit = DateTime.now().difference(sent).inMinutes < 15;
-          } catch (_) {}
-        }
-        showModalBottomSheet(
-          context: context,
-          backgroundColor: Colors.transparent,
-          builder: (_) => MessageContextMenu(
-            message: widget.message,
-            myId: widget.currentUserId,
-            canEdit: canEdit,
-            onReply: () {
-              if (widget.onSwipeReply != null) widget.onSwipeReply!(widget.message);
-            },
-            onEdit: () {
-              if (widget.onEdit != null) widget.onEdit!(widget.message);
-            },
-            onDeleteForMe: () {
-              final msgId = widget.message['id']?.toString();
-              if (msgId != null && widget.onDelete != null) {
-                widget.onDelete!(msgId, forAll: false);
-              }
-            },
-            onDeleteForAll: () {
-              final msgId = widget.message['id']?.toString();
-              if (msgId != null && widget.onDelete != null) {
-                widget.onDelete!(msgId, forAll: true);
-              }
-            },
-            onForward: () {
-              if (widget.onForward != null) widget.onForward!(widget.message);
-            },
-            onCopy: () {
-              final text = widget.message['content']?.toString() ?? '';
-              if (text.isNotEmpty) {
-                Clipboard.setData(ClipboardData(text: text));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Row(children: [
-                      Icon(Icons.copy, color: Colors.white, size: 16),
-                      SizedBox(width: 8),
-                      Text('Message copié'),
-                    ]),
-                    backgroundColor: Colors.grey.shade800,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 1),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
-              }
-            },
-          ),
-        );
-      },
-      onHorizontalDragUpdate: (details) {
-        // Only allow swipe for reply
-        if (details.delta.dx > 0) _onHorizontalDragUpdate(details);
-      },
-      onHorizontalDragEnd: _onHorizontalDragEnd,
-      child: Transform.translate(
-        offset: Offset(_dragOffset, 0),
-        child: Padding(
+    // ─── La ligne du message (bulle + avatar), reprise telle quelle dans le menu ───
+    final row = Padding(
           padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
           child: Row(
             mainAxisAlignment:
@@ -414,9 +419,12 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                   ),
                 ),
 
-              // Avatar for Other User
+              // Avatar for Other User (un vocal porte déjà la photo dans sa bande)
               if (!widget.isMe) ...[
-                AutoRefreshAvatar(avatarUrl: widget.otherAvatarUrl, size: 28),
+                if (isVoice)
+                  const SizedBox(width: 28)
+                else
+                  AutoRefreshAvatar(avatarUrl: widget.otherAvatarUrl, size: 28),
                 const SizedBox(width: 8),
               ],
 
@@ -427,7 +435,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                   padding: isCardMessage
                       ? EdgeInsets.zero
                       : isVoice
-                      ? const EdgeInsets.fromLTRB(4, 4, 12, 4)
+                      ? const EdgeInsets.fromLTRB(8, 6, 10, 4)
                       : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isCardMessage
@@ -473,6 +481,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                               waveform: waveform,
                               isPlayed: widget.message['played_at'] != null,
                               onFirstPlay: () => widget.onVoicePlayed?.call(widget.message['id'].toString()),
+                              avatarUrl: widget.isMe ? widget.myAvatarUrl : widget.otherAvatarUrl,
                               footer: _buildTimeRow(
                                 timeString,
                                 color: widget.isMe || isDark ? Colors.white.withOpacity(0.7) : Colors.black38,
@@ -495,6 +504,13 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                       bytes: localImage,
                                       progress: (widget.message['upload_progress'] as num?)?.toDouble() ?? 0,
                                     ),
+                                  ),
+
+                                if (isForwarded)
+                                  _buildForwardedLabel(
+                                    isImageOnly
+                                        ? (isDark ? Colors.white70 : Colors.black54)
+                                        : (widget.isMe || isDark ? Colors.white70 : Colors.black54),
                                   ),
 
                                 // ── Reply-to context ──
@@ -533,11 +549,11 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                                   Text(
                                     widget.message['content'],
                                     style: TextStyle(
-                                      color: widget.isMe || isDark
-                                          ? Colors.white
-                                          : Colors.black87,
+                                      color: (widget.isMe || isDark ? Colors.white : Colors.black87)
+                                          .withValues(alpha: isDeleted ? 0.7 : 1),
                                       fontSize: 15,
                                       height: 1.3,
+                                      fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
                                     ),
                                   ),
 
@@ -574,7 +590,23 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                 ),
             ],
           ),
-        ),
+        );
+
+    final bubble = GestureDetector(
+      onLongPress: () => _openMessageMenu(
+        row,
+        isDeleted: isDeleted,
+        isPlainText: isPlainText,
+        isCash: cashAmount != null,
+      ),
+      onHorizontalDragUpdate: (details) {
+        // Seul le glissement vers la droite déclenche la réponse
+        if (details.delta.dx > 0) _onHorizontalDragUpdate(details);
+      },
+      onHorizontalDragEnd: _onHorizontalDragEnd,
+      child: Transform.translate(
+        offset: Offset(_dragOffset, 0),
+        child: KeyedSubtree(key: _rowKey, child: row),
       ),
     );
 
@@ -600,6 +632,49 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Barre de réactions rapides, dans le même verre que le menu.
+class _ReactionBar extends StatelessWidget {
+  final ValueChanged<String> onSelected;
+
+  const _ReactionBar({required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return OliGlassSurface(
+      borderRadius: BorderRadius.circular(26),
+      blur: 24,
+      tint: isDark ? const Color(0xB3242428) : const Color(0xD9F4F7FB),
+      borderColor: isDark ? const Color(0x33FFFFFF) : const Color(0x591E7DBA),
+      reflection: isDark ? 0.12 : 0.4,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final emoji in kDefaultReactions)
+              Semantics(
+                button: true,
+                label: 'Réagir $emoji',
+                child: InkResponse(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onSelected(emoji);
+                  },
+                  radius: 24,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 7),
+                    child: Text(emoji, style: const TextStyle(fontSize: 27)),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

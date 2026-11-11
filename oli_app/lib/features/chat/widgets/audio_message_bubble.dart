@@ -3,10 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../../../config/api_config.dart';
 import '../../../core/theme/oli_glass.dart';
+import '../../../core/theme/oli_colors.dart';
+import '../../../../widgets/auto_refresh_avatar.dart';
 
-const _waveformHeight = 22.0;
-const _waveformBars = 32;
+const _waveformHeight = 26.0;
+const _waveformBars = 34;
 const _playButtonSize = 36.0;
+const _avatarSize = 48.0;
+const _micBadgeSize = 20.0;
+const _thumbRadius = 6.0;
+const _voiceBubbleWidth = 264.0;
 
 /// Vert franc sur la bulle bleue : l'expéditeur voit que son vocal a été écouté.
 const _listenedOnBlue = Color(0xFF7CFFB2);
@@ -85,6 +91,9 @@ class AudioMessageBubble extends StatefulWidget {
   /// Heure et coches, placées dans la bande.
   final Widget? footer;
 
+  /// Photo de l'auteur du vocal, affichée à gauche avec un badge micro.
+  final String? avatarUrl;
+
   const AudioMessageBubble({
     super.key,
     required this.audioUrl,
@@ -94,6 +103,7 @@ class AudioMessageBubble extends StatefulWidget {
     this.isPlayed = false,
     this.onFirstPlay,
     this.footer,
+    this.avatarUrl,
   });
 
   @override
@@ -189,36 +199,45 @@ class _AudioMessageBubbleState extends State<AudioMessageBubble> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final color = _audioColor(context, widget.isMe);
     final total = _totalDuration;
     final progress = total.inMilliseconds > 0 ? (_position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0) : 0.0;
     final label = _isPlaying || _position > Duration.zero ? _position : total;
+    final unheardBlue = isDark ? OliPalette.blueOnDark : OliPalette.blue;
 
     // Expéditeur : les barres passent au vert une fois écouté. Destinataire : bleu tant qu'il n'a pas écouté.
     final idleBarColor = widget.isMe
         ? (widget.isPlayed ? _listenedOnBlue : Colors.white.withOpacity(0.45))
-        : (widget.isPlayed
-            ? color.withOpacity(0.35)
-            : (isDark ? OliPalette.blueOnDark : OliPalette.blue));
+        : (widget.isPlayed ? color.withOpacity(0.35) : unheardBlue);
+    final accent = widget.isMe
+        ? (widget.isPlayed ? _listenedOnBlue : Colors.white)
+        : (widget.isPlayed ? color.withOpacity(0.6) : unheardBlue);
+    final bubbleColor = widget.isMe
+        ? theme.primaryColor
+        : (isDark ? OliChatDarkColors.receivedBubble : Colors.white);
 
     return SizedBox(
-      width: 220,
+      width: _voiceBubbleWidth,
       child: Row(
         children: [
+          _buildAvatar(accent, bubbleColor),
+          const SizedBox(width: 4),
           IconButton(
             tooltip: _isPlaying ? 'Mettre en pause' : 'Écouter',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(width: _playButtonSize, height: _playButtonSize),
-            icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: color, size: _playButtonSize),
+            icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: color, size: _playButtonSize),
             onPressed: _togglePlay,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 2),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const SizedBox(height: 6),
                 LayoutBuilder(
                   builder: (context, constraints) => GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -231,6 +250,7 @@ class _AudioMessageBubbleState extends State<AudioMessageBubble> {
                         progress: progress,
                         playedColor: color,
                         idleColor: idleBarColor,
+                        thumbColor: accent,
                       ),
                     ),
                   ),
@@ -240,13 +260,40 @@ class _AudioMessageBubbleState extends State<AudioMessageBubble> {
                   children: [
                     Text(
                       total > Duration.zero || _isPlaying ? _formatDuration(label) : 'Vocal',
-                      style: TextStyle(color: color.withOpacity(0.7), fontSize: 10),
+                      style: TextStyle(color: color.withOpacity(0.75), fontSize: 11),
                     ),
                     const Spacer(),
                     if (widget.footer != null) widget.footer!,
                   ],
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Photo de l'auteur et badge micro, coloré selon l'écoute.
+  Widget _buildAvatar(Color micColor, Color bubbleColor) {
+    return SizedBox.square(
+      dimension: _avatarSize + 4,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            top: 2,
+            child: AutoRefreshAvatar(avatarUrl: widget.avatarUrl, size: _avatarSize),
+          ),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: _micBadgeSize,
+              height: _micBadgeSize,
+              decoration: BoxDecoration(color: bubbleColor, shape: BoxShape.circle),
+              child: Icon(Icons.mic, size: 15, color: micColor),
             ),
           ),
         ],
@@ -261,23 +308,27 @@ class _WaveformPainter extends CustomPainter {
   final double progress;
   final Color playedColor;
   final Color idleColor;
+  final Color thumbColor;
 
   const _WaveformPainter({
     required this.levels,
     required this.progress,
     required this.playedColor,
     required this.idleColor,
+    required this.thumbColor,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (levels.isEmpty) return;
-    final slot = size.width / levels.length;
+    // Les barres laissent la place du curseur aux deux extrémités
+    final barsWidth = size.width - _thumbRadius * 2;
+    final slot = barsWidth / levels.length;
     final barWidth = math.max(2.0, slot * 0.55);
     final paint = Paint()..strokeCap = StrokeCap.round;
 
     for (var i = 0; i < levels.length; i++) {
-      final x = slot * i + slot / 2;
+      final x = _thumbRadius + slot * i + slot / 2;
       final height = math.max(barWidth, size.height * levels[i]);
       paint
         ..color = (i + 0.5) / levels.length <= progress ? playedColor : idleColor
@@ -288,6 +339,13 @@ class _WaveformPainter extends CustomPainter {
         paint,
       );
     }
+
+    // Curseur rond : position de lecture, à glisser pour avancer
+    canvas.drawCircle(
+      Offset(_thumbRadius + barsWidth * progress, size.height / 2),
+      _thumbRadius,
+      Paint()..color = thumbColor,
+    );
   }
 
   @override
@@ -295,5 +353,6 @@ class _WaveformPainter extends CustomPainter {
       oldDelegate.progress != progress ||
       oldDelegate.idleColor != idleColor ||
       oldDelegate.playedColor != playedColor ||
+      oldDelegate.thumbColor != thumbColor ||
       oldDelegate.levels != levels;
 }

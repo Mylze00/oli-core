@@ -563,6 +563,16 @@ if (process.env.NODE_ENV !== 'test') {
                 require('path').join(__dirname, 'migrations/add_feed_banners.sql'), 'utf8'
             ));
 
+            // Modification, suppression pour tous et masquage d'un message
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_message_edit_delete.sql'), 'utf8'
+            ));
+
+            // Messages éphémères réglés par conversation
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_ephemeral_messages.sql'), 'utf8'
+            ));
+
             // Créer la table notifications si elle n'existe pas
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS notifications (
@@ -641,6 +651,15 @@ if (process.env.NODE_ENV !== 'test') {
     setInterval(() => {
         exchangeRateService.updateRatesDaily();
     }, TWENTY_FOUR_HOURS);
+
+    // Les messages éphémères expirés sont déjà masqués ; ils sont effacés de la base chaque heure
+    setInterval(async () => {
+        try {
+            await pool.query('DELETE FROM messages WHERE expires_at < NOW()');
+        } catch (e) {
+            console.warn('⚠️ Purge des messages éphémères:', e.message);
+        }
+    }, 60 * 60 * 1000);
 }
 
 // --- DÉMARRAGE DU SERVEUR ---

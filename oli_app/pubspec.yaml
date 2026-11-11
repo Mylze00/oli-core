@@ -72,6 +72,7 @@ dependencies:
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.4.1 # cache disque des images (OliImageCache)
   flutter_callkit_incoming: ^3.1.6
+  wakelock_plus: ^1.5.2
 
 
 dev_dependencies:
@@ -100,6 +101,7 @@ flutter:
   assets:
     - assets/images/logo.png
     - assets/images/logo_oli_ticket.png
+    - assets/images/oticket_bg.png
     - assets/images/logo_caa.png
     - assets/images/logo_kin_avia.png
     - assets/images/ticket_icon.png

@@ -17,6 +17,39 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import '../../core/services/hive_cache_service.dart'; // fallback
 import '../../core/router/network/dio_provider.dart';
 
+/// Texte laissé à la place d'un message supprimé pour tous (le même que celui du serveur).
+const kDeletedMessagePlaceholder = '🚫 Message supprimé';
+
+/// Délais de modification et de suppression pour tous, alignés sur le serveur.
+const kMessageEditWindow = Duration(minutes: 15);
+const kMessageDeleteForAllWindow = Duration(hours: 48);
+const kMaxForwardRecipients = 5;
+
+/// Un message en cours d'envoi n'a pas encore d'identifiant serveur.
+/// Durées proposées pour les messages éphémères, avec la clé attendue par le serveur.
+const kEphemeralDurations = <String, int?>{
+  'off': null,
+  '24h': 24 * 60 * 60,
+  '7d': 7 * 24 * 60 * 60,
+  '90d': 90 * 24 * 60 * 60,
+};
+
+String ephemeralLabel(int? seconds) => switch (seconds) {
+      null => 'Désactivés',
+      86400 => '24 heures',
+      604800 => '7 jours',
+      7776000 => '90 jours',
+      _ => '${(seconds / 86400).round()} jours',
+    };
+
+/// Un message éphémère dont l'heure est passée n'est plus affiché, même depuis le cache.
+bool isMessageExpired(Map<String, dynamic> message) {
+  final expiresAt = DateTime.tryParse(message['expires_at']?.toString() ?? '');
+  return expiresAt != null && expiresAt.isBefore(DateTime.now());
+}
+
+bool isServerMessageId(Object? id) => id != null && RegExp(r'^\d+$').hasMatch(id.toString());
+
 class ChatState {
   final bool isLoading;
   final List<Map<String, dynamic>> messages;
@@ -35,7 +68,11 @@ class ChatState {
     this.isOtherUserOnline = false,
     this.isOtherUserTyping = false,
     this.isOtherUserRecording = false,
+    this.ephemeralSeconds,
   });
+
+  /// Durée de vie des nouveaux messages (null = messages éphémères désactivés).
+  final int? ephemeralSeconds;
 
   final bool isOtherUserOnline;
   final bool isOtherUserTyping;
@@ -51,6 +88,7 @@ class ChatState {
     bool? isOtherUserOnline,
     bool? isOtherUserTyping,
     bool? isOtherUserRecording,
+    Object? ephemeralSeconds = _keep,
   }) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
@@ -62,9 +100,13 @@ class ChatState {
       isOtherUserOnline: isOtherUserOnline ?? this.isOtherUserOnline,
       isOtherUserTyping: isOtherUserTyping ?? this.isOtherUserTyping,
       isOtherUserRecording: isOtherUserRecording ?? this.isOtherUserRecording,
+      ephemeralSeconds: identical(ephemeralSeconds, _keep) ? this.ephemeralSeconds : ephemeralSeconds as int?,
     );
   }
 }
+
+/// Distingue « ne pas changer » de « remettre à null » dans copyWith.
+const _keep = Object();
 
 final chatControllerProvider = StateNotifierProvider.family<ChatController, ChatState, String>((ref, otherUserId) {
   final user = ref.watch(userProvider).value;
@@ -115,6 +157,10 @@ class ChatController extends StateNotifier<ChatState> {
       _socketService.on('messages_read', _handleMessagesRead);
       _socketService.on('messages_delivered', _handleMessagesDelivered);
       _socketService.on('message_played', _handleMessagePlayed);
+      _socketService.on('message_edited', _handleMessageEdited);
+      _socketService.on('message_deleted', _handleMessageDeleted);
+      _socketService.on('reaction_updated', _handleReactionUpdated);
+      _socketService.on('conversation_ephemeral', _handleEphemeralChanged);
       
       // Écouter le statut en ligne (global ou spécifique)
       _socketService.on('user_online', _handleUserOnline);
@@ -472,6 +518,7 @@ class ChatController extends StateNotifier<ChatState> {
           conversationId: convId,
           friendshipStatus: friendshipStatus,
           requesterId: requesterId,
+          ephemeralSeconds: messages.isEmpty ? state.ephemeralSeconds : (messages.last['ephemeral_seconds'] as num?)?.toInt(),
         );
 
         // [CACHE] 3. Mise à jour silencieuse du cache
@@ -762,6 +809,125 @@ class ChatController extends StateNotifier<ChatState> {
         // On se contente de retirer le message temporaire.
         messages: state.messages.where((m) => m['id'] != tempId).toList(), 
       );
+    }
+  }
+
+  // ─── Modifier, supprimer, transférer ──────────────────────────────────────
+
+  bool _isThisConversation(Object? conversationId) =>
+      conversationId != null && conversationId.toString() == state.conversationId?.toString();
+
+  void _updateMessages(List<Map<String, dynamic>> messages) {
+    state = state.copyWith(messages: messages);
+    _forceCacheUpdate(messages);
+  }
+
+  void _updateMessage(String messageId, Map<String, dynamic> Function(Map<String, dynamic> message) update) {
+    _updateMessages([
+      for (final m in state.messages)
+        if (m['id']?.toString() == messageId) update(m) else m,
+    ]);
+  }
+
+  Map<String, dynamic> _asDeleted(Map<String, dynamic> message, String deletedAt) => {
+        ...message,
+        'content': kDeletedMessagePlaceholder,
+        'metadata': {'deleted': true},
+        'reactions': null,
+        'deleted_at': deletedAt,
+      };
+
+  String _serverError(Object error, String fallback) {
+    final data = error is DioException ? error.response?.data : null;
+    return data is Map && data['error'] != null ? data['error'].toString() : fallback;
+  }
+
+  void _handleMessageEdited(dynamic data) {
+    if (!mounted || data is! Map<String, dynamic> || !_isThisConversation(data['conversation_id'])) return;
+    _updateMessage(data['message_id'].toString(), (m) => {
+          ...m,
+          'content': data['content'],
+          'edited_at': data['edited_at'],
+        });
+  }
+
+  void _handleMessageDeleted(dynamic data) {
+    if (!mounted || data is! Map<String, dynamic> || !_isThisConversation(data['conversation_id'])) return;
+    final deletedAt = data['deleted_at']?.toString() ?? DateTime.now().toUtc().toIso8601String();
+    _updateMessage(data['message_id'].toString(), (m) => _asDeleted(m, deletedAt));
+  }
+
+  void _handleReactionUpdated(dynamic data) {
+    if (!mounted || data is! Map<String, dynamic> || !_isThisConversation(data['conversation_id'])) return;
+    _updateMessage(data['message_id'].toString(), (m) => {...m, 'reactions': data['reactions']});
+  }
+
+  void _handleEphemeralChanged(dynamic data) {
+    if (!mounted || data is! Map<String, dynamic> || !_isThisConversation(data['conversation_id'])) return;
+    state = state.copyWith(ephemeralSeconds: (data['ephemeral_seconds'] as num?)?.toInt());
+  }
+
+  /// Règle la durée des messages éphémères pour les deux participants.
+  Future<String?> setEphemeral(String durationKey) async {
+    final conversationId = state.conversationId;
+    if (conversationId == null) return 'Envoyez un premier message pour régler cette discussion';
+    try {
+      final response = await _dio.put(
+        '${ApiConfig.baseUrl}/chat/conversations/$conversationId/ephemeral',
+        data: {'duration': durationKey},
+      );
+      state = state.copyWith(ephemeralSeconds: (response.data['ephemeral_seconds'] as num?)?.toInt());
+      return null;
+    } catch (e) {
+      return _serverError(e, "Le réglage n'a pas pu être enregistré");
+    }
+  }
+
+  /// Renvoie un message d'erreur à afficher, ou null si la modification a réussi.
+  Future<String?> editMessage(String messageId, String content) async {
+    final text = content.trim();
+    if (text.isEmpty) return 'Le message ne peut pas être vide';
+    final previous = state.messages;
+    _updateMessage(messageId, (m) => {...m, 'content': text, 'edited_at': DateTime.now().toUtc().toIso8601String()});
+    try {
+      await _dio.patch('${ApiConfig.baseUrl}/chat/messages/$messageId', data: {'content': text});
+      return null;
+    } catch (e) {
+      if (mounted) _updateMessages(previous);
+      return _serverError(e, "Le message n'a pas pu être modifié");
+    }
+  }
+
+  /// Pour moi : le message disparaît de ma discussion. Pour tous : son contenu est effacé chez les deux.
+  Future<String?> deleteMessage(String messageId, {required bool forAll}) async {
+    final previous = state.messages;
+    if (forAll) {
+      _updateMessage(messageId, (m) => _asDeleted(m, DateTime.now().toUtc().toIso8601String()));
+    } else {
+      _updateMessages(state.messages.where((m) => m['id']?.toString() != messageId).toList());
+    }
+    try {
+      await _dio.delete(
+        '${ApiConfig.baseUrl}/chat/messages/$messageId',
+        queryParameters: {'for': forAll ? 'all' : 'me'},
+      );
+      return null;
+    } catch (e) {
+      if (mounted) _updateMessages(previous);
+      return _serverError(e, "Le message n'a pas pu être supprimé");
+    }
+  }
+
+  /// Le serveur recopie le message dans chaque discussion choisie.
+  Future<String?> forwardMessage(String messageId, List<String> conversationIds) async {
+    try {
+      await _dio.post(
+        '${ApiConfig.baseUrl}/chat/messages/$messageId/forward',
+        data: {'conversationIds': conversationIds.map(int.parse).toList()},
+      );
+      return null;
+    } catch (e) {
+      return _serverError(e, "Le message n'a pas pu être transféré");
     }
   }
 

@@ -33,6 +33,46 @@ const BLOCKED_BY_RECIPIENT_RESPONSE = {
 };
 const HIDDEN_BEFORE = `COALESCE(cp.hidden_at, '-infinity'::timestamptz)`;
 
+// Délais laissés à l'auteur, comme sur les messageries courantes
+const EDIT_WINDOW_MINUTES = 15;
+const DELETE_FOR_ALL_WINDOW_HOURS = 48;
+const MAX_FORWARD_RECIPIENTS = 5;
+const MAX_MESSAGE_LENGTH = 4000;
+const DELETED_PLACEHOLDER = '🚫 Message supprimé';
+const MESSAGE_ID_PATTERN = /^\d+$/;
+
+// Durées proposées pour les messages éphémères, en secondes
+const EPHEMERAL_SECONDS = new Map([
+    ['off', null],
+    ['24h', 24 * 60 * 60],
+    ['7d', 7 * 24 * 60 * 60],
+    ['90d', 90 * 24 * 60 * 60],
+]);
+const NOT_EXPIRED = (alias) => `(${alias}.expires_at IS NULL OR ${alias}.expires_at > NOW())`;
+
+/** Message visible par cet utilisateur, avec la preuve qu'il participe à la conversation. */
+async function findMessageForParticipant(messageId, userId) {
+    const { rows } = await pool.query(
+        `SELECT m.* FROM messages m
+         JOIN conversation_participants cp ON cp.conversation_id = m.conversation_id AND cp.user_id = $2
+         WHERE m.id = $1`,
+        [messageId, userId]
+    );
+    return rows[0] || null;
+}
+
+async function emitToConversation(req, conversationId, event, payload) {
+    const io = req.app.get('io');
+    if (!io) return;
+    const { rows } = await pool.query(
+        'SELECT user_id FROM conversation_participants WHERE conversation_id = $1',
+        [conversationId]
+    );
+    rows.forEach((p) => io.to(`user_${p.user_id}`).emit(event, payload));
+}
+
+const isCashMessage = (message) => Boolean(message.metadata && message.metadata.cash_transfer);
+
 // --- HELPER FUNCTIONS ---
 const formatProductImage = (row) => {
     let imgUrl = null;
@@ -243,7 +283,7 @@ exports.getConversations = async (req, res) => {
     const myId = req.user.id;
     try {
         const result = await pool.query(`
-            SELECT c.id as conversation_id, c.is_market, cp.is_archived, cp.is_favorite, cp.is_pinned, cp.marked_unread,
+            SELECT c.id as conversation_id, c.is_market, c.ephemeral_seconds, cp.is_archived, cp.is_favorite, cp.is_pinned, cp.marked_unread,
                 (cp.muted_until IS NOT NULL AND cp.muted_until > NOW()) as is_muted,
                 EXISTS (SELECT 1 FROM user_blocks b WHERE b.blocker_id = $1 AND b.blocked_id = u.id) as is_blocked,
                 u.name as other_name, u.avatar_url as other_avatar, u.id as other_id, u.phone as other_phone,
@@ -258,7 +298,12 @@ exports.getConversations = async (req, res) => {
             LEFT JOIN friendships f ON (f.requester_id = cp.user_id AND f.addressee_id = cp2.user_id) 
                                     OR (f.requester_id = cp2.user_id AND f.addressee_id = cp.user_id)
             LEFT JOIN products p ON c.product_id = p.id
-            LEFT JOIN LATERAL (SELECT content, type, created_at, sender_id FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) m ON true
+            LEFT JOIN LATERAL (
+                SELECT content, type, created_at, sender_id FROM messages lm
+                WHERE lm.conversation_id = c.id AND ${NOT_EXPIRED('lm')}
+                  AND NOT EXISTS (SELECT 1 FROM message_hidden_for h WHERE h.message_id = lm.id AND h.user_id = $1)
+                ORDER BY lm.created_at DESC LIMIT 1
+            ) m ON true
             WHERE cp.user_id = $1 AND (cp.hidden_at IS NULL OR m.created_at > cp.hidden_at)
             ORDER BY cp.is_pinned DESC, m.created_at DESC NULLS LAST
         `, [myId]);
@@ -357,6 +402,39 @@ exports.markVoicePlayed = async (req, res) => {
         res.json({ played: Boolean(played) });
     } catch (err) {
         console.error('Erreur markVoicePlayed:', err);
+        res.status(500).json({ error: 'Erreur' });
+    }
+};
+
+/**
+ * Messages éphémères : la durée vaut pour les deux participants et pour les messages envoyés ensuite.
+ */
+exports.setConversationEphemeral = async (req, res) => {
+    const { id } = req.params;
+    const { duration } = req.body || {};
+    if (!MESSAGE_ID_PATTERN.test(id) || !EPHEMERAL_SECONDS.has(duration)) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        const seconds = EPHEMERAL_SECONDS.get(duration);
+        const { rows } = await pool.query(
+            `UPDATE conversations c SET ephemeral_seconds = $1
+             WHERE c.id = $2
+               AND EXISTS (SELECT 1 FROM conversation_participants cp WHERE cp.conversation_id = c.id AND cp.user_id = $3)
+             RETURNING c.id, c.ephemeral_seconds`,
+            [seconds, id, req.user.id]
+        );
+        if (rows.length === 0) return res.status(404).json({ error: 'Conversation introuvable' });
+
+        await emitToConversation(req, rows[0].id, 'conversation_ephemeral', {
+            conversation_id: rows[0].id,
+            ephemeral_seconds: rows[0].ephemeral_seconds,
+            changed_by: req.user.id,
+        });
+        res.json({ success: true, ephemeral_seconds: rows[0].ephemeral_seconds });
+    } catch (err) {
+        console.error('Erreur setConversationEphemeral:', err);
         res.status(500).json({ error: 'Erreur' });
     }
 };
@@ -554,7 +632,7 @@ exports.getMessages = async (req, res) => {
 
         const result = await pool.query(`
             SELECT m.*, u.name as sender_name, u.phone as sender_phone, u.avatar_url as sender_avatar,
-                c.product_id, c.id as conversation_id, parent.content as reply_to_content, parent.sender_id as reply_to_sender,
+                c.product_id, c.id as conversation_id, c.ephemeral_seconds, parent.content as reply_to_content, parent.sender_id as reply_to_sender,
                 f.status as friendship_status, f.requester_id
             FROM messages m
             JOIN users u ON m.sender_id = u.id
@@ -570,6 +648,8 @@ exports.getMessages = async (req, res) => {
                 SELECT mine.hidden_at FROM conversation_participants mine
                 WHERE mine.conversation_id = m.conversation_id AND mine.user_id = $1
             ), '-infinity'::timestamptz)
+            AND NOT EXISTS (SELECT 1 FROM message_hidden_for h WHERE h.message_id = m.id AND h.user_id = $1)
+            AND ${NOT_EXPIRED('m')}
             ${cursorCondition} ORDER BY m.created_at DESC LIMIT $${paramIndex}
         `, params);
 
@@ -661,6 +741,186 @@ exports.reactToMessage = async (req, res) => {
     } catch (err) {
         console.error('Erreur reactToMessage:', err);
         res.status(500).json({ error: 'Erreur réaction' });
+    }
+};
+
+/**
+ * Modifier le texte d'un message : seul l'auteur, sur un message texte, dans les 15 minutes.
+ */
+exports.editMessage = async (req, res) => {
+    const { messageId } = req.params;
+    const content = typeof req.body.content === 'string' ? req.body.content.trim() : '';
+    if (!MESSAGE_ID_PATTERN.test(messageId) || !content || content.length > MAX_MESSAGE_LENGTH) {
+        return res.status(400).json({ error: 'Texte du message invalide' });
+    }
+
+    try {
+        const { rows } = await pool.query(
+            `UPDATE messages SET content = $1, edited_at = NOW()
+             WHERE id = $2 AND sender_id = $3
+               AND deleted_at IS NULL
+               AND COALESCE(type, 'text') = 'text'
+               AND created_at > NOW() - make_interval(mins => $4)
+             RETURNING id, conversation_id, content, edited_at`,
+            [content, messageId, req.user.id, EDIT_WINDOW_MINUTES]
+        );
+        const edited = rows[0];
+        if (!edited) {
+            return res.status(403).json({ error: `Un message ne peut être modifié que par son auteur, dans les ${EDIT_WINDOW_MINUTES} minutes` });
+        }
+
+        await emitToConversation(req, edited.conversation_id, 'message_edited', {
+            message_id: edited.id,
+            conversation_id: edited.conversation_id,
+            content: edited.content,
+            edited_at: edited.edited_at,
+        });
+        res.json({ success: true, message: edited });
+    } catch (err) {
+        console.error('Erreur editMessage:', err);
+        res.status(500).json({ error: 'Erreur lors de la modification' });
+    }
+};
+
+/**
+ * Supprimer un message.
+ * - pour moi (?for=me) : il disparaît seulement de ma discussion ;
+ * - pour tous (?for=all) : l'auteur efface le contenu chez les deux participants, dans les 48 heures.
+ * Un billet de cash reste : c'est la trace d'un transfert d'argent.
+ */
+exports.deleteMessage = async (req, res) => {
+    const { messageId } = req.params;
+    const forAll = req.query.for === 'all';
+    if (!MESSAGE_ID_PATTERN.test(messageId)) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        const message = await findMessageForParticipant(messageId, req.user.id);
+        if (!message) return res.status(404).json({ error: 'Message introuvable' });
+
+        if (!forAll) {
+            await pool.query(
+                `INSERT INTO message_hidden_for (message_id, user_id) VALUES ($1, $2)
+                 ON CONFLICT DO NOTHING`,
+                [messageId, req.user.id]
+            );
+            return res.json({ success: true });
+        }
+
+        if (String(message.sender_id) !== String(req.user.id)) {
+            return res.status(403).json({ error: 'Seul l\'auteur peut supprimer ce message pour tous' });
+        }
+        if (isCashMessage(message)) {
+            return res.status(403).json({ error: 'Un transfert d\'argent ne peut pas être supprimé pour tous' });
+        }
+
+        const { rows } = await pool.query(
+            `UPDATE messages
+             SET content = $1, metadata = '{"deleted": true}'::jsonb, reactions = NULL,
+                 latitude = NULL, longitude = NULL, deleted_at = NOW()
+             WHERE id = $2 AND deleted_at IS NULL
+               AND created_at > NOW() - make_interval(hours => $3)
+             RETURNING id, conversation_id, content, deleted_at`,
+            [DELETED_PLACEHOLDER, messageId, DELETE_FOR_ALL_WINDOW_HOURS]
+        );
+        const deleted = rows[0];
+        if (!deleted) {
+            return res.status(403).json({ error: `Un message ne peut être supprimé pour tous que dans les ${DELETE_FOR_ALL_WINDOW_HOURS} heures` });
+        }
+
+        await emitToConversation(req, deleted.conversation_id, 'message_deleted', {
+            message_id: deleted.id,
+            conversation_id: deleted.conversation_id,
+            content: deleted.content,
+            deleted_at: deleted.deleted_at,
+        });
+        res.json({ success: true, message: deleted });
+    } catch (err) {
+        console.error('Erreur deleteMessage:', err);
+        res.status(500).json({ error: 'Erreur lors de la suppression' });
+    }
+};
+
+/**
+ * Transférer un message vers d'autres discussions (5 au plus).
+ * Le serveur recopie le message d'origine : le client ne peut rien y ajouter.
+ */
+exports.forwardMessage = async (req, res) => {
+    const { messageId } = req.params;
+    const senderId = req.user.id;
+    const conversationIds = Array.isArray(req.body.conversationIds)
+        ? [...new Set(req.body.conversationIds.map(String))].filter((id) => MESSAGE_ID_PATTERN.test(id))
+        : [];
+    if (!MESSAGE_ID_PATTERN.test(messageId) || conversationIds.length === 0) {
+        return res.status(400).json({ error: 'Choisissez au moins une discussion' });
+    }
+    if (conversationIds.length > MAX_FORWARD_RECIPIENTS) {
+        return res.status(400).json({ error: `${MAX_FORWARD_RECIPIENTS} discussions au maximum` });
+    }
+
+    try {
+        const original = await findMessageForParticipant(messageId, senderId);
+        if (!original || original.deleted_at) return res.status(404).json({ error: 'Message introuvable' });
+        if (isCashMessage(original)) {
+            return res.status(403).json({ error: 'Un transfert d\'argent ne peut pas être transféré' });
+        }
+
+        // Seuls le média et la forme du message voyagent : pas de produit, de réponse ni de réaction
+        const source = original.metadata || {};
+        const metadata = { forwarded: true };
+        for (const key of ['mediaUrl', 'mediaType', 'duration_ms', 'waveform', 'lat', 'lng', 'latitude', 'longitude']) {
+            if (source[key] !== undefined) metadata[key] = source[key];
+        }
+
+        const { rows: targets } = await pool.query(
+            `SELECT mine.conversation_id, other.user_id AS recipient_id
+             FROM conversation_participants mine
+             JOIN conversation_participants other
+               ON other.conversation_id = mine.conversation_id AND other.user_id <> mine.user_id
+             WHERE mine.user_id = $1 AND mine.conversation_id = ANY($2::int[])`,
+            [senderId, conversationIds]
+        );
+
+        const io = req.app.get('io');
+        const sent = [];
+        const skipped = [];
+        for (const target of targets) {
+            const block = await getBlockBetween(senderId, target.recipient_id);
+            if (block.senderBlockedRecipient || block.recipientBlockedSender) {
+                skipped.push(target.conversation_id);
+                continue;
+            }
+
+            const { rows } = await pool.query(
+                `INSERT INTO messages (conversation_id, sender_id, content, type, metadata, latitude, longitude, delivered_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+                [
+                    target.conversation_id,
+                    senderId,
+                    original.content,
+                    original.type || 'text',
+                    JSON.stringify(metadata),
+                    original.latitude,
+                    original.longitude,
+                    presence.isOnline(target.recipient_id) ? new Date() : null,
+                ]
+            );
+            const message = rows[0];
+            sent.push(message.id);
+            if (io) {
+                io.to(`user_${target.recipient_id}`).emit('new_message', message);
+                io.to(`user_${senderId}`).emit('new_message', message);
+            }
+        }
+
+        if (sent.length === 0) {
+            return res.status(403).json({ error: 'Aucune des discussions choisies ne peut recevoir ce message' });
+        }
+        res.json({ success: true, sent: sent.length, skipped: skipped.length });
+    } catch (err) {
+        console.error('Erreur forwardMessage:', err);
+        res.status(500).json({ error: 'Erreur lors du transfert' });
     }
 };
 

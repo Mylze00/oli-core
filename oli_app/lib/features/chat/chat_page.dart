@@ -10,6 +10,12 @@ import 'widgets/product_context_header.dart';
 import 'widgets/chat_input_area.dart';
 import 'widgets/reply_preview.dart';
 import 'widgets/chat_cart_summary.dart';
+import 'widgets/message_actions.dart';
+import 'widgets/conversation_context_menu.dart';
+import 'chat_theme.dart';
+import 'chat_media_page.dart';
+import 'contact_info_page.dart';
+import '../../core/user/user_provider.dart';
 import '../../../../widgets/auto_refresh_avatar.dart';
 import '../../config/api_config.dart';
 import 'package:dio/dio.dart';
@@ -49,8 +55,6 @@ class ChatPage extends ConsumerStatefulWidget {
 }
 
 class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver {
-  static const _darkPatternOpacity = 0.7;
-
   ChatController? _chatController;
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
@@ -61,6 +65,11 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
 
   // Swipe-to-reply state
   Map<String, dynamic>? _replyToMessage;
+
+  // Recherche dans la discussion (null = pas de recherche en cours)
+  String? _searchQuery;
+  final TextEditingController _searchController = TextEditingController();
+  final GlobalKey _menuButtonKey = GlobalKey();
 
   @override
   void initState() {
@@ -88,6 +97,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
     WidgetsBinding.instance.removeObserver(this);
     _chatController?.setScreenActive(false);
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -131,8 +141,8 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
     final chatState = ref.watch(chatControllerProvider(widget.otherId));
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    // Chaque mode a son image : un fond clair assombri donnerait un gris terne
-    final bgImage = isDark ? "assets/images/chat_bg_new.png" : "assets/images/bgd.jpg";
+    final wallpaper = ref.watch(chatWallpaperProvider(widget.otherId));
+    final visibleMessages = _visibleMessages(chatState.messages);
 
     // Écouteur pour scroll automatique lors de nouveaux messages
     ref.listen(chatControllerProvider(widget.otherId), (previous, next) {
@@ -151,10 +161,10 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
         scrolledUnderElevation: isDark ? 0 : null,
         surfaceTintColor: isDark ? Colors.transparent : null,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
-          onPressed: () => Navigator.pop(context),
+          icon: Icon(_searchQuery != null ? Icons.close : Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
+          onPressed: _searchQuery != null ? _closeSearch : () => Navigator.pop(context),
         ),
-        title: Row(
+        title: _searchQuery != null ? _buildSearchField(isDark, visibleMessages.length) : Row(
           children: [
             AutoRefreshAvatar(
                avatarUrl: _effectiveAvatarUrl,
@@ -184,26 +194,12 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
             ),
           ],
         ),
-        actions: [
+        actions: _searchQuery != null ? null : [
           // Bouton Appel Audio
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: GestureDetector(
-              onTap: () {
-                final conversationId = chatState.messages.isNotEmpty
-                    ? chatState.messages.first['conversation_id']?.toString()
-                    : null;
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => CallScreen(
-                    otherId: widget.otherId,
-                    conversationId: conversationId,
-                    otherName: widget.otherName,
-                    otherAvatarUrl: _effectiveAvatarUrl,
-                    isVideoCall: false,
-                    isIncoming: false,
-                  ),
-                ));
-              },
+              onTap: () => _openCall(video: false),
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -218,21 +214,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: GestureDetector(
-              onTap: () {
-                final conversationId = chatState.messages.isNotEmpty
-                    ? chatState.messages.first['conversation_id']?.toString()
-                    : null;
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => CallScreen(
-                    otherId: widget.otherId,
-                    conversationId: conversationId,
-                    otherName: widget.otherName,
-                    otherAvatarUrl: _effectiveAvatarUrl,
-                    isVideoCall: true,
-                    isIncoming: false,
-                  ),
-                ));
-              },
+              onTap: () => _openCall(video: true),
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -247,14 +229,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
-          color: isDark ? Colors.black : Colors.white,
-          image: DecorationImage(
-            image: AssetImage(bgImage),
-            fit: BoxFit.cover,
-            opacity: isDark ? _darkPatternOpacity : 0.4,
-          ),
-        ),
+        decoration: chatWallpaperDecoration(wallpaper, isDark: isDark),
         child: Column(
           children: [
             // En-tête de contexte produit (si présent)
@@ -312,6 +287,8 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
             if (_isUploading)
               const LinearProgressIndicator(minHeight: 2),
 
+            if (chatState.ephemeralSeconds != null) _buildEphemeralBanner(chatState.ephemeralSeconds, isDark),
+
           Expanded(
             child: chatState.isLoading 
               ? const Center(child: CircularProgressIndicator())
@@ -330,6 +307,13 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                       ],
                     ),
                   )
+                : _searchQuery != null && visibleMessages.isEmpty
+                  ? Center(
+                      child: Text(
+                        _searchQuery!.isEmpty ? 'Tapez un mot à rechercher' : 'Aucun message trouvé',
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    )
                 : chatState.messages.isEmpty
                   ? Center(
                       child: Column(
@@ -349,9 +333,9 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                       // La discussion s'ouvre sur le dernier échange, sans défilement visible
                       reverse: true,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      itemCount: chatState.messages.length,
+                      itemCount: visibleMessages.length,
                       itemBuilder: (context, index) {
-                        final msg = chatState.messages[chatState.messages.length - 1 - index];
+                        final msg = visibleMessages[visibleMessages.length - 1 - index];
                         final isMe = msg['sender_id'].toString() == widget.myId;
                         
                         return ChatMessageBubble(
@@ -359,6 +343,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                           isMe: isMe,
                           currentUserId: widget.myId,
                           otherAvatarUrl: _effectiveAvatarUrl,
+                          myAvatarUrl: ref.watch(userProvider).value?.avatarUrl,
                           onSwipeReply: (message) {
                             setState(() => _replyToMessage = message);
                           },
@@ -369,6 +354,9 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                             ref.read(chatControllerProvider(widget.otherId).notifier)
                                 .reactToMessage(messageId, emoji);
                           },
+                          onEdit: _editMessage,
+                          onDelete: _deleteMessage,
+                          onForward: _forwardMessage,
                         );
                       },
                     ),
@@ -387,7 +375,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
 
             ChatInputArea(
               onSendMessage: _sendMessage,
-              onShowTools: () => _showChatTools(context),
+              attachments: _chatAttachments(context),
               onVoiceRecorded: _sendVoice,
               onRecording: (isRecording) =>
                   ref.read(chatControllerProvider(widget.otherId).notifier).sendRecording(isRecording),
@@ -462,8 +450,19 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
 
   /// Actions de la conversation ouverte, identiques à celles de la liste.
   Widget _buildConversationMenu(ChatState chatState, bool isDark) {
+    return IconButton(
+      key: _menuButtonKey,
+      tooltip: "Plus d'options",
+      icon: Icon(Icons.more_vert, color: isDark ? Colors.white70 : Colors.black54),
+      onPressed: () => _openConversationMenu(chatState),
+    );
+  }
+
+  void _openConversationMenu(ChatState chatState) {
+    final box = _menuButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
     final conversationId = chatState.conversationId?.toString();
-    final conversations = ref.watch(inboxConversationsProvider).value ?? const <Map<String, dynamic>>[];
+    final conversations = ref.read(inboxConversationsProvider).value ?? const <Map<String, dynamic>>[];
     final conversation = conversations.cast<Map<String, dynamic>?>().firstWhere(
           (c) => c?['conversation_id']?.toString() == conversationId,
           orElse: () => null,
@@ -471,16 +470,207 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
     final isFavorite = conversation?['is_favorite'] == true;
     final isArchived = conversation?['is_archived'] == true;
 
-    return PopupMenuButton<String>(
-      enabled: conversationId != null,
-      tooltip: "Plus d'options",
-      icon: Icon(Icons.more_vert, color: isDark ? Colors.white70 : Colors.black54),
-      onSelected: (action) => _runConversationAction(action, conversationId!, isFavorite, isArchived),
-      itemBuilder: (_) => [
-        PopupMenuItem(value: 'favorite', child: Text(isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris')),
-        PopupMenuItem(value: 'archive', child: Text(isArchived ? 'Désarchiver' : 'Archiver')),
-        const PopupMenuItem(value: 'delete', child: Text('Supprimer pour moi', style: TextStyle(color: Colors.red))),
+    showAnchoredGlassMenu(
+      context: context,
+      anchor: box.localToGlobal(Offset.zero) & box.size,
+      items: [
+        ConversationMenuItem(icon: Icons.info_outline, label: 'Infos du contact', onTap: _openContactInfo),
+        ConversationMenuItem(icon: Icons.search, label: 'Rechercher', onTap: _startSearch),
+        ConversationMenuItem(icon: Icons.photo_library_outlined, label: 'Médias, liens et docs', onTap: _openMedia),
+        ConversationMenuItem(
+          icon: Icons.palette_outlined,
+          label: 'Thème de la discussion',
+          onTap: () => showChatWallpaperPicker(context, ref, widget.otherId),
+        ),
+        ConversationMenuItem(
+          icon: Icons.timer_outlined,
+          label: 'Messages éphémères',
+          submenu: [
+            for (final entry in kEphemeralDurations.entries)
+              ConversationMenuItem(
+                icon: chatState.ephemeralSeconds == entry.value ? Icons.check_circle : Icons.radio_button_unchecked,
+                label: ephemeralLabel(entry.value),
+                onTap: () => _setEphemeral(entry.key),
+              ),
+          ],
+        ),
+        if (conversationId != null) ...[
+          ConversationMenuItem(
+            icon: isFavorite ? Icons.favorite : Icons.favorite_border,
+            label: isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
+            onTap: () => _runConversationAction('favorite', conversationId, isFavorite, isArchived),
+          ),
+          ConversationMenuItem(
+            icon: Icons.archive_outlined,
+            label: isArchived ? 'Désarchiver' : 'Archiver',
+            onTap: () => _runConversationAction('archive', conversationId, isFavorite, isArchived),
+          ),
+          ConversationMenuItem(
+            icon: Icons.delete_outline,
+            label: 'Supprimer pour moi',
+            isDanger: true,
+            onTap: () => _runConversationAction('delete', conversationId, isFavorite, isArchived),
+          ),
+        ],
       ],
+    );
+  }
+
+  // ─── Outils du menu ⋮ ─────────────────────────────────────────────────────
+
+  void _openCall({required bool video}) {
+    final chatState = ref.read(chatControllerProvider(widget.otherId));
+    final conversationId = chatState.conversationId?.toString() ??
+        (chatState.messages.isNotEmpty ? chatState.messages.first['conversation_id']?.toString() : null);
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => CallScreen(
+        otherId: widget.otherId,
+        conversationId: conversationId,
+        otherName: widget.otherName,
+        otherAvatarUrl: _effectiveAvatarUrl,
+        isVideoCall: video,
+        isIncoming: false,
+      ),
+    ));
+  }
+
+  /// Messages à afficher : sans les éphémères expirés, et filtrés pendant une recherche.
+  List<Map<String, dynamic>> _visibleMessages(List<Map<String, dynamic>> messages) {
+    final query = _searchQuery?.toLowerCase();
+    return messages.where((m) {
+      if (isMessageExpired(m)) return false;
+      if (query == null) return true;
+      if (query.isEmpty || m['deleted_at'] != null) return false;
+      return (m['content']?.toString().toLowerCase() ?? '').contains(query);
+    }).toList();
+  }
+
+  void _startSearch() {
+    _searchController.clear();
+    setState(() => _searchQuery = '');
+  }
+
+  void _closeSearch() {
+    FocusScope.of(context).unfocus();
+    setState(() => _searchQuery = null);
+  }
+
+  Widget _buildSearchField(bool isDark, int resultCount) {
+    return TextField(
+      controller: _searchController,
+      autofocus: true,
+      textInputAction: TextInputAction.search,
+      style: TextStyle(color: isDark ? Colors.white : Colors.black),
+      decoration: InputDecoration(
+        hintText: 'Rechercher dans la discussion',
+        border: InputBorder.none,
+        suffixText: _searchQuery?.isNotEmpty == true ? '$resultCount' : null,
+      ),
+      onChanged: (value) => setState(() => _searchQuery = value.trim()),
+    );
+  }
+
+  int _mediaCount(List<Map<String, dynamic>> messages) => messages.where((m) {
+        if (m['deleted_at'] != null) return false;
+        final raw = m['metadata'];
+        final hasMedia = raw is Map ? raw['mediaUrl'] != null : raw?.toString().contains('mediaUrl') == true;
+        final content = m['content']?.toString() ?? '';
+        return hasMedia || content.contains('http://') || content.contains('https://');
+      }).length;
+
+  void _openMedia() {
+    final messages = ref.read(chatControllerProvider(widget.otherId)).messages.where((m) => !isMessageExpired(m)).toList();
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => ChatMediaPage(otherName: widget.otherName, messages: messages),
+    ));
+  }
+
+  void _openContactInfo() {
+    final messages = ref.read(chatControllerProvider(widget.otherId)).messages;
+    Navigator.push(context, MaterialPageRoute(
+      builder: (pageContext) => ContactInfoPage(
+        otherId: widget.otherId,
+        otherName: widget.otherName,
+        avatarUrl: _effectiveAvatarUrl,
+        mediaCount: _mediaCount(messages),
+        onAudioCall: () => _openCall(video: false),
+        onVideoCall: () => _openCall(video: true),
+        onSearch: _startSearch,
+        onOpenMedia: _openMedia,
+        onTheme: () => showChatWallpaperPicker(pageContext, ref, widget.otherId),
+        onEphemeral: () => _chooseEphemeral(pageContext),
+      ),
+    ));
+  }
+
+  Future<void> _setEphemeral(String durationKey) async {
+    final notifier = ref.read(chatControllerProvider(widget.otherId).notifier);
+    final error = await notifier.setEphemeral(durationKey);
+    final seconds = kEphemeralDurations[durationKey];
+    _showResult(error, success: seconds == null
+        ? 'Messages éphémères désactivés'
+        : 'Les nouveaux messages disparaîtront après ${ephemeralLabel(seconds)}');
+  }
+
+  Future<void> _chooseEphemeral(BuildContext sheetContext) async {
+    final current = ref.read(chatControllerProvider(widget.otherId)).ephemeralSeconds;
+    final choice = await showModalBottomSheet<String>(
+      context: sheetContext,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
+              child: Text('Messages éphémères', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'Les nouveaux messages disparaîtront pour vous deux après la durée choisie. Les transferts d\'argent restent.',
+                style: TextStyle(fontSize: 12.5, color: Theme.of(ctx).hintColor),
+              ),
+            ),
+            for (final entry in kEphemeralDurations.entries)
+              ListTile(
+                leading: Icon(
+                  current == entry.value ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: current == entry.value ? Theme.of(ctx).primaryColor : null,
+                ),
+                title: Text(ephemeralLabel(entry.value)),
+                onTap: () => Navigator.pop(ctx, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (choice != null) await _setEphemeral(choice);
+  }
+
+  Widget _buildEphemeralBanner(int? seconds, bool isDark) {
+    return GestureDetector(
+      onTap: () => _chooseEphemeral(context),
+      child: Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.timer_outlined, size: 15, color: isDark ? Colors.white70 : Colors.black54),
+            const SizedBox(width: 6),
+            Text(
+              'Messages éphémères : ${ephemeralLabel(seconds)}',
+              style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -518,69 +708,150 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
     messenger.showSnackBar(SnackBar(content: Text(error ?? 'Conversation mise à jour')));
   }
 
-  void _showChatTools(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1A1A1A) : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          height: 280,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Partager", 
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                   _buildToolItem(Icons.image, "Galerie", Colors.purple, () {
-                    Navigator.pop(ctx);
-                    _pickImage(ImageSource.gallery);
-                  }),
-                  _buildToolItem(Icons.camera_alt, "Caméra", Colors.red, () {
-                    Navigator.pop(ctx);
-                    _pickImage(ImageSource.camera);
-                  }),
-                  _buildToolItem(Icons.location_on, "Position", Colors.blue, () {
-                    Navigator.pop(ctx);
-                    _shareLocation();
-                  }),
-                  _buildToolItem(Icons.attach_money, "Cash", Colors.green, () {
-                    Navigator.pop(ctx);
-                    _showSendCashSheet(context);
-                  }),
-                ],
-              )
-            ],
-          ),
-        );
-      },
-    );
+  /// Icônes colorées sur pastilles blanches, comme le panneau de pièces jointes de WhatsApp.
+  List<ChatAttachmentOption> _chatAttachments(BuildContext context) => [
+        ChatAttachmentOption(
+          icon: Icons.photo_library_rounded,
+          label: 'Photos',
+          color: const Color(0xFF1A8CFF),
+          onTap: () => _pickImage(ImageSource.gallery),
+        ),
+        ChatAttachmentOption(
+          icon: Icons.camera_alt_rounded,
+          label: 'Caméra',
+          color: const Color(0xFF3A3A3C),
+          onTap: () => _pickImage(ImageSource.camera),
+        ),
+        ChatAttachmentOption(
+          icon: Icons.location_on_rounded,
+          label: 'Localisation',
+          color: const Color(0xFF00C48C),
+          onTap: _shareLocation,
+        ),
+        ChatAttachmentOption(
+          icon: Icons.payments_rounded,
+          label: 'Cash',
+          color: const Color(0xFF2EAF4E),
+          onTap: () => _showSendCashSheet(context),
+        ),
+      ];
+
+  // ─── Actions du menu d'un message ─────────────────────────────────────────
+
+  ChatController get _chatNotifier => ref.read(chatControllerProvider(widget.otherId).notifier);
+
+  void _showResult(String? error, {String? success}) {
+    final text = error ?? success;
+    if (text == null || !mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
   }
 
-  Widget _buildToolItem(IconData icon, String label, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 28),
+  Future<void> _editMessage(Map<String, dynamic> message) async {
+    final controller = TextEditingController(text: message['content']?.toString() ?? '');
+    final edited = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark ? OliChatDarkColors.bar : Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Modifier le message', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(
+                'Possible pendant ${kMessageEditWindow.inMinutes} minutes après l\'envoi',
+                style: TextStyle(fontSize: 12, color: Theme.of(ctx).hintColor),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      minLines: 1,
+                      maxLines: 5,
+                      maxLength: 4000,
+                      decoration: InputDecoration(
+                        counterText: '',
+                        filled: true,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    tooltip: 'Enregistrer',
+                    icon: const Icon(Icons.check_rounded),
+                    onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        ),
+      ),
+    );
+    controller.dispose();
+    final id = message['id']?.toString();
+    if (edited == null || edited.isEmpty || id == null || edited == message['content']?.toString()) return;
+    _showResult(await _chatNotifier.editMessage(id, edited));
+  }
+
+  Future<void> _deleteMessage(String messageId, {required bool forAll}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(forAll ? 'Supprimer pour tous ?' : 'Supprimer pour vous ?'),
+        content: Text(forAll
+            ? 'Le message sera remplacé par « Message supprimé » chez vous et chez ${widget.otherName}.'
+            : 'Le message disparaîtra de votre discussion. ${widget.otherName} le verra toujours.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFE5484D)),
+            child: const Text('Supprimer'),
+          ),
         ],
+      ),
+    );
+    if (confirmed != true) return;
+    _showResult(await _chatNotifier.deleteMessage(messageId, forAll: forAll));
+  }
+
+  String _forwardPreview(Map<String, dynamic> message) {
+    final content = message['content']?.toString() ?? '';
+    if (message['type'] == 'location') return '📍 Position partagée';
+    final raw = message['metadata'];
+    Map<String, dynamic>? metadata;
+    try {
+      metadata = raw is String ? jsonDecode(raw) as Map<String, dynamic> : raw as Map<String, dynamic>?;
+    } catch (_) {}
+    if (metadata?['mediaType'] == 'audio') return '🎤 Message vocal';
+    if (metadata?['mediaUrl'] != null && (content.isEmpty || content == '📷 Image')) return '📷 Photo';
+    return content;
+  }
+
+  void _forwardMessage(Map<String, dynamic> message) {
+    final id = message['id']?.toString();
+    if (id == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ForwardSheet(
+        previewText: _forwardPreview(message),
+        currentConversationId: ref.read(chatControllerProvider(widget.otherId)).conversationId?.toString(),
+        onForward: (conversationIds) => _chatNotifier.forwardMessage(id, conversationIds),
       ),
     );
   }
