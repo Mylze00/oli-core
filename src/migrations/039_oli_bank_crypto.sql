@@ -161,7 +161,9 @@ CREATE INDEX IF NOT EXISTS idx_events_unprocessed ON oli_bank_events(processed) 
 -- ─────────────────────────────────────────────────────────────────────
 -- 6. OLI BANK USER PORTAL — Vue consolidée (lecture rapide)
 -- ─────────────────────────────────────────────────────────────────────
-CREATE OR REPLACE VIEW oli_bank_user_portal AS
+-- Recréée de zéro : CREATE OR REPLACE refuse de changer le type d'une colonne existante
+DROP VIEW IF EXISTS oli_bank_user_portal;
+CREATE VIEW oli_bank_user_portal AS
 SELECT
     u.id                                AS user_id,
     u.name,
@@ -206,7 +208,7 @@ SELECT
 FROM  users u
 LEFT JOIN wallets w                 ON w.user_id = u.id
 LEFT JOIN oli_bank_keypairs kp      ON kp.user_id = u.id
-LEFT JOIN trust_scores ts           ON ts.user_id = u.id;
+LEFT JOIN user_trust_scores ts      ON ts.user_id = u.id; -- la table « trust_scores » n'existe pas
 
 -- ─────────────────────────────────────────────────────────────────────
 -- 7. Triggers d'automatisation

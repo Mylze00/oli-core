@@ -36,7 +36,10 @@ function _hashToken(token) {
  */
 function _extractDeviceInfo(req) {
     const ua = req.headers['user-agent'] || '';
-    const deviceType = /android/i.test(ua) ? 'android'
+    const declared = String(req.headers['x-platform'] || '').toLowerCase().slice(0, 16);
+    // L'application déclare sa plateforme : son agent « Dart/… » ne la donne pas
+    const deviceType = ['android', 'ios', 'web', 'windows', 'macos', 'linux'].includes(declared) ? declared
+        : /android/i.test(ua) ? 'android'
         : /iphone|ipad/i.test(ua) ? 'ios'
         : /flutter/i.test(ua) ? 'flutter'
         : 'web';
@@ -44,7 +47,7 @@ function _extractDeviceInfo(req) {
     return {
         deviceType,
         deviceModel: req.headers['x-device-model'] || null,
-        platform:    req.headers['x-platform'] || deviceType,
+        platform:    deviceType,
         appVersion:  req.headers['x-app-version'] || null,
         deviceId:    req.headers['x-device-id'] || null,
     };
@@ -57,57 +60,61 @@ function _isFinancialRoute(path) {
     return FINANCIAL_ROUTES.some(route => path.includes(route));
 }
 
+// La session n'est réécrite qu'une fois par minute ; le compteur d'actions, lui, suit chaque requête
+const SESSION_REFRESH_MS = 60 * 1000;
+const _lastTrackedAt = new Map();
+
+function _shouldRefreshSession(sessionToken) {
+    const now = Date.now();
+    if (now - (_lastTrackedAt.get(sessionToken) || 0) < SESSION_REFRESH_MS) return false;
+    _lastTrackedAt.set(sessionToken, now);
+    // Mémoire bornée : les sessions inactives sont oubliées
+    if (_lastTrackedAt.size > 5000) {
+        for (const [token, at] of _lastTrackedAt) {
+            if (now - at > SESSION_REFRESH_MS) _lastTrackedAt.delete(token);
+        }
+    }
+    return true;
+}
+
 /**
  * Middleware principal OLI Session.
+ *
+ * Ce middleware est monté avant les routes, alors que req.user n'est rempli que par
+ * l'authentification de chaque route : le suivi attend donc la fin de la réponse.
  */
-async function oliSessionMiddleware(req, res, next) {
-    try {
-        // Ignorer certaines routes
-        const path = req.path || '';
-        if (SKIP_ROUTES.some(s => path.startsWith(s))) {
-            return next();
-        }
+function oliSessionMiddleware(req, res, next) {
+    const path = (req.originalUrl || req.url || '').split('?')[0];
+    if (SKIP_ROUTES.some(s => path.startsWith(s))) return next();
 
-        // Ne tracker que si l'utilisateur est authentifié
-        if (!req.user?.id) return next();
+    res.on('finish', () => {
+        const userId = req.user?.id;
+        if (!userId) return;
 
-        const userId = req.user.id;
         const rawToken = req.headers.authorization?.replace('Bearer ', '') || '';
-        const sessionToken = _hashToken(rawToken || `${userId}-${Date.now()}`);
-
-        const deviceInfo = _extractDeviceInfo(req);
-        const ipAddress  = req.ip || req.connection?.remoteAddress || null;
+        if (!rawToken) return;
+        const sessionToken = _hashToken(rawToken);
         const isFinancial = _isFinancialRoute(path);
+        const refresh = _shouldRefreshSession(sessionToken);
 
-        // Tracker la session de manière non-bloquante
         setImmediate(async () => {
             try {
-                await oliBank.trackSession(userId, {
-                    sessionToken,
-                    ipAddress,
-                    ...deviceInfo,
-                });
-
-                if (isFinancial) {
-                    await oliBank.incrementSessionAction(sessionToken, true);
-                } else {
-                    await oliBank.incrementSessionAction(sessionToken, false);
+                if (refresh) {
+                    await oliBank.trackSession(userId, {
+                        sessionToken,
+                        ipAddress: req.ip || req.socket?.remoteAddress || null,
+                        ..._extractDeviceInfo(req),
+                    });
                 }
+                await oliBank.incrementSessionAction(sessionToken, isFinancial);
             } catch (e) {
-                // Le tracking ne doit jamais bloquer la requête principale
+                // Le suivi ne doit jamais gêner l'application
                 console.warn('⚠️ OLI Session tracking failed (non-blocking):', e.message);
             }
         });
+    });
 
-        // Attacher les infos de session à la requête
-        req.oliSession = { sessionToken, isFinancial, deviceInfo };
-
-        next();
-    } catch (err) {
-        // Non-fatal — toujours laisser passer la requête
-        console.warn('⚠️ OLI Session Middleware error:', err.message);
-        next();
-    }
+    next();
 }
 
 module.exports = oliSessionMiddleware;

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/bank_portal_provider.dart';
+import '../../../providers/exchange_rate_provider.dart';
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
 const _bg         = Color(0xFF060D1A);
@@ -16,6 +17,13 @@ const _textPri    = Colors.white;
 const _textSec    = Color(0xFF8899B5);
 
 // ─── Écran Principal ─────────────────────────────────────────────────────────
+
+/// Les montants OLI Bank sont tenus en FC, comme le wallet. Ils s'affichent dans la
+/// monnaie choisie à l'accueil (FC, ou converti en USD au taux du jour).
+String _money(WidgetRef ref, num fcAmount) {
+  ref.watch(exchangeRateProvider);
+  return ref.read(exchangeRateProvider.notifier).formatWalletBalance(fcAmount.toDouble());
+}
 
 class BankPortalScreen extends ConsumerStatefulWidget {
   const BankPortalScreen({super.key});
@@ -57,6 +65,11 @@ class _BankPortalScreenState extends ConsumerState<BankPortalScreen>
       backgroundColor: _bg,
       body: state.isLoading
           ? const Center(child: CircularProgressIndicator(color: _accent))
+          : state.error != null && state.oliAddress == null
+          ? _LoadError(
+              message: state.error!,
+              onRetry: () => ref.read(bankPortalProvider.notifier).loadPortal(),
+            )
           : NestedScrollView(
               headerSliverBuilder: (_, __) => [
                 _buildAppBar(state),
@@ -178,12 +191,12 @@ class _BankPortalScreenState extends ConsumerState<BankPortalScreen>
 
 // ─── Hero Header ─────────────────────────────────────────────────────────────
 
-class _HeroHeader extends StatelessWidget {
+class _HeroHeader extends ConsumerWidget {
   final BankPortalState state;
   const _HeroHeader({required this.state});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Stack(
       children: [
         // Fond dégradé
@@ -263,20 +276,12 @@ class _HeroHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '\$${state.walletBalance.toStringAsFixed(2)}',
+                      _money(ref, state.walletBalance),
                       style: const TextStyle(
                         color: _textPri,
                         fontSize: 36,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -1,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Text(
-                        state.currency ?? 'USD',
-                        style: const TextStyle(color: _textSec, fontSize: 14),
                       ),
                     ),
                   ],
@@ -285,11 +290,11 @@ class _HeroHeader extends StatelessWidget {
                 // Stats rapides
                 Row(
                   children: [
-                    _MiniStat(label: 'Déposé', value: '\$${state.totalDeposited.toStringAsFixed(0)}', color: _accent),
+                    _MiniStat(label: 'Déposé', value: _money(ref, state.totalDeposited), color: _accent),
                     const SizedBox(width: 16),
-                    _MiniStat(label: 'Retiré', value: '\$${state.totalWithdrawn.toStringAsFixed(0)}', color: _danger),
+                    _MiniStat(label: 'Retiré', value: _money(ref, state.totalWithdrawn), color: _danger),
                     const SizedBox(width: 16),
-                    _MiniStat(label: 'En escrow', value: '\$${state.fundsInEscrow.toStringAsFixed(0)}', color: _gold),
+                    _MiniStat(label: 'En escrow', value: _money(ref, state.fundsInEscrow), color: _gold),
                   ],
                 ),
               ],
@@ -436,12 +441,16 @@ class _TrustScoreCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Pas de score enregistré : on ne présente pas un 0 comme un « utilisateur de confiance »
+    final isRated = state.trustScore != null;
     final score = state.trustScore ?? 0;
     final risk  = state.fraudRiskLevel ?? 'low';
-    final color = risk == 'low' ? _accent
+    final color = !isRated ? _textSec
+        : risk == 'low' ? _accent
         : risk == 'medium' ? _gold
         : _danger;
-    final label = risk == 'low' ? 'Utilisateur de confiance'
+    final label = !isRated ? 'Pas encore évalué'
+        : risk == 'low' ? 'Utilisateur de confiance'
         : risk == 'medium' ? 'Surveillance recommandée'
         : 'Risque élevé';
 
@@ -464,7 +473,7 @@ class _TrustScoreCard extends StatelessWidget {
                       strokeWidth: 8,
                     ),
                     Text(
-                      score.toStringAsFixed(0),
+                      isRated ? score.toStringAsFixed(0) : '–',
                       style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.w900),
                     ),
                   ],
@@ -478,7 +487,8 @@ class _TrustScoreCard extends StatelessWidget {
                     Text('Score OLI Bank', style: TextStyle(color: _textSec, fontSize: 12)),
                     const SizedBox(height: 4),
                     Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14)),
-                    const SizedBox(height: 8),
+                    if (isRated) const SizedBox(height: 8),
+                    if (isRated)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
@@ -499,16 +509,16 @@ class _TrustScoreCard extends StatelessWidget {
   }
 }
 
-class _StatGrid extends StatelessWidget {
+class _StatGrid extends ConsumerWidget {
   final BankPortalState state;
   const _StatGrid({required this.state});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final items = [
       ('Transactions', '${state.totalTransactions}', Icons.swap_horiz_rounded, _accentB),
       ('Escrows actifs', '${state.activeEscrows}', Icons.lock_rounded, _gold),
-      ('En séquestre', '\$${state.fundsInEscrow.toStringAsFixed(0)}', Icons.account_balance_rounded, _gold),
+      ('En séquestre', _money(ref, state.fundsInEscrow), Icons.account_balance_rounded, _gold),
       ('Wallet actif', state.bankActive ? 'Oui' : 'Non', Icons.check_circle_rounded, _accent),
     ];
     return GridView.count(
@@ -595,12 +605,12 @@ class _LastSessionCard extends StatelessWidget {
   }
 }
 
-class _LedgerTile extends StatelessWidget {
+class _LedgerTile extends ConsumerWidget {
   final LedgerEntry entry;
   const _LedgerTile({required this.entry});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isCredit = entry.amount >= 0;
     final color    = isCredit ? _accent : _danger;
     final icon     = isCredit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
@@ -632,10 +642,10 @@ class _LedgerTile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('${isCredit ? '+' : ''}\$${entry.amount.abs().toStringAsFixed(2)}',
+                  Text('${isCredit ? '+' : '-'}${_money(ref, entry.amount.abs())}',
                       style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14)),
                   if (entry.feeAmount > 0)
-                    Text('Frais: \$${entry.feeAmount.toStringAsFixed(2)}',
+                    Text('Frais : ${_money(ref, entry.feeAmount)}',
                         style: const TextStyle(color: _textSec, fontSize: 10)),
                 ],
               ),
@@ -696,12 +706,12 @@ class _LedgerTile extends StatelessWidget {
   }
 }
 
-class _EscrowTile extends StatelessWidget {
+class _EscrowTile extends ConsumerWidget {
   final EscrowEntry entry;
   const _EscrowTile({required this.entry});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return _Card(
       borderColor: _gold.withOpacity(0.3),
       child: Column(
@@ -730,7 +740,7 @@ class _EscrowTile extends StatelessWidget {
                 ),
               ),
               Text(
-                '\$${entry.amountLocked.toStringAsFixed(2)}',
+                _money(ref, entry.amountLocked),
                 style: const TextStyle(color: _gold, fontWeight: FontWeight.w900, fontSize: 16),
               ),
             ],
@@ -740,12 +750,12 @@ class _EscrowTile extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              _EscrowStat('Vendeur', '\$${entry.sellerAmount.toStringAsFixed(2)}', _accent),
+              _EscrowStat('Vendeur', _money(ref, entry.sellerAmount), _accent),
               const SizedBox(width: 12),
               if (entry.delivererAmount > 0)
-                _EscrowStat('Livreur', '\$${entry.delivererAmount.toStringAsFixed(2)}', _accentB),
+                _EscrowStat('Livreur', _money(ref, entry.delivererAmount), _accentB),
               if (entry.delivererAmount > 0) const SizedBox(width: 12),
-              _EscrowStat('Frais OLI', '\$${entry.oliFee.toStringAsFixed(2)}', _textSec),
+              _EscrowStat('Frais OLI', _money(ref, entry.oliFee), _textSec),
             ],
           ),
         ],
@@ -817,7 +827,7 @@ class _SessionTile extends StatelessWidget {
   }
 }
 
-class _TxVerifier extends StatelessWidget {
+class _TxVerifier extends ConsumerWidget {
   final TextEditingController ctrl;
   final Map<String, dynamic>? result;
   final bool loading;
@@ -831,7 +841,7 @@ class _TxVerifier extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isValid = result?['valid'] == true;
     return Column(
       children: [
@@ -898,7 +908,7 @@ class _TxVerifier extends StatelessWidget {
                 if (result!['txType'] != null) ...[
                   const SizedBox(height: 8),
                   _InfoRow('Type', result!['txType'].toString()),
-                  _InfoRow('Montant', '\$${result!['amount']}'),
+                  _InfoRow('Montant', _money(ref, num.tryParse('${result!['amount']}') ?? 0)),
                   _InfoRow('Statut', result!['status']?.toString() ?? '-'),
                 ],
               ],
@@ -1075,4 +1085,49 @@ class _EmptyState extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// Le portail n'a pas pu être chargé : afficher des zéros ferait croire à un compte vide.
+class _LoadError extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _LoadError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_rounded, color: _textPri),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_off_rounded, color: _textSec, size: 48),
+                    const SizedBox(height: 16),
+                    Text(message, textAlign: TextAlign.center, style: const TextStyle(color: _textPri, fontSize: 14)),
+                    const SizedBox(height: 20),
+                    TextButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh_rounded, color: _accent),
+                      label: const Text('Réessayer', style: TextStyle(color: _accent, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

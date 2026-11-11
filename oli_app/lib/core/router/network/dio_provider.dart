@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import '../../../config/api_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../storage/secure_storage_service.dart';
@@ -13,6 +14,9 @@ final dioProvider = Provider<Dio>((ref) {
       receiveTimeout: const Duration(seconds: 30),
       headers: {
         'Content-Type': 'application/json',
+        // Appareil affiché dans les sessions OLI Bank. Absent sur le web, où le
+        // navigateur s'identifie déjà et où un en-tête de plus déclencherait le contrôle CORS.
+        if (!kIsWeb) 'X-Platform': defaultTargetPlatform.name.toLowerCase(),
       },
     ),
   );

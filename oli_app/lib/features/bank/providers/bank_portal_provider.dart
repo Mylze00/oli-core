@@ -162,7 +162,7 @@ class BankPortalState {
     this.isLoading = false,
     this.error,
     this.oliAddress,
-    this.bankActive = true,
+    this.bankActive = false,
     this.walletBalance = 0,
     this.totalDeposited = 0,
     this.totalWithdrawn = 0,
@@ -172,7 +172,7 @@ class BankPortalState {
     this.trustScore,
     this.fraudRiskLevel,
     this.name,
-    this.currency = 'USD',
+    this.currency = 'FC',
     this.isFrozen = false,
     this.lastSessionAt,
     this.lastDevice,
@@ -242,7 +242,7 @@ class BankPortalNotifier extends StateNotifier<BankPortalState> {
       state = state.copyWith(
         isLoading:         false,
         oliAddress:        p['oli_address']?.toString(),
-        bankActive:        p['bank_active'] != false,
+        bankActive:        p['bank_active'] == true,
         walletBalance:     (p['wallet_balance'] as num?)?.toDouble() ?? 0,
         totalDeposited:    (p['total_deposited'] as num?)?.toDouble() ?? 0,
         totalWithdrawn:    (p['total_withdrawn'] as num?)?.toDouble() ?? 0,
@@ -268,8 +268,15 @@ class BankPortalNotifier extends StateNotifier<BankPortalState> {
             .map((e) => SessionEntry.fromJson(e as Map<String, dynamic>))
             .toList(),
       );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final message = data is Map ? data['error']?.toString() : null;
+      state = state.copyWith(
+        isLoading: false,
+        error: message ?? 'OLI Bank est injoignable. Vérifiez votre connexion.',
+      );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: 'Impossible de charger OLI Bank.');
     }
   }
 

@@ -112,6 +112,33 @@ function _computeTxHash({ prevHash, userId, amount, txType, timestamp, nonce }) 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CORRESPONDANCE WALLET → GRAND LIVRE
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SAME_LEDGER_TYPES = new Set([
+    'deposit', 'withdrawal', 'payment', 'refund', 'reward', 'system_credit',
+    'escrow_lock', 'escrow_release', 'escrow_refund', 'fee',
+]);
+const DEBIT_LEDGER_TYPES = new Set(['withdrawal', 'payment', 'p2p_send', 'escrow_lock', 'fee']);
+
+/** Type du Grand Livre pour un mouvement du wallet, ou null s'il n'a pas d'équivalent. */
+function _ledgerTypeFor(tx) {
+    const delta = parseFloat(tx.balance_after) - parseFloat(tx.balance_before);
+    if (tx.type === 'transfer') return delta < 0 ? 'p2p_send' : 'p2p_receive';
+    // Les crédits liés à une commande sont des ventes ou des livraisons payées
+    if (tx.type === 'credit') return tx.order_id ? 'escrow_release' : 'system_credit';
+    return SAME_LEDGER_TYPES.has(tx.type) ? tx.type : null;
+}
+
+/** Montant signé : négatif quand l'argent sort du wallet. */
+function _signedAmount(tx, txType) {
+    const delta = parseFloat(tx.balance_after) - parseFloat(tx.balance_before);
+    if (delta) return delta;
+    const amount = Math.abs(parseFloat(tx.amount) || 0);
+    return DEBIT_LEDGER_TYPES.has(txType) ? -amount : amount;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CLASSE PRINCIPALE
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -183,6 +210,7 @@ class OliBankService {
         balanceBefore, balanceAfter, counterpartId = null,
         orderId = null, escrowRef = null, status = 'confirmed',
         sensitivePayload = null, metadata = {},
+        txId = uuidv4(), confirmedAt = null,
     }) {
         // 1. Récupérer la clé privée du user
         const kpRow = await pool.query(
@@ -208,7 +236,6 @@ class OliBankService {
         const prevHash = lastTxRow.rows[0]?.tx_hash || null;
 
         // 3. Calculer le hash de cette TX
-        const txId      = uuidv4();
         const nonce     = crypto.randomBytes(8).toString('hex');
         const timestamp = Date.now();
         const txHash    = _computeTxHash({ prevHash, userId, amount, txType, timestamp, nonce });
@@ -238,8 +265,8 @@ class OliBankService {
             INSERT INTO oli_bank_ledger
                 (tx_id, tx_hash, prev_tx_hash, user_id, oli_address, tx_type,
                  amount, fee_amount, balance_before, balance_after, counterpart_id,
-                 order_id, escrow_ref, signature, payload_enc, status, metadata)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+                 order_id, escrow_ref, signature, payload_enc, status, metadata, confirmed_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, COALESCE($18, NOW()))
             RETURNING id, tx_id, tx_hash
         `, [
             txId, txHash, prevHash,
@@ -253,6 +280,7 @@ class OliBankService {
             payloadEnc,
             status,
             JSON.stringify(metadata),
+            confirmedAt,
         ]);
 
         // 7. Mettre à jour last_used_at de la keypair
@@ -616,6 +644,14 @@ class OliBankService {
     async getUserPortal(userId) {
         const uid = parseInt(userId);
 
+        // Comptes créés avant OLI Bank : l'identité est créée à la première ouverture
+        await this.initializeUserPortal(uid);
+        try {
+            await this.syncLedgerFromWallet({ userId: uid });
+        } catch (e) {
+            console.warn(`⚠️ OLI Bank: grand livre de user #${uid} non synchronisé:`, e.message);
+        }
+
         // Vue matérialisée
         const portalRes = await pool.query(
             'SELECT * FROM oli_bank_user_portal WHERE user_id = $1',
@@ -708,8 +744,7 @@ class OliBankService {
                  platform, app_version, ip_address, city, country, oli_address)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
             ON CONFLICT (session_token) DO UPDATE
-                SET last_seen_at = NOW(),
-                    action_count = user_sessions_ext.action_count + 1
+                SET last_seen_at = NOW()
             RETURNING id
         `, [
             uid,
@@ -759,6 +794,98 @@ class OliBankService {
         } catch (e) {
             return null;
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 8. Synchronisation wallet → Grand Livre
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Inscrit au Grand Livre chaque mouvement du wallet qui n'y est pas encore.
+     * Le wallet reste la source de vérité : tous ses chemins d'écriture sont couverts
+     * sans avoir à appeler OLI Bank depuis chacun d'eux. Les appels sont mis en file
+     * pour que la chaîne de hash de chaque utilisateur reste dans l'ordre.
+     */
+    syncLedgerFromWallet({ userId = null, limit = 200 } = {}) {
+        const run = () => this._runLedgerSync(userId, limit);
+        this._ledgerSyncQueue = (this._ledgerSyncQueue || Promise.resolve()).then(run, run);
+        return this._ledgerSyncQueue;
+    }
+
+    async _runLedgerSync(userId, limit) {
+        const params = [limit];
+        let userFilter = '';
+        if (userId !== null) {
+            params.push(parseInt(userId));
+            userFilter = 'AND user_id = $2';
+        }
+        // Un dépôt Unipesa est lié au Grand Livre par processDeposit juste après son écriture : on lui en laisse le temps
+        const { rows } = await pool.query(`
+            SELECT id, user_id, type, amount, balance_before, balance_after,
+                   currency, provider, reference, description, order_id, created_at
+            FROM   wallet_transactions
+            WHERE  ledger_tx_id IS NULL
+              AND  status = 'completed'
+              AND  type NOT IN ('deposit_pending', 'withdrawal_pending')
+              AND  NOT (type = 'deposit' AND provider = 'UNIPESA' AND created_at > NOW() - INTERVAL '1 minute')
+              ${userFilter}
+            ORDER BY id
+            LIMIT $1
+        `, params);
+
+        const blockedUsers = new Set();
+        const readyUsers = new Set();
+        let written = 0;
+
+        for (const tx of rows) {
+            if (blockedUsers.has(tx.user_id)) continue;
+            const txType = _ledgerTypeFor(tx);
+            if (!txType) continue;
+
+            const txId = uuidv4();
+            // Réservation : un mouvement n'est jamais inscrit deux fois
+            const claim = await pool.query(
+                'UPDATE wallet_transactions SET ledger_tx_id = $1 WHERE id = $2 AND ledger_tx_id IS NULL',
+                [txId, tx.id]
+            );
+            if (claim.rowCount === 0) continue;
+
+            try {
+                if (!readyUsers.has(tx.user_id)) {
+                    await this.initializeUserPortal(tx.user_id);
+                    readyUsers.add(tx.user_id);
+                }
+                const before = parseFloat(tx.balance_before) || 0;
+                const after  = parseFloat(tx.balance_after) || 0;
+                await this._writeLedger({
+                    txId,
+                    userId: tx.user_id,
+                    oliAddress: await this._getOliAddress(tx.user_id),
+                    txType,
+                    amount: _signedAmount(tx, txType),
+                    balanceBefore: before,
+                    balanceAfter: after,
+                    orderId: tx.order_id,
+                    confirmedAt: tx.created_at,
+                    metadata: {
+                        wallet_tx_id: tx.id,
+                        currency: tx.currency,
+                        provider: tx.provider,
+                        reference: tx.reference,
+                        description: tx.description,
+                    },
+                });
+                written++;
+            } catch (e) {
+                // La chaîne de cet utilisateur doit rester ordonnée : ses mouvements suivants attendront
+                await pool.query('UPDATE wallet_transactions SET ledger_tx_id = NULL WHERE id = $1 AND ledger_tx_id = $2', [tx.id, txId]);
+                blockedUsers.add(tx.user_id);
+                console.warn(`⚠️ OLI Bank: mouvement wallet #${tx.id} non inscrit au Grand Livre:`, e.message);
+            }
+        }
+
+        if (written > 0) console.log(`🏦 OLI Bank: ${written} mouvement(s) wallet inscrit(s) au Grand Livre`);
+        return written;
     }
 
     // ─────────────────────────────────────────────────────────────

@@ -17,29 +17,8 @@ const unipesaService = require('./unipesa.service');
 const pool = require('../config/db');
 const { FEES, FC_TO_USD_FALLBACK } = require('../config/index'); // [P1.4]
 
-// 🏦 OLI Bank — import différé pour éviter les dépendances circulaires
-let _oliBank = null;
-function getOliBank() {
-    if (!_oliBank) _oliBank = require('./oli_bank.service');
-    return _oliBank;
-}
-
-/**
- * Fire-and-forget : enregistre la transaction dans le Grand Livre OLI Bank.
- * Ne bloque jamais le flux principal du wallet.
- */
-function _recordToLedger(userId, txType, amount, meta = {}) {
-    setImmediate(async () => {
-        try {
-            const bank = getOliBank();
-            // S'assurer que le portail de l'utilisateur existe
-            await bank.initializeUserPortal(userId);
-            await bank.recordLedgerEntry(userId, txType, amount, meta);
-        } catch (err) {
-            console.warn(`⚠️ OLI Bank ledger non-bloquant [${txType}] user#${userId}:`, err.message);
-        }
-    });
-}
+// 🏦 OLI Bank : chaque mouvement du wallet est inscrit au Grand Livre par
+// oliBank.syncLedgerFromWallet (au démarrage, chaque minute et à l'ouverture du portail).
 
 // [P1.4] Taux FC→USD depuis la configuration centralisée (plus de hardcode)
 const FC_TO_USD = FC_TO_USD_FALLBACK; // config/index.js → FC_TO_USD_FALLBACK
@@ -132,12 +111,6 @@ class WalletService {
 
         // L'opération est en cours sur le téléphone de l'utilisateur (push USSD).
         // Le crédit du wallet se fera à la réception du webhook de confirmation.
-        // 🏦 OLI Bank — Ledger non-bloquant (montant net estimé)
-        _recordToLedger(userId, 'deposit', unipesaRes.netAmountFC, {
-            reference: unipesaRes.oliOrderId,
-            provider: provider || unipesaRes.provider,
-            fee: unipesaRes.totalFeeFC,
-        });
 
         return {
             status:          'pending',
@@ -233,8 +206,6 @@ class WalletService {
                 `Frais 3% retrait — ${amount.toFixed(0)} FC (User #${userId})`
             );
 
-            // 🏦 OLI Bank — Ledger (non-bloquant)
-            _recordToLedger(userId, 'withdrawal', amount, { reference, provider, fee: feeAmount });
 
             return {
                 ...withdrawResult,
@@ -278,8 +249,6 @@ class WalletService {
             description: `Paiement commande${orderId ? ` #${orderId}` : ''}`,
             orderId,
         });
-        // 🏦 OLI Bank — Ledger escrow_lock (non-bloquant)
-        _recordToLedger(userId, 'escrow_lock', amount, { orderId, reference: `ORDER_${orderId}` });
         return payResult;
     }
 
@@ -305,8 +274,6 @@ class WalletService {
             description: `Vente confirmée — commande #${orderId}`,
             orderId,
         });
-        // 🏦 OLI Bank — Ledger escrow_release (non-bloquant)
-        _recordToLedger(sellerId, 'escrow_release', amount, { orderId, role: 'seller' });
         console.log(`💰 Vendeur #${sellerId} crédité : +${amount.toFixed(0)} FC (commande #${orderId}) → solde: ${result.balanceAfter.toFixed(0)} FC`);
         return result;
     }

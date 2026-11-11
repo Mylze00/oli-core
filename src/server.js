@@ -358,7 +358,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "authorization", "X-Requested-With", "Accept", "Idempotency-Key"],
+    allowedHeaders: ["Content-Type", "Authorization", "authorization", "X-Requested-With", "Accept", "X-Platform", "Idempotency-Key"],
     exposedHeaders: ["Content-Type", "Authorization"]
 };
 app.use(cors(corsOptions));
@@ -666,6 +666,13 @@ if (process.env.NODE_ENV !== 'test') {
             console.warn('⚠️ Purge des messages éphémères:', e.message);
         }
     }, 60 * 60 * 1000);
+
+    // 🏦 Grand Livre OLI Bank : les mouvements du wallet y sont inscrits chaque minute
+    const oliBankLedger = require('./services/oli_bank.service');
+    const syncBankLedger = () => oliBankLedger.syncLedgerFromWallet()
+        .catch(e => console.warn('⚠️ Synchronisation du Grand Livre OLI Bank:', e.message));
+    setTimeout(syncBankLedger, 30 * 1000);
+    setInterval(syncBankLedger, 60 * 1000);
 }
 
 // --- DÉMARRAGE DU SERVEUR ---
