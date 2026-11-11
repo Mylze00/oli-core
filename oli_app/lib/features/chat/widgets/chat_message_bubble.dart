@@ -23,6 +23,7 @@ class ChatMessageBubble extends StatefulWidget {
   final Function(Map<String, dynamic> message)? onForward;
   final Function(String messageId, {required bool forAll})? onDelete;
   final Function(Map<String, dynamic> message)? onEdit;
+  final void Function(String messageId)? onVoicePlayed;
 
   const ChatMessageBubble({
     super.key,
@@ -35,6 +36,7 @@ class ChatMessageBubble extends StatefulWidget {
     this.onForward,
     this.onDelete,
     this.onEdit,
+    this.onVoicePlayed,
   });
 
   @override
@@ -185,9 +187,10 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     required Color color,
     required Color readColor,
     bool readOnBlueBubble = false,
+    bool compact = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: EdgeInsets.only(top: compact ? 0 : 4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.end,
@@ -313,6 +316,10 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
             !mediaUrl.endsWith('.m4a') &&
             (messageContent.isEmpty || messageContent == '📷 Image'));
     final isCardMessage = isLocation || cashAmount != null || isImageOnly;
+    final isVoice = widget.message['local_audio'] == true ||
+        mediaType == 'audio' ||
+        (mediaUrl != null && mediaUrl.endsWith('.m4a'));
+    final waveform = (metaMap?['waveform'] as List?)?.map((v) => (v as num).toInt()).toList();
 
     final reactions = _parseReactions();
     final replyContext = _buildReplyContext();
@@ -419,6 +426,8 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                   constraints: BoxConstraints(maxWidth: size.width * 0.75),
                   padding: isCardMessage
                       ? EdgeInsets.zero
+                      : isVoice
+                      ? const EdgeInsets.fromLTRB(4, 4, 12, 4)
                       : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isCardMessage
@@ -461,6 +470,16 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                               audioUrl: mediaUrl!,
                               isMe: widget.isMe,
                               durationMs: (metaMap?['duration_ms'] as num?)?.toInt(),
+                              waveform: waveform,
+                              isPlayed: widget.message['played_at'] != null,
+                              onFirstPlay: () => widget.onVoicePlayed?.call(widget.message['id'].toString()),
+                              footer: _buildTimeRow(
+                                timeString,
+                                color: widget.isMe || isDark ? Colors.white.withOpacity(0.7) : Colors.black38,
+                                readColor: theme.primaryColor,
+                                readOnBlueBubble: widget.isMe,
+                                compact: true,
+                              ),
                             )
                           : Column(
                               crossAxisAlignment: isImageOnly && widget.isMe

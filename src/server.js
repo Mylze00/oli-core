@@ -528,6 +528,11 @@ if (process.env.NODE_ENV !== 'test') {
             // Début réel de la conversation, pour calculer la durée d'un appel
             await pool.query(`ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS answered_at TIMESTAMPTZ`);
 
+            // Moment où le destinataire écoute un vocal
+            await pool.query(require('fs').readFileSync(
+                require('path').join(__dirname, 'migrations/add_message_played_at.sql'), 'utf8'
+            ));
+
             // Moment où un message atteint l'appareil du destinataire
             await pool.query(require('fs').readFileSync(
                 require('path').join(__dirname, 'migrations/add_message_delivered_at.sql'), 'utf8'

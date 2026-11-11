@@ -4,6 +4,7 @@ const callController = require('../controllers/call.controller');
 
 router.get('/history', callController.getCallHistory);
 router.get('/peer/:userId', callController.getCallPeer);
+router.get('/ice-servers', callController.getIceServers);
 router.post('/:callerId/decline', callController.declineCall);
 
 module.exports = router;

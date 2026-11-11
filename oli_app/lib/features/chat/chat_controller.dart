@@ -114,6 +114,7 @@ class ChatController extends StateNotifier<ChatState> {
       // Écouter les reçus de lecture
       _socketService.on('messages_read', _handleMessagesRead);
       _socketService.on('messages_delivered', _handleMessagesDelivered);
+      _socketService.on('message_played', _handleMessagePlayed);
       
       // Écouter le statut en ligne (global ou spécifique)
       _socketService.on('user_online', _handleUserOnline);
@@ -195,6 +196,33 @@ class ChatController extends StateNotifier<ChatState> {
       
       state = state.copyWith(messages: updatedMessages);
       _forceCacheUpdate(updatedMessages);
+    }
+  }
+
+  void _setMessagePlayed(String messageId, String playedAt) {
+    state = state.copyWith(messages: [
+      for (final m in state.messages)
+        if (m['id']?.toString() == messageId) {...m, 'played_at': playedAt} else m,
+    ]);
+  }
+
+  void _handleMessagePlayed(dynamic rawData) {
+    if (!mounted || rawData is! Map<String, dynamic>) return;
+    _setMessagePlayed(rawData['message_id'].toString(), rawData['played_at']?.toString() ?? DateTime.now().toIso8601String());
+  }
+
+  /// Première écoute d'un vocal reçu : l'expéditeur en est prévenu.
+  Future<void> markVoicePlayed(String messageId) async {
+    if (messageId.startsWith('temp_')) return;
+    _setMessagePlayed(messageId, DateTime.now().toIso8601String());
+    try {
+      final token = await _storage.getToken();
+      await _dio.post(
+        '${ApiConfig.baseUrl}/chat/messages/$messageId/played',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    } catch (e) {
+      debugPrint('❌ Écoute du vocal non transmise: $e');
     }
   }
 
@@ -462,6 +490,7 @@ class ChatController extends StateNotifier<ChatState> {
   Future<bool> sendVoice(
     XFile file, {
     required Duration duration,
+    List<int> waveform = const [],
     String? replyToId,
     String? productId,
     String? productName,
@@ -484,6 +513,7 @@ class ChatController extends StateNotifier<ChatState> {
         'created_at': DateTime.now().toIso8601String(),
         'local_audio': true,
         'duration_ms': duration.inMilliseconds,
+        'waveform': waveform,
         'upload_progress': 0.0,
       },
     ]);
@@ -506,7 +536,7 @@ class ChatController extends StateNotifier<ChatState> {
       mediaUrl: url,
       mediaType: 'audio',
       type: 'audio',
-      customMetadata: {'duration_ms': duration.inMilliseconds},
+      customMetadata: {'duration_ms': duration.inMilliseconds, 'waveform': waveform},
       replyToId: replyToId,
       productId: productId,
       productName: productName,

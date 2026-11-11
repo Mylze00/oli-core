@@ -32,5 +32,6 @@ router.get('/users', chatController.searchUsers);
 
 // Réactions sur un message
 router.put('/messages/:messageId/react', chatController.reactToMessage);
+router.post('/messages/:messageId/played', chatController.markVoicePlayed);
 
 module.exports = router;

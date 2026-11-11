@@ -1,6 +1,27 @@
 const pool = require('../config/db');
 const callLogService = require('../services/call-log.service');
 
+const DEFAULT_ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+];
+
+function readRelayServers() {
+    if (!process.env.ICE_SERVERS_JSON) return [];
+    try {
+        const servers = JSON.parse(process.env.ICE_SERVERS_JSON);
+        return Array.isArray(servers) ? servers : [];
+    } catch (err) {
+        console.error('ICE_SERVERS_JSON invalide:', err.message);
+        return [];
+    }
+}
+
+/** Serveurs de connexion des appels : le relais se configure sans republier l'application. */
+exports.getIceServers = (req, res) => {
+    res.json({ iceServers: [...DEFAULT_ICE_SERVERS, ...readRelayServers()] });
+};
+
 /** Refus depuis l'écran natif, quand l'application n'a pas de connexion en direct. */
 exports.declineCall = async (req, res) => {
     const { callerId } = req.params;

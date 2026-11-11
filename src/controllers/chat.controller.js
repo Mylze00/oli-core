@@ -320,6 +320,48 @@ exports.updateConversationState = async (req, res) => {
 };
 
 /**
+ * Marquer un vocal comme écouté : seul le destinataire peut le faire, une seule fois.
+ */
+exports.markVoicePlayed = async (req, res) => {
+    const { messageId } = req.params;
+    if (!/^\d+$/.test(messageId)) {
+        return res.status(400).json({ error: 'Requête invalide' });
+    }
+
+    try {
+        const { rows } = await pool.query(
+            `UPDATE messages m SET played_at = NOW()
+             WHERE m.id = $1
+               AND m.sender_id <> $2
+               AND m.played_at IS NULL
+               AND (m.type = 'audio' OR m.metadata->>'mediaType' = 'audio')
+               AND EXISTS (
+                   SELECT 1 FROM conversation_participants cp
+                   WHERE cp.conversation_id = m.conversation_id AND cp.user_id = $2
+               )
+             RETURNING m.id, m.sender_id, m.conversation_id, m.played_at`,
+            [messageId, req.user.id]
+        );
+
+        const played = rows[0];
+        if (played) {
+            const io = req.app.get('io');
+            if (io) {
+                io.to(`user_${played.sender_id}`).emit('message_played', {
+                    message_id: played.id,
+                    conversation_id: played.conversation_id,
+                    played_at: played.played_at,
+                });
+            }
+        }
+        res.json({ played: Boolean(played) });
+    } catch (err) {
+        console.error('Erreur markVoicePlayed:', err);
+        res.status(500).json({ error: 'Erreur' });
+    }
+};
+
+/**
  * Couper ou réactiver les notifications d'une conversation
  */
 exports.setConversationMute = async (req, res) => {

@@ -93,8 +93,9 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
+      // Liste inversée : le dernier échange est en position 0
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
@@ -345,10 +346,12 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                     )
                   : ListView.builder(
                       controller: _scrollController,
+                      // La discussion s'ouvre sur le dernier échange, sans défilement visible
+                      reverse: true,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       itemCount: chatState.messages.length,
                       itemBuilder: (context, index) {
-                        final msg = chatState.messages[index];
+                        final msg = chatState.messages[chatState.messages.length - 1 - index];
                         final isMe = msg['sender_id'].toString() == widget.myId;
                         
                         return ChatMessageBubble(
@@ -359,6 +362,9 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                           onSwipeReply: (message) {
                             setState(() => _replyToMessage = message);
                           },
+                          onVoicePlayed: (messageId) => ref
+                              .read(chatControllerProvider(widget.otherId).notifier)
+                              .markVoicePlayed(messageId),
                           onReact: (messageId, emoji) {
                             ref.read(chatControllerProvider(widget.otherId).notifier)
                                 .reactToMessage(messageId, emoji);
@@ -586,6 +592,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
     final sent = await ref.read(chatControllerProvider(widget.otherId).notifier).sendVoice(
       XFile(recording.path, name: recording.fileName, mimeType: recording.mimeType),
       duration: recording.duration,
+      waveform: recording.waveform,
       replyToId: replyToId,
       productId: widget.productId,
       productName: widget.productName,

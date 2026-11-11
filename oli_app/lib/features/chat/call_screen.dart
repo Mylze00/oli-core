@@ -21,6 +21,12 @@ const _connectionTimeout = Duration(seconds: 30);
 const _reconnectionTimeout = Duration(seconds: 20);
 const _qualityCheckInterval = Duration(seconds: 3);
 const _moveMessage = 'Déplacez-vous vers un endroit mieux couvert.';
+const _iceServersTimeout = Duration(seconds: 4);
+
+/// Relevé temporaire, à retirer une fois le son des appels validé sur de vrais téléphones.
+const _showCallDiagnostics = true;
+const _callDiagnosticsVersion = 'diag-1';
+const _diagnosticsInterval = Duration(seconds: 2);
 
 /// Interlocuteur de l'appel en cours : un seul appel à la fois sur cet appareil.
 class ActiveCall {
@@ -96,6 +102,14 @@ class _CallScreenState extends ConsumerState<CallScreen>
   bool _isClosing = false;
   bool _isCallInitiated = false;
 
+  String _iceStateLabel = 'New';
+  final Set<String> _localCandidateTypes = {};
+  final Set<String> _remoteCandidateTypes = {};
+  int _audioBytesSent = 0;
+  int _audioBytesReceived = 0;
+  bool _hasMicrophoneTrack = false;
+  Timer? _diagnosticsTimer;
+
   late String _displayName;
   BadgeType? _badgeType;
 
@@ -144,6 +158,18 @@ class _CallScreenState extends ConsumerState<CallScreen>
     }
 
     if (!widget.autoAccept) _playRingtone();
+  }
+
+  /// En cas d'échec, l'appel tente quand même une connexion directe.
+  Future<Map<String, dynamic>> _loadIceServers() async {
+    try {
+      final response = await ref.read(dioProvider).get('/calls/ice-servers').timeout(_iceServersTimeout);
+      final servers = response.data is Map ? response.data['iceServers'] : null;
+      if (servers is List && servers.isNotEmpty) return {'iceServers': servers};
+    } catch (e) {
+      debugPrint('Serveurs de connexion non chargés: $e');
+    }
+    return _iceServers;
   }
 
   /// Le nom et la certification viennent du serveur, jamais de l'appelant.
@@ -247,7 +273,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
     await [Permission.microphone, if (widget.isVideoCall) Permission.camera].request();
 
     // Create Peer Connection
-    _peerConnection = await createPeerConnection(_iceServers);
+    _peerConnection = await createPeerConnection(await _loadIceServers());
 
     final peerConnection = _peerConnection!;
 
@@ -262,6 +288,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
     };
 
     peerConnection.onIceCandidate = (RTCIceCandidate candidate) {
+      _recordCandidateType(_localCandidateTypes, candidate.candidate);
       ref.read(socketServiceProvider).emit('webrtc_ice_candidate', {
         'toId': widget.otherId,
         'candidate': {
@@ -307,6 +334,8 @@ class _CallScreenState extends ConsumerState<CallScreen>
       for (final track in _localStream?.getTracks() ?? const <MediaStreamTrack>[]) {
         await _peerConnection?.addTrack(track, _localStream!);
       }
+      _hasMicrophoneTrack = _localStream?.getAudioTracks().isNotEmpty ?? false;
+      _startDiagnostics();
     } catch (e) {
       debugPrint("MediaStream Error: $e");
       if (mounted) {
@@ -374,6 +403,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
     socket.onWebrtcIceCandidate((data) async {
       if (!mounted || !_isFromPeer(data)) return;
       final received = data['candidate'];
+      _recordCandidateType(_remoteCandidateTypes, received['candidate']?.toString());
       final candidate = RTCIceCandidate(received['candidate'], received['sdpMid'], received['sdpMLineIndex']);
 
       // Trop tôt : le candidat sera appliqué après la description distante
@@ -490,8 +520,49 @@ class _CallScreenState extends ConsumerState<CallScreen>
     }
   }
 
+  void _recordCandidateType(Set<String> types, String? candidate) {
+    final type = RegExp(r' typ (\w+)').firstMatch(candidate ?? '')?.group(1);
+    if (type != null && mounted) setState(() => types.add(type));
+  }
+
+  void _startDiagnostics() {
+    if (!_showCallDiagnostics) return;
+    _diagnosticsTimer = Timer.periodic(_diagnosticsInterval, (_) async {
+      final peerConnection = _peerConnection;
+      if (peerConnection == null || !mounted) return;
+      try {
+        var sent = _audioBytesSent;
+        var received = _audioBytesReceived;
+        for (final report in await peerConnection.getStats()) {
+          final kind = report.values['kind'] ?? report.values['mediaType'];
+          if (kind != 'audio') continue;
+          if (report.type == 'outbound-rtp') sent = int.tryParse('${report.values['bytesSent']}') ?? sent;
+          if (report.type == 'inbound-rtp') received = int.tryParse('${report.values['bytesReceived']}') ?? received;
+        }
+        if (mounted) {
+          setState(() {
+            _audioBytesSent = sent;
+            _audioBytesReceived = received;
+          });
+        }
+      } catch (e) {
+        debugPrint('Relevé de connexion impossible: $e');
+      }
+    });
+  }
+
+  String get _diagnosticsText {
+    String kilobytes(int bytes) => '${(bytes / 1024).toStringAsFixed(0)} Ko';
+    String types(Set<String> values) => values.isEmpty ? 'aucun' : values.join('+');
+    return '$_callDiagnosticsVersion · ${widget.isIncoming ? 'reçoit' : 'appelle'} · ICE $_iceStateLabel\n'
+        'local ${types(_localCandidateTypes)} · distant ${types(_remoteCandidateTypes)} · '
+        'micro ${_hasMicrophoneTrack ? 'oui' : 'non'}\n'
+        'envoyé ${kilobytes(_audioBytesSent)} · reçu ${kilobytes(_audioBytesReceived)}';
+  }
+
   void _handleIceConnectionState(RTCIceConnectionState state) {
     if (!mounted || _isClosing) return;
+    setState(() => _iceStateLabel = state.name.replaceFirst('RTCIceConnectionState', ''));
 
     if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
         state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
@@ -600,6 +671,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
     _timeoutTimer?.cancel();
     _connectionTimer?.cancel();
     _qualityTimer?.cancel();
+    _diagnosticsTimer?.cancel();
     _callTimer?.cancel();
     _audioPlayer.stop();
 
@@ -630,6 +702,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
     _timeoutTimer?.cancel();
     _connectionTimer?.cancel();
     _qualityTimer?.cancel();
+    _diagnosticsTimer?.cancel();
     _callTimer?.cancel();
     _pulseController.dispose();
     _slideController.dispose();
@@ -718,6 +791,20 @@ class _CallScreenState extends ConsumerState<CallScreen>
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: RTCVideoView(_localRenderer, mirror: true),
+              ),
+            ),
+
+          if (_showCallDiagnostics)
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: MediaQuery.of(context).padding.bottom + 2,
+              child: IgnorePointer(
+                child: Text(
+                  _diagnosticsText,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white60, fontSize: 10),
+                ),
               ),
             ),
 

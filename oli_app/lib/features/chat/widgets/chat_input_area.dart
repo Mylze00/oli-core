@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
+import 'dart:math' as math;
 
 const _maxRecordingDuration = Duration(minutes: 5);
 const _minRecordingDuration = Duration(milliseconds: 800);
@@ -14,6 +15,9 @@ const _cancelDragDistance = -80.0;
 const _lockDragDistance = -70.0;
 const _recordingSignalEverySeconds = 3;
 const _holdHint = 'Maintenez le bouton pour enregistrer un vocal';
+const _amplitudeInterval = Duration(milliseconds: 100);
+const _waveformBars = 40;
+const _silenceDb = -50.0;
 
 /// Un vocal prêt à être envoyé.
 class VoiceRecording {
@@ -22,11 +26,15 @@ class VoiceRecording {
   final String mimeType;
   final Duration duration;
 
+  /// Volumes de 0 à 100, pour dessiner l'onde du vocal.
+  final List<int> waveform;
+
   const VoiceRecording({
     required this.path,
     required this.fileName,
     required this.mimeType,
     required this.duration,
+    this.waveform = const [],
   });
 }
 
@@ -80,6 +88,8 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
   Timer? _timer;
   Duration _recordDuration = Duration.zero;
   String? _reviewPath;
+  final List<double> _levelsDb = [];
+  StreamSubscription<Amplitude>? _amplitudeSubscription;
 
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
@@ -116,6 +126,7 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
     _controller.dispose();
     _animController.dispose();
     _timer?.cancel();
+    _amplitudeSubscription?.cancel();
     if (_voiceState == _VoiceState.holding || _voiceState == _VoiceState.locked) {
       widget.onRecording?.call(false);
     }
@@ -189,6 +200,11 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
       }
       if (!mounted) return;
 
+      _levelsDb.clear();
+      _amplitudeSubscription = _audioRecorder
+          .onAmplitudeChanged(_amplitudeInterval)
+          .listen((amplitude) => _levelsDb.add(amplitude.current));
+
       HapticFeedback.mediumImpact();
       setState(() {
         _voiceState = _VoiceState.holding;
@@ -227,7 +243,20 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
 
   Duration get _elapsed => _startTime == null ? Duration.zero : DateTime.now().difference(_startTime!);
 
+  /// Réduit les volumes relevés à quelques barres, de 0 (silence) à 100.
+  List<int> _buildWaveform() {
+    if (_levelsDb.isEmpty) return const [];
+    return List.generate(_waveformBars, (i) {
+      final start = (i * _levelsDb.length / _waveformBars).floor();
+      final end = math.max(start + 1, ((i + 1) * _levelsDb.length / _waveformBars).floor());
+      final peak = _levelsDb.sublist(start, math.min(end, _levelsDb.length)).reduce(math.max);
+      return (((peak - _silenceDb) / -_silenceDb).clamp(0.05, 1.0) * 100).round();
+    });
+  }
+
   void _resetRecordingUi() {
+    _amplitudeSubscription?.cancel();
+    _amplitudeSubscription = null;
     _timer?.cancel();
     _animController.reverse();
     widget.onRecording?.call(false);
@@ -241,6 +270,7 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
       fileName: 'audio_message.${format.extension}',
       mimeType: format.mimeType,
       duration: duration,
+      waveform: _buildWaveform(),
     ));
   }
 
