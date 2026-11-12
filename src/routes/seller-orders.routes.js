@@ -78,7 +78,7 @@ router.get('/', requireAuth, requireSeller, async (req, res) => {
             SELECT DISTINCT o.id, o.user_id, o.status, o.payment_status,
                    o.total_amount, o.delivery_address, o.delivery_fee,
                    o.delivery_method_id, o.pickup_code,
-                   o.payment_method, o.payment_reference, o.paid_at,
+                   o.payment_method, NULL::text AS payment_reference, NULL::timestamptz AS paid_at,
                    o.tracking_number, o.carrier, o.estimated_delivery,
                    o.shipped_at, o.delivered_at, o.created_at, o.updated_at,
                    u.name as buyer_name, u.phone as buyer_phone,

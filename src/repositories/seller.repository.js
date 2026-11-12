@@ -148,8 +148,10 @@ async function getSellerOrders(sellerId, status = null, limit = 50, offset = 0) 
                 o.delivery_fee,
                 o.delivery_method_id,
                 o.payment_method,
-                o.payment_reference,
-                o.paid_at,
+                -- payment_reference / paid_at n'existent pas sur orders : renvoyés vides
+                -- (les lire faisait échouer la requête → « Erreur réseau » côté vendeur)
+                NULL::text AS payment_reference,
+                NULL::timestamptz AS paid_at,
                 o.pickup_code,
                 o.tracking_number,
                 o.carrier,
