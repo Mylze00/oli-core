@@ -475,6 +475,8 @@ class TopRankingGrid extends StatelessWidget {
   final double childAspectRatio;
   /// Index global du premier produit de ce chunk dans la liste totale du classement
   final int startIndex;
+  /// Produits de grands magasins intercalés dans la grille : ils portent un badge.
+  final bool Function(Product product)? isStoreProduct;
 
   static const int columns = 2;
   static const double gutter = 8;
@@ -486,6 +488,7 @@ class TopRankingGrid extends StatelessWidget {
     this.crossAxisCount = 2,
     this.childAspectRatio = 0.7,
     this.startIndex = 0,
+    this.isStoreProduct,
   });
 
   @override
@@ -507,7 +510,10 @@ class TopRankingGrid extends StatelessWidget {
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             if (products.isEmpty) return Container(color: Colors.grey[900]);
-            return TopRankingProductCard(product: products[index]);
+            return TopRankingProductCard(
+              product: products[index],
+              storeBadge: isStoreProduct?.call(products[index]) ?? false,
+            );
           },
           childCount: products.isEmpty ? columns : products.length,
         ),
@@ -521,7 +527,10 @@ class TopRankingGrid extends StatelessWidget {
 class TopRankingProductCard extends ConsumerWidget {
   final Product product;
 
-  const TopRankingProductCard({super.key, required this.product});
+  /// Badge « Grand magasin » (produit certifié intercalé dans la grille du marché).
+  final bool storeBadge;
+
+  const TopRankingProductCard({super.key, required this.product, this.storeBadge = false});
 
   static const Color _priceBlue = Color(0xFF64B5F6); // bleu clair (un ton plus clair)
 
@@ -553,24 +562,13 @@ class TopRankingProductCard extends ConsumerWidget {
             // Visuel carré
             AspectRatio(
               aspectRatio: 1,
-              child: product.images.isNotEmpty
-                  ? CachedNetworkImage(
-                      cacheManager: OliImageCache.instance,
-                      imageUrl: CloudinaryHelper.card(product.images.first),
-                      fit: BoxFit.cover,
-                      memCacheWidth: 540, // décodage à la résolution servie (540 px)
-                      placeholder: (_, __) => Container(
-                        color: isDark ? Colors.grey[900] : Colors.grey[200],
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        color: isDark ? Colors.grey[900] : Colors.grey[200],
-                        child: const Icon(Icons.broken_image, color: Colors.grey),
-                      ),
-                    )
-                  : Container(
-                      color: isDark ? Colors.grey[900] : Colors.grey[200],
-                      child: const Icon(Icons.image, color: Colors.grey),
-                    ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildImage(isDark),
+                  if (storeBadge) const Positioned(top: 6, left: 6, child: _StoreBadge()),
+                ],
+              ),
             ),
             // Bloc texte (hauteur fixe)
             SizedBox(
@@ -609,6 +607,53 @@ class TopRankingProductCard extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildImage(bool isDark) {
+    return product.images.isNotEmpty
+                  ? CachedNetworkImage(
+                      cacheManager: OliImageCache.instance,
+                      imageUrl: CloudinaryHelper.card(product.images.first),
+                      fit: BoxFit.cover,
+                      memCacheWidth: 540, // décodage à la résolution servie (540 px)
+                      placeholder: (_, __) => Container(
+                        color: isDark ? Colors.grey[900] : Colors.grey[200],
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        color: isDark ? Colors.grey[900] : Colors.grey[200],
+                        child: const Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+                    )
+                  : Container(
+                      color: isDark ? Colors.grey[900] : Colors.grey[200],
+                      child: const Icon(Icons.image, color: Colors.grey),
+                    );
+  }
+
+}
+
+/// Étiquette des produits de grands magasins intercalés dans la grille du marché.
+class _StoreBadge extends StatelessWidget {
+  const _StoreBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16A34A),
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 4)],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.storefront_rounded, color: Colors.white, size: 11),
+          SizedBox(width: 3),
+          Text('Grand magasin', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+        ],
       ),
     );
   }

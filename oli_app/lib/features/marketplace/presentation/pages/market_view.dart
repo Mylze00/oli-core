@@ -130,6 +130,49 @@ class _MarketViewState extends ConsumerState<MarketView> {
     return [...head, ...tail];
   }
 
+  /// Nombre de produits ordinaires avant chaque produit de grand magasin.
+  static const _storeEvery = 5;
+
+  List<Product> _cachedStores = [];
+  String _lastStoreKey = '';
+
+  /// Produits des grands magasins qui respectent la recherche et la catégorie choisies,
+  /// mélangés une fois (ordre stable entre deux affichages).
+  List<Product> _storeProductsFor(List<Product> stores) {
+    final key = '$_searchQuery|$_selectedCategory|${stores.map((p) => p.id).join(',')}';
+    if (key == _lastStoreKey) return _cachedStores;
+
+    var list = stores;
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      list = list
+          .where((p) => p.name.toLowerCase().contains(query) || p.seller.toLowerCase().contains(query))
+          .toList();
+    }
+    final categoryKey = _categories[_selectedCategory] ?? '';
+    if (_selectedCategory != 'Tout' && categoryKey.isNotEmpty) {
+      list = list.where((p) => p.category?.toLowerCase() == categoryKey.toLowerCase()).toList();
+    }
+    _cachedStores = List<Product>.from(list)..shuffle(Random());
+    _lastStoreKey = key;
+    return _cachedStores;
+  }
+
+  /// Après chaque série de [_storeEvery] produits ordinaires, un produit de grand magasin
+  /// (sans répétition), pour varier la sélection.
+  List<Product> _interleaveStores(List<Product> normal, List<Product> stores) {
+    if (stores.isEmpty) return normal;
+    final normalIds = normal.map((p) => p.id).toSet();
+    final queue = stores.where((p) => !normalIds.contains(p.id)).toList();
+    final feed = <Product>[];
+    var next = 0;
+    for (var i = 0; i < normal.length; i++) {
+      feed.add(normal[i]);
+      if ((i + 1) % _storeEvery == 0 && next < queue.length) feed.add(queue[next++]);
+    }
+    return feed;
+  }
+
   void _navigateToProduct(Product product) {
     Navigator.push(
       context,
@@ -184,14 +227,18 @@ class _MarketViewState extends ConsumerState<MarketView> {
         // ── DATA ──
         data: (allProducts) {
           final filtered = _filterProducts(allProducts);
+          final storeProducts = _storeProductsFor(verifiedShopsProducts);
+          final storeIds = storeProducts.map((p) => p.id).toSet();
+          bool isStore(Product p) => storeIds.contains(p.id);
+          final feed = _interleaveStores(filtered, storeProducts);
 
           // Sections — filtered est déjà mélangé et diversifié
           // Affichage toujours par paires : un produit isolé en fin de liste n'est pas affiché
           List<Product> evenOnly(List<Product> list) =>
               list.length.isEven ? list : list.sublist(0, list.length - 1);
 
-          final recentProducts = evenOnly(filtered.take(8).toList());
-          final allGridProducts = filtered.length > 8 ? evenOnly(filtered.skip(8).toList()) : <Product>[];
+          final recentProducts = evenOnly(feed.take(8).toList());
+          final allGridProducts = feed.length > 8 ? evenOnly(feed.skip(8).toList()) : <Product>[];
           // 4 produits, puis À la une (Spotlight), puis le reste
           final gridBefore = allGridProducts.take(4).toList();
           final gridAfterA = allGridProducts.length > 4 ? allGridProducts.skip(4).toList() : <Product>[];
@@ -222,59 +269,13 @@ class _MarketViewState extends ConsumerState<MarketView> {
                     child: VerifiedShopProductsSection(products: verifiedShopsProducts),
                   ),
 
-                // ── 5. COMPTEUR ──
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${filtered.length} produit${filtered.length > 1 ? 's' : ''}',
-                          style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 12),
-                        ),
-                        if (_searchQuery.isNotEmpty || _selectedCategory != "Tout")
-                          GestureDetector(
-                            onTap: () => setState(() {
-                              _searchQuery = "";
-                              _searchCtrl.clear();
-                              _selectedCategory = "Tout";
-                            }),
-                            child: Row(
-                              children: [
-                                Icon(Icons.clear, size: 14, color: Colors.blueAccent),
-                                const SizedBox(width: 4),
-                                const Text('Effacer filtres', style: TextStyle(color: Colors.blueAccent, fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // ── 4. SECTION RÉCENTS (carousel horizontal) ──
-                if (recentProducts.isNotEmpty) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Row(
-                        children: [
-                          Container(width: 3, height: 18, decoration: BoxDecoration(color: Colors.blueAccent, borderRadius: BorderRadius.circular(2))),
-                          const SizedBox(width: 8),
-                          Text('Récemment ajoutés', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(width: 8),
-                          Text('🔥', style: TextStyle(fontSize: 14)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  TopRankingGrid(products: recentProducts, startIndex: 0),
-                ],
+                // ── 5. PREMIERS PRODUITS (sans titre ni compteur) ──
+                if (recentProducts.isNotEmpty)
+                  TopRankingGrid(products: recentProducts, startIndex: 0, isStoreProduct: isStore),
 
                 // ── 6a. GRILLE PRODUITS (6 premiers) ──
                 if (gridBefore.isNotEmpty)
-                  TopRankingGrid(products: gridBefore, startIndex: 0),
+                  TopRankingGrid(products: gridBefore, startIndex: 0, isStoreProduct: isStore),
 
                 // ── 7. SPOTLIGHT CAROUSEL ── (produits non encore affichés)
                 if (filtered.length >= 4)
@@ -284,12 +285,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
                 // ── 6b. GRILLE (6 produits après Spotlight → total = 9) ──
                 if (gridAfterA.isNotEmpty)
-                  TopRankingGrid(products: gridAfterA, startIndex: 0),
+                  TopRankingGrid(products: gridAfterA, startIndex: 0, isStoreProduct: isStore),
 
 
                 // ── 6c. GRILLE (reste) ──
                 if (gridAfterB.isNotEmpty)
-                  TopRankingGrid(products: gridAfterB, startIndex: 0),
+                  TopRankingGrid(products: gridAfterB, startIndex: 0, isStoreProduct: isStore),
 
                 // ── EMPTY STATE ──
                 if (filtered.isEmpty)
