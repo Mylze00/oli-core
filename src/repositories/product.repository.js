@@ -276,6 +276,9 @@ class ProductRepository {
         } else {
             query += ` ORDER BY p.created_at DESC`;
         }
+        // Départage stable : des produits créés à la même seconde (imports en lot) gardent
+        // le même ordre d'une page à l'autre → pas de doublon ni de produit sauté
+        query += `, p.id DESC`;
 
         query += ` LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
         params.push(parseInt(limit), parseInt(offset));

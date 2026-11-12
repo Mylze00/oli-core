@@ -40,7 +40,7 @@ class MarketViewState extends ConsumerState<MarketView> {
   String _lastFilterKey = ''; // clé = "searchQuery|category"
   List<String> _lastProductIds = [];
 
-  /// Défilement continu : la page suivante (50 produits) se charge près du bas.
+  /// Défilement continu : le lot suivant (10 produits) se charge près du bas.
   final ScrollController _scroll = ScrollController();
   bool _loadingMore = false;
 
@@ -94,7 +94,8 @@ class MarketViewState extends ConsumerState<MarketView> {
 
   void _onScroll() {
     if (!_scroll.hasClients || _loadingMore) return;
-    if (_scroll.position.extentAfter > 1200) return;
+    // Lot suivant demandé un peu avant la fin, pour une continuité sans attente
+    if (_scroll.position.extentAfter > 1600) return;
     final notifier = ref.read(marketProductsProvider.notifier);
     if (!notifier.hasMore) return;
     setState(() => _loadingMore = true);
@@ -242,7 +243,7 @@ class MarketViewState extends ConsumerState<MarketView> {
   static const _headCount = 12;
 
   /// Taille des tranches équilibrées après « À la une » (fixe : l'ordre déjà vu ne bouge pas).
-  static const _chunkSize = 24;
+  static const _chunkSize = 20;
 
   /// Ordonne un bloc pour que les deux colonnes de la grille en quinconce finissent au même
   /// niveau : chaque paire de cartes hautes suit le motif court, haute, haute, court
@@ -290,7 +291,8 @@ class MarketViewState extends ConsumerState<MarketView> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
-    final backgroundColor = isDark ? Colors.black : Colors.grey[400];
+    // Mode clair : gris éclairci de 50 % (grey[400] #BDBDBD → #DEDEDE)
+    final backgroundColor = isDark ? Colors.black : const Color(0xFFDEDEDE);
     final textColor = isDark ? Colors.white : Colors.black;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final productsAsync = ref.watch(marketProductsProvider);

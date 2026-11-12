@@ -56,6 +56,11 @@ List<Product> _pickSpotlight(List<Product> all, {int max = 10}) {
   return result;
 }
 
+bool _isDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
+
+/// Texte du carrousel : blanc en mode sombre, presque noir en mode clair.
+Color _textColor(BuildContext context) => _isDark(context) ? Colors.white : const Color(0xFF111418);
+
 class MarketSpotlightCarousel extends ConsumerStatefulWidget {
   final List<Product> products;
   const MarketSpotlightCarousel({super.key, required this.products});
@@ -97,10 +102,10 @@ class _MarketSpotlightCarouselState
                 ),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'À la une',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: _textColor(context),
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
@@ -232,8 +237,8 @@ class _SpotlightCircleItem extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: _textColor(context),
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -252,7 +257,8 @@ class _SpotlightCircleItem extends StatelessWidget {
             child: Text(
               formattedPrice,
               style: TextStyle(
-                color: borderColor,
+                // Couleurs pastel trop pâles sur fond clair : version foncée en mode clair
+                color: _isDark(context) ? borderColor : Color.lerp(borderColor, Colors.black, 0.4),
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),
@@ -265,14 +271,14 @@ class _SpotlightCircleItem extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.location_on_rounded, size: 10, color: Colors.white38),
+              Icon(Icons.location_on_rounded, size: 10, color: _textColor(context).withValues(alpha: 0.45)),
               const SizedBox(width: 2),
               Flexible(
                 child: Text(
                   location,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white38, fontSize: 9.5),
+                  style: TextStyle(color: _textColor(context).withValues(alpha: 0.55), fontSize: 9.5),
                 ),
               ),
             ],

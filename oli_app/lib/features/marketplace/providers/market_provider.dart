@@ -22,7 +22,9 @@ class MarketState {
 class MarketProductsNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   int _offset = 0;
   bool _hasMore = true;
-  static const int _pageSize = 50; // ← Limité à 50 pour réduire la RAM
+  /// Premier chargement : 20 produits (deux lots), puis des lots de 10 pendant le défilement.
+  static const int _firstPageSize = 20;
+  static const int _pageSize = 10;
 
   /// [sellerId] : liste limitée à un vendeur (profil vendeur, fournisseur séparé).
   MarketProductsNotifier({String? sellerId}) : super(const AsyncValue.loading()) {
@@ -68,7 +70,8 @@ class MarketProductsNotifier extends StateNotifier<AsyncValue<List<Product>>> {
       if (search != null && search.isNotEmpty) queryParams['search'] = search;
       if (category != null && category.isNotEmpty) queryParams['category'] = category;
       if (sellerId != null && sellerId.isNotEmpty) queryParams['seller_id'] = sellerId;
-      queryParams['limit'] = '$_pageSize';
+      final limit = append ? _pageSize : _firstPageSize;
+      queryParams['limit'] = '$limit';
       queryParams['offset'] = '$_offset';
 
       final uri = Uri.parse('${ApiConfig.baseUrl}/products').replace(queryParameters: queryParams);
@@ -98,15 +101,19 @@ class MarketProductsNotifier extends StateNotifier<AsyncValue<List<Product>>> {
         }
 
         _offset += newProducts.length;
-        
+
         if (append && state.hasValue) {
-          state = AsyncValue.data([...state.value!, ...newProducts]);
+          // Sans doublon : un produit déjà affiché n'est jamais ajouté une seconde fois
+          final seen = state.value!.map((p) => p.id).toSet();
+          final fresh = newProducts.where((p) => seen.add(p.id)).toList();
+          state = AsyncValue.data([...state.value!, ...fresh]);
         } else {
-          state = AsyncValue.data(newProducts);
+          final seen = <String>{};
+          state = AsyncValue.data(newProducts.where((p) => seen.add(p.id)).toList());
         }
 
         // Si on a reçu moins que demandé, il n'y a plus de produits
-        if (newProducts.length < _pageSize) {
+        if (newProducts.length < limit) {
           _hasMore = false;
         }
       } else {

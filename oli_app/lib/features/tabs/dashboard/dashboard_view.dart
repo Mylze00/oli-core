@@ -392,7 +392,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
-    final backgroundColor = isDark ? Colors.black : OliLightColors.background;
+    // Accueil en mode clair : gris renforcé de 15 % (#F5F6F8 → #D0D1D3), propre à cette page
+    final backgroundColor = isDark ? Colors.black : const Color(0xFFD0D1D3);
     final textColor = isDark ? Colors.white : Colors.black87;
 
     // Providers de données
