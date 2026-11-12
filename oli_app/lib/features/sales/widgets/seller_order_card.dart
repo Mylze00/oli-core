@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/oli_surface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -28,8 +29,9 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
+    final surface = OliSurface.of(context);
+    final cardColor = surface.card;
+    final textColor = surface.text;
     ref.watch(exchangeRateProvider);
     final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
 
@@ -37,9 +39,12 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
         color: cardColor,
-        borderRadius: BorderRadius.circular(12),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: surface.border),
+        ),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () {
             Navigator.push(
@@ -147,25 +152,25 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [Colors.orange.shade100, Colors.amber.shade50]),
+                      color: OliSurface.of(context).tile,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.shade400, width: 2),
+                      border: Border.all(color: OliSurface.of(context).accent.withValues(alpha: 0.4), width: 2),
                     ),
                     child: Column(
                       children: [
                         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.key, color: Colors.orange.shade800, size: 20),
+                          Icon(Icons.key, color: OliSurface.of(context).accent, size: 20),
                           const SizedBox(width: 8),
-                          Text('CODE POUR LE LIVREUR', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade800, letterSpacing: 1)),
+                          Text('CODE POUR LE LIVREUR', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: OliSurface.of(context).accent, letterSpacing: 1)),
                         ]),
                         const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade300)),
-                          child: Text(order.pickupCode!, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6, color: Colors.orange.shade900, fontFamily: 'monospace')),
+                          decoration: BoxDecoration(color: OliSurface.of(context).card, borderRadius: BorderRadius.circular(10), border: Border.all(color: OliSurface.of(context).accent.withValues(alpha: 0.4))),
+                          child: Text(order.pickupCode!, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6, color: OliSurface.of(context).accent, fontFamily: 'monospace')),
                         ),
                         const SizedBox(height: 6),
-                        Text('Communiquez ce code au livreur', style: TextStyle(fontSize: 11, color: Colors.orange.shade700)),
+                        Text('Communiquez ce code au livreur', style: TextStyle(fontSize: 11, color: OliSurface.of(context).accent)),
                       ],
                     ),
                   ),
@@ -329,20 +334,20 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
       buttons.add(Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.orange.shade50,
+          color: OliSurface.of(context).tile,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orange.shade300),
+          border: Border.all(color: OliSurface.of(context).accent.withValues(alpha: 0.4)),
         ),
         child: Column(
           children: [
             Row(
               children: [
-                Icon(Icons.key, color: Colors.orange.shade700, size: 20),
+                Icon(Icons.key, color: OliSurface.of(context).accent, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Code de retrait pour le livreur',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.orange.shade800),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OliSurface.of(context).accent),
                   ),
                 ),
               ],
@@ -353,7 +358,7 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.orange.shade200),
+                border: Border.all(color: OliSurface.of(context).border),
               ),
               child: Text(
                 order.pickupCode!,
@@ -361,7 +366,7 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 6,
-                  color: Colors.orange.shade800,
+                  color: OliSurface.of(context).accent,
                   fontFamily: 'monospace',
                 ),
               ),
@@ -369,7 +374,7 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
             const SizedBox(height: 6),
             Text(
               'Communiquez ce code au livreur quand il arrive',
-              style: TextStyle(fontSize: 11, color: Colors.orange.shade600),
+              style: TextStyle(fontSize: 11, color: OliSurface.of(context).textSecondary),
             ),
           ],
         ),
@@ -697,55 +702,28 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
 
   // ------  Helper widgets & methods  ------
 
+  /// Statut en pastille neutre : point coloré (bleu en cours, vert livrée, rouge annulée).
   Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-
+    final surface = OliSurface.of(context);
+    final Color dot;
     switch (status) {
       case 'paid':
-        bgColor = Colors.orange.shade100;
-        textColor = Colors.orange.shade800;
-        break;
       case 'processing':
-        bgColor = Colors.blue.shade100;
-        textColor = Colors.blue.shade800;
-        break;
       case 'ready':
-        bgColor = Colors.teal.shade100;
-        textColor = Colors.teal.shade800;
-        break;
       case 'shipped':
-        bgColor = Colors.purple.shade100;
-        textColor = Colors.purple.shade800;
+        dot = surface.accent;
         break;
       case 'delivered':
-        bgColor = Colors.green.shade100;
-        textColor = Colors.green.shade800;
+        dot = surface.success;
         break;
       case 'cancelled':
-        bgColor = Colors.red.shade100;
-        textColor = Colors.red.shade800;
+      case 'refunded':
+        dot = surface.danger;
         break;
       default:
-        bgColor = Colors.grey.shade100;
-        textColor = Colors.grey.shade800;
+        dot = surface.textSecondary;
     }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        SellerOrder.statusLabels[status] ?? status,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
-      ),
-    );
+    return OliStatusPill(label: SellerOrder.statusLabels[status] ?? status, dot: dot);
   }
 
   Widget _buildItemsPreview(ExchangeRateNotifier exchangeNotifier) {

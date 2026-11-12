@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/oli_surface.dart';
 import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/cart_provider.dart';
@@ -6,11 +7,15 @@ import '../../checkout/screens/checkout_page.dart';
 import '../../../providers/exchange_rate_provider.dart';
 
 /// Page Panier Premium — Dark Mode avec groupement par vendeur
+/// Couleurs du panier (kit commun), fixées au début de chaque construction de la page.
+late OliSurface _c;
+
 class CartPage extends ConsumerWidget {
   const CartPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    _c = OliSurface.of(context);
     final cartItems = ref.watch(cartProvider);
     final groupedCart = ref.watch(groupedCartProvider);
     final selectedTotal = ref.watch(selectedCartTotalProvider);
@@ -18,24 +23,24 @@ class CartPage extends ConsumerWidget {
     final allSelected = cartItems.isNotEmpty && cartItems.every((item) => item.isSelected);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
+      backgroundColor: _c.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0D0D0D),
+        backgroundColor: _c.background,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
         title: Row(
           children: [
-            const Text(
+            Text(
               'Mon Panier',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _c.text),
             ),
             const SizedBox(width: 10),
             if (cartItems.isNotEmpty)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFEF4444)]),
+                  color: OliSurface.oliBlue,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -51,11 +56,11 @@ class CartPage extends ConsumerWidget {
               onPressed: () => ref.read(cartProvider.notifier).toggleAllSelection(),
               child: Text(
                 allSelected ? 'Désélectionner' : 'Tout',
-                style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w600),
+                style: const TextStyle(color: OliSurface.oliBlue, fontWeight: FontWeight.w600),
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444)),
+              icon: Icon(Icons.delete_sweep_rounded, color: _c.danger),
               onPressed: () => _confirmClearCart(context, ref),
             ),
           ],
@@ -93,20 +98,20 @@ class CartPage extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1A2E).withOpacity(0.6),
+              color: _c.card.withOpacity(0.6),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.shopping_cart_outlined, size: 64, color: Color(0xFF4A4A6A)),
+            child: Icon(Icons.shopping_cart_outlined, size: 64, color: _c.textSecondary),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Votre panier est vide',
-            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(color: _c.text, fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             'Explorez le marché et trouvez\ndes articles qui vous plaisent',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.5),
+            style: TextStyle(color: _c.textSecondary, fontSize: 14, height: 1.5),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
@@ -115,8 +120,8 @@ class CartPage extends ConsumerWidget {
             icon: const Icon(Icons.storefront_rounded, size: 20),
             label: const Text('Explorer le Marché'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF59E0B),
-              foregroundColor: Colors.black,
+              backgroundColor: OliSurface.oliBlue,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
@@ -140,10 +145,10 @@ class CartPage extends ConsumerWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: _c.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: allShopSelected ? const Color(0xFFF59E0B).withOpacity(0.3) : Colors.transparent,
+          color: allShopSelected ? OliSurface.oliBlue.withOpacity(0.3) : Colors.transparent,
         ),
       ),
       child: Column(
@@ -157,8 +162,8 @@ class CartPage extends ConsumerWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF16213E),
-                    const Color(0xFF1A1A2E).withOpacity(0.5),
+                    _c.card,
+                    _c.card.withOpacity(0.5),
                   ],
                 ),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -171,19 +176,19 @@ class CartPage extends ConsumerWidget {
                     child: Checkbox(
                       value: allShopSelected,
                       onChanged: (_) => ref.read(cartProvider.notifier).toggleShopSelection(sellerId),
-                      activeColor: const Color(0xFFF59E0B),
+                      activeColor: OliSurface.oliBlue,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                      side: const BorderSide(color: Color(0xFF4A4A6A)),
+                      side: BorderSide(color: _c.textSecondary),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withOpacity(0.15),
+                      color: OliSurface.oliBlue.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.store_rounded, color: Color(0xFFF59E0B), size: 18),
+                    child: const Icon(Icons.store_rounded, color: OliSurface.oliBlue, size: 18),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -192,8 +197,8 @@ class CartPage extends ConsumerWidget {
                         Flexible(
                           child: Text(
                             shopItems.first.sellerName ?? 'Boutique',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: _c.text,
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
                             ),
@@ -224,7 +229,7 @@ class CartPage extends ConsumerWidget {
                   if (shopSubtotal > 0)
                     Text(
                       exchangeNotifier.formatProductPrice(shopSubtotal),
-                      style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 14),
+                      style: const TextStyle(color: OliSurface.oliBlue, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                 ],
               ),
@@ -236,15 +241,15 @@ class CartPage extends ConsumerWidget {
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D0D1A),
+                color: _c.tile,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2A2A4A), width: 0.5),
+                border: Border.all(color: _c.border, width: 0.5),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.local_shipping_rounded, color: Color(0xFF6B7280), size: 16),
+                  Icon(Icons.local_shipping_rounded, color: _c.textSecondary, size: 16),
                   const SizedBox(width: 8),
-                  const Text('Livraison:', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12)),
+                  Text('Livraison:', style: TextStyle(color: _c.textSecondary, fontSize: 12)),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Row(
@@ -309,7 +314,7 @@ class CartPage extends ConsumerWidget {
             color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isSelected ? color.withOpacity(0.5) : const Color(0xFF2A2A4A),
+              color: isSelected ? color.withOpacity(0.5) : _c.border,
               width: isSelected ? 1.5 : 0.5,
             ),
           ),
@@ -317,13 +322,13 @@ class CartPage extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: isSelected ? color : const Color(0xFF6B7280), size: 14),
+              Icon(icon, color: isSelected ? color : _c.textSecondary, size: 14),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
                   isFree ? '$label (Gratuit)' : label,
                   style: TextStyle(
-                    color: isSelected ? color : const Color(0xFF6B7280),
+                    color: isSelected ? color : _c.textSecondary,
                     fontSize: 10,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
@@ -367,7 +372,7 @@ class CartPage extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: const Color(0xFF2A2A4A).withOpacity(0.4), width: 0.5)),
+          border: Border(top: BorderSide(color: _c.border.withOpacity(0.4), width: 0.5)),
         ),
         child: Row(
           children: [
@@ -378,9 +383,9 @@ class CartPage extends ConsumerWidget {
               child: Checkbox(
                 value: item.isSelected,
                 onChanged: (_) => ref.read(cartProvider.notifier).toggleItemSelection(item.productId),
-                activeColor: const Color(0xFF3B82F6),
+                activeColor: _c.accent,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                side: const BorderSide(color: Color(0xFF4A4A6A)),
+                side: BorderSide(color: _c.textSecondary),
               ),
             ),
             const SizedBox(width: 10),
@@ -390,15 +395,15 @@ class CartPage extends ConsumerWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: const Color(0xFF16213E),
+                color: _c.card,
                 borderRadius: BorderRadius.circular(12),
                 image: item.imageUrl != null
                     ? DecorationImage(image: NetworkImage(item.imageUrl!), fit: BoxFit.cover)
                     : null,
-                border: Border.all(color: const Color(0xFF2A2A4A), width: 0.5),
+                border: Border.all(color: _c.border, width: 0.5),
               ),
               child: item.imageUrl == null
-                  ? const Icon(Icons.image_rounded, color: Color(0xFF4A4A6A), size: 32)
+                  ? Icon(Icons.image_rounded, color: _c.textSecondary, size: 32)
                   : null,
             ),
             const SizedBox(width: 12),
@@ -411,7 +416,7 @@ class CartPage extends ConsumerWidget {
                   Text(
                     item.productName,
                     style: TextStyle(
-                      color: item.isSelected ? Colors.white : const Color(0xFF6B7280),
+                      color: item.isSelected ? _c.text : _c.textSecondary,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                     ),
@@ -422,7 +427,7 @@ class CartPage extends ConsumerWidget {
                   Text(
                     exchangeNotifier.formatProductPrice(item.price),
                     style: TextStyle(
-                      color: item.isSelected ? const Color(0xFFF59E0B) : const Color(0xFF4A4A6A),
+                      color: item.isSelected ? OliSurface.oliBlue : _c.textSecondary,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -439,7 +444,7 @@ class CartPage extends ConsumerWidget {
                       Text(
                         '${item.deliveryMethod} · ${item.deliveryPrice == 0 ? "Gratuit" : exchangeNotifier.formatProductPrice(item.deliveryPrice)}',
                         style: TextStyle(
-                          color: item.isSelected ? const Color(0xFF6B7280) : const Color(0xFF3A3A4A),
+                          color: item.isSelected ? _c.textSecondary : _c.border,
                           fontSize: 11,
                         ),
                       ),
@@ -452,15 +457,15 @@ class CartPage extends ConsumerWidget {
             // Quantity stepper
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF0D0D1A),
+                color: _c.tile,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF2A2A4A), width: 0.5),
+                border: Border.all(color: _c.border, width: 0.5),
               ),
               child: Column(
                 children: [
                   _buildStepperBtn(
                     icon: Icons.add_rounded,
-                    color: item.isSelected ? const Color(0xFF3B82F6) : const Color(0xFF4A4A6A),
+                    color: item.isSelected ? _c.accent : _c.textSecondary,
                     onTap: () => ref.read(cartProvider.notifier).updateQuantity(item.cartKey, item.quantity + 1),
                   ),
                   Container(
@@ -468,7 +473,7 @@ class CartPage extends ConsumerWidget {
                     child: Text(
                       '${item.quantity}',
                       style: TextStyle(
-                        color: item.isSelected ? Colors.white : const Color(0xFF6B7280),
+                        color: item.isSelected ? _c.text : _c.textSecondary,
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
                       ),
@@ -477,8 +482,8 @@ class CartPage extends ConsumerWidget {
                   _buildStepperBtn(
                     icon: item.quantity > 1 ? Icons.remove_rounded : Icons.delete_outline_rounded,
                     color: item.isSelected
-                        ? (item.quantity > 1 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444))
-                        : const Color(0xFF4A4A6A),
+                        ? (item.quantity > 1 ? OliSurface.oliBlue : _c.danger)
+                        : _c.textSecondary,
                     onTap: () => ref.read(cartProvider.notifier).updateQuantity(item.cartKey, item.quantity - 1),
                   ),
                 ],
@@ -515,9 +520,9 @@ class CartPage extends ConsumerWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E).withOpacity(0.95),
+            color: _c.card.withOpacity(0.95),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: const Border(top: BorderSide(color: Color(0xFF2A2A4A), width: 0.5)),
+            border: Border(top: BorderSide(color: _c.border, width: 0.5)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.5),
@@ -539,26 +544,26 @@ class CartPage extends ConsumerWidget {
                       children: [
                         Text(
                           '$totalQuantity article${totalQuantity > 1 ? 's' : ''}',
-                          style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                          style: TextStyle(color: _c.textSecondary, fontSize: 13),
                         ),
                         if (totalDelivery > 0)
                           Text(
                             'Livraison: ${exchangeNotifier.formatProductPrice(totalDelivery)}',
-                            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+                            style: TextStyle(color: _c.textSecondary, fontSize: 11),
                           ),
                       ],
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
+                        Text(
                           'Total',
-                          style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11),
+                          style: TextStyle(color: _c.textSecondary, fontSize: 11),
                         ),
                         Text(
                           exchangeNotifier.formatProductPrice(selectedTotal),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: _c.text,
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
                           ),
@@ -579,7 +584,7 @@ class CartPage extends ConsumerWidget {
                         : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
-                      disabledBackgroundColor: const Color(0xFF2A2A4A),
+                      disabledBackgroundColor: _c.border,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       elevation: 0,
@@ -587,9 +592,9 @@ class CartPage extends ConsumerWidget {
                     child: Ink(
                       decoration: BoxDecoration(
                         gradient: hasSelectedItems
-                            ? const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFEF4444)])
+                            ? const LinearGradient(colors: [OliSurface.oliBlue, Color(0xFF3B8EF0)])
                             : null,
-                        color: hasSelectedItems ? null : const Color(0xFF2A2A4A),
+                        color: hasSelectedItems ? null : _c.border,
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Container(
@@ -599,7 +604,7 @@ class CartPage extends ConsumerWidget {
                           children: [
                             Icon(
                               hasSelectedItems ? Icons.shopping_bag_rounded : Icons.touch_app_rounded,
-                              color: hasSelectedItems ? Colors.white : const Color(0xFF6B7280),
+                              color: hasSelectedItems ? _c.text : _c.textSecondary,
                               size: 20,
                             ),
                             const SizedBox(width: 10),
@@ -608,7 +613,7 @@ class CartPage extends ConsumerWidget {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: hasSelectedItems ? Colors.white : const Color(0xFF6B7280),
+                                color: hasSelectedItems ? _c.text : _c.textSecondary,
                               ),
                             ),
                           ],
@@ -632,17 +637,17 @@ class CartPage extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: _c.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Vider le panier ?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text(
+        title: Text('Vider le panier ?', style: TextStyle(color: _c.text, fontWeight: FontWeight.bold)),
+        content: Text(
           'Tous les articles seront supprimés de votre panier.',
-          style: TextStyle(color: Color(0xFF9CA3AF)),
+          style: TextStyle(color: _c.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280))),
+            child: Text('Annuler', style: TextStyle(color: _c.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -650,7 +655,7 @@ class CartPage extends ConsumerWidget {
               Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: _c.danger,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Vider', style: TextStyle(color: Colors.white)),

@@ -1,3 +1,4 @@
+import '../../../widgets/cart_added_toast.dart';
 import '../../../core/theme/oli_glass.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -121,13 +122,7 @@ class _ProductBottomSheetState extends ConsumerState<ProductBottomSheet> {
 
       cart.addItem(_buildCartItem(product));
       navigator.pop();
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Produit ajouté au panier !'),
-          backgroundColor: Color(0xFF00C853),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      CartAddedToast.show(navigator.context);
     });
   }
 

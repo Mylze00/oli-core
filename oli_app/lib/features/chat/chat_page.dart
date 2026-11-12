@@ -1,3 +1,4 @@
+import '../../widgets/cart_added_toast.dart';
 import '../../core/theme/oli_glass.dart'; // verre bleu des feuilles d'envoi
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -249,21 +250,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                   );
                   ref.read(chatCartProvider(widget.otherId).notifier)
                       .addProduct(cartItem);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          const Icon(Icons.check_circle, color: Colors.white, size: 18),
-                          const SizedBox(width: 8),
-                          Text('"${widget.productName}" ajouté au panier'),
-                        ],
-                      ),
-                      backgroundColor: Colors.green.shade700,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
+                  CartAddedToast.show(context);
                 } : null,
                 onBuyNow: widget.productId != null ? () {
                   Navigator.push(

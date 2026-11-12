@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../orders/providers/orders_provider.dart';
@@ -13,9 +12,14 @@ import '../../../wallet/screens/wallet_screen.dart';
 import '../../../cart/screens/cart_page.dart';
 import '../../../cart/providers/cart_provider.dart';
 import '../../../settings/screens/settings_page.dart';
+import '../../../../core/theme/oli_surface.dart';
+import '../../../../providers/exchange_rate_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardSection — MON TABLEAU DE BORD
+// Toutes les opérations de l'utilisateur, côté acheteur et côté vendeur :
+// résumé chiffré, puis accès direct à chaque liste. Même langage visuel que la
+// validation de commande, touches de bleu Oli.
 // ─────────────────────────────────────────────────────────────────────────────
 class DashboardSection extends ConsumerStatefulWidget {
   const DashboardSection({super.key});
@@ -24,131 +28,44 @@ class DashboardSection extends ConsumerStatefulWidget {
   ConsumerState<DashboardSection> createState() => _DashboardSectionState();
 }
 
-class _DashboardSectionState extends ConsumerState<DashboardSection>
-    with SingleTickerProviderStateMixin {
+class _DashboardSectionState extends ConsumerState<DashboardSection> {
   // 0 = Acheteur, 1 = Vendeur
   int _selectedTab = 0;
-  late AnimationController _controller;
-  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 280));
-    _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+    // Compteurs à jour à chaque ouverture (avant, ceux du vendeur restaient à 0
+    // tant que la page des ventes n'avait pas été ouverte)
+    Future.microtask(() {
+      if (!mounted) return;
+      ref.invalidate(ordersProvider);
+      ref.read(sellerOrdersProvider.notifier).loadAll();
+    });
   }
 
   void _switchTab(int index) {
     if (_selectedTab == index) return;
-    _controller.reset();
     setState(() => _selectedTab = index);
-    _controller.forward();
+    if (index == 1) ref.read(sellerOrdersProvider.notifier).fetchStats();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Carte glassmorphism — hauteur augmentée de 20% (240px)
-        SizedBox(
-          height: 240,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.15),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.18),
-                      blurRadius: 20,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // ── Toggle Acheteur / Vendeur ──────────────────────────
-                    _GlassToggle(
-                      selectedTab: _selectedTab,
-                      onTabChanged: _switchTab,
-                    ),
-                    // ── Grille d'icônes ────────────────────────────────────
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                        child: FadeTransition(
-                          opacity: _fadeAnim,
-                          child: _selectedTab == 0
-                              ? _BuyerGrid(context: context, ref: ref)
-                              : _SellerGrid(context: context, ref: ref),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Toggle Acheteur / Vendeur — style glassmorphism iOS
-// ─────────────────────────────────────────────────────────────────────────────
-class _GlassToggle extends StatelessWidget {
-  final int selectedTab;
-  final ValueChanged<int> onTabChanged;
-
-  const _GlassToggle({required this.selectedTab, required this.onTabChanged});
-
-  @override
-  Widget build(BuildContext context) {
+    final s = OliSurface.of(context);
     return Container(
-      margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-      height: 32,
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? Colors.white.withValues(alpha: 0.06)
-            : Colors.black.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Colors.white.withValues(alpha: 0.1)
-                : Colors.black.withValues(alpha: 0.08),
-            width: 1),
-      ),
-      child: Row(
+      decoration: s.cardDecoration(radius: 20),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _ToggleItem(
-            icon: Icons.shopping_cart_outlined,
-            label: 'Acheteur',
-            isActive: selectedTab == 0,
-            onTap: () => onTabChanged(0),
-          ),
-          _ToggleItem(
-            icon: Icons.storefront_outlined,
-            label: 'Vendeur',
-            isActive: selectedTab == 1,
-            onTap: () => onTabChanged(1),
+          _SegmentedToggle(selected: _selectedTab, onChanged: _switchTab),
+          const SizedBox(height: 12),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: _selectedTab == 0
+                ? const _BuyerDashboard(key: ValueKey('buyer'))
+                : const _SellerDashboard(key: ValueKey('seller')),
           ),
         ],
       ),
@@ -156,438 +73,318 @@ class _GlassToggle extends StatelessWidget {
   }
 }
 
-class _ToggleItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
+// ─────────────────────────────────────────────────────────────────────────────
+// Sélecteur Acheteur / Vendeur
+// ─────────────────────────────────────────────────────────────────────────────
+class _SegmentedToggle extends StatelessWidget {
+  final int selected;
+  final ValueChanged<int> onChanged;
 
-  const _ToggleItem({
-    required this.icon,
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-  });
+  const _SegmentedToggle({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOut,
-          margin: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: isActive
-                ? const Color(0xFF1E7DBA).withOpacity(0.85)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF1E7DBA).withOpacity(0.35),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    )
-                  ]
-                : [],
-          ),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 14,
-                color: isActive
-                    ? Colors.white
-                    : (Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white54
-                        : const Color(0xFF5B6B7C)),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isActive
-                      ? Colors.white
-                      : (Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white54
-                          : const Color(0xFF5B6B7C)),
-                  fontWeight:
-                      isActive ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: 13,
-                ),
-              ),
-            ],
+    final s = OliSurface.of(context);
+    Widget item(int index, IconData icon, String label) {
+      final active = selected == index;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => onChanged(index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            height: 36,
+            margin: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: active ? OliSurface.oliBlue : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: active
+                  ? [BoxShadow(color: OliSurface.oliBlue.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 2))]
+                  : null,
+            ),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: active ? Colors.white : s.textSecondary),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                      color: active ? Colors.white : s.textSecondary,
+                      fontSize: 14,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    )),
+              ],
+            ),
           ),
         ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(color: s.tile, borderRadius: BorderRadius.circular(13)),
+      child: Row(
+        children: [
+          item(0, Icons.shopping_bag_outlined, 'Acheteur'),
+          item(1, Icons.storefront_outlined, 'Vendeur'),
+        ],
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Grille Acheteur
+// Côté acheteur
 // ─────────────────────────────────────────────────────────────────────────────
-class _BuyerGrid extends StatelessWidget {
-  final BuildContext context;
-  final WidgetRef ref;
-
-  const _BuyerGrid({required this.context, required this.ref});
+class _BuyerDashboard extends ConsumerWidget {
+  const _BuyerDashboard({super.key});
 
   @override
-  Widget build(BuildContext wCtx) {
-    final ordersAsync = ref.watch(ordersProvider);
-    // Badge = nombre total d'articles dans le panier
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(exchangeRateProvider);
+    final ex = ref.read(exchangeRateProvider.notifier);
+    final orders = ref.watch(ordersProvider).valueOrNull ?? const [];
     final cartCount = ref.watch(cartProvider).fold<int>(0, (sum, item) => sum + item.quantity);
-    // Badge = nombre réel de favoris (aucun badge s'il n'y en a pas)
     final favoritesCount = ref.watch(favoritesProvider).length;
 
-    int total = 0;
-    int inProgress = 0;
-    int delivered = 0;
+    final inProgress = orders.where((o) => PurchaseFilter.inProgress.matches(o.status)).length;
+    final delivered = orders.where((o) => PurchaseFilter.delivered.matches(o.status)).length;
+    final pendingPayment = orders.where((o) => o.status == 'pending').length;
+    // Dépensé = commandes payées (en cours ou livrées)
+    final spent = orders
+        .where((o) => o.status != 'pending' && o.status != 'cancelled')
+        .fold<double>(0, (sum, o) => sum + o.totalAmount);
 
-    ordersAsync.whenData((orders) {
-      total = orders.length;
-      inProgress = orders
-          .where((o) => PurchaseFilter.inProgress.matches(o.status))
-          .length;
-      delivered = orders
-          .where((o) => PurchaseFilter.delivered.matches(o.status))
-          .length;
-    });
+    void open(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));
 
-    return _IconGrid(items: [
-      _DashItem(
-        icon: Icons.receipt_long_outlined,
-        label: 'Mes\nCommandes',
-        count: total,
-        countColor: const Color(0xFF1E7DBA),
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const PurchasesPage())),
-      ),
-      _DashItem(
-        icon: Icons.local_shipping_outlined,
-        label: 'En Cours',
-        count: inProgress,
-        countColor: const Color(0xFFF59E0B),
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const PurchasesPage(initialFilter: PurchaseFilter.inProgress))),
-      ),
-      _DashItem(
-        icon: Icons.check_circle_outline,
-        label: 'Livrées',
-        count: delivered,
-        countColor: const Color(0xFF22C55E),
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const PurchasesPage(initialFilter: PurchaseFilter.delivered))),
-      ),
-      _DashItem(
-        icon: Icons.favorite_border_rounded,
-        label: 'Mes Favoris',
-        count: favoritesCount,
-        countColor: Colors.redAccent,
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const FavoritesPage())),
-      ),
-      _DashItem(
-        icon: Icons.shopping_cart_outlined,
-        label: 'Panier',
-        count: cartCount,
-        countColor: Colors.red,
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const CartPage())),
-      ),
-      _DashItem(
-        icon: Icons.account_balance_wallet_outlined,
-        label: 'Portefeuille',
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const WalletScreen())),
-      ),
-    ]);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SummaryStrip(items: [
+          _Stat('${orders.length}', 'Commandes'),
+          _Stat('$inProgress', 'En cours'),
+          _Stat(ex.formatProductPrice(spent), 'Dépensé'),
+        ]),
+        const SizedBox(height: 14),
+        _TileGrid(items: [
+          _Tile(Icons.receipt_long_outlined, 'Mes commandes', count: pendingPayment > 0 ? pendingPayment : 0,
+              hint: pendingPayment > 0 ? 'à payer' : null, onTap: () => open(const PurchasesPage())),
+          _Tile(Icons.local_shipping_outlined, 'En cours', count: inProgress,
+              onTap: () => open(const PurchasesPage(initialFilter: PurchaseFilter.inProgress))),
+          _Tile(Icons.check_circle_outline_rounded, 'Livrées', count: delivered,
+              onTap: () => open(const PurchasesPage(initialFilter: PurchaseFilter.delivered))),
+          _Tile(Icons.favorite_border_rounded, 'Favoris', count: favoritesCount,
+              onTap: () => open(const FavoritesPage())),
+          _Tile(Icons.shopping_cart_outlined, 'Panier', count: cartCount, onTap: () => open(const CartPage())),
+          _Tile(Icons.account_balance_wallet_outlined, 'Portefeuille', onTap: () => open(const WalletScreen())),
+        ]),
+      ],
+    );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Grille Vendeur
+// Côté vendeur
 // ─────────────────────────────────────────────────────────────────────────────
-class _SellerGrid extends StatelessWidget {
-  final BuildContext context;
-  final WidgetRef ref;
-
-  const _SellerGrid({required this.context, required this.ref});
+class _SellerDashboard extends ConsumerWidget {
+  const _SellerDashboard({super.key});
 
   @override
-  Widget build(BuildContext wCtx) {
-    final sellerState = ref.watch(sellerOrdersProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(exchangeRateProvider);
+    final ex = ref.read(exchangeRateProvider.notifier);
+    final state = ref.watch(sellerOrdersProvider);
+    final stats = state.stats;
+    final counts = state.statusCounts;
 
-    final pending = sellerState.statusCounts['paid'] ?? 0;
-    final processing = (sellerState.statusCounts['processing'] ?? 0) +
-        (sellerState.statusCounts['ready'] ?? 0);
-    final shipped = sellerState.statusCounts['shipped'] ?? 0;
+    final toProcess = stats?.toProcess ?? counts['paid'] ?? 0;
+    final processing = stats?.processing ?? ((counts['processing'] ?? 0) + (counts['ready'] ?? 0));
+    final shipped = stats?.shipped ?? counts['shipped'] ?? 0;
+    final revenue = stats?.deliveredRevenue ?? 0;
 
-    return _IconGrid(items: [
-      _DashItem(
-        icon: Icons.inbox_outlined,
-        label: 'Commandes\nReçues',
-        count: pending,
-        countColor: const Color(0xFFF59E0B),
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const MySalesPage(
-                  title: 'Commandes reçues',
-                  statuses: ['paid'],
-                  emptyMessage: 'Aucune nouvelle commande',
-                ))),
-      ),
-      _DashItem(
-        icon: Icons.inventory_2_outlined,
-        label: 'En\nTraitement',
-        count: processing,
-        countColor: const Color(0xFF1E7DBA),
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const MySalesPage(
-                  title: 'En traitement',
-                  statuses: ['processing', 'ready'],
-                  emptyMessage: 'Aucune commande en traitement',
-                ))),
-      ),
-      _DashItem(
-        icon: Icons.local_shipping_outlined,
-        label: 'Expédiées',
-        count: shipped,
-        countColor: const Color(0xFF22C55E),
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const MySalesPage(
-                  title: 'Commandes expédiées',
-                  statuses: ['shipped'],
-                  emptyMessage: 'Aucune commande expédiée',
-                ))),
-      ),
-      _DashItem(
-        icon: Icons.add_box_outlined,
-        label: 'Publier\nArticle',
-        onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => const PublishArticlePage())),
-      ),
-      _DashItem(
-        icon: Icons.storefront_outlined,
-        label: 'Ma Boutique',
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const MyShopsScreen())),
-      ),
-      _DashItem(
-        icon: Icons.settings_outlined,
-        label: 'Paramètres',
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const SettingsPage())),
-      ),
-    ]);
+    void open(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SummaryStrip(items: [
+          _Stat('$toProcess', 'À traiter'),
+          _Stat('${processing + shipped}', 'En cours'),
+          _Stat(ex.formatProductPrice(revenue), 'Ventes livrées'),
+        ]),
+        const SizedBox(height: 14),
+        _TileGrid(items: [
+          _Tile(Icons.inbox_outlined, 'Reçues', count: toProcess, hint: toProcess > 0 ? 'à traiter' : null,
+              onTap: () => open(const MySalesPage(
+                    title: 'Commandes reçues',
+                    statuses: ['paid'],
+                    emptyMessage: 'Aucune nouvelle commande',
+                  ))),
+          _Tile(Icons.inventory_2_outlined, 'En traitement', count: processing,
+              onTap: () => open(const MySalesPage(
+                    title: 'En traitement',
+                    statuses: ['processing', 'ready'],
+                    emptyMessage: 'Aucune commande en traitement',
+                  ))),
+          _Tile(Icons.local_shipping_outlined, 'Expédiées', count: shipped,
+              onTap: () => open(const MySalesPage(
+                    title: 'Commandes expédiées',
+                    statuses: ['shipped'],
+                    emptyMessage: 'Aucune commande expédiée',
+                  ))),
+          _Tile(Icons.add_box_outlined, 'Publier', onTap: () => open(const PublishArticlePage())),
+          _Tile(Icons.storefront_outlined, 'Ma boutique', onTap: () => open(const MyShopsScreen())),
+          _Tile(Icons.settings_outlined, 'Paramètres', onTap: () => open(const SettingsPage())),
+        ]),
+      ],
+    );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Layout grille 3 colonnes x N lignes
+// Résumé chiffré
 // ─────────────────────────────────────────────────────────────────────────────
-class _IconGrid extends StatelessWidget {
-  final List<_DashItem> items;
-  const _IconGrid({required this.items});
+class _Stat {
+  final String value;
+  final String label;
+  const _Stat(this.value, this.label);
+}
+
+class _SummaryStrip extends StatelessWidget {
+  final List<_Stat> items;
+  const _SummaryStrip({required this.items});
 
   @override
   Widget build(BuildContext context) {
-    final rows = <Widget>[];
-    for (int i = 0; i < items.length; i += 3) {
-      final rowItems = items.sublist(i, (i + 3).clamp(0, items.length));
-      rows.add(Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: rowItems.map((item) => _DashIconWidget(item: item)).toList(),
-      ));
-      if (i + 3 < items.length) const SizedBox(height: 14);
-    }
-    return Column(
-      children: rows
-          .expand((row) => [row, const SizedBox(height: 14)])
-          .toList()
-        ..removeLast(),
+    final s = OliSurface.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      decoration: BoxDecoration(color: s.tile, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) Container(width: 1, height: 30, color: s.border),
+            Expanded(
+              child: Column(
+                children: [
+                  Text(items[i].value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: s.text, fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(items[i].label, style: TextStyle(color: s.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Modèle de données d'un item du dashboard
+// Grille de raccourcis (3 colonnes)
 // ─────────────────────────────────────────────────────────────────────────────
-class _DashItem {
+class _Tile {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final int count;
-  final Color countColor;
-  final bool heartBadge;
+  final String? hint;
 
-  const _DashItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.count = 0,
-    this.countColor = const Color(0xFF1E7DBA),
-    this.heartBadge = false,
-  });
+  const _Tile(this.icon, this.label, {required this.onTap, this.count = 0, this.hint});
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Widget d'une icône du dashboard — style iOS glass
-// ─────────────────────────────────────────────────────────────────────────────
-class _DashIconWidget extends StatefulWidget {
-  final _DashItem item;
-  const _DashIconWidget({required this.item});
-
-  @override
-  State<_DashIconWidget> createState() => _DashIconWidgetState();
-}
-
-class _DashIconWidgetState extends State<_DashIconWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _press;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _press = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 100),
-        lowerBound: 0.0,
-        upperBound: 1.0);
-    _scale = Tween<double>(begin: 1.0, end: 0.90).animate(
-        CurvedAnimation(parent: _press, curve: Curves.easeOut));
-  }
-
-  @override
-  void dispose() {
-    _press.dispose();
-    super.dispose();
-  }
+class _TileGrid extends StatelessWidget {
+  final List<_Tile> items;
+  const _TileGrid({required this.items});
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
-    final showBadge = item.count > 0 || item.heartBadge;
+    final rows = <Widget>[];
+    for (var i = 0; i < items.length; i += 3) {
+      if (i > 0) rows.add(const SizedBox(height: 14));
+      rows.add(Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final item in items.sublist(i, (i + 3).clamp(0, items.length))) Expanded(child: _TileView(item: item)),
+        ],
+      ));
+    }
+    return Column(mainAxisSize: MainAxisSize.min, children: rows);
+  }
+}
 
-    return Expanded(
-      child: GestureDetector(
-        onTapDown: (_) => _press.forward(),
-        onTapUp: (_) {
-          _press.reverse();
-          item.onTap();
-        },
-        onTapCancel: () => _press.reverse(),
-        child: ScaleTransition(
-          scale: _scale,
-          child: Column(
-            children: [
-              // Carré glassmorphism avec icône
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(11),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white.withValues(alpha: 0.10)
-                              : Colors.black.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(11),
-                          border: Border.all(
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white.withValues(alpha: 0.18)
-                                : Colors.black.withValues(alpha: 0.10),
-                            width: 1,
-                          ),
-                        ),
-                        child: Icon(
-                          item.icon,
-                          size: 18,
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white.withValues(alpha: 0.88)
-                              : const Color(0xFF1E7DBA),
-                        ),
+class _TileView extends StatefulWidget {
+  final _Tile item;
+  const _TileView({required this.item});
+
+  @override
+  State<_TileView> createState() => _TileViewState();
+}
+
+class _TileViewState extends State<_TileView> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = OliSurface.of(context);
+    final item = widget.item;
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        item.onTap();
+      },
+      child: AnimatedScale(
+        scale: _pressed ? 0.92 : 1,
+        duration: const Duration(milliseconds: 100),
+        child: Column(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: OliSurface.oliBlue.withValues(alpha: s.isDark ? 0.18 : 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(item.icon, size: 22, color: s.accent),
+                ),
+                if (item.count > 0)
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: OliSurface.oliBlue,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: s.card, width: 2),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        item.count > 99 ? '99+' : '${item.count}',
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),
-
-                  // Badge compteur ou ❤️
-                  if (showBadge)
-                    Positioned(
-                      right: -5,
-                      top: -5,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: item.heartBadge
-                              ? Colors.redAccent
-                              : item.countColor,
-                          shape: BoxShape.circle,
-                          border:
-                              Border.all(color: Colors.white.withOpacity(0.3), width: 1),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (item.heartBadge
-                                      ? Colors.red
-                                      : item.countColor)
-                                  .withOpacity(0.4),
-                              blurRadius: 6,
-                            )
-                          ],
-                        ),
-                        constraints:
-                            const BoxConstraints(minWidth: 18, minHeight: 18),
-                        child: Center(
-                          child: item.heartBadge
-                              ? const Icon(Icons.favorite,
-                                  size: 8, color: Colors.white)
-                              : Text(
-                                  item.count > 99 ? '99+' : '${item.count}',
-                                  style: TextStyle(
-                                    // Texte foncé sur les badges clairs (orange, vert)
-                                    color: item.countColor.computeLuminance() > 0.3
-                                        ? const Color(0xFF0B1727)
-                                        : Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 7),
-
-              Text(
-                item.label,
+              ],
+            ),
+            const SizedBox(height: 7),
+            Text(item.label,
                 textAlign: TextAlign.center,
-                maxLines: 2,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white.withValues(alpha: 0.80)
-                      : const Color(0xFF2B3A4A),
-                  height: 1.3,
-                ),
-              ),
-            ],
-          ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: s.text, fontSize: 12, fontWeight: FontWeight.w600)),
+            if (item.hint != null)
+              Text(item.hint!, style: TextStyle(color: s.accent, fontSize: 10, fontWeight: FontWeight.w600)),
+          ],
         ),
       ),
     );

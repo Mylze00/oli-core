@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../user/providers/favorites_provider.dart';
-import '../../../models/product_model.dart';
 import '../../marketplace/presentation/widgets/market_product_card.dart';
+import '../../../core/theme/oli_surface.dart';
 
 /// Page "Favoris et Suivis"
 /// Refactorisée pour utiliser le FavoritesProvider
@@ -31,62 +31,59 @@ class _FavoritesPageState extends ConsumerState<FavoritesPage> with SingleTicker
   @override
   Widget build(BuildContext context) {
     final favorites = ref.watch(favoritesProvider);
+    final surface = OliSurface.of(context);
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: const Text('Favoris et Suivis'),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.blueAccent,
-          labelColor: Colors.blueAccent,
-          unselectedLabelColor: Colors.grey,
-          tabs: [
-            Tab(text: 'Produits (${favorites.length})'),
-            const Tab(text: 'Vendeurs (0)'),
-          ],
+      backgroundColor: surface.background,
+      appBar: surface.appBar(
+        'Mes favoris',
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(52),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            decoration: BoxDecoration(color: surface.tile, borderRadius: BorderRadius.circular(12)),
+            child: TabBar(
+              controller: _tabController,
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              indicator: BoxDecoration(color: OliSurface.oliBlue, borderRadius: BorderRadius.circular(10)),
+              indicatorPadding: const EdgeInsets.all(3),
+              labelColor: Colors.white,
+              unselectedLabelColor: surface.textSecondary,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              tabs: [
+                Tab(text: 'Produits (${favorites.length})'),
+                const Tab(text: 'Vendeurs'),
+              ],
+            ),
+          ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildProductsGrid(favorites),
-          _buildEmptyState(Icons.store_outlined, 'Vendeurs bientôt', 'La fonctionnalité de suivi arrive bientôt'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductsGrid(List<Product> favorites) {
-    if (favorites.isEmpty) {
-      return _buildEmptyState(Icons.favorite_border, 'Aucun favori', 'Les produits que vous aimez apparaîtront ici');
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.55,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: favorites.length,
-      itemBuilder: (context, index) => MarketProductCard(product: favorites[index]),
-    );
-  }
-
-  Widget _buildEmptyState(IconData icon, String title, String subtitle) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 64, color: Colors.grey.shade700),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(subtitle, style: TextStyle(color: Colors.grey.shade500)),
+          favorites.isEmpty
+              ? const OliEmptyState(
+                  icon: Icons.favorite_border_rounded,
+                  title: 'Aucun favori',
+                  subtitle: 'Les produits que vous aimez apparaîtront ici',
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.55,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  itemCount: favorites.length,
+                  itemBuilder: (context, index) => MarketProductCard(product: favorites[index]),
+                ),
+          const OliEmptyState(
+            icon: Icons.storefront_outlined,
+            title: 'Vendeurs suivis',
+            subtitle: 'Le suivi des vendeurs arrive bientôt',
+          ),
         ],
       ),
     );
