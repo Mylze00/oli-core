@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/oli_surface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -16,6 +17,9 @@ import '../../auth/screens/login_page.dart';
 import '../../../core/theme/oli_glass.dart';
 
 /// Page "Paramètres"
+/// Couleurs des paramètres (kit commun), fixées au début de chaque construction.
+late OliSurface _c;
+
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
@@ -110,7 +114,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Authentification échouée'),
-            backgroundColor: Colors.orange,
+            backgroundColor: const Color(0xFF3A3A3C),
           ),
         );
         return;
@@ -124,13 +128,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(enable ? 'Biométrie activée' : 'Biométrie désactivée'),
-        backgroundColor: enable ? Colors.green : Colors.orange,
+        backgroundColor: enable ? Colors.green : const Color(0xFF3A3A3C),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    _c = OliSurface.of(context);
     final userAsync = ref.watch(userProvider);
     final exchangeState = ref.watch(exchangeRateProvider);
     final String selectedCurrency = exchangeState.selectedCurrency.code;
@@ -142,31 +147,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           fontFamily: 'CreatoDisplay',
         ),
         appBarTheme: AppBarTheme.of(context).copyWith(
-          titleTextStyle: const TextStyle(
+          titleTextStyle: TextStyle(
             fontFamily: 'CreatoDisplay',
             fontSize: 20,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: _c.text,
           ),
         ),
         listTileTheme: ListTileTheme.of(context).copyWith(
-          titleTextStyle: const TextStyle(fontFamily: 'CreatoDisplay', fontSize: 15, color: Colors.white),
-          subtitleTextStyle: const TextStyle(fontFamily: 'CreatoDisplay', fontSize: 12, color: Colors.grey),
+          titleTextStyle: TextStyle(fontFamily: 'CreatoDisplay', fontSize: 15, color: _c.text),
+          subtitleTextStyle: TextStyle(fontFamily: 'CreatoDisplay', fontSize: 12, color: _c.textSecondary),
         ),
       ),
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: _c.background,
         appBar: AppBar(
-          backgroundColor: Colors.black,
+          backgroundColor: _c.background,
           elevation: 0,
           title: const Text('Paramètres', style: TextStyle(fontFamily: 'CreatoDisplay')),
         ),
       body: userAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur: $e', style: const TextStyle(color: Colors.white))),
+        error: (e, _) => Center(child: Text('Erreur: $e', style: TextStyle(color: _c.text))),
         data: (user) {
           if (user == null) {
-             return const Center(child: Text('Vous devez être connecté', style: TextStyle(color: Colors.white)));
+             return Center(child: Text('Vous devez être connecté', style: TextStyle(color: _c.text)));
           }
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -198,11 +203,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 trailingWidget: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(user.isVerified ? Icons.verified_user : Icons.error_outline, color: user.isVerified ? Colors.green : Colors.orange, size: 16),
+                    Icon(user.isVerified ? Icons.verified_user : Icons.error_outline, color: user.isVerified ? _c.success : _c.danger, size: 16),
                     const SizedBox(width: 4),
-                    Text(user.isVerified ? 'Verifié' : 'Non verifié', style: TextStyle(color: user.isVerified ? Colors.green : Colors.orange, fontSize: 13)),
+                    Text(user.isVerified ? 'Verifié' : 'Non verifié', style: TextStyle(color: user.isVerified ? _c.success : _c.danger, fontSize: 13)),
                     const SizedBox(width: 8),
-                    const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14),
+                    Icon(Icons.arrow_forward_ios, color: _c.textSecondary, size: 14),
                   ],
                 ),
                 onTap: () {
@@ -217,20 +222,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _buildSectionTitle('Sécurité'),
             _buildCard([
               SwitchListTile(
-                secondary: const Icon(Icons.fingerprint, color: Colors.green),
-                title: const Text('Connexion biométrique', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+                secondary: Icon(Icons.fingerprint, color: _c.accent),
+                title: Text('Connexion biométrique', style: TextStyle(color: _c.text, fontSize: 15, fontWeight: FontWeight.w500)),
                 subtitle: Text(
                   _biometricAvailable 
                     ? 'Face ID / Empreinte digitale' 
                     : 'Non disponible sur cet appareil',
                   style: TextStyle(
-                    color: _biometricAvailable ? Colors.grey : Colors.orange,
+                    color: _c.textSecondary,
                     fontSize: 12,
                   ),
                 ),
                 value: _biometricEnabled,
                 onChanged: _biometricAvailable ? _toggleBiometric : null,
-                activeColor: Colors.blueAccent,
+                activeColor: _c.accent,
               ),
             ]),
 
@@ -240,27 +245,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _buildSectionTitle('Notifications'),
             _buildCard([
               SwitchListTile(
-                secondary: const Icon(Icons.notifications_outlined, color: Colors.blueAccent),
-                title: const Text('Notifications push', style: TextStyle(color: Colors.white, fontSize: 15)),
+                secondary: Icon(Icons.notifications_outlined, color: _c.accent),
+                title: Text('Notifications push', style: TextStyle(color: _c.text, fontSize: 15)),
                 value: _notificationsEnabled,
                 onChanged: (v) => _setNotificationPref('push', v, _notificationsEnabled, (x) { _notificationsEnabled = x; }),
-                activeColor: Colors.blueAccent,
+                activeColor: _c.accent,
               ),
               _buildDivider(),
               SwitchListTile(
-                secondary: const Icon(Icons.mail_outline, color: Colors.orange),
-                title: const Text('Notifications email', style: TextStyle(color: Colors.white, fontSize: 15)),
+                secondary: Icon(Icons.mail_outline, color: _c.accent),
+                title: Text('Notifications email', style: TextStyle(color: _c.text, fontSize: 15)),
                 value: _emailNotifications,
                 onChanged: (v) => _setNotificationPref('email', v, _emailNotifications, (x) { _emailNotifications = x; }),
-                activeColor: Colors.blueAccent,
+                activeColor: _c.accent,
               ),
               _buildDivider(),
               SwitchListTile(
-                secondary: const Icon(Icons.sms_outlined, color: Colors.green),
-                title: const Text('Notifications SMS', style: TextStyle(color: Colors.white, fontSize: 15)),
+                secondary: Icon(Icons.sms_outlined, color: _c.accent),
+                title: Text('Notifications SMS', style: TextStyle(color: _c.text, fontSize: 15)),
                 value: _smsNotifications,
                 onChanged: (v) => _setNotificationPref('sms', v, _smsNotifications, (x) { _smsNotifications = x; }),
-                activeColor: Colors.blueAccent,
+                activeColor: _c.accent,
               ),
             ]),
 
@@ -273,7 +278,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 icon: Icons.language,
                 title: 'Langue',
                 trailingText: selectedLanguage,
-                iconColor: Colors.blueAccent,
+                iconColor: _c.accent,
                 onTap: () => _showLanguageDialog(),
               ),
               _buildDivider(),
@@ -281,7 +286,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 icon: Icons.attach_money,
                 title: 'Devise',
                 trailingText: selectedCurrency,
-                iconColor: Colors.blueAccent,
+                iconColor: _c.accent,
                 onTap: () => _showCurrencyDialog(),
               ),
             ]),
@@ -294,14 +299,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               _buildListTile(
                 icon: Icons.privacy_tip_outlined,
                 title: 'Politique de confidentialité',
-                iconColor: Colors.blueAccent,
+                iconColor: _c.accent,
                 onTap: () => _showPrivacyPolicy(),
               ),
               _buildDivider(),
               _buildListTile(
                 icon: Icons.description_outlined,
                 title: 'Conditions d\'utilisation',
-                iconColor: Colors.blueAccent,
+                iconColor: _c.accent,
                 onTap: () => _showTerms(),
               ),
             _buildDivider(),
@@ -352,14 +357,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 12),
-      child: Text(title, style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+      child: Text(title, style: TextStyle(color: _c.textSecondary, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
     );
   }
 
   Widget _buildCard(List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: _c.card,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(children: children),
@@ -384,28 +389,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       trailing = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(trailingText, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          Text(trailingText, style: TextStyle(color: _c.textSecondary, fontSize: 13)),
           if (showArrow) ...[
             const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white30, size: 14),
+            Icon(Icons.arrow_forward_ios, color: _c.textSecondary, size: 14),
           ]
         ],
       );
     } else if (showArrow) {
-      trailing = const Icon(Icons.arrow_forward_ios, color: Colors.white30, size: 14);
+      trailing = Icon(Icons.arrow_forward_ios, color: _c.textSecondary, size: 14);
     }
 
     return ListTile(
-      leading: icon != null ? Icon(icon, color: iconColor ?? Colors.blueGrey.shade300) : null,
-      title: Text(title, style: TextStyle(color: titleColor ?? Colors.white, fontSize: 15)),
-      subtitle: subtitle != null ? Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)) : null,
+      leading: icon != null ? Icon(icon, color: iconColor ?? _c.accent) : null,
+      title: Text(title, style: TextStyle(color: titleColor ?? _c.text, fontSize: 15)),
+      subtitle: subtitle != null ? Text(subtitle, style: TextStyle(color: _c.textSecondary, fontSize: 12)) : null,
       trailing: trailing,
       onTap: onTap,
     );
   }
 
   Widget _buildDivider() {
-    return const Divider(height: 1, color: Colors.white10, indent: 56);
+    return Divider(height: 1, color: _c.border, indent: 56);
   }
 
   void _showEditProfileDialog(String currentName, String? currentUsername, String? currentBio, String? currentCity) {
@@ -430,29 +435,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Modifier profil', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text('Modifier profil', style: TextStyle(color: _c.text, fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 24),
                   TextField(
                     controller: usernameController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: _c.text),
                     decoration: oliGlassInputDecoration('Pseudo (public)'),
                   ),
                   const SizedBox(height: 14),
                   TextField(
                     controller: nameController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: _c.text),
                     decoration: oliGlassInputDecoration('Nom complet (privé)'),
                   ),
                   const SizedBox(height: 14),
                   TextField(
                     controller: cityController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: _c.text),
                     decoration: oliGlassInputDecoration('Adresse de livraison'),
                   ),
                   const SizedBox(height: 14),
                   TextField(
                     controller: bioController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: _c.text),
                     decoration: oliGlassInputDecoration('Bio (facultatif)'),
                   ),
                   const SizedBox(height: 24),
@@ -540,11 +545,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Mot de passe', style: TextStyle(color: Colors.white)),
-        content: const Text(
+        backgroundColor: _c.card,
+        title: Text('Mot de passe', style: TextStyle(color: _c.text)),
+        content: Text(
           'La connexion OLI utilise uniquement la vérification par SMS (OTP).\n\nVotre compte est sécurisé par votre numéro de téléphone.',
-          style: TextStyle(color: Colors.white70, height: 1.5),
+          style: TextStyle(color: _c.textSecondary, height: 1.5),
         ),
         actions: [
           ElevatedButton(
@@ -564,8 +569,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => SimpleDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Choisir la devise', style: TextStyle(color: Colors.white)),
+        backgroundColor: _c.card,
+        title: Text('Choisir la devise', style: TextStyle(color: _c.text)),
         children: currencies.map((currency) {
           final isSelected = currency == currentCurrency;
           return SimpleDialogOption(
@@ -575,10 +580,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             },
             child: Row(
               children: [
-                if (isSelected) const Icon(Icons.check, color: Colors.blueAccent, size: 18),
+                if (isSelected) Icon(Icons.check, color: _c.accent, size: 18),
                 if (!isSelected) const SizedBox(width: 18),
                 const SizedBox(width: 12),
-                Text('${currency.name} (${currency.symbol})', style: const TextStyle(color: Colors.white)),
+                Text('${currency.name} (${currency.symbol})', style: TextStyle(color: _c.text)),
               ],
             ),
           );
@@ -591,25 +596,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => SimpleDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Langue', style: TextStyle(color: Colors.white)),
+        backgroundColor: _c.card,
+        title: Text('Langue', style: TextStyle(color: _c.text)),
         children: [
           SimpleDialogOption(
             onPressed: () => Navigator.pop(context),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.check, color: Colors.blueAccent, size: 18),
+                Icon(Icons.check, color: _c.accent, size: 18),
                 SizedBox(width: 12),
-                Text('Français', style: TextStyle(color: Colors.white)),
+                Text('Français', style: TextStyle(color: _c.text)),
               ],
             ),
           ),
-          const SimpleDialogOption(
+          SimpleDialogOption(
             child: Row(
               children: [
                 SizedBox(width: 18),
                 SizedBox(width: 12),
-                Text('English (Bientôt)', style: TextStyle(color: Colors.grey)),
+                Text('English (Bientôt)', style: TextStyle(color: _c.textSecondary)),
               ],
             ),
           ),
@@ -630,13 +635,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
+        backgroundColor: _c.card,
         title: const Text('Supprimer le compte', style: TextStyle(color: Colors.red)),
-        content: const Text(
+        content: Text(
           'Cette action est irréversible. Vos informations personnelles seront effacées. '
           'Vos commandes et transactions passées sont conservées de façon anonyme '
           'pour nos obligations légales et comptables.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: _c.textSecondary),
         ),
         actions: [
           TextButton(
@@ -687,9 +692,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          title: const Text('Suppression impossible', style: TextStyle(color: Colors.white)),
-          content: Text(message, style: const TextStyle(color: Colors.white70)),
+          backgroundColor: _c.card,
+          title: Text('Suppression impossible', style: TextStyle(color: _c.text)),
+          content: Text(message, style: TextStyle(color: _c.textSecondary)),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
           ],
@@ -705,9 +710,10 @@ class _PolicyPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _c = OliSurface.of(context);
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.black, title: Text(title)),
+      backgroundColor: _c.background,
+      appBar: AppBar(backgroundColor: _c.background, title: Text(title)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Text(
@@ -724,7 +730,7 @@ class _PolicyPage extends StatelessWidget {
           '• Politique de remboursement\n'
           '• Responsabilités\n\n'
           'Pour toute question, contactez-nous à support@oli.com',
-          style: const TextStyle(color: Colors.white70, height: 1.6),
+          style: TextStyle(color: _c.textSecondary, height: 1.6),
         ),
       ),
     );

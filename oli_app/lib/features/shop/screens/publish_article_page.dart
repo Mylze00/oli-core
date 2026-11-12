@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../../../core/theme/oli_surface.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +11,9 @@ import '../../marketplace/providers/market_provider.dart';
 import '../providers/product_controller.dart';
 import '../../../config/api_config.dart';
 import '../../../models/product_model.dart';
+
+/// Couleurs de la page (kit commun), fixées au début de chaque construction.
+late OliSurface _c;
 
 class PublishArticlePage extends ConsumerStatefulWidget {
   const PublishArticlePage({super.key});
@@ -128,9 +132,9 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
 
   Color get _qualityColor {
     final s = _qualityScore;
-    if (s >= 80) return Colors.greenAccent;
-    if (s >= 50) return Colors.orangeAccent;
-    return Colors.redAccent;
+    if (s >= 80) return _c.success;
+    if (s >= 50) return _c.accent;
+    return _c.danger;
   }
 
   // ────────────────── LOCALISATION ──────────────────
@@ -209,12 +213,12 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Row(
+        backgroundColor: _c.card,
+        title: Row(
           children: [
-            Icon(Icons.help_outline, color: Colors.blueAccent),
+            Icon(Icons.help_outline, color: _c.accent),
             SizedBox(width: 8),
-            Text("État du produit", style: TextStyle(color: Colors.white)),
+            Text("État du produit", style: TextStyle(color: _c.text)),
           ],
         ),
         content: const Column(
@@ -239,12 +243,12 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Row(
+        backgroundColor: _c.card,
+        title: Row(
           children: [
-            Icon(Icons.help_outline, color: Colors.blueAccent),
+            Icon(Icons.help_outline, color: _c.accent),
             SizedBox(width: 8),
-            Text("Modes de livraison", style: TextStyle(color: Colors.white)),
+            Text("Modes de livraison", style: TextStyle(color: _c.text)),
           ],
         ),
         content: const Column(
@@ -274,14 +278,15 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
   // ══════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
+    _c = OliSurface.of(context);
     final state = ref.watch(productControllerProvider);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: _c.background,
       appBar: AppBar(
-        title: const Text("Mettre en vente", style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text("Mettre en vente", style: TextStyle(color: _c.text)),
+        backgroundColor: _c.background,
+        iconTheme: IconThemeData(color: _c.text),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -343,7 +348,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: _c.tile,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _qualityColor.withOpacity(0.3)),
       ),
@@ -353,7 +358,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Qualité de votre annonce", style: TextStyle(color: Colors.white70, fontSize: 13)),
+              Text("Qualité de votre annonce", style: TextStyle(color: _c.textSecondary, fontSize: 13)),
               Text("${score.toInt()}%", style: TextStyle(color: _qualityColor, fontWeight: FontWeight.bold, fontSize: 15)),
             ],
           ),
@@ -362,7 +367,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
             borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
               value: score / 100,
-              backgroundColor: Colors.white10,
+              backgroundColor: _c.border,
               valueColor: AlwaysStoppedAnimation<Color>(_qualityColor),
               minHeight: 8,
             ),
@@ -381,9 +386,9 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
       children: [
         Row(
           children: [
-            const Text("Photos du produit", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text("Photos du produit", style: TextStyle(color: _c.text, fontWeight: FontWeight.bold)),
             const SizedBox(width: 6),
-            Text("(${_images.length}/5+)", style: const TextStyle(color: Colors.white38, fontSize: 12)),
+            Text("(${_images.length}/5+)", style: TextStyle(color: _c.textSecondary, fontSize: 12)),
           ],
         ),
         const SizedBox(height: 10),
@@ -401,16 +406,16 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: Colors.white10,
+                    color: _c.border,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                    border: Border.all(color: _c.accent.withOpacity(0.3)),
                   ),
-                  child: const Column(
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.add, color: Colors.blueAccent, size: 24),
+                      Icon(Icons.add, color: _c.accent, size: 24),
                       SizedBox(height: 4),
-                      Text("Plus", style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
+                      Text("Plus", style: TextStyle(color: _c.accent, fontSize: 10)),
                     ],
                   ),
                 ),
@@ -462,10 +467,10 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
         width: 100,
         height: 100,
         decoration: BoxDecoration(
-          color: Colors.white10,
+          color: _c.border,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: hasImage ? Colors.greenAccent.withOpacity(0.4) : Colors.blueAccent.withOpacity(0.3),
+            color: hasImage ? _c.success.withOpacity(0.4) : _c.accent.withOpacity(0.3),
           ),
           image: hasImage
               ? DecorationImage(
@@ -485,15 +490,15 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                 Positioned(left: 4, bottom: 4, child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-                  child: Text(slot['label'], style: const TextStyle(color: Colors.white70, fontSize: 8)),
+                  child: Text(slot['label'], style: TextStyle(color: _c.textSecondary, fontSize: 8)),
                 )),
               ])
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(slot['icon'], color: Colors.blueAccent.withOpacity(0.6), size: 24),
+                  Icon(slot['icon'], color: _c.accent.withOpacity(0.6), size: 24),
                   const SizedBox(height: 4),
-                  Text(slot['label'], style: TextStyle(color: Colors.white38, fontSize: 9), textAlign: TextAlign.center),
+                  Text(slot['label'], style: TextStyle(color: _c.textSecondary, fontSize: 9), textAlign: TextAlign.center),
                 ],
               ),
       ),
@@ -504,7 +509,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Text(title, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+      child: Text(title, style: TextStyle(color: _c.accent, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -513,7 +518,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-          Text(title, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+          Text(title, style: TextStyle(color: _c.accent, fontWeight: FontWeight.bold)),
           const SizedBox(width: 6),
           GestureDetector(
             onTap: onHelp,
@@ -521,9 +526,9 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
               padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
+                border: Border.all(color: _c.accent.withOpacity(0.5)),
               ),
-              child: const Icon(Icons.question_mark, color: Colors.blueAccent, size: 14),
+              child: Icon(Icons.question_mark, color: _c.accent, size: 14),
             ),
           ),
         ],
@@ -539,14 +544,14 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
         maxLines: maxLines,
         keyboardType: isNumber ? TextInputType.number : TextInputType.text,
         inputFormatters: isNumber ? [FilteringTextInputFormatter.digitsOnly] : [],
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: _c.text),
         validator: (v) => v!.isEmpty ? "Champ requis" : null,
         decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.white54),
+          prefixIcon: Icon(icon, color: _c.textSecondary),
           labelText: label,
-          labelStyle: const TextStyle(color: Colors.white54),
+          labelStyle: TextStyle(color: _c.textSecondary),
           filled: true,
-          fillColor: Colors.white10,
+          fillColor: _c.border,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
@@ -563,11 +568,11 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
           // Titre de section
           Row(
             children: [
-              const Icon(Icons.description, color: Colors.blueAccent, size: 18),
+              Icon(Icons.description, color: _c.accent, size: 18),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 "Description du produit",
-                style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 14),
+                style: TextStyle(color: _c.accent, fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ],
           ),
@@ -577,25 +582,25 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
+              color: _c.tile,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(12),
                 topRight: Radius.circular(12),
               ),
-              border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+              border: Border.all(color: _c.accent.withOpacity(0.3)),
             ),
             child: Row(
               children: [
                 _formatButton(Icons.format_bold, "Gras", () => _insertTag("**")),
                 _formatButton(Icons.format_italic, "Italique", () => _insertTag("_")),
-                Container(width: 1, height: 20, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 6)),
+                Container(width: 1, height: 20, color: _c.border, margin: const EdgeInsets.symmetric(horizontal: 6)),
                 _formatButton(Icons.format_list_bulleted, "Liste", () => _insertPrefix("• ")),
                 _formatButton(Icons.horizontal_rule, "Séparateur", () => _insertLine("───────────────")),
                 const Spacer(),
                 Text(
                   "${_description.text.length}",
                   style: TextStyle(
-                    color: _description.text.length > 500 ? Colors.greenAccent : Colors.white38,
+                    color: _description.text.length > 500 ? _c.success : _c.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -607,22 +612,22 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
           // Zone de texte principale
           Container(
             decoration: BoxDecoration(
-              color: Colors.white10,
+              color: _c.border,
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(12),
                 bottomRight: Radius.circular(12),
               ),
-              border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+              border: Border.all(color: _c.accent.withOpacity(0.3)),
             ),
             child: TextFormField(
               controller: _description,
               maxLines: null,
               minLines: 5,
               keyboardType: TextInputType.multiline,
-              style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+              style: TextStyle(color: _c.text, fontSize: 14, height: 1.5),
               decoration: InputDecoration(
                 hintText: "Décrivez votre produit en détail :\n• Caractéristiques principales\n• Matériaux / composition\n• Dimensions ou taille\n• Conseils d'utilisation",
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.25), fontSize: 13),
+                hintStyle: TextStyle(color: _c.border, fontSize: 13),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.all(14),
               ),
@@ -636,7 +641,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
               Icon(
                 _description.text.length >= 100 ? Icons.check_circle : Icons.info_outline,
                 size: 13,
-                color: _description.text.length >= 100 ? Colors.greenAccent : Colors.white38,
+                color: _description.text.length >= 100 ? _c.success : _c.textSecondary,
               ),
               const SizedBox(width: 4),
               Expanded(
@@ -645,7 +650,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                       ? "Bonne description ! Plus elle est détaillée, plus vos chances de vente augmentent."
                       : "Ajoutez au moins 100 caractères pour une description efficace.",
                   style: TextStyle(
-                    color: _description.text.length >= 100 ? Colors.greenAccent.withOpacity(0.7) : Colors.white38,
+                    color: _description.text.length >= 100 ? _c.success.withOpacity(0.7) : _c.textSecondary,
                     fontSize: 11,
                   ),
                 ),
@@ -665,7 +670,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
         borderRadius: BorderRadius.circular(6),
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: Icon(icon, color: Colors.white54, size: 18),
+          child: Icon(icon, color: _c.textSecondary, size: 18),
         ),
       ),
     );
@@ -714,17 +719,17 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
         Expanded(
           child: DropdownButtonFormField<String>(
             value: _condition,
-            dropdownColor: Colors.grey[900],
-            style: const TextStyle(color: Colors.white, fontSize: 16),
+            dropdownColor: _c.card,
+            style: TextStyle(color: _c.text, fontSize: 16),
             decoration: InputDecoration(
               labelText: "État du produit",
-              labelStyle: const TextStyle(color: Colors.white54),
+              labelStyle: TextStyle(color: _c.textSecondary),
               filled: true,
-              fillColor: Colors.white10,
+              fillColor: _c.border,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
             items: ['Neuf', 'Occasion', 'Fonctionnel', 'Pour pièce ou à réparer'].map((v) {
-              return DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(color: Colors.white)));
+              return DropdownMenuItem(value: v, child: Text(v, style: TextStyle(color: _c.text)));
             }).toList(),
             onChanged: (v) => setState(() => _condition = v!),
           ),
@@ -736,9 +741,9 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
+              border: Border.all(color: _c.accent.withOpacity(0.5)),
             ),
-            child: const Icon(Icons.question_mark, color: Colors.blueAccent, size: 16),
+            child: Icon(Icons.question_mark, color: _c.accent, size: 16),
           ),
         ),
       ],
@@ -749,7 +754,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
   Widget _buildDeliveryOptions() {
     return Container(
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: _c.border, borderRadius: BorderRadius.circular(12)),
       child: Column(children: [
         ..._shippingOptions.asMap().entries.map((entry) {
           final index = entry.key;
@@ -760,7 +765,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
             decoration: BoxDecoration(
               color: Colors.black12, 
               borderRadius: BorderRadius.circular(8), 
-              border: Border.all(color: Colors.white24)
+              border: Border.all(color: _c.border)
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -768,22 +773,22 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("Option #${index + 1}", style: const TextStyle(color: Colors.blueAccent, fontSize: 12)),
+                    Text("Option #${index + 1}", style: TextStyle(color: _c.accent, fontSize: 12)),
                     if (_shippingOptions.length > 1)
                       GestureDetector(
                         onTap: () => setState(() => _shippingOptions.removeAt(index)),
-                        child: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                        child: Icon(Icons.delete, color: _c.danger, size: 20),
                       )
                   ],
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   value: _availableMethods.any((m) => m['id'] == option.methodId) ? option.methodId : null,
-                  dropdownColor: Colors.grey[900],
-                  style: const TextStyle(color: Colors.white),
+                  dropdownColor: _c.card,
+                  style: TextStyle(color: _c.text),
                   decoration: InputDecoration(
                     labelText: "Mode de transport",
-                    labelStyle: const TextStyle(color: Colors.white54),
+                    labelStyle: TextStyle(color: _c.textSecondary),
                     filled: true,
                     fillColor: Colors.black26,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -816,10 +821,10 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                         child: TextFormField(
                           initialValue: option.cost > 0 ? option.cost.toString() : '',
                           keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: _c.text),
                           decoration: InputDecoration(
                             labelText: "Coût (\$)",
-                            labelStyle: const TextStyle(color: Colors.white54),
+                            labelStyle: TextStyle(color: _c.textSecondary),
                             filled: true, fillColor: Colors.black26,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -840,11 +845,11 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                           initialValue: option.time,
                           keyboardType: TextInputType.number,
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: _c.text),
                           decoration: InputDecoration(
                             labelText: "Calcul du délai (jours)",
                             hintText: "Ex: 5",
-                            labelStyle: const TextStyle(color: Colors.white54),
+                            labelStyle: TextStyle(color: _c.textSecondary),
                             filled: true, fillColor: Colors.black26,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -865,10 +870,10 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
                   const SizedBox(height: 10),
                   TextFormField( 
                     initialValue: option.time,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: _c.text),
                     decoration: InputDecoration(
                       labelText: "Temps estimé",
-                      labelStyle: const TextStyle(color: Colors.white54),
+                      labelStyle: TextStyle(color: _c.textSecondary),
                       filled: true, fillColor: Colors.black26,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -891,8 +896,8 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
         SizedBox(
           width: double.infinity,
           child: TextButton.icon(
-            icon: const Icon(Icons.add_circle, color: Colors.blueAccent),
-            label: const Text("Ajouter un mode de livraison", style: TextStyle(color: Colors.blueAccent)),
+            icon: Icon(Icons.add_circle, color: _c.accent),
+            label: Text("Ajouter un mode de livraison", style: TextStyle(color: _c.accent)),
             onPressed: () {
               setState(() {
                 _shippingOptions.add(ShippingOption(
@@ -910,20 +915,20 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
   Widget _buildCategorySelector() {
   return DropdownButtonFormField<String>(
     value: _categoriesData.any((c) => c['key'] == _category) ? _category : null,
-    dropdownColor: Colors.grey[900],
-    style: const TextStyle(color: Colors.white, fontSize: 16),
+    dropdownColor: _c.card,
+    style: TextStyle(color: _c.text, fontSize: 16),
     decoration: InputDecoration(
       labelText: "Catégorie",
-      labelStyle: const TextStyle(color: Colors.white54),
+      labelStyle: TextStyle(color: _c.textSecondary),
       filled: true,
-      fillColor: Colors.white10,
+      fillColor: _c.border,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
     ),
     items: _categoriesData.map((cat) {
       return DropdownMenuItem<String>(
         value: cat['key'],
-        child: Text(cat['label']!, style: const TextStyle(color: Colors.white)),
+        child: Text(cat['label']!, style: TextStyle(color: _c.text)),
       );
     }).toList(),
     onChanged: (v) => setState(() => _category = v!),
@@ -935,25 +940,25 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: _c.tile,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.blueAccent.withOpacity(0.2)),
+        border: Border.all(color: _c.accent.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Conditions de vente", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 15)),
+          Text("Conditions de vente", style: TextStyle(color: _c.accent, fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 14),
           
           // Politique de retour
           DropdownButtonFormField<String>(
             value: _returnPolicy,
-            dropdownColor: Colors.grey[900],
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            dropdownColor: _c.card,
+            style: TextStyle(color: _c.text, fontSize: 14),
             decoration: InputDecoration(
               labelText: "Politique de retour",
-              labelStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.assignment_return, color: Colors.white54),
+              labelStyle: TextStyle(color: _c.textSecondary),
+              prefixIcon: Icon(Icons.assignment_return, color: _c.textSecondary),
               filled: true,
               fillColor: Colors.black26,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -962,7 +967,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
               'Retours acceptés (sous 14 jours)',
               'Retours refusés',
               'Garantie Oli (7 jours)',
-            ].map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(color: Colors.white, fontSize: 13)))).toList(),
+            ].map((v) => DropdownMenuItem(value: v, child: Text(v, style: TextStyle(color: _c.text, fontSize: 13)))).toList(),
             onChanged: (v) => setState(() => _returnPolicy = v!),
           ),
           
@@ -974,23 +979,23 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _certifyAuthenticity ? Colors.greenAccent.withOpacity(0.08) : Colors.transparent,
+                color: _certifyAuthenticity ? _c.success.withOpacity(0.08) : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _certifyAuthenticity ? Colors.greenAccent.withOpacity(0.4) : Colors.white24),
+                border: Border.all(color: _certifyAuthenticity ? _c.success.withOpacity(0.4) : _c.border),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     _certifyAuthenticity ? Icons.check_box : Icons.check_box_outline_blank,
-                    color: _certifyAuthenticity ? Colors.greenAccent : Colors.white38,
+                    color: _certifyAuthenticity ? _c.success : _c.textSecondary,
                     size: 22,
                   ),
                   const SizedBox(width: 10),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       "Je certifie que l'article est authentique et conforme à la description.",
-                      style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                      style: TextStyle(color: _c.textSecondary, fontSize: 13, height: 1.4),
                     ),
                   ),
                 ],
@@ -1008,44 +1013,44 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blueAccent.withOpacity(0.08), Colors.greenAccent.withOpacity(0.05)],
+          colors: [_c.accent.withOpacity(0.08), _c.success.withOpacity(0.05)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.blueAccent.withOpacity(0.25)),
+        border: Border.all(color: _c.accent.withOpacity(0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Text("🛡️", style: TextStyle(fontSize: 20)),
               SizedBox(width: 8),
-              Text("Protection Oli activée", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+              Text("Protection Oli activée", style: TextStyle(color: _c.text, fontWeight: FontWeight.bold, fontSize: 15)),
             ],
           ),
           const SizedBox(height: 4),
-          Container(height: 1, color: Colors.white12),
+          Container(height: 1, color: _c.border),
           const SizedBox(height: 12),
           
-          const _TrustItem(
+          _TrustItem(
             icon: Icons.lock,
-            color: Colors.greenAccent,
+            color: _c.success,
             title: "Paiement sécurisé",
             desc: "L'argent est conservé par Oli jusqu'à la réception du colis.",
           ),
           const SizedBox(height: 10),
-          const _TrustItem(
+          _TrustItem(
             icon: Icons.warning_amber,
-            color: Colors.orangeAccent,
+            color: _c.accent,
             title: "Ne sortez jamais d'Oli",
             desc: "Si un acheteur vous demande de payer par PayPal, Western Union ou de discuter sur WhatsApp, c'est probablement une arnaque.",
           ),
           const SizedBox(height: 10),
-          const _TrustItem(
+          _TrustItem(
             icon: Icons.local_shipping,
-            color: Colors.blueAccent,
+            color: _c.accent,
             title: "Livraison suivie",
             desc: "Utilisez uniquement nos bordereaux pour être couvert en cas de perte.",
           ),
@@ -1060,7 +1065,7 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
       width: double.infinity,
       height: 55,
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        style: ElevatedButton.styleFrom(backgroundColor: _c.accent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
         onPressed: state.isLoading ? null : _submitForm,
         child: state.isLoading 
           ? const CircularProgressIndicator(color: Colors.white) 
@@ -1082,9 +1087,9 @@ class _PublishArticlePageState extends ConsumerState<PublishArticlePage> {
       return;
     }
     if (!_certifyAuthenticity) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text("Vous devez certifier l'authenticité de votre article"),
-        backgroundColor: Colors.redAccent,
+        backgroundColor: _c.danger,
       ));
       return;
     }
@@ -1137,6 +1142,7 @@ class _HelpItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _c = OliSurface.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1145,8 +1151,8 @@ class _HelpItem extends StatelessWidget {
         Expanded(
           child: RichText(
             text: TextSpan(children: [
-              TextSpan(text: "$title : ", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              TextSpan(text: desc, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              TextSpan(text: "$title : ", style: TextStyle(color: _c.text, fontWeight: FontWeight.bold, fontSize: 13)),
+              TextSpan(text: desc, style: TextStyle(color: _c.textSecondary, fontSize: 13)),
             ]),
           ),
         ),
@@ -1164,6 +1170,7 @@ class _TrustItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _c = OliSurface.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1173,7 +1180,7 @@ class _TrustItem extends StatelessWidget {
           child: RichText(
             text: TextSpan(children: [
               TextSpan(text: "$title : ", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
-              TextSpan(text: desc, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+              TextSpan(text: desc, style: TextStyle(color: _c.textSecondary, fontSize: 12, height: 1.4)),
             ]),
           ),
         ),

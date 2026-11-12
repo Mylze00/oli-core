@@ -10,16 +10,18 @@ class _Palette {
   final bool isDark;
   _Palette(this.isDark);
 
-  Color get bg => isDark ? const Color(0xFF0B0F1A) : const Color(0xFFF5F7FA);
-  Color get surface => isDark ? const Color(0xFF161B2A) : Colors.white;
-  Color get text => isDark ? Colors.white : const Color(0xFF1A1F2E);
-  Color get muted => isDark ? Colors.white60 : Colors.black54;
-  Color get divider => isDark ? Colors.white12 : Colors.black12;
+  // Aligné sur le kit commun (core/theme/oli_surface.dart)
+  Color get bg => isDark ? Colors.black : const Color(0xFFF5F6F8);
+  Color get surface => isDark ? const Color(0xFF1C1C1E) : Colors.white;
+  Color get text => isDark ? Colors.white : const Color(0xFF111418);
+  Color get muted => isDark ? const Color(0xFF9A9AA0) : const Color(0xFF5F6673);
+  Color get divider => isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE6E8EC);
 
-  static const Color green = Color(0xFF22C55E);
-  static const Color red = Color(0xFFEF4444);
-  static const Color amber = Color(0xFFF59E0B);
-  static const Color blue = Color(0xFF3B82F6);
+  static const Color green = Color(0xFF16A34A);
+  static const Color red = Color(0xFFE5484D);
+  // Plus d'orange : « en attente », récompenses et séquestre en bleu Oli
+  static const Color amber = Color(0xFF1E7DBA);
+  static const Color blue = Color(0xFF1E7DBA);
   static const Color grey = Color(0xFF94A3B8);
 }
 
@@ -121,7 +123,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1E3A8A), Color(0xFF1E6FBF)],
+          colors: [Color(0xFF14527A), Color(0xFF1E7DBA)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -260,7 +262,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               label: Text(labels[f]!),
               selected: selected,
               onSelected: (_) => setState(() => _filter = f),
-              selectedColor: const Color(0xFF1E6FBF),
+              selectedColor: const Color(0xFF1E7DBA),
               backgroundColor: c.surface,
               side: BorderSide.none,
               labelStyle: TextStyle(

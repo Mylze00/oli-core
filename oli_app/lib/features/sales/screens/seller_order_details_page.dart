@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/theme/oli_surface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -258,25 +259,23 @@ class _SellerOrderDetailsPageState
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.orange.shade100, Colors.amber.shade50],
-          ),
+          color: OliSurface.of(context).tile,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orange.shade400, width: 2),
+          border: Border.all(color: OliSurface.of(context).accent.withValues(alpha: 0.4), width: 2),
         ),
         child: Column(
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.key, color: Colors.orange.shade800, size: 22),
+                Icon(Icons.key, color: OliSurface.of(context).accent, size: 22),
                 const SizedBox(width: 8),
                 Text(
                   'CODE POUR LE LIVREUR',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: Colors.orange.shade800,
+                    color: OliSurface.of(context).accent,
                     letterSpacing: 1,
                   ),
                 ),
@@ -289,7 +288,7 @@ class _SellerOrderDetailsPageState
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.shade300),
+                border: Border.all(color: OliSurface.of(context).accent.withValues(alpha: 0.4)),
               ),
               child: Text(
                 _order!.pickupCode!,
@@ -297,7 +296,7 @@ class _SellerOrderDetailsPageState
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 8,
-                  color: Colors.orange.shade900,
+                  color: OliSurface.of(context).accent,
                   fontFamily: 'monospace',
                 ),
               ),
@@ -305,7 +304,7 @@ class _SellerOrderDetailsPageState
             const SizedBox(height: 8),
             Text(
               'Communiquez ce code au livreur quand il arrive',
-              style: TextStyle(fontSize: 12, color: Colors.orange.shade700),
+              style: TextStyle(fontSize: 12, color: OliSurface.of(context).accent),
             ),
           ],
         ),
@@ -339,13 +338,13 @@ class _SellerOrderDetailsPageState
               onTap: () => _callBuyer(_order!.buyerPhone!),
               child: Row(
                 children: [
-                  const Icon(Icons.phone, size: 20, color: Colors.green),
+                  Icon(Icons.phone, size: 20, color: OliSurface.of(context).accent),
                   const SizedBox(width: 10),
                   Text(
                     _order!.buyerPhone!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-                      color: Colors.green,
+                      color: OliSurface.of(context).accent,
                       decoration: TextDecoration.underline,
                     ),
                   ),
@@ -378,8 +377,8 @@ class _SellerOrderDetailsPageState
                     icon: const Icon(Icons.phone, size: 18),
                     label: const Text('Appeler'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.green,
-                      side: const BorderSide(color: Colors.green),
+                      foregroundColor: OliSurface.of(context).accent,
+                      side: BorderSide(color: OliSurface.of(context).accent),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                     ),
@@ -577,7 +576,7 @@ class _SellerOrderDetailsPageState
       buttons.add(_buildFullWidthButton(
         icon: Icons.qr_code_scanner,
         label: 'Vérifier le code client (Pick & Go)',
-        color: Colors.green,
+        color: OliSurface.oliBlue,
         onPressed: _showPickupCodeDialog,
       ));
     }
@@ -587,7 +586,7 @@ class _SellerOrderDetailsPageState
       buttons.add(_buildFullWidthButton(
         icon: Icons.handshake,
         label: 'Confirmer la remise en main propre',
-        color: Colors.teal,
+        color: OliSurface.oliBlue,
         onPressed: _showDeliveryCodeDialog,
       ));
     }
@@ -674,7 +673,7 @@ class _SellerOrderDetailsPageState
             child: const Text('Annuler'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: OliSurface.oliBlue, foregroundColor: Colors.white),
             onPressed: () async {
               final code = controller.text.trim();
               if (code.isEmpty) return;
@@ -730,7 +729,7 @@ class _SellerOrderDetailsPageState
             child: const Text('Annuler'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+            style: ElevatedButton.styleFrom(backgroundColor: OliSurface.oliBlue, foregroundColor: Colors.white),
             onPressed: () async {
               final code = controller.text.trim();
               if (code.isEmpty) return;
@@ -909,55 +908,28 @@ class _SellerOrderDetailsPageState
 
   // ------  Helpers  ------
 
+  /// Statut en pastille neutre (point bleu en cours, vert livrée, rouge annulée).
   Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-
+    final surface = OliSurface.of(context);
+    final Color dot;
     switch (status) {
       case 'paid':
-        bgColor = Colors.orange.shade100;
-        textColor = Colors.orange.shade800;
-        break;
       case 'processing':
-        bgColor = Colors.blue.shade100;
-        textColor = Colors.blue.shade800;
-        break;
       case 'ready':
-        bgColor = Colors.teal.shade100;
-        textColor = Colors.teal.shade800;
-        break;
       case 'shipped':
-        bgColor = Colors.purple.shade100;
-        textColor = Colors.purple.shade800;
+        dot = surface.accent;
         break;
       case 'delivered':
-        bgColor = Colors.green.shade100;
-        textColor = Colors.green.shade800;
+        dot = surface.success;
         break;
       case 'cancelled':
-        bgColor = Colors.red.shade100;
-        textColor = Colors.red.shade800;
+      case 'refunded':
+        dot = surface.danger;
         break;
       default:
-        bgColor = Colors.grey.shade100;
-        textColor = Colors.grey.shade800;
+        dot = surface.textSecondary;
     }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        SellerOrder.statusLabels[status] ?? status,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
-      ),
-    );
+    return OliStatusPill(label: SellerOrder.statusLabels[status] ?? status, dot: dot);
   }
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
