@@ -14,7 +14,36 @@ import {
     ClockIcon,
     PlusCircleIcon,
     XMarkIcon,
+    BanknotesIcon,
+    IdentificationIcon,
+    MapPinIcon,
 } from '@heroicons/react/24/solid';
+
+const VEHICLE_LABELS = { moto: 'Moto', velo: 'Vélo', voiture: 'Voiture', pied: 'À pied' };
+
+/** Le wallet Oli est tenu en francs congolais. */
+const formatFc = (amount) => `${Math.round(Number(amount) || 0).toLocaleString('fr-FR')} FC`;
+
+/** Gage d'une candidature : réellement bloqué (FC) ou seulement déclaré (anciennes candidatures, en USD). */
+function PledgeInfo({ app }) {
+    if (app.pledge_status === 'held' || app.pledge_status === 'refunded') {
+        const held = app.pledge_status === 'held';
+        return (
+            <>
+                <p className="text-lg font-bold text-gray-900">{formatFc(app.pledge_fc)}</p>
+                <p className={`text-xs font-medium ${held ? 'text-amber-600' : 'text-gray-400'}`}>
+                    {held ? '🔒 Gage bloqué' : '↩️ Gage rendu'}
+                </p>
+            </>
+        );
+    }
+    return (
+        <>
+            <p className="text-lg font-bold text-gray-400">${parseFloat(app.pledge_amount || 0).toFixed(2)}</p>
+            <p className="text-xs text-gray-400">Déclaré, non bloqué</p>
+        </>
+    );
+}
 
 /* ─── Reusable Components ─────────────────────────────────────── */
 
@@ -64,7 +93,7 @@ export default function Delivery() {
 
     // Applications state
     const [applications, setApplications] = useState([]);
-    const [appStats, setAppStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
+    const [appStats, setAppStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, pledges_held_count: 0, pledges_held_fc: 0 });
     const [appLoading, setAppLoading] = useState(true);
     const [appFilter, setAppFilter] = useState('all');
     const [appSearch, setAppSearch] = useState('');
@@ -155,14 +184,15 @@ export default function Delivery() {
             await fetchDrivers(); // Refresh drivers since a new one was added
         } catch (err) {
             console.error(err);
-            alert("Erreur lors de l'approbation");
+            alert(err.response?.data?.error || "Erreur lors de l'approbation");
         } finally {
             setActionLoading(null);
         }
     };
 
     const rejectApplication = async (app) => {
-        const note = window.prompt(`Raison du rejet pour ${app.name || 'ce candidat'} (optionnel) :`);
+        const pledgeNotice = app.pledge_status === 'held' ? `\nSon gage de ${formatFc(app.pledge_fc)} lui sera rendu.` : '';
+        const note = window.prompt(`Raison du rejet pour ${app.full_name || app.name || 'ce candidat'} (optionnel) :${pledgeNotice}`);
         if (note === null) return; // User cancelled
         setActionLoading(app.id);
         try {
@@ -170,7 +200,7 @@ export default function Delivery() {
             await fetchApplications();
         } catch (err) {
             console.error(err);
-            alert("Erreur lors du rejet");
+            alert(err.response?.data?.error || "Erreur lors du rejet");
         } finally {
             setActionLoading(null);
         }
@@ -201,6 +231,8 @@ export default function Delivery() {
             const s = appSearch.toLowerCase();
             list = list.filter(a =>
                 a.name?.toLowerCase().includes(s) ||
+                a.full_name?.toLowerCase().includes(s) ||
+                a.zone?.toLowerCase().includes(s) ||
                 a.phone?.includes(s) ||
                 a.email?.toLowerCase().includes(s)
             );
@@ -422,11 +454,17 @@ export default function Delivery() {
             {tab === 'applications' && (
                 <>
                     {/* Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <StatCard label="Total" value={appStats.total} icon={ClipboardDocumentListIcon} color="blue" />
                         <StatCard label="En attente" value={appStats.pending} icon={ClockIcon} color="amber" />
                         <StatCard label="Approuvées" value={appStats.approved} icon={CheckCircleIcon} color="green" />
                         <StatCard label="Rejetées" value={appStats.rejected} icon={XCircleIcon} color="red" />
+                        <StatCard
+                            label={`Gages bloqués (${appStats.pledges_held_count || 0})`}
+                            value={formatFc(appStats.pledges_held_fc)}
+                            icon={BanknotesIcon}
+                            color="purple"
+                        />
                     </div>
 
                     {/* Filters */}
@@ -459,17 +497,19 @@ export default function Delivery() {
                                             />
                                             <div className="min-w-0">
                                                 <Link to={`/users/${app.user_id}`} className="text-sm font-semibold text-blue-600 hover:underline truncate block">
-                                                    {app.name || 'Sans nom'}
+                                                    {app.full_name || app.name || 'Sans nom'}
                                                 </Link>
+                                                {app.full_name && app.name && app.full_name !== app.name && (
+                                                    <p className="text-xs text-gray-400 truncate">Compte : {app.name}</p>
+                                                )}
                                                 <p className="text-xs text-gray-400 truncate">{app.phone || app.app_phone}</p>
                                                 {app.email && <p className="text-xs text-gray-400 truncate">{app.email}</p>}
                                             </div>
                                         </div>
 
-                                        {/* Pledge Amount */}
+                                        {/* Gage */}
                                         <div className="text-center px-4">
-                                            <p className="text-lg font-bold text-gray-900">${parseFloat(app.pledge_amount || 0).toFixed(2)}</p>
-                                            <p className="text-xs text-gray-400">Gage</p>
+                                            <PledgeInfo app={app} />
                                         </div>
 
                                         {/* Status */}
@@ -521,6 +561,34 @@ export default function Delivery() {
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Véhicule, zone et pièce d'identité */}
+                                    {(app.vehicle_type || app.zone || app.id_document_url) && (
+                                        <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-600">
+                                            {app.vehicle_type && (
+                                                <span className="flex items-center gap-1.5">
+                                                    <TruckIcon className="h-4 w-4 text-gray-400" />
+                                                    {VEHICLE_LABELS[app.vehicle_type] || app.vehicle_type}
+                                                    {app.vehicle_plate && <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{app.vehicle_plate}</span>}
+                                                </span>
+                                            )}
+                                            {app.zone && (
+                                                <span className="flex items-center gap-1.5">
+                                                    <MapPinIcon className="h-4 w-4 text-gray-400" />
+                                                    {app.zone}
+                                                </span>
+                                            )}
+                                            {app.id_document_url && (
+                                                <a href={app.id_document_url} target="_blank" rel="noopener noreferrer"
+                                                    className="flex items-center gap-2 text-blue-600 hover:underline">
+                                                    <img src={app.id_document_url} alt="Pièce d'identité"
+                                                        className="h-10 w-16 object-cover rounded border border-gray-200" />
+                                                    <IdentificationIcon className="h-4 w-4" />
+                                                    Pièce d'identité
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Motivation */}
                                     {app.motivation && (

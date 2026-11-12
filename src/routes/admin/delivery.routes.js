@@ -6,6 +6,14 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
 const { BASE_URL } = require('../../config');
+const walletRepository = require('../../repositories/wallet.repository');
+const notificationService = require('../../services/notification.service');
+
+/** Le candidat est prévenu de la décision (base, temps réel et push vers l'app Oli). */
+function notifyCandidate(req, userId, title, body) {
+    notificationService.send(userId, 'system', title, body, { kind: 'deliverer_application' }, req.app.get('io'))
+        .catch((e) => console.warn(`⚠️ Candidat #${userId} non prévenu:`, e.message));
+}
 
 // ─── Auto-migration au démarrage ──────────────────────────────────
 (async () => {
@@ -194,6 +202,8 @@ router.get('/applications', async (req, res) => {
                 da.id, da.user_id, da.pledge_amount, da.phone as app_phone,
                 da.motivation, da.status, da.admin_note,
                 da.created_at, da.reviewed_at,
+                da.full_name, da.id_document_url, da.vehicle_type, da.vehicle_plate, da.zone,
+                da.pledge_fc, da.pledge_status,
                 u.name, u.phone, u.email, u.avatar_url
             FROM deliverer_applications da
             JOIN users u ON u.id = da.user_id
@@ -208,7 +218,7 @@ router.get('/applications', async (req, res) => {
         }
 
         if (search) {
-            conditions.push(`(u.name ILIKE $${paramIndex} OR u.phone ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
+            conditions.push(`(u.name ILIKE $${paramIndex} OR da.full_name ILIKE $${paramIndex} OR u.phone ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
             params.push(`%${search}%`);
             paramIndex++;
         }
@@ -225,20 +235,23 @@ router.get('/applications', async (req, res) => {
         // Format avatars
         const applications = result.rows.map(a => ({
             ...a,
+            pledge_fc: parseFloat(a.pledge_fc) || 0,
             avatar_url: a.avatar_url
                 ? (a.avatar_url.startsWith('http') ? a.avatar_url : `${BASE_URL}/uploads/${a.avatar_url}`)
                 : null
         }));
 
         // Stats des candidatures
-        let appStats = { total: 0, pending: 0, approved: 0, rejected: 0 };
+        let appStats = { total: 0, pending: 0, approved: 0, rejected: 0, pledges_held_count: 0, pledges_held_fc: 0 };
         try {
             const statsResult = await pool.query(`
                 SELECT 
                     COUNT(*) as total,
                     COUNT(*) FILTER (WHERE status = 'pending') as pending,
                     COUNT(*) FILTER (WHERE status = 'approved') as approved,
-                    COUNT(*) FILTER (WHERE status = 'rejected') as rejected
+                    COUNT(*) FILTER (WHERE status = 'rejected') as rejected,
+                    COUNT(*) FILTER (WHERE pledge_status = 'held') as pledges_held_count,
+                    COALESCE(SUM(pledge_fc) FILTER (WHERE pledge_status = 'held'), 0) as pledges_held_fc
                 FROM deliverer_applications
             `);
             appStats = statsResult.rows[0];
@@ -251,6 +264,8 @@ router.get('/applications', async (req, res) => {
                 pending: parseInt(appStats.pending),
                 approved: parseInt(appStats.approved),
                 rejected: parseInt(appStats.rejected),
+                pledges_held_count: parseInt(appStats.pledges_held_count),
+                pledges_held_fc: parseFloat(appStats.pledges_held_fc),
             }
         });
     } catch (err) {
@@ -267,33 +282,31 @@ router.patch('/applications/:id/approve', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Récupérer la candidature
-        const app = await pool.query(
-            'SELECT user_id, status FROM deliverer_applications WHERE id = $1',
-            [id]
-        );
-        if (app.rows.length === 0) {
-            return res.status(404).json({ error: 'Candidature introuvable' });
-        }
-        if (app.rows[0].status === 'approved') {
-            return res.status(400).json({ error: 'Candidature déjà approuvée' });
-        }
-
-        const userId = app.rows[0].user_id;
-
-        // Mettre à jour la candidature
-        await pool.query(
-            `UPDATE deliverer_applications 
-             SET status = 'approved', admin_note = $1, reviewed_at = NOW() 
-             WHERE id = $2`,
+        // Seule une candidature en attente peut être approuvée (une refusée a déjà rendu son gage)
+        const updated = await pool.query(
+            `UPDATE deliverer_applications
+             SET status = 'approved', admin_note = $1, reviewed_at = NOW()
+             WHERE id = $2 AND status = 'pending'
+             RETURNING user_id, pledge_fc, pledge_status`,
             [req.body.admin_note || 'Approuvé par admin', id]
         );
+        if (updated.rows.length === 0) {
+            const exists = await pool.query('SELECT status FROM deliverer_applications WHERE id = $1', [id]);
+            return exists.rows.length === 0
+                ? res.status(404).json({ error: 'Candidature introuvable' })
+                : res.status(400).json({ error: `Candidature déjà traitée (${exists.rows[0].status})` });
+        }
+
+        const { user_id: userId } = updated.rows[0];
 
         // Activer le rôle livreur sur l'utilisateur
         await pool.query(
             'UPDATE users SET is_deliverer = TRUE, updated_at = NOW() WHERE id = $1',
             [userId]
         );
+
+        notifyCandidate(req, userId, '🎉 Candidature livreur acceptée',
+            'Bienvenue dans l\'équipe ! Ouvrez l\'app Oli Delivery pour commencer vos livraisons. Votre gage reste bloqué comme garantie.');
 
         res.json({
             success: true,
@@ -313,26 +326,62 @@ router.patch('/applications/:id/approve', async (req, res) => {
 router.patch('/applications/:id/reject', async (req, res) => {
     try {
         const { id } = req.params;
-        const { admin_note } = req.body;
+        const note = (req.body.admin_note || '').trim() || 'Rejeté par admin';
 
-        const app = await pool.query(
-            'SELECT user_id, status FROM deliverer_applications WHERE id = $1',
-            [id]
-        );
-        if (app.rows.length === 0) {
-            return res.status(404).json({ error: 'Candidature introuvable' });
+        // Le passage à « refusée » et la libération du gage se font en une seule écriture :
+        // deux clics simultanés ne peuvent pas rembourser deux fois
+        const updated = await pool.query(`
+            WITH current AS (
+                SELECT id, pledge_status AS was FROM deliverer_applications WHERE id = $1 FOR UPDATE
+            )
+            UPDATE deliverer_applications da
+            SET status = 'rejected', admin_note = $2, reviewed_at = NOW(),
+                pledge_status = CASE WHEN current.was = 'held' THEN 'refunded' ELSE da.pledge_status END
+            FROM current
+            WHERE da.id = current.id AND da.status = 'pending'
+            RETURNING da.user_id, da.pledge_fc, da.pledge_reference, current.was AS previous_pledge_status
+        `, [id, note]);
+
+        if (updated.rows.length === 0) {
+            const exists = await pool.query('SELECT status FROM deliverer_applications WHERE id = $1', [id]);
+            return exists.rows.length === 0
+                ? res.status(404).json({ error: 'Candidature introuvable' })
+                : res.status(400).json({ error: `Candidature déjà traitée (${exists.rows[0].status})` });
         }
 
-        await pool.query(
-            `UPDATE deliverer_applications 
-             SET status = 'rejected', admin_note = $1, reviewed_at = NOW() 
-             WHERE id = $2`,
-            [admin_note || 'Rejeté par admin', id]
-        );
+        const app = updated.rows[0];
+        const pledgeFc = parseFloat(app.pledge_fc) || 0;
+        let refunded = false;
+
+        if (app.previous_pledge_status === 'held' && pledgeFc > 0) {
+            try {
+                await walletRepository.performDeposit(app.user_id, pledgeFc, {
+                    type: 'escrow_refund',
+                    provider: 'OLI_DELIVERY',
+                    reference: `${app.pledge_reference || `DELIVERER_PLEDGE_APP_${id}`}_REFUND`,
+                    description: 'Gage livreur rendu (candidature refusée)',
+                });
+                refunded = true;
+            } catch (e) {
+                // Retour à l'état d'avant : l'admin peut refuser à nouveau, ce qui retentera le remboursement
+                await pool.query(
+                    "UPDATE deliverer_applications SET status = 'pending', pledge_status = 'held', admin_note = NULL, reviewed_at = NULL WHERE id = $1",
+                    [id]
+                );
+                console.error(`❌ Gage de la candidature #${id} non rendu:`, e.message);
+                return res.status(500).json({ error: 'Le gage n\'a pas pu être rendu : la candidature reste en attente. Réessayez.' });
+            }
+        }
+
+        notifyCandidate(req, app.user_id, 'Candidature livreur refusée',
+            refunded
+                ? `Motif : ${note}. Votre gage de ${Math.round(pledgeFc).toLocaleString('fr-FR')} FC a été rendu sur votre wallet Oli.`
+                : `Motif : ${note}.`);
 
         res.json({
             success: true,
-            message: 'Candidature rejetée'
+            message: refunded ? 'Candidature rejetée — gage rendu au candidat' : 'Candidature rejetée',
+            refunded,
         });
     } catch (err) {
         console.error('Erreur reject application:', err);

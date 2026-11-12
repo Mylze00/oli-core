@@ -40,4 +40,6 @@ class ApiConfig {
   // Candidature Livreur
   static const String deliveryApply = '$deliveryBase/apply';
   static const String deliveryApplyStatus = '$deliveryBase/apply/status';
+  /// Solde du wallet Oli (en FC) : le gage de candidature y est prélevé.
+  static const String oliWalletBalance = '$baseUrl/api/wallet/balance';
 }

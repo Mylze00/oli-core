@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,16 +16,30 @@ class PendingPage extends ConsumerStatefulWidget {
 class _PendingPageState extends ConsumerState<PendingPage> {
   String _status = 'pending';
   String? _adminNote;
+  String _pledgeStatus = 'none';
+  double _pledgeFc = 0;
   bool _isLoading = true;
+
+  /// La décision de l'admin s'affiche d'elle-même, sans avoir à rouvrir la page.
+  Timer? _autoRefresh;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkStatus());
+    _autoRefresh = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_status == 'pending') _checkStatus(silent: true);
+    });
   }
 
-  Future<void> _checkStatus() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _autoRefresh?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkStatus({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
     try {
       final dio = ref.read(dioProvider);
       final response = await dio.get(ApiConfig.deliveryApplyStatus);
@@ -34,6 +49,8 @@ class _PendingPageState extends ConsumerState<PendingPage> {
         setState(() {
           _status = data['status'] ?? 'pending';
           _adminNote = data['admin_note'];
+          _pledgeStatus = data['pledge_status']?.toString() ?? 'none';
+          _pledgeFc = (data['pledge_fc'] as num?)?.toDouble() ?? 0;
           _isLoading = false;
         });
 
@@ -125,7 +142,7 @@ class _PendingPageState extends ConsumerState<PendingPage> {
                           width: double.infinity,
                           height: 52,
                           child: ElevatedButton.icon(
-                            onPressed: _checkStatus,
+                            onPressed: () => _checkStatus(),
                             icon: const Icon(Icons.refresh),
                             label: const Text('Vérifier le statut',
                                 style: TextStyle(fontWeight: FontWeight.bold)),
@@ -241,13 +258,17 @@ class _PendingPageState extends ConsumerState<PendingPage> {
   }
 
   String _getDescription() {
+    final pledge = '${_pledgeFc.round()} FC';
     switch (_status) {
       case 'approved':
-        return 'Félicitations ! Votre candidature a été approuvée. Vous pouvez maintenant accéder au dashboard et commencer à livrer.';
+        return 'Félicitations ! Votre candidature a été approuvée. Vous pouvez maintenant accéder au dashboard et commencer à livrer.'
+            '${_pledgeStatus == 'held' ? '\n\nVotre gage de $pledge reste bloqué comme garantie.' : ''}';
       case 'rejected':
-        return 'Votre candidature n\'a pas été retenue pour le moment. Vous pouvez soumettre une nouvelle candidature.';
+        return 'Votre candidature n\'a pas été retenue pour le moment. Vous pouvez soumettre une nouvelle candidature.'
+            '${_pledgeStatus == 'refunded' ? '\n\nVotre gage de $pledge a été rendu sur votre wallet Oli.' : ''}';
       default:
-        return 'Votre candidature est en cours d\'examen par notre équipe. Vous recevrez une notification une fois qu\'elle sera traitée.';
+        return 'Votre candidature est en cours d\'examen par notre équipe. Cette page se met à jour toute seule.'
+            '${_pledgeStatus == 'held' ? '\n\nVotre gage de $pledge est bloqué ; il vous sera rendu en cas de refus.' : ''}';
     }
   }
 }

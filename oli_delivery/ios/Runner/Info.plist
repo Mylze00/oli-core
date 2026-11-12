@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Oli Delivery utilise l'appareil photo pour photographier votre pièce d'identité lors de la candidature.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Oli Delivery accède à vos photos pour joindre votre pièce d'identité à la candidature.</string>
 </dict>
 </plist>

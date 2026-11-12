@@ -1,9 +1,24 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/config/api_config.dart';
 import '../../core/providers/dio_provider.dart';
+
+const _primary = Color(0xFF1E7DBA);
+const _minPledgeFc = 100;
+
+/// Moyens de déplacement acceptés par le serveur (valeur envoyée → libellé).
+const _vehicles = {
+  'moto': 'Moto',
+  'velo': 'Vélo',
+  'voiture': 'Voiture',
+  'pied': 'À pied',
+};
+const _vehiclesWithPlate = {'moto', 'voiture'};
 
 class ApplyPage extends ConsumerStatefulWidget {
   const ApplyPage({super.key});
@@ -13,54 +28,195 @@ class ApplyPage extends ConsumerStatefulWidget {
 }
 
 class _ApplyPageState extends ConsumerState<ApplyPage> {
+  final _fullNameController = TextEditingController();
+  final _plateController = TextEditingController();
+  final _zoneController = TextEditingController();
   final _pledgeController = TextEditingController();
   final _motivationController = TextEditingController();
+
+  String? _vehicleType;
+  XFile? _idDocument;
+  Uint8List? _idDocumentPreview;
+
+  /// Solde du wallet Oli en FC : null tant qu'il n'est pas chargé.
+  double? _walletBalance;
   bool _isSubmitting = false;
+
+  /// Vrai tant qu'on vérifie si une candidature existe déjà.
+  bool _isCheckingExisting = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _redirectIfAlreadyApplied();
+    _loadWalletBalance();
+  }
+
+  /// Après la connexion par téléphone, un candidat qui a déjà postulé suit sa
+  /// candidature au lieu de remplir le formulaire une seconde fois.
+  Future<void> _redirectIfAlreadyApplied() async {
+    try {
+      final response = await ref.read(dioProvider).get(ApiConfig.deliveryApplyStatus);
+      final status = response.data is Map ? response.data['status']?.toString() : null;
+      if (mounted && (status == 'pending' || status == 'approved')) {
+        context.go('/pending');
+        return;
+      }
+    } catch (e) {
+      debugPrint('Statut de candidature non vérifié: $e');
+    }
+    if (mounted) setState(() => _isCheckingExisting = false);
+  }
 
   @override
   void dispose() {
+    _fullNameController.dispose();
+    _plateController.dispose();
+    _zoneController.dispose();
     _pledgeController.dispose();
     _motivationController.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final pledgeStr = _pledgeController.text.trim();
-    final pledge = double.tryParse(pledgeStr) ?? 0;
+  Future<void> _loadWalletBalance() async {
+    try {
+      final response = await ref.read(dioProvider).get(ApiConfig.oliWalletBalance);
+      final balance = (response.data['balanceFC'] as num?)?.toDouble();
+      if (mounted && balance != null) setState(() => _walletBalance = balance);
+    } catch (e) {
+      debugPrint('Solde du wallet non chargé: $e');
+    }
+  }
 
-    if (pledge <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez entrer un montant de gage valide'),
-          backgroundColor: Colors.red,
+  Future<void> _pickIdDocument(ImageSource source) async {
+    try {
+      final file = await ImagePicker().pickImage(source: source, maxWidth: 1600, imageQuality: 85);
+      if (file == null) return;
+      final preview = await file.readAsBytes();
+      if (mounted) {
+        setState(() {
+          _idDocument = file;
+          _idDocumentPreview = preview;
+        });
+      }
+    } catch (e) {
+      _showError("Impossible d'ouvrir la photo. Vérifiez l'autorisation d'accès.");
+    }
+  }
+
+  void _chooseIdDocumentSource() {
+    // Sur le web, le navigateur propose lui-même appareil photo ou fichier
+    if (kIsWeb) {
+      _pickIdDocument(ImageSource.gallery);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera),
+              title: const Text('Prendre une photo'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickIdDocument(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choisir dans la galerie'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickIdDocument(ImageSource.gallery);
+              },
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  /// Premier champ manquant, ou null si la candidature est complète.
+  String? _validationError(int pledge) {
+    if (_fullNameController.text.trim().length < 3) return 'Indiquez votre nom complet';
+    if (_vehicleType == null) return 'Choisissez votre moyen de déplacement';
+    if (_vehiclesWithPlate.contains(_vehicleType) && _plateController.text.trim().isEmpty) {
+      return "Indiquez la plaque d'immatriculation";
+    }
+    if (_zoneController.text.trim().isEmpty) return 'Indiquez votre zone de livraison';
+    if (_idDocument == null) return "Ajoutez la photo de votre pièce d'identité";
+    if (pledge < _minPledgeFc) return 'Le gage doit être d\'au moins $_minPledgeFc FC';
+    final balance = _walletBalance;
+    if (balance != null && pledge > balance) {
+      return 'Solde insuffisant : votre wallet Oli contient ${_formatFc(balance)}. Rechargez-le ou baissez le gage.';
+    }
+    return null;
+  }
+
+  Future<void> _submit() async {
+    final pledge = int.tryParse(_pledgeController.text.trim()) ?? 0;
+    final error = _validationError(pledge);
+    if (error != null) {
+      _showError(error);
       return;
     }
 
-    setState(() => _isSubmitting = true);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Bloquer le gage ?'),
+        content: Text(
+          '${_formatFc(pledge)} seront prélevés sur votre wallet Oli et bloqués pendant l\'examen '
+          'de votre candidature. Ils vous seront rendus si elle est refusée.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirmer')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
 
+    setState(() => _isSubmitting = true);
     try {
-      final dio = ref.read(dioProvider);
-      final response = await dio.post(ApiConfig.deliveryApply, data: {
-        'pledge_amount': pledge,
+      final document = _idDocument!;
+      final form = FormData.fromMap({
+        'full_name': _fullNameController.text.trim(),
+        'vehicle_type': _vehicleType,
+        'vehicle_plate': _plateController.text.trim(),
+        'zone': _zoneController.text.trim(),
+        'pledge_fc': pledge,
         'motivation': _motivationController.text.trim(),
+        'id_document': MultipartFile.fromBytes(
+          await document.readAsBytes(),
+          filename: document.name.isNotEmpty ? document.name : 'piece_identite.jpg',
+        ),
       });
 
-      if (mounted) {
-        if (response.statusCode == 201 || response.statusCode == 200) {
-          context.go('/pending');
-        }
+      final response = await ref.read(dioProvider).post(ApiConfig.deliveryApply, data: form);
+      if (mounted && (response.statusCode == 201 || response.statusCode == 200)) {
+        context.go('/pending');
       }
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final code = data is Map ? data['code']?.toString() : null;
+      if (mounted && (code == 'already_pending' || code == 'already_approved')) {
+        context.go('/pending');
+        return;
+      }
+      final message = data is Map ? data['error']?.toString() : null;
+      _showError(message ?? 'Envoi impossible. Vérifiez votre connexion et réessayez.');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showError('Envoi impossible. Réessayez.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -68,198 +224,294 @@ class _ApplyPageState extends ConsumerState<ApplyPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isCheckingExisting) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final needsPlate = _vehiclesWithPlate.contains(_vehicleType);
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 20),
+                  _buildHeader(),
+                  const SizedBox(height: 32),
+                  _buildAdvantages(),
+                  const SizedBox(height: 28),
 
-              // Header
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E7DBA).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: const Icon(
-                        Icons.delivery_dining,
-                        size: 56,
-                        color: Color(0xFF1E7DBA),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Devenir Livreur Oli',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E7DBA),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Rejoignez notre équipe de livreurs et commencez à gagner dès aujourd\'hui',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  _sectionTitle('Votre identité'),
+                  _field(
+                    controller: _fullNameController,
+                    label: 'Nom complet (comme sur la pièce)',
+                    icon: Icons.person_outline,
+                    capitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildIdDocumentPicker(),
 
-              const SizedBox(height: 32),
-
-              // Avantages
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.green.withOpacity(0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.stars, color: Colors.green, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Avantages',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 28),
+                  _sectionTitle('Votre activité'),
+                  _label('Moyen de déplacement'),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _vehicles.entries.map((vehicle) => ChoiceChip(
+                          label: Text(vehicle.value),
+                          selected: _vehicleType == vehicle.key,
+                          selectedColor: _primary.withOpacity(0.15),
+                          onSelected: (_) => setState(() => _vehicleType = vehicle.key),
+                        )).toList(),
+                  ),
+                  if (needsPlate) ...[
                     const SizedBox(height: 12),
-                    _buildAdvantage('Gagnez des commissions sur chaque livraison'),
-                    _buildAdvantage('Horaires flexibles — travaillez quand vous voulez'),
-                    _buildAdvantage('Wallet intégré avec retrait Mobile Money'),
-                    _buildAdvantage('Notifications en temps réel pour les commandes'),
+                    _field(
+                      controller: _plateController,
+                      label: "Plaque d'immatriculation",
+                      icon: Icons.pin_outlined,
+                      capitalization: TextCapitalization.characters,
+                    ),
                   ],
-                ),
-              ),
+                  const SizedBox(height: 12),
+                  _field(
+                    controller: _zoneController,
+                    label: 'Zone de livraison (ex : Gombe, Limete)',
+                    icon: Icons.location_on_outlined,
+                    capitalization: TextCapitalization.words,
+                  ),
 
-              const SizedBox(height: 28),
+                  const SizedBox(height: 28),
+                  _sectionTitle('Gage de garantie'),
+                  Text(
+                    'Prélevé sur votre wallet Oli et bloqué pendant l\'examen. Il vous est rendu si votre '
+                    'candidature est refusée, et reste bloqué comme garantie si elle est acceptée.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600, height: 1.4),
+                  ),
+                  const SizedBox(height: 10),
+                  _field(
+                    controller: _pledgeController,
+                    label: 'Montant du gage (FC)',
+                    icon: Icons.lock_outline,
+                    keyboardType: TextInputType.number,
+                    formatters: [FilteringTextInputFormatter.digitsOnly],
+                    suffix: 'FC',
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _walletBalance == null
+                        ? 'Minimum $_minPledgeFc FC'
+                        : 'Solde disponible : ${_formatFc(_walletBalance!)} · minimum $_minPledgeFc FC',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
 
-              // Montant de gage
-              const Text(
-                'Montant de gage (USD)',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Ce montant sert de garantie. Choisissez librement le montant selon votre volonté.',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _pledgeController,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                  const SizedBox(height: 28),
+                  _sectionTitle('Motivation (optionnel)'),
+                  _field(
+                    controller: _motivationController,
+                    label: 'Pourquoi souhaitez-vous devenir livreur ?',
+                    maxLines: 3,
+                  ),
+
+                  const SizedBox(height: 32),
+                  _buildSubmitButton(),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () => context.go('/login'),
+                      icon: const Icon(Icons.arrow_back, size: 18),
+                      label: const Text('Retour'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.grey.shade600),
+                    ),
+                  ),
                 ],
-                decoration: InputDecoration(
-                  hintText: 'Ex: 5.00',
-                  prefixIcon: const Icon(Icons.attach_money),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFF1E7DBA), width: 2),
-                  ),
-                ),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-
-              const SizedBox(height: 20),
-
-              // Motivation (optional)
-              const Text(
-                'Motivation (optionnel)',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _motivationController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: 'Pourquoi souhaitez-vous devenir livreur ?',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFF1E7DBA), width: 2),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Submit
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton.icon(
-                  onPressed: _isSubmitting ? null : _submit,
-                  icon: _isSubmitting
-                      ? const SizedBox(
-                          width: 20, height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.send),
-                  label: Text(
-                    _isSubmitting ? 'Envoi en cours...' : 'Soumettre ma candidature',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1E7DBA),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 2,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Logout
-              Center(
-                child: TextButton.icon(
-                  onPressed: () => context.go('/login'),
-                  icon: const Icon(Icons.arrow_back, size: 18),
-                  label: const Text('Retour'),
-                  style: TextButton.styleFrom(foregroundColor: Colors.grey.shade600),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Center(
+      child: Column(
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: _primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: const Icon(Icons.delivery_dining, size: 56, color: _primary),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Devenir Livreur Oli',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _primary),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Rejoignez notre équipe de livreurs et commencez à gagner dès aujourd\'hui',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvantages() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.green.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.stars, color: Colors.green, size: 20),
+              SizedBox(width: 8),
+              Text('Avantages', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildAdvantage('Gagnez des commissions sur chaque livraison'),
+          _buildAdvantage('Horaires flexibles — travaillez quand vous voulez'),
+          _buildAdvantage('Wallet intégré avec retrait Mobile Money'),
+          _buildAdvantage('Notifications en temps réel pour les commandes'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIdDocumentPicker() {
+    final preview = _idDocumentPreview;
+    return InkWell(
+      onTap: _chooseIdDocumentSource,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: preview == null ? Colors.grey.shade300 : _primary),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 72,
+                height: 48,
+                child: preview == null
+                    ? Container(
+                        color: Colors.grey.shade100,
+                        child: const Icon(Icons.badge_outlined, color: Colors.grey),
+                      )
+                    : Image.memory(preview, fit: BoxFit.cover),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    preview == null ? "Photo de la pièce d'identité" : 'Pièce ajoutée',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    preview == null ? "Carte d'électeur, passeport ou permis" : 'Touchez pour la changer',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+            Icon(preview == null ? Icons.add_a_photo_outlined : Icons.check_circle,
+                color: preview == null ? Colors.grey : Colors.green),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton.icon(
+        onPressed: _isSubmitting ? null : _submit,
+        icon: _isSubmitting
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            : const Icon(Icons.send),
+        label: Text(
+          _isSubmitting ? 'Envoi en cours...' : 'Soumettre ma candidature',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 2,
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+      );
+
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(text, style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+      );
+
+  Widget _field({
+    required TextEditingController controller,
+    required String label,
+    IconData? icon,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? formatters,
+    TextCapitalization capitalization = TextCapitalization.sentences,
+    String? suffix,
+  }) {
+    OutlineInputBorder border(Color color, [double width = 1]) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: color, width: width),
+        );
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      inputFormatters: formatters,
+      textCapitalization: capitalization,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: icon == null ? null : Icon(icon),
+        suffixText: suffix,
+        filled: true,
+        fillColor: Colors.white,
+        border: border(Colors.grey.shade300),
+        enabledBorder: border(Colors.grey.shade300),
+        focusedBorder: border(_primary, 2),
       ),
     );
   }
@@ -271,11 +523,17 @@ class _ApplyPageState extends ConsumerState<ApplyPage> {
         children: [
           const Icon(Icons.check_circle, color: Colors.green, size: 18),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(text, style: const TextStyle(fontSize: 14)),
-          ),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
         ],
       ),
     );
   }
+}
+
+String _formatFc(num amount) {
+  final digits = amount.round().toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+        (match) => '${match[1]} ',
+      );
+  return '$digits FC';
 }
