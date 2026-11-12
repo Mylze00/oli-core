@@ -27,10 +27,10 @@ class MarketView extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<MarketView> createState() => _MarketViewState();
+  ConsumerState<MarketView> createState() => MarketViewState();
 }
 
-class _MarketViewState extends ConsumerState<MarketView> {
+class MarketViewState extends ConsumerState<MarketView> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _selectedCategory = "Tout";
   String _searchQuery = "";
@@ -65,6 +65,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
     _scroll.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  /// Onglet Marché touché : retour en haut de la page.
+  void scrollToTop() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(0, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
   }
 
   void _onScroll() {
@@ -213,6 +219,48 @@ class _MarketViewState extends ConsumerState<MarketView> {
     return feed;
   }
 
+  /// Produits avant « À la une ».
+  static const _headCount = 12;
+
+  /// Taille des tranches équilibrées après « À la une » (fixe : l'ordre déjà vu ne bouge pas).
+  static const _chunkSize = 24;
+
+  /// Ordonne un bloc pour que les deux colonnes de la grille en quinconce finissent au même
+  /// niveau : chaque paire de cartes hautes suit le motif court, haute, haute, court
+  /// (la première à droite, la suivante à gauche). Une carte qui casserait l'équilibre
+  /// (nombre impair) est reportée dans [carry], au bloc suivant.
+  ({List<Product> balanced, List<Product> carry}) _balanceBlock(List<Product> items, bool Function(Product) isTall) {
+    final talls = items.where(isTall).toList();
+    final shorts = items.where((p) => !isTall(p)).toList();
+    final carry = <Product>[];
+    if (talls.length.isOdd) carry.add(talls.removeLast());
+    if (shorts.length.isOdd) carry.add(shorts.removeLast());
+
+    final out = <Product>[];
+    var t = 0;
+    var s = 0;
+    while (t < talls.length || s < shorts.length) {
+      if (t + 1 < talls.length) {
+        if (s + 1 < shorts.length) {
+          out..add(shorts[s])..add(talls[t])..add(talls[t + 1])..add(shorts[s + 1]);
+          s += 2;
+        } else {
+          out..add(talls[t])..add(talls[t + 1]);
+        }
+        t += 2;
+        // Une rangée de cartes courtes entre deux blocs hauts, pour le rythme
+        if (s + 1 < shorts.length) {
+          out..add(shorts[s])..add(shorts[s + 1]);
+          s += 2;
+        }
+      } else {
+        out..add(shorts[s])..add(shorts[s + 1]);
+        s += 2;
+      }
+    }
+    return (balanced: out, carry: carry);
+  }
+
   void _navigateToProduct(Product product) {
     Navigator.push(
       context,
@@ -272,19 +320,23 @@ class _MarketViewState extends ConsumerState<MarketView> {
           bool isStore(Product p) => storeIds.contains(p.id);
           final feed = _interleaveStores(filtered, storeProducts);
 
-          // Sections — filtered est déjà mélangé et diversifié
-          // Affichage toujours par paires : un produit isolé en fin de liste n'est pas affiché
-          List<Product> evenOnly(List<Product> list) =>
-              list.length.isEven ? list : list.sublist(0, list.length - 1);
-
-          final recentProducts = evenOnly(feed.take(8).toList());
-          final allGridProducts = feed.length > 8 ? evenOnly(feed.skip(8).toList()) : <Product>[];
-          // 4 produits, puis À la une (Spotlight), puis le reste
-          final gridBefore = allGridProducts.take(4).toList();
-          final gridAfterA = allGridProducts.length > 4 ? allGridProducts.skip(4).toList() : <Product>[];
-          final gridAfterB = <Product>[];
-
-
+          // Avant « À la une » : un seul bloc de 12 produits, équilibré pour que les deux
+          // colonnes finissent à la même hauteur ; après : tranches de 24 équilibrées.
+          bool isTall(Product p) => MarketProductGrid.isTall(p, isStore: isStore(p));
+          final head = _balanceBlock(feed.take(_headCount).toList(), isTall);
+          final gridBefore = head.balanced;
+          final gridAfterA = <Product>[];
+          var carry = head.carry;
+          final rest = feed.length > _headCount ? feed.skip(_headCount).toList() : <Product>[];
+          for (var i = 0; i < rest.length; i += _chunkSize) {
+            final chunk = [...carry, ...rest.skip(i).take(_chunkSize)];
+            final isLast = i + _chunkSize >= rest.length;
+            final balanced = _balanceBlock(chunk, isTall);
+            gridAfterA.addAll(balanced.balanced);
+            carry = balanced.carry;
+            if (isLast) gridAfterA.addAll(carry);
+          }
+          if (rest.isEmpty) gridAfterA.addAll(carry);
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -310,11 +362,7 @@ class _MarketViewState extends ConsumerState<MarketView> {
                     child: VerifiedShopProductsSection(products: verifiedShopsProducts),
                   ),
 
-                // ── 5. PREMIERS PRODUITS (sans titre ni compteur) ──
-                if (recentProducts.isNotEmpty)
-                  MarketProductGrid(products: recentProducts, isStoreProduct: isStore),
-
-                // ── 6a. GRILLE PRODUITS (6 premiers) ──
+                // ── 5. GRILLE AVANT « À LA UNE » (12 produits, colonnes à niveau) ──
                 if (gridBefore.isNotEmpty)
                   MarketProductGrid(products: gridBefore, isStoreProduct: isStore),
 
@@ -324,14 +372,11 @@ class _MarketViewState extends ConsumerState<MarketView> {
                     child: MarketSpotlightCarousel(products: filtered),
                   ),
 
-                // ── 6b. GRILLE (6 produits après Spotlight → total = 9) ──
+                // ── 6. GRILLE APRÈS « À LA UNE » (tranches de 24 équilibrées) ──
                 if (gridAfterA.isNotEmpty)
                   MarketProductGrid(products: gridAfterA, isStoreProduct: isStore),
 
 
-                // ── 6c. GRILLE (reste) ──
-                if (gridAfterB.isNotEmpty)
-                  MarketProductGrid(products: gridAfterB, isStoreProduct: isStore),
 
                 // ── EMPTY STATE ──
                 if (filtered.isEmpty)

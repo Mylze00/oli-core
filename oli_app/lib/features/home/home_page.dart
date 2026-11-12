@@ -26,6 +26,7 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   int _currentIndex = 0;
+  final GlobalKey<MarketViewState> _marketKey = GlobalKey<MarketViewState>();
 
   late List<Widget> _pages;
   final _dashboardStateKey = GlobalKey<MainDashboardViewState>();
@@ -49,7 +50,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         onBecameVisible: () {},
       ),
       const ConversationsPage(),
-      MarketView(),
+      MarketView(key: _marketKey),
       const ProfileAndWalletPage(),
     ];
   }
@@ -71,6 +72,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       _dashboardStateKey.currentState?.scrollToTop();
       return;
     }
+    // Marché : chaque toucher sur l'onglet ramène en haut de la page
+    if (adjusted == 2) _marketKey.currentState?.scrollToTop();
     setState(() {
       if (adjusted == 0 && _currentIndex != 0) {
         ref.read(searchFiltersProvider.notifier).reset();

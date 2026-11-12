@@ -30,6 +30,10 @@ class MarketProductGrid extends StatelessWidget {
   /// Bloc texte d'une carte « Livraison 24h » (une ligne de plus).
   static const double textBlockHeightWithDelivery = 78;
 
+  /// Carte haute (une ligne « Livraison 24h » en plus) : boutique vérifiée, certifiée ou grand magasin.
+  static bool isTall(Product product, {bool isStore = false}) =>
+      product.shopVerified || product.sellerHasCertifiedShop || isStore;
+
   @override
   Widget build(BuildContext context) {
     if (products.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
@@ -57,7 +61,7 @@ class MarketProductCard extends ConsumerWidget {
 
   const MarketProductCard({super.key, required this.product, this.storeBadge = false});
 
-  bool get _delivers24h => product.shopVerified || product.sellerHasCertifiedShop || storeBadge;
+  bool get _delivers24h => MarketProductGrid.isTall(product, isStore: storeBadge);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
