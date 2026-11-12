@@ -8,6 +8,8 @@ const { orderAmountToWallet } = require('../utils/order-currency');
 
 /** Marge ajoutée à une recharge Mobile Money de commande (reste sur le wallet). */
 const MOBILE_MONEY_ROUNDING_FC = 1;
+/** Modes sans livreur Oli : retrait au guichet et remise en main propre. */
+const NO_DELIVERER_MODES = ['pick_go', 'hand_delivery'];
 /** Commandes en cours de règlement Mobile Money sur cette instance. */
 const settlingOrders = new Set();
 const pool = require('../config/db');
@@ -491,9 +493,8 @@ class OrderService {
             );
 
             // Créer l'entrée delivery_orders + broadcast aux livreurs
-            const CIRCUIT_A_MODES = ['oli_express', 'oli_standard', 'partner', 'free'];
             const deliveryMethod = order.delivery_method_id;
-            const needsDeliverer = !deliveryMethod || CIRCUIT_A_MODES.includes(deliveryMethod);
+            const needsDeliverer = this._needsDeliverer(deliveryMethod);
 
             if (needsDeliverer) {
                 // Vérifier qu'il n'y a pas déjà une entrée delivery_orders pour cette commande
@@ -686,15 +687,27 @@ class OrderService {
             throw new Error("La commande doit être au statut 'processing' pour valider le pickup");
         }
 
-        if (order.pickup_code !== code.toUpperCase()) {
-            throw new Error('Code de pickup invalide');
-        }
-
         const isPickAndGo = order.delivery_method_id === 'pick_go';
+        const typedCode = String(code || '').trim().toUpperCase();
+
+        // PickGo : le client présente SON code (delivery_code) au guichet ; le pickup_code est
+        // connu du vendeur, il ne prouverait pas que le client est venu.
+        // Livreur : le vendeur lui donne le pickup_code au moment du retrait.
+        const expectedCode = isPickAndGo ? order.delivery_code : order.pickup_code;
+        if (!expectedCode || expectedCode !== typedCode) {
+            throw new Error(isPickAndGo ? 'Code client invalide' : 'Code de pickup invalide');
+        }
 
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+
+            // Verrou de ligne : deux validations simultanées ne créditent pas le vendeur deux fois
+            const locked = await client.query('SELECT status FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
+            if (!['processing', 'ready'].includes(locked.rows[0]?.status)) {
+                await client.query('ROLLBACK');
+                throw new Error('Ce retrait a déjà été validé');
+            }
 
             if (isPickAndGo) {
                 // Circuit B — Pick & Go : directement DELIVERED
@@ -789,7 +802,7 @@ class OrderService {
         const order = result.rows[0];
 
         const isHandDelivery = order.delivery_method_id === 'hand_delivery';
-        const isBuyer = order.user_id === userId;
+        const isBuyer = Number(order.user_id) === Number(userId);
 
         // Vérifier que l'appelant est autorisé
         if (!isBuyer && !isHandDelivery) {
@@ -816,7 +829,7 @@ class OrderService {
             throw new Error(`La commande doit être au statut '${allowedStatuses.join("' ou '")}' pour valider la livraison`);
         }
 
-        if (order.delivery_code !== code.toUpperCase()) {
+        if (order.delivery_code !== String(code || '').trim().toUpperCase()) {
             throw new Error('Code de livraison invalide');
         }
 
@@ -915,7 +928,7 @@ class OrderService {
         const order = orderResult.rows[0];
 
         // Vérifier permission : acheteur, vendeur, ou livreur
-        const isBuyer = order.user_id === userId;
+        const isBuyer = Number(order.user_id) === Number(userId);
         let isSeller = false;
         let isDeliverer = false;
         if (!isBuyer) {
@@ -1094,9 +1107,8 @@ class OrderService {
 
         // CRÉER L'ENTRÉE delivery_orders POUR LES LIVREURS
         // Uniquement pour Circuit A (modes avec livreur Oli)
-        const CIRCUIT_A_MODES = ['oli_express', 'oli_standard', 'partner', 'free'];
         const deliveryMethod = order.delivery_method_id;
-        const needsDeliverer = !deliveryMethod || CIRCUIT_A_MODES.includes(deliveryMethod);
+        const needsDeliverer = this._needsDeliverer(deliveryMethod);
 
         let deliveryOrder = null;
         if (needsDeliverer) {
@@ -1162,6 +1174,14 @@ class OrderService {
     }
 
     // --- Helpers privés ---
+
+    /**
+     * Un livreur Oli est nécessaire pour tous les modes, sauf le retrait au guichet (PickGo)
+     * et la remise en main propre. Avant, maritime et moto n'avaient jamais de livreur.
+     */
+    _needsDeliverer(deliveryMethod) {
+        return !NO_DELIVERER_MODES.includes(deliveryMethod);
+    }
 
     async _getOrderForSeller(orderId, sellerId) {
         const result = await pool.query(

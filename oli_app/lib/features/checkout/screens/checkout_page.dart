@@ -99,7 +99,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     return method.isEmpty ? 'Standard' : method;
   }
 
-  bool get _isPickup => _deliveryMethod.toLowerCase().contains('pick') || _deliveryFeeUsd == 0;
+  /// Retrait sans livreur (PickGo, main propre). Une livraison gratuite reste une livraison :
+  /// elle demande une adresse, ce n'est pas un retrait.
+  bool get _isPickup {
+    final method = _deliveryMethod.toLowerCase();
+    return method.contains('pick') || method.contains('main propre') || method == 'hand_delivery';
+  }
 
   @override
   void initState() {
@@ -137,10 +142,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       _quoteError = null;
     });
     try {
-      final quote = await ref.read(orderServiceProvider).quoteOrder(
-            items: items.map((item) => item.toOrderItem()).toList(),
-            deliveryFee: _deliveryFeeUsd,
-          );
+      final quote = await ref
+          .read(orderServiceProvider)
+          .quoteOrder(items: items.map((item) => item.toOrderItem()).toList(), deliveryFee: _deliveryFeeUsd);
       if (!mounted) return;
       setState(() {
         _quote = quote;
@@ -200,10 +204,15 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         surfaceTintColor: Colors.transparent,
         foregroundColor: c.text,
         elevation: 0,
-        title: Text('Validation de commande', style: TextStyle(color: c.text, fontWeight: FontWeight.w600)),
+        title: Text(
+          'Validation de commande',
+          style: TextStyle(color: c.text, fontWeight: FontWeight.w600),
+        ),
       ),
       body: items.isEmpty
-          ? Center(child: Text('Aucun article à commander', style: TextStyle(color: c.textSecondary)))
+          ? Center(
+              child: Text('Aucun article à commander', style: TextStyle(color: c.textSecondary)),
+            )
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
               children: [
@@ -233,7 +242,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         Text('Votre commande', style: TextStyle(color: c.textSecondary, fontSize: 14)),
         const SizedBox(height: 4),
         if (_isQuoting && quote == null)
-          SizedBox(height: 40, child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: c.accent)))
+          SizedBox(
+            height: 40,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: c.accent)),
+          )
         else
           Text(
             quote == null ? '—' : _fc(quote.totalFC),
@@ -251,21 +263,27 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
   Widget _buildPerks(_CheckoutColors c) {
     Widget perk(IconData icon, String label) => Expanded(
-          child: Column(
-            children: [
-              Icon(icon, color: c.text, size: 24),
-              const SizedBox(height: 6),
-              Text(label, textAlign: TextAlign.center, style: TextStyle(color: c.text, fontSize: 12, height: 1.2)),
-            ],
+      child: Column(
+        children: [
+          Icon(icon, color: c.text, size: 24),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: c.text, fontSize: 12, height: 1.2),
           ),
-        );
+        ],
+      ),
+    );
     return _card(
       c,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       child: Row(
         children: [
-          perk(_isPickup ? Icons.storefront_outlined : Icons.local_shipping_outlined,
-              _isPickup ? 'Retrait\nen boutique' : 'Livraison\n$_deliveryMethod'),
+          perk(
+            _isPickup ? Icons.storefront_outlined : Icons.local_shipping_outlined,
+            _isPickup ? 'Retrait\nen boutique' : 'Livraison\n$_deliveryMethod',
+          ),
           perk(Icons.verified_user_outlined, 'Paiement\nsécurisé'),
           perk(Icons.qr_code_2_rounded, 'Code remis\nà la livraison'),
         ],
@@ -293,10 +311,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           ),
           const SizedBox(height: 10),
           _summaryRow(c, 'Total', quote == null ? '—' : _fc(quote.totalFC), emphasize: true),
-          if (_quoteError != null) ...[
-            const SizedBox(height: 12),
-            _buildQuoteError(c),
-          ],
+          if (_quoteError != null) ...[const SizedBox(height: 12), _buildQuoteError(c)],
         ],
       ),
     );
@@ -329,14 +344,18 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.productName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: c.text, fontWeight: FontWeight.w600, fontSize: 15)),
+              Text(
+                item.productName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: c.text, fontWeight: FontWeight.w600, fontSize: 15),
+              ),
               const SizedBox(height: 4),
               Text(
-                [if (item.sellerName != null && item.sellerName!.isNotEmpty) item.sellerName!, 'Qté ${item.quantity}']
-                    .join(' · '),
+                [
+                  if (item.sellerName != null && item.sellerName!.isNotEmpty) item.sellerName!,
+                  'Qté ${item.quantity}',
+                ].join(' · '),
                 style: TextStyle(color: c.textSecondary, fontSize: 13),
               ),
             ],
@@ -356,8 +375,13 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       children: [
         const Icon(Icons.error_outline, color: Color(0xFFE5484D), size: 18),
         const SizedBox(width: 8),
-        Expanded(child: Text(_quoteError!, style: const TextStyle(color: Color(0xFFE5484D), fontSize: 13))),
-        TextButton(onPressed: _loadQuote, child: Text('Réessayer', style: TextStyle(color: c.accent))),
+        Expanded(
+          child: Text(_quoteError!, style: const TextStyle(color: Color(0xFFE5484D), fontSize: 13)),
+        ),
+        TextButton(
+          onPressed: _loadQuote,
+          child: Text('Réessayer', style: TextStyle(color: c.accent)),
+        ),
       ],
     );
   }
@@ -367,10 +391,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (_isPickup) {
       return _card(
         c,
-        child: _infoRow(c,
-            icon: Icons.storefront_outlined,
-            label: 'Retrait en boutique',
-            value: 'Présentez votre code au vendeur pour récupérer la commande'),
+        child: _infoRow(
+          c,
+          icon: Icons.storefront_outlined,
+          label: 'Retrait en boutique',
+          value: 'Présentez votre code au vendeur pour récupérer la commande',
+        ),
       );
     }
     return _card(
@@ -396,8 +422,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final walletSubtitle = quote == null
         ? 'Solde en cours de chargement'
         : quote.walletCovers
-            ? 'Solde : ${_fc(quote.walletBalanceFC)}'
-            : 'Solde insuffisant : ${_fc(quote.walletBalanceFC)}';
+        ? 'Solde : ${_fc(quote.walletBalanceFC)}'
+        : 'Solde insuffisant : ${_fc(quote.walletBalanceFC)}';
     final mobileSubtitle = quote == null
         ? 'Airtel, Orange, Vodacom (M-Pesa)'
         : 'Frais Mobile Money : +${_fc(quote.mobileMoneyFeeFC)}';
@@ -407,29 +433,32 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _paymentOption(c,
-              value: 'wallet',
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'Wallet Oli',
-              subtitle: walletSubtitle,
-              subtitleWarning: quote != null && !quote.walletCovers),
+          _paymentOption(
+            c,
+            value: 'wallet',
+            icon: Icons.account_balance_wallet_outlined,
+            label: 'Wallet Oli',
+            subtitle: walletSubtitle,
+            subtitleWarning: quote != null && !quote.walletCovers,
+          ),
           Divider(height: 1, indent: 64, color: c.border),
-          _paymentOption(c,
-              value: 'mobile_money',
-              icon: Icons.phone_android_rounded,
-              label: 'Mobile Money',
-              subtitle: mobileSubtitle),
-          if (_paymentMethod == 'mobile_money') ...[
-            Divider(height: 1, indent: 64, color: c.border),
-            _buildPhoneRow(c),
-          ],
+          _paymentOption(
+            c,
+            value: 'mobile_money',
+            icon: Icons.phone_android_rounded,
+            label: 'Mobile Money',
+            subtitle: mobileSubtitle,
+          ),
+          if (_paymentMethod == 'mobile_money') ...[Divider(height: 1, indent: 64, color: c.border), _buildPhoneRow(c)],
           Divider(height: 1, indent: 64, color: c.border),
-          _paymentOption(c,
-              value: 'card',
-              icon: Icons.credit_card_rounded,
-              label: 'Carte bancaire',
-              subtitle: 'Bientôt disponible',
-              enabled: false),
+          _paymentOption(
+            c,
+            value: 'card',
+            icon: Icons.credit_card_rounded,
+            label: 'Carte bancaire',
+            subtitle: 'Bientôt disponible',
+            enabled: false,
+          ),
         ],
       ),
     );
@@ -509,23 +538,38 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   ],
                 ),
               ),
+              // Bouton façon Apple Pay : noir en clair, blanc en sombre
               SizedBox(
                 height: 52,
-                width: 170,
+                width: 190,
                 child: ElevatedButton(
                   onPressed: canPay ? _confirmOrder : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: c.accent,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: c.accent.withValues(alpha: 0.35),
-                    disabledForegroundColor: Colors.white70,
-                    shape: const StadiumBorder(),
+                    backgroundColor: c.isDark ? Colors.white : Colors.black,
+                    foregroundColor: c.isDark ? Colors.black : Colors.white,
+                    disabledBackgroundColor: (c.isDark ? Colors.white : Colors.black).withValues(alpha: 0.3),
+                    disabledForegroundColor: (c.isDark ? Colors.black : Colors.white).withValues(alpha: 0.7),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
                   child: _isPaying
-                      ? const SizedBox(
-                          width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Payer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      ? SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: c.isDark ? Colors.black : Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Payer avec ', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w400)),
+                            Icon(Icons.account_balance_wallet_rounded, size: 18),
+                            SizedBox(width: 3),
+                            Text('Pay', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                          ],
+                        ),
                 ),
               ),
             ],
@@ -544,9 +588,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         color: c.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: c.border),
-        boxShadow: c.isDark
-            ? null
-            : const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 2))],
+        boxShadow: c.isDark ? null : const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 2))],
       ),
       clipBehavior: Clip.antiAlias,
       child: child,
@@ -554,37 +596,44 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   Widget _sectionTitle(_CheckoutColors c, String title) => Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 10),
-        child: Text(title, style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w700)),
-      );
+    padding: const EdgeInsets.only(left: 4, bottom: 10),
+    child: Text(
+      title,
+      style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w700),
+    ),
+  );
 
   Widget _summaryRow(_CheckoutColors c, String label, String value, {bool emphasize = false}) {
     return Row(
       children: [
         Expanded(
-          child: Text(label,
-              style: TextStyle(
-                color: emphasize ? c.text : c.textSecondary,
-                fontSize: emphasize ? 16 : 14,
-                fontWeight: emphasize ? FontWeight.w700 : FontWeight.w400,
-              )),
-        ),
-        Text(value,
+          child: Text(
+            label,
             style: TextStyle(
-              color: c.text,
-              fontSize: emphasize ? 17 : 14,
-              fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
-            )),
+              color: emphasize ? c.text : c.textSecondary,
+              fontSize: emphasize ? 16 : 14,
+              fontWeight: emphasize ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: c.text,
+            fontSize: emphasize ? 17 : 14,
+            fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
 
   Widget _iconTile(_CheckoutColors c, IconData icon, {Color? color}) => Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(color: c.iconTile, borderRadius: BorderRadius.circular(10)),
-        child: Icon(icon, color: color ?? c.text, size: 20),
-      );
+    width: 36,
+    height: 36,
+    decoration: BoxDecoration(color: c.iconTile, borderRadius: BorderRadius.circular(10)),
+    child: Icon(icon, color: color ?? c.text, size: 20),
+  );
 
   /// Ligne façon Apple Pay : icône dans un carré, libellé, valeur et flèche.
   Widget _infoRow(
@@ -611,7 +660,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 children: [
                   Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12)),
                   const SizedBox(height: 2),
-                  Text(value, style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w500)),
+                  Text(
+                    value,
+                    style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w500),
+                  ),
                   if (detail != null && detail.isNotEmpty)
                     Text(detail, style: TextStyle(color: c.textSecondary, fontSize: 12)),
                 ],
@@ -648,13 +700,18 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w600)),
+                    Text(
+                      label,
+                      style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
                     const SizedBox(height: 2),
-                    Text(subtitle,
-                        style: TextStyle(
-                          color: subtitleWarning ? const Color(0xFFE5484D) : c.textSecondary,
-                          fontSize: 12,
-                        )),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: subtitleWarning ? const Color(0xFFE5484D) : c.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -673,28 +730,40 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
   Future<void> _confirmOrder() async {
     final quote = _quote;
-    final amount = _amountToPay;
-    if (quote == null || amount == null || _payBlocker != null) return;
+    if (quote == null || _amountToPay == null || _payBlocker != null) return;
 
     final address = ref.read(defaultAddressProvider);
     final phone = _phoneController.text.trim();
-    final isMobileMoney = _paymentMethod == 'mobile_money';
 
-    final confirmed = await showPaymentConfirmationSheet(
+    final choice = await showPaymentConfirmationSheet(
       context: context,
-      amountFC: amount,
-      paymentMethod: _paymentMethod,
+      initialMethod: _paymentMethod,
+      walletTotalFC: quote.totalFC,
+      mobileMoneyTotalFC: quote.mobileMoneyTotalFC,
+      mobileMoneyFeeFC: quote.mobileMoneyFeeFC,
       walletBalanceFC: quote.walletBalanceFC,
+      walletCovers: quote.walletCovers,
       mobileMoneyPhone: phone,
-      mobileMoneyFeeFC: isMobileMoney ? quote.mobileMoneyFeeFC : 0,
       deliveryLabel: _isPickup ? 'Retrait en boutique' : (address?.fullAddress ?? ''),
+      isPickup: _isPickup,
       formatFc: _fc,
     );
-    if (confirmed != true || !mounted) return;
+    if (choice == null || !mounted) return;
+    if (choice.editAddress) {
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressManagementPage()));
+      ref.read(addressProvider.notifier).loadAddresses();
+      return;
+    }
+    // Le moyen a pu être changé dans la feuille
+    setState(() => _paymentMethod = choice.method!);
+    final isMobileMoney = _paymentMethod == 'mobile_money';
+    final amount = _amountToPay!;
 
     setState(() => _isPaying = true);
     try {
-      final order = await ref.read(orderServiceProvider).createOrder(
+      final order = await ref
+          .read(orderServiceProvider)
+          .createOrder(
             items: _checkoutItems.map((item) => item.toOrderItem()).toList(),
             deliveryAddress: _isPickup ? '' : (address?.fullAddress ?? ''),
             paymentMethod: _paymentMethod,
@@ -707,15 +776,26 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       if (!mounted) return;
 
       if (isMobileMoney) {
-        await _processMobileMoneyPayment(order, phone);
+        await _processMobileMoneyPayment(order, phone, amount);
         return;
       }
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OrderSuccessPage(order: order)));
+      // Wallet : débit immédiat → « Terminé », puis le récapitulatif de la commande
+      await showPaymentSuccessSheet(
+        context: context,
+        order: order,
+        amountFC: amount,
+        formatFc: _fc,
+        onDone: () {
+          if (mounted) {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OrderSuccessPage(order: order)));
+          }
+        },
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: const Color(0xFFE5484D)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: const Color(0xFFE5484D)));
       // Le solde a pu changer : le devis est recalculé
       _loadQuote();
     } finally {
@@ -724,7 +804,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   /// La commande existe (en attente) : on lance la demande Mobile Money et on suit son statut.
-  Future<void> _processMobileMoneyPayment(Order order, String phone) async {
+  Future<void> _processMobileMoneyPayment(Order order, String phone, double amountFC) async {
     setState(() => _isPaying = true);
     Map<String, dynamic>? operation;
     String? error;
@@ -739,14 +819,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final oliOrderId = operation?['oliOrderId'] as String?;
     if (oliOrderId == null) {
       if (error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error), backgroundColor: const Color(0xFFE5484D)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error), backgroundColor: const Color(0xFFE5484D)));
       }
       showPaymentFailedSheet(
         context: context,
         reason: PaymentResult.failed,
-        onRetry: () => _processMobileMoneyPayment(order, phone),
+        onRetry: () => _processMobileMoneyPayment(order, phone, amountFC),
         onCancel: _openPurchases,
       );
       return;
@@ -762,21 +842,26 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (!mounted) return;
 
     if (result == PaymentResult.success) {
-      showPaymentSuccessSheet(context: context, ref: ref, order: order, onDone: _openPurchases);
+      showPaymentSuccessSheet(
+        context: context,
+        order: order,
+        amountFC: amountFC,
+        formatFc: _fc,
+        onDone: _openPurchases,
+      );
     } else {
       showPaymentFailedSheet(
         context: context,
         reason: result ?? PaymentResult.cancelled,
-        onRetry: () => _processMobileMoneyPayment(order, phone),
+        onRetry: () => _processMobileMoneyPayment(order, phone, amountFC),
         onCancel: _openPurchases,
       );
     }
   }
 
   void _openPurchases() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const PurchasesPage()),
-      (route) => route.isFirst,
-    );
+    Navigator.of(
+      context,
+    ).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const PurchasesPage()), (route) => route.isFirst);
   }
 }
