@@ -168,8 +168,8 @@ SELECT
     u.id                                AS user_id,
     u.name,
     u.phone,
-    u.email,
-    u.role,
+    NULL::text                          AS email,  -- users n'a pas de colonne email
+    u.account_type                      AS role,   -- ni de colonne role (cf. b1996f1)
     u.is_verified,
     u.id_oli                            AS oli_id,
     kp.oli_address,

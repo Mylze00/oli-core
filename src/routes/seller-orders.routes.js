@@ -151,7 +151,7 @@ router.get('/:id', requireAuth, requireSeller, async (req, res) => {
     try {
         // Vérifier que la commande contient des produits du vendeur
         const orderQuery = `
-            SELECT o.*, u.name as buyer_name, u.phone as buyer_phone, u.email as buyer_email,
+            SELECT o.*, u.name as buyer_name, u.phone as buyer_phone, NULL::text as buyer_email, -- users n'a pas de colonne email
                    json_agg(json_build_object(
                        'id', oi.id,
                        'product_id', oi.product_id,
@@ -166,7 +166,7 @@ router.get('/:id', requireAuth, requireSeller, async (req, res) => {
             JOIN products p ON p.id::text = oi.product_id
             JOIN users u ON u.id = o.user_id
             WHERE o.id = $1 AND p.seller_id = $2
-            GROUP BY o.id, u.name, u.phone, u.email
+            GROUP BY o.id, u.name, u.phone
         `;
 
         const orderResult = await db.query(orderQuery, [req.params.id, req.user.id]);

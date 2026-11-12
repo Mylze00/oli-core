@@ -49,7 +49,7 @@ router.get('/drivers', async (req, res) => {
 
         let query = `
             SELECT 
-                u.id, u.name, u.phone, u.email, u.avatar_url,
+                u.id, u.name, u.phone, NULL::text AS email, u.avatar_url,
                 u.is_deliverer, u.is_verified, u.is_suspended,
                 u.created_at,
                 -- users n'a pas de colonne last_active : la dernière activité vient des sessions suivies
@@ -67,7 +67,7 @@ router.get('/drivers', async (req, res) => {
         let paramIndex = 1;
 
         if (search) {
-            query += ` AND (u.name ILIKE $${paramIndex} OR u.phone ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`;
+            query += ` AND (u.name ILIKE $${paramIndex} OR u.phone ILIKE $${paramIndex})`;
             params.push(`%${search}%`);
             paramIndex++;
         }
@@ -208,7 +208,7 @@ router.get('/applications', async (req, res) => {
                 da.created_at, da.reviewed_at,
                 da.full_name, da.id_document_url, da.vehicle_type, da.vehicle_plate, da.zone,
                 da.pledge_fc, da.pledge_status,
-                u.name, u.phone, u.email, u.avatar_url
+                u.name, u.phone, NULL::text AS email, u.avatar_url
             FROM deliverer_applications da
             JOIN users u ON u.id = da.user_id
         `;
@@ -222,7 +222,7 @@ router.get('/applications', async (req, res) => {
         }
 
         if (search) {
-            conditions.push(`(u.name ILIKE $${paramIndex} OR da.full_name ILIKE $${paramIndex} OR u.phone ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
+            conditions.push(`(u.name ILIKE $${paramIndex} OR da.full_name ILIKE $${paramIndex} OR u.phone ILIKE $${paramIndex})`);
             params.push(`%${search}%`);
             paramIndex++;
         }
