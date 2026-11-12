@@ -311,11 +311,11 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
                 // ── 5. PREMIERS PRODUITS (sans titre ni compteur) ──
                 if (recentProducts.isNotEmpty)
-                  TopRankingGrid(products: recentProducts, startIndex: 0, isStoreProduct: isStore),
+                  TopRankingGrid(products: recentProducts, startIndex: 0, isStoreProduct: isStore, masonry: true),
 
                 // ── 6a. GRILLE PRODUITS (6 premiers) ──
                 if (gridBefore.isNotEmpty)
-                  TopRankingGrid(products: gridBefore, startIndex: 0, isStoreProduct: isStore),
+                  TopRankingGrid(products: gridBefore, startIndex: 0, isStoreProduct: isStore, masonry: true),
 
                 // ── 7. SPOTLIGHT CAROUSEL ── (produits non encore affichés)
                 if (filtered.length >= 4)
@@ -325,12 +325,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
                 // ── 6b. GRILLE (6 produits après Spotlight → total = 9) ──
                 if (gridAfterA.isNotEmpty)
-                  TopRankingGrid(products: gridAfterA, startIndex: 0, isStoreProduct: isStore),
+                  TopRankingGrid(products: gridAfterA, startIndex: 0, isStoreProduct: isStore, masonry: true),
 
 
                 // ── 6c. GRILLE (reste) ──
                 if (gridAfterB.isNotEmpty)
-                  TopRankingGrid(products: gridAfterB, startIndex: 0, isStoreProduct: isStore),
+                  TopRankingGrid(products: gridAfterB, startIndex: 0, isStoreProduct: isStore, masonry: true),
 
                 // ── EMPTY STATE ──
                 if (filtered.isEmpty)

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/services/oli_image_cache.dart';
 import 'package:flutter/material.dart';
@@ -478,10 +479,15 @@ class TopRankingGrid extends StatelessWidget {
   final int startIndex;
   /// Produits de grands magasins intercalés dans la grille : ils portent un badge.
   final bool Function(Product product)? isStoreProduct;
+  /// Grille en quinconce (page Marché) : chaque carte garde sa propre hauteur,
+  /// les cartes « Livraison 24h » sont plus hautes et les colonnes se décalent.
+  final bool masonry;
 
   static const int columns = 2;
   static const double gutter = 8;
-  static const double textBlockHeight = 78;
+  static const double textBlockHeight = 58;
+  /// Bloc texte d'une carte « Livraison 24h » en grille en quinconce (une ligne de plus).
+  static const double textBlockHeightWithDelivery = 78;
 
   const TopRankingGrid({
     super.key,
@@ -490,6 +496,7 @@ class TopRankingGrid extends StatelessWidget {
     this.childAspectRatio = 0.7,
     this.startIndex = 0,
     this.isStoreProduct,
+    this.masonry = false,
   });
 
   @override
@@ -498,6 +505,23 @@ class TopRankingGrid extends StatelessWidget {
     // Padding horizontal du SliverPadding (8 + 8) et espace entre les colonnes
     final cellWidth = (screenWidth - 16 - gutter) / columns;
     final aspect = cellWidth / (cellWidth + textBlockHeight);
+
+    if (masonry && products.isNotEmpty) {
+      return SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        sliver: SliverMasonryGrid.count(
+          crossAxisCount: columns,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: gutter,
+          childCount: products.length,
+          itemBuilder: (context, index) => TopRankingProductCard(
+            product: products[index],
+            storeBadge: isStoreProduct?.call(products[index]) ?? false,
+            naturalHeight: true,
+          ),
+        ),
+      );
+    }
 
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -531,7 +555,18 @@ class TopRankingProductCard extends ConsumerWidget {
   /// Badge « Grand magasin » (produit certifié intercalé dans la grille du marché).
   final bool storeBadge;
 
-  const TopRankingProductCard({super.key, required this.product, this.storeBadge = false});
+  /// Grille en quinconce : « Livraison 24h » sous le prix (carte plus haute).
+  /// Grille régulière : l'icône 24 h reste sur la ligne du prix (hauteur inchangée).
+  final bool naturalHeight;
+
+  const TopRankingProductCard({
+    super.key,
+    required this.product,
+    this.storeBadge = false,
+    this.naturalHeight = false,
+  });
+
+  bool get _delivers24h => product.shopVerified || product.sellerHasCertifiedShop || storeBadge;
 
   static const Color _priceBlue = Color(0xFF64B5F6); // bleu clair (un ton plus clair)
 
@@ -573,7 +608,9 @@ class TopRankingProductCard extends ConsumerWidget {
             ),
             // Bloc texte (hauteur fixe)
             SizedBox(
-              height: TopRankingGrid.textBlockHeight,
+              height: naturalHeight && _delivers24h
+                  ? TopRankingGrid.textBlockHeightWithDelivery
+                  : TopRankingGrid.textBlockHeight,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
                 child: Column(
@@ -591,7 +628,10 @@ class TopRankingProductCard extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Text(
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
                       formattedPrice,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -602,8 +642,12 @@ class TopRankingProductCard extends ConsumerWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                        ),
+                        if (!naturalHeight && _delivers24h) Delivery24hIcon(size: 18, color: titleColor),
+                      ],
+                    ),
                     // Boutique vérifiée : livraison en 24 h
-                    if (product.shopVerified || product.sellerHasCertifiedShop || storeBadge) ...[
+                    if (naturalHeight && _delivers24h) ...[
                       const SizedBox(height: 3),
                       Row(
                         children: [
