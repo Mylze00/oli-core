@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/services/oli_image_cache.dart';
 import 'package:flutter/material.dart';
@@ -480,7 +481,7 @@ class TopRankingGrid extends StatelessWidget {
 
   static const int columns = 2;
   static const double gutter = 8;
-  static const double textBlockHeight = 58;
+  static const double textBlockHeight = 78;
 
   const TopRankingGrid({
     super.key,
@@ -601,6 +602,20 @@ class TopRankingProductCard extends ConsumerWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    // Boutique vérifiée : livraison en 24 h
+                    if (product.shopVerified || product.sellerHasCertifiedShop || storeBadge) ...[
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Delivery24hIcon(size: 18, color: titleColor),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Livraison 24h',
+                            style: TextStyle(color: titleColor.withValues(alpha: 0.75), fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -647,7 +662,12 @@ class _StoreBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = (product.shopName?.trim().isNotEmpty ?? false) ? product.shopName!.trim() : product.seller;
+    final shop = product.shopName?.trim() ?? '';
+    final seller = product.seller.trim();
+    // « Boutique Entreprise » est le nom par défaut posé à la création : on préfère le vendeur
+    final name = (seller.isNotEmpty && seller != 'Anonyme') || shop.isEmpty || shop == 'Boutique Entreprise'
+        ? seller
+        : shop;
     final avatar = product.sellerAvatar;
     return Align(
       alignment: Alignment.centerLeft,
@@ -691,4 +711,88 @@ class _StoreBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Icône « livraison en 24 h » : flèche circulaire, pointillés, « 24 » et bandeau jaune.
+class Delivery24hIcon extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const Delivery24hIcon({super.key, this.size = 18, this.color = Colors.black});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _Delivery24hPainter(color)),
+    );
+  }
+}
+
+class _Delivery24hPainter extends CustomPainter {
+  final Color color;
+
+  _Delivery24hPainter(this.color);
+
+  static const _yellow = Color(0xFFFFB400);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final center = Offset(w / 2, w / 2);
+    final radius = w * 0.42;
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.09
+      ..strokeCap = StrokeCap.round;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    // Arc plein (de bas-droite, par la gauche, jusqu'en haut) terminé par une flèche
+    const start = 1.15; // radians, sens horaire depuis l'axe x
+    const sweep = 3.75;
+    canvas.drawArc(rect, start, sweep, false, stroke);
+    final end = start + sweep;
+    final tip = center + Offset(radius * math.cos(end), radius * math.sin(end));
+    final tangent = Offset(-math.sin(end), math.cos(end)); // direction horaire
+    final normal = Offset(math.cos(end), math.sin(end));
+    final head = w * 0.17;
+    final arrow = Path()
+      ..moveTo(tip.dx + tangent.dx * head, tip.dy + tangent.dy * head)
+      ..lineTo(tip.dx + normal.dx * head * 0.8, tip.dy + normal.dy * head * 0.8)
+      ..lineTo(tip.dx - normal.dx * head * 0.8, tip.dy - normal.dy * head * 0.8)
+      ..close();
+    canvas.drawPath(arrow, Paint()..color = color);
+
+    // Pointillés sur le reste du cercle
+    final dash = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.08
+      ..strokeCap = StrokeCap.round;
+    final gapStart = end + 0.35;
+    const gapEnd = start + 2 * math.pi - 0.2;
+    for (var a = gapStart; a < gapEnd; a += 0.42) {
+      canvas.drawArc(rect, a, 0.18, false, dash);
+    }
+
+    // « 24 » et bandeau jaune
+    final text = TextPainter(
+      text: TextSpan(
+        text: '24',
+        style: TextStyle(color: color, fontSize: w * 0.36, fontWeight: FontWeight.w900, height: 1),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    text.paint(canvas, Offset(center.dx - text.width / 2, center.dy - text.height * 0.72));
+    final band = RRect.fromRectAndRadius(
+      Rect.fromLTWH(center.dx - w * 0.22, center.dy + w * 0.1, w * 0.44, w * 0.12),
+      Radius.circular(w * 0.04),
+    );
+    canvas.drawRRect(band, Paint()..color = _yellow);
+  }
+
+  @override
+  bool shouldRepaint(_Delivery24hPainter old) => old.color != color;
 }
