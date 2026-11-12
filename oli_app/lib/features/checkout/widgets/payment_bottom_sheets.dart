@@ -9,6 +9,7 @@ import '../../../config/api_config.dart';
 import '../../../models/order_model.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../../wallet/services/biometric_service.dart';
+import '../../../core/widgets/mobile_operator.dart';
 
 // --- STYLES COMMUNS ---
 const _sheetShape = RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24)));
@@ -25,7 +26,6 @@ class _SheetPalette {
 
   const _SheetPalette._(this.background, this.text, this.secondary, this.tile, this.accent, this.border);
 
-  static const pending = Color(0xFFF59E0B);
   static const danger = Color(0xFFE5484D);
 
   factory _SheetPalette.of(BuildContext context) {
@@ -232,7 +232,7 @@ class _OliPaySheetState extends State<_OliPaySheet> {
                     leading: _methodTile(_method),
                     title: _isMobileMoney ? 'Mobile Money' : 'Wallet OLI',
                     subtitle: _isMobileMoney
-                        ? '${widget.mobileMoneyPhone} · validation sur le téléphone'
+                        ? '${formatCongoPhone(widget.mobileMoneyPhone)} · ${MobileOperator.fromPhone(widget.mobileMoneyPhone).serviceName}'
                         : 'Solde ${widget.formatFc(widget.walletBalanceFC)}',
                     warning: blocker != null,
                     trailing: Icon(_choosingMethod ? Icons.expand_less : Icons.chevron_right, color: p.secondary),
@@ -374,13 +374,16 @@ class _OliPaySheetState extends State<_OliPaySheet> {
   /// Vignette du moyen de paiement, façon carte bancaire.
   Widget _methodTile(String method) {
     final isMm = method == 'mobile_money';
+    if (isMm && widget.mobileMoneyPhone.trim().isNotEmpty) {
+      return OperatorLogo(phone: widget.mobileMoneyPhone, size: 40);
+    }
     return Container(
       width: 46,
       height: 30,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(5),
         gradient: LinearGradient(
-          colors: isMm ? const [Color(0xFFF59E0B), Color(0xFFEA580C)] : const [Color(0xFF1A5DE6), Color(0xFF0B2E7A)],
+          colors: isMm ? const [Color(0xFF5F6673), Color(0xFF2C2F36)] : const [Color(0xFF1A5DE6), Color(0xFF0B2E7A)],
         ),
       ),
       child: Icon(
@@ -477,6 +480,7 @@ Future<PaymentResult?> showPaymentPendingSheet({
   required String oliOrderId,
   required String phoneNumber,
   required String providerName,
+  String? amountLabel,
 }) {
   return showModalBottomSheet<PaymentResult>(
     context: context,
@@ -486,7 +490,12 @@ Future<PaymentResult?> showPaymentPendingSheet({
     backgroundColor: _SheetPalette.of(context).background,
     shape: _sheetShape,
     builder: (ctx) {
-      return _PaymentPendingWidget(oliOrderId: oliOrderId, phoneNumber: phoneNumber, providerName: providerName);
+      return _PaymentPendingWidget(
+        oliOrderId: oliOrderId,
+        phoneNumber: phoneNumber,
+        providerName: providerName,
+        amountLabel: amountLabel,
+      );
     },
   );
 }
@@ -495,16 +504,26 @@ class _PaymentPendingWidget extends ConsumerStatefulWidget {
   final String oliOrderId;
   final String phoneNumber;
   final String providerName;
+  final String? amountLabel;
 
-  const _PaymentPendingWidget({required this.oliOrderId, required this.phoneNumber, required this.providerName});
+  const _PaymentPendingWidget({
+    required this.oliOrderId,
+    required this.phoneNumber,
+    required this.providerName,
+    this.amountLabel,
+  });
 
   @override
   ConsumerState<_PaymentPendingWidget> createState() => _PaymentPendingWidgetState();
 }
 
 class _PaymentPendingWidgetState extends ConsumerState<_PaymentPendingWidget> with TickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
+  /// Anneau du compte à rebours : se vide en continu sur toute la durée d'attente.
+  late final AnimationController _ring = AnimationController(vsync: this, duration: _pendingTimeout)..forward();
+
+  /// Halo qui respire autour du logo de l'opérateur.
+  late final AnimationController _halo = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
+    ..repeat(reverse: true);
   Timer? _statusTimer;
   Timer? _countdownTimer;
   int _secondsLeft = _pendingTimeout.inSeconds;
@@ -514,11 +533,6 @@ class _PaymentPendingWidgetState extends ConsumerState<_PaymentPendingWidget> wi
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(
-      begin: 0.95,
-      end: 1.05,
-    ).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
     _startTimers();
   }
 
@@ -542,7 +556,8 @@ class _PaymentPendingWidgetState extends ConsumerState<_PaymentPendingWidget> wi
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _ring.dispose();
+    _halo.dispose();
     _statusTimer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
@@ -596,52 +611,119 @@ class _PaymentPendingWidgetState extends ConsumerState<_PaymentPendingWidget> wi
   @override
   Widget build(BuildContext context) {
     final p = _SheetPalette.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final card = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final operator = MobileOperator.fromPhone(widget.phoneNumber);
+    const ringSize = 132.0;
+
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 12),
-            AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (_, child) => Transform.scale(scale: _pulseAnimation.value, child: child),
-              child: _statusBadge(Icons.phone_android_rounded, _SheetPalette.pending, iconSize: 40),
-            ),
-            const SizedBox(height: 24),
             Text(
-              'En attente de validation',
+              'Validez sur votre téléphone',
               style: TextStyle(color: p.text, fontSize: 20, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Validez la demande ${widget.providerName} reçue sur\n${widget.phoneNumber}',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: p.secondary, fontSize: 14, height: 1.4),
-            ),
+            const SizedBox(height: 4),
+            Text('Paiement ${operator.serviceName} en attente', style: TextStyle(color: p.secondary, fontSize: 14)),
             const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: _SheetPalette.pending),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  _countdownLabel,
-                  style: const TextStyle(
-                    color: _SheetPalette.pending,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
+
+            // Logo de l'opérateur dans l'anneau du compte à rebours
+            SizedBox(
+              width: ringSize,
+              height: ringSize,
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_ring, _halo]),
+                builder: (_, __) {
+                  final breath = Curves.easeInOut.transform(_halo.value);
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 84 + 14 * breath,
+                        height: 84 + 14 * breath,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: p.accent.withValues(alpha: 0.10 * (1 - breath) + 0.04),
+                        ),
+                      ),
+                      SizedBox.expand(
+                        child: CircularProgressIndicator(
+                          value: 1 - _ring.value,
+                          strokeWidth: 4,
+                          strokeCap: StrokeCap.round,
+                          color: p.accent,
+                          backgroundColor: p.border,
+                        ),
+                      ),
+                      OperatorLogo(phone: widget.phoneNumber, size: 64),
+                    ],
+                  );
+                },
+              ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 14),
+            Text(
+              _countdownLabel,
+              style: TextStyle(
+                color: p.text,
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            Text('restantes pour valider', style: TextStyle(color: p.secondary, fontSize: 13)),
+            const SizedBox(height: 20),
+
+            // Numéro débité, avec le logo du réseau, et montant
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                children: [
+                  OperatorLogo(phone: widget.phoneNumber, size: 40),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          formatCongoPhone(widget.phoneNumber),
+                          style: TextStyle(color: p.text, fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          '${operator.serviceName} · ${operator.networkName}',
+                          style: TextStyle(color: p.secondary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (widget.amountLabel != null)
+                    Text(
+                      widget.amountLabel!,
+                      style: TextStyle(color: p.text, fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Ce que l'acheteur doit faire
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+              decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(14)),
+              child: Column(
+                children: [
+                  _step(p, 1, 'Une demande de paiement s\'affiche sur votre téléphone'),
+                  _step(p, 2, 'Saisissez votre code PIN ${operator.serviceName} pour confirmer'),
+                  _step(p, 3, 'Cette page se met à jour toute seule'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: TextButton(
@@ -651,6 +733,30 @@ class _PaymentPendingWidgetState extends ConsumerState<_PaymentPendingWidget> wi
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _step(_SheetPalette p, int index, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: p.tile, shape: BoxShape.circle),
+            child: Text(
+              '$index',
+              style: TextStyle(color: p.text, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label, style: TextStyle(color: p.text, fontSize: 14)),
+          ),
+        ],
       ),
     );
   }

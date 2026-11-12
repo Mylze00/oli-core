@@ -181,21 +181,21 @@ class OrderProgressBar extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.hourglass_top, size: 16, color: Colors.orange.shade400),
+          const Icon(Icons.hourglass_top, size: 16, color: Colors.white70),
           const SizedBox(width: 6),
           Text(
             'En attente de paiement',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Colors.orange.shade400,
+              color: Colors.white70,
             ),
           ),
         ],

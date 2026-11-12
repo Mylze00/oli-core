@@ -11,6 +11,7 @@ import '../../../core/user/user_provider.dart';
 import '../../../models/order_model.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import 'order_success_page.dart';
+import '../../../core/widgets/mobile_operator.dart';
 
 /// Page de validation de commande, avec le panier (défaut) ou un achat direct.
 ///
@@ -470,8 +471,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       return _infoRow(
         c,
         icon: Icons.person_outline_rounded,
-        label: 'Numéro débité',
-        value: _phoneController.text,
+        leading: OperatorLogo(phone: _phoneController.text, size: 36),
+        label: 'Numéro débité · ${MobileOperator.fromPhone(_phoneController.text).serviceName}',
+        value: formatCongoPhone(_phoneController.text),
         trailing: TextButton(
           onPressed: () => setState(() => _isEditingPhone = true),
           child: Text('Modifier', style: TextStyle(color: c.accent)),
@@ -492,7 +494,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           hintText: '+243 81 000 0000',
           labelStyle: TextStyle(color: c.textSecondary),
           hintStyle: TextStyle(color: c.textSecondary.withValues(alpha: 0.6)),
-          prefixIcon: Icon(Icons.phone_outlined, color: c.textSecondary),
+          prefixIcon: MobileOperator.fromPhone(_phoneController.text) == MobileOperator.unknown
+              ? Icon(Icons.phone_outlined, color: c.textSecondary)
+              : Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: OperatorLogo(phone: _phoneController.text, size: 32),
+                ),
           filled: true,
           fillColor: c.iconTile,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -645,6 +652,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     bool warning = false,
     VoidCallback? onTap,
     Widget? trailing,
+    Widget? leading,
   }) {
     return InkWell(
       onTap: onTap,
@@ -652,7 +660,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            _iconTile(c, icon, color: warning ? const Color(0xFFF59E0B) : null),
+            leading ?? _iconTile(c, icon, color: warning ? const Color(0xFFE5484D) : null),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -842,7 +850,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       ref: ref,
       oliOrderId: oliOrderId,
       phoneNumber: phone,
-      providerName: 'Mobile Money',
+      providerName: MobileOperator.fromPhone(phone).serviceName,
+      amountLabel: _fc(amountFC),
     );
     if (!mounted) return;
 
