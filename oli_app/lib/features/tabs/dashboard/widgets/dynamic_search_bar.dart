@@ -215,8 +215,14 @@ class _DynamicSearchBarState extends ConsumerState<DynamicSearchBar> {
                         transitionBuilder: (Widget child, Animation<double> animation) {
                           return FadeTransition(opacity: animation, child: child);
                         },
+                        // Ancien et nouveau texte alignés à gauche pendant le fondu
+                        // (par défaut ils sont centrés : un texte court « sautait » à gauche)
+                        layoutBuilder: (current, previous) => Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [...previous, if (current != null) current],
+                        ),
                         child: Text(
-                          _placeholders[_currentIndex],
+                          _placeholders[_currentIndex % _placeholders.length],
                           key: ValueKey<int>(_currentIndex),
                           style: TextStyle(color: Colors.grey[600], fontSize: 14),
                           maxLines: 1,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../providers/exchange_rate_provider.dart';
 import '../providers/search_filters_provider.dart';
 
 /// Bottom Sheet pour les filtres de recherche
@@ -93,8 +94,8 @@ class _SearchFiltersSheetState extends ConsumerState<SearchFiltersSheet> {
               divisions: 50,
               activeColor: const Color(0xFF1E7DBA),
               labels: RangeLabels(
-                '\$${_priceRange.start.toInt()}',
-                '\$${_priceRange.end.toInt()}',
+                _fc(_priceRange.start),
+                _fc(_priceRange.end),
               ),
               onChanged: (values) {
                 setState(() => _priceRange = values);
@@ -185,10 +186,10 @@ class _SearchFiltersSheetState extends ConsumerState<SearchFiltersSheet> {
                 children: widget.availableLocations.map((loc) {
                   final isSelected = filters.location == loc;
                   return FilterChip(
-                    avatar: Icon(Icons.location_on, size: 16, color: isSelected ? Colors.white : Colors.orange),
+                    avatar: Icon(Icons.location_on, size: 16, color: isSelected ? Colors.white : const Color(0xFF1E7DBA)),
                     label: Text(loc, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : null)),
                     selected: isSelected,
-                    selectedColor: Colors.orange.shade700,
+                    selectedColor: const Color(0xFF1E7DBA),
                     checkmarkColor: Colors.white,
                     onSelected: (selected) {
                       ref.read(searchFiltersProvider.notifier).setLocation(
@@ -311,6 +312,9 @@ class _SearchFiltersSheetState extends ConsumerState<SearchFiltersSheet> {
     );
   }
 
+  /// Prix (stockés en USD) affichés dans la devise de l'app, en FC par défaut.
+  String _fc(double usd) => ref.read(exchangeRateProvider.notifier).formatProductPrice(usd);
+
   Widget _buildPriceLabel(double value) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -319,7 +323,7 @@ class _SearchFiltersSheetState extends ConsumerState<SearchFiltersSheet> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        '\$${value.toInt()}',
+        _fc(value),
         style: const TextStyle(
           fontWeight: FontWeight.bold,
           fontSize: 14,

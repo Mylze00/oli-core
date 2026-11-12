@@ -20,7 +20,10 @@ class MarketProductGrid extends StatelessWidget {
   /// Produits de grands magasins intercalés : ils portent l'avatar et le nom du magasin.
   final bool Function(Product product)? isStoreProduct;
 
-  const MarketProductGrid({super.key, required this.products, this.isStoreProduct});
+  /// Images légères (résultats de recherche) pour réduire la consommation de données.
+  final bool lowData;
+
+  const MarketProductGrid({super.key, required this.products, this.isStoreProduct, this.lowData = false});
 
   static const int columns = 2;
   static const double gutter = 8;
@@ -75,7 +78,8 @@ class MarketProductGrid extends StatelessWidget {
     return blocks;
   }
 
-  Widget _card(Product p) => MarketProductCard(product: p, storeBadge: isStoreProduct?.call(p) ?? false);
+  Widget _card(Product p) =>
+      MarketProductCard(product: p, storeBadge: isStoreProduct?.call(p) ?? false, lowData: lowData);
 
   Widget _buildBlock(List<Product> block) {
     if (block.length == 4) {
@@ -108,7 +112,10 @@ class MarketProductCard extends ConsumerWidget {
   /// Badge « Grand magasin » (produit certifié intercalé dans la grille du marché).
   final bool storeBadge;
 
-  const MarketProductCard({super.key, required this.product, this.storeBadge = false});
+  /// Image légère (300 px, q_auto:eco) au lieu de la vignette standard (540 px, q_80).
+  final bool lowData;
+
+  const MarketProductCard({super.key, required this.product, this.storeBadge = false, this.lowData = false});
 
   bool get _delivers24h => MarketProductGrid.isTall(product, isStore: storeBadge);
 
@@ -212,9 +219,9 @@ class MarketProductCard extends ConsumerWidget {
             color: Colors.white,
             child: CachedNetworkImage(
               cacheManager: OliImageCache.instance,
-              imageUrl: CloudinaryHelper.card(product.images.first),
+              imageUrl: lowData ? CloudinaryHelper.lowData(product.images.first) : CloudinaryHelper.card(product.images.first),
               fit: BoxFit.cover,
-              memCacheWidth: 540, // décodage à la résolution servie (540 px)
+              memCacheWidth: lowData ? 300 : 540, // décodage à la résolution servie (540 px)
               placeholder: (_, __) => Container(color: isDark ? Colors.grey[900] : Colors.grey[200]),
               errorWidget: (_, __, ___) => Container(
                 color: isDark ? Colors.grey[900] : Colors.grey[200],

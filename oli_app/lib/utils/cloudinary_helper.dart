@@ -61,6 +61,20 @@ class CloudinaryHelper {
     return thumbnail(url, width: 120, height: 120);
   }
 
+  /// Vignette « économie de données » (résultats de recherche) : 300 px, compression
+  /// Cloudinary la plus économe (q_auto:eco) — environ trois fois plus légère que card().
+  static String lowData(String url, {int size = 300}) {
+    if (!url.contains('cloudinary.com')) return url;
+    final uploadIndex = url.indexOf('/upload/');
+    if (uploadIndex == -1) return url;
+    final afterUpload = url.substring(uploadIndex + 8);
+    if (afterUpload.startsWith('c_') || afterUpload.startsWith('w_') || afterUpload.startsWith('f_')) {
+      return url;
+    }
+    final before = url.substring(0, uploadIndex + 8);
+    return '${before}c_fill,w_$size,h_$size,q_auto:eco,f_auto/$afterUpload';
+  }
+
   /// Image redimensionnée SANS recadrage (proportions conservées), largeur max [width].
   /// Utilisée par la fiche produit : une photo de plusieurs Mo passe à ~100 Ko.
   static String fit(String url, {int width = 900}) {
