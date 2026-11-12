@@ -1,5 +1,11 @@
 {
     "buildCommand": "cd oli_admin && npm install && npm run build",
     "outputDirectory": "oli_admin/dist",
-    "installCommand": "cd oli_admin && npm install"
+    "installCommand": "cd oli_admin && npm install",
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
 }

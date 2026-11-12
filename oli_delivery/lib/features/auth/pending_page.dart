@@ -65,7 +65,7 @@ class _PendingPageState extends ConsumerState<PendingPage> {
           await ref.read(authControllerProvider.notifier).checkSession();
           final authState = ref.read(authControllerProvider);
           if (authState.userData?['is_deliverer'] == true && mounted) {
-            context.go('/');
+            context.go('/dashboard');
           }
         }
       }
@@ -186,7 +186,7 @@ class _PendingPageState extends ConsumerState<PendingPage> {
                           width: double.infinity,
                           height: 52,
                           child: ElevatedButton.icon(
-                            onPressed: () => context.go('/'),
+                            onPressed: () => context.go('/dashboard'),
                             icon: const Icon(Icons.arrow_forward),
                             label: const Text('Accéder au Dashboard',
                                 style: TextStyle(fontWeight: FontWeight.bold)),
