@@ -54,11 +54,13 @@ router.get('/drivers', async (req, res) => {
                 u.created_at,
                 -- users n'a pas de colonne last_active : la dernière activité vient des sessions suivies
                 (SELECT MAX(s.last_seen_at) FROM user_sessions_ext s WHERE s.user_id = u.id) AS last_active,
-                COUNT(DISTINCT o.id) FILTER (WHERE o.delivery_status = 'delivered') as completed_deliveries,
-                COUNT(DISTINCT o.id) FILTER (WHERE o.delivery_status IN ('assigned', 'in_transit')) as active_deliveries,
-                COUNT(DISTINCT o.id) as total_deliveries
+                COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'delivered') as completed_deliveries,
+                COUNT(DISTINCT d.id) FILTER (WHERE d.status IN ('assigned', 'picked_up', 'in_transit')) as active_deliveries,
+                COUNT(DISTINCT d.id) as total_deliveries
             FROM users u
-            LEFT JOIN orders o ON o.deliverer_id = u.id
+            -- Le livreur d'une commande est dans delivery_orders (orders n'a pas de deliverer_id).
+            -- Comparaison en texte : le type de deliverer_id diffère selon les migrations.
+            LEFT JOIN delivery_orders d ON d.deliverer_id::text = u.id::text
             WHERE u.is_deliverer = TRUE
         `;
         const params = [];
