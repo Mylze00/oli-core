@@ -7,6 +7,8 @@ import '../../../../core/theme/oli_surface.dart';
 import '../../../marketplace/presentation/pages/seller_profile_page.dart';
 import '../../models/feed_model.dart';
 import '../../providers/feed_provider.dart';
+import '../../../chat/widgets/conversation_context_menu.dart';
+import '../create_post_page.dart';
 
 /// Nombre court façon X : 950 · 1,2 k · 96,7 k · 1,3 M.
 String compactCount(int n) {
@@ -44,19 +46,21 @@ class FeedActionBar extends ConsumerWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _ActionButton(icon: Icons.chat_bubble_outline_rounded, count: post.commentsCount, color: s.textSecondary, size: size, onTap: onReply),
-        _ActionButton(
-          icon: Icons.repeat_rounded,
-          count: post.repostsCount,
-          color: post.isRepostedByMe ? s.success : s.textSecondary,
-          size: size + 2,
-          onTap: () {
-            HapticFeedback.selectionClick();
-            notifier.toggleRepost(post);
-          },
+        _ActionButton(icon: Icons.chat_bubble_outline, count: post.commentsCount, color: s.textSecondary, size: size, onTap: onReply),
+        Builder(
+          builder: (buttonContext) => _ActionButton(
+            icon: Icons.repeat,
+            count: post.repostsCount,
+            color: post.isRepostedByMe ? s.success : s.textSecondary,
+            size: size + 2,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              _showRepostMenu(buttonContext, ref, post);
+            },
+          ),
         ),
         _ActionButton(
-          icon: post.isLikedByMe ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          icon: post.isLikedByMe ? Icons.favorite : Icons.favorite_border,
           count: post.likesCount,
           color: post.isLikedByMe ? const Color(0xFFF91880) : s.textSecondary,
           size: size,
@@ -66,7 +70,7 @@ class FeedActionBar extends ConsumerWidget {
           },
         ),
         _ActionButton(
-          icon: post.isBookmarkedByMe ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          icon: post.isBookmarkedByMe ? Icons.bookmark : Icons.bookmark_border,
           count: post.bookmarksCount,
           color: post.isBookmarkedByMe ? s.accent : s.textSecondary,
           size: size,
@@ -75,7 +79,7 @@ class FeedActionBar extends ConsumerWidget {
             notifier.toggleBookmark(post);
           },
         ),
-        _ActionButton(icon: Icons.ios_share_rounded, color: s.textSecondary, size: size, onTap: () => shareFeedPost(post)),
+        _ActionButton(icon: Icons.ios_share, color: s.textSecondary, size: size, onTap: () => shareFeedPost(post)),
       ],
     );
   }
@@ -100,11 +104,8 @@ class _ActionButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              transitionBuilder: (child, a) => ScaleTransition(scale: a, child: child),
-              child: Icon(icon, key: ValueKey('$icon$color'), size: size, color: color),
-            ),
+            // Icône simple (sans animation de remplacement) : affichage fiable partout
+            Icon(icon, size: size, color: color),
             if (count != null && count! > 0) ...[
               const SizedBox(width: 4),
               Text(compactCount(count!), style: TextStyle(color: color, fontSize: 13)),
@@ -116,86 +117,133 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-/// Menu « ⋯ » d'un post. [onRemoved] : le post a quitté le fil (masqué, signalé, supprimé).
-Future<void> showFeedPostMenu(BuildContext context, WidgetRef ref, FeedPost post, {VoidCallback? onRemoved}) async {
-  final s = OliSurface.of(context);
+/// Rectangle à l'écran d'un élément (pour placer le menu en verre à côté).
+Rect _rectOf(BuildContext context) {
+  final box = context.findRenderObject() as RenderBox?;
+  if (box == null || !box.hasSize) return Rect.zero;
+  return box.localToGlobal(Offset.zero) & box.size;
+}
+
+/// « Republier » / « Citer » : petit menu en verre à côté du bouton.
+void _showRepostMenu(BuildContext buttonContext, WidgetRef ref, FeedPost post) {
+  final s = OliSurface.of(buttonContext);
+  showConversationContextMenu(
+    context: buttonContext,
+    anchor: _rectOf(buttonContext),
+    keepAnchorPosition: true,
+    preview: Icon(Icons.repeat_rounded, color: post.isRepostedByMe ? s.success : s.text),
+    items: [
+      ConversationMenuItem(
+        icon: Icons.repeat_rounded,
+        label: post.isRepostedByMe ? 'Annuler la republication' : 'Republier',
+        onTap: () => ref.read(feedProvider.notifier).toggleRepost(post),
+      ),
+      ConversationMenuItem(
+        icon: Icons.edit_note_rounded,
+        label: 'Citer',
+        onTap: () => Navigator.push(
+          buttonContext,
+          MaterialPageRoute(builder: (_) => CreatePostPage(quotedPost: post)),
+        ),
+      ),
+    ],
+  );
+}
+
+/// Menu « ⋯ » d'un post, en verre façon iOS, à côté de l'élément touché ([anchorContext] :
+/// la carte ou le bouton) avec l'aperçu [preview] détaché au-dessus de la page floutée.
+/// [onRemoved] : le post a quitté le fil (masqué, signalé, supprimé).
+Future<void> showFeedPostMenu(
+  BuildContext context,
+  WidgetRef ref,
+  FeedPost post, {
+  VoidCallback? onRemoved,
+  BuildContext? anchorContext,
+  Widget? preview,
+}) async {
   final notifier = ref.read(feedProvider.notifier);
   final messenger = ScaffoldMessenger.of(context);
   final handle = (post.authorOliId != null && post.authorOliId!.isNotEmpty) ? '@${post.authorOliId}' : post.authorName;
+  final anchorCtx = anchorContext ?? context;
 
-  Widget item(IconData icon, String label, VoidCallback onTap, {Color? color}) => ListTile(
-        leading: Icon(icon, color: color ?? s.text),
-        title: Text(label, style: TextStyle(color: color ?? s.text, fontSize: 15, fontWeight: FontWeight.w500)),
-        onTap: onTap,
-      );
-
-  await showModalBottomSheet(
-    context: context,
-    backgroundColor: s.card,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-    builder: (sheet) {
-      void close() => Navigator.pop(sheet);
-      return SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(width: 36, height: 4, decoration: BoxDecoration(color: s.border, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 8),
-            if (post.isMine) ...[
-              item(Icons.bar_chart_rounded, 'Voir les interactions avec le post', () {
-                close();
-                showFeedInteractions(context, ref, post);
-              }),
-              item(Icons.delete_outline_rounded, 'Supprimer le post', () async {
-                close();
-                final ok = await _confirm(context, 'Supprimer ce post ?', 'Il sera retiré du Fil pour tout le monde.', 'Supprimer');
-                if (ok != true) return;
-                final done = await notifier.deletePost(post.id);
-                messenger.showSnackBar(SnackBar(content: Text(done ? 'Post supprimé' : 'Suppression impossible')));
-                if (done) onRemoved?.call();
-              }, color: s.danger),
-            ] else ...[
-              item(Icons.visibility_off_outlined, 'Masquer ce post', () async {
-                close();
-                await notifier.hidePost(post.id);
-                messenger.showSnackBar(const SnackBar(content: Text('Post masqué : vous ne le verrez plus')));
-                onRemoved?.call();
-              }),
-              item(Icons.flag_outlined, 'Signaler le post', () async {
-                close();
-                final details = await _askReport(context);
-                if (details == null) return;
-                await notifier.reportPost(post.id, reason: 'report', details: details.isEmpty ? null : details);
-                messenger.showSnackBar(const SnackBar(content: Text('Merci, le post a été signalé')));
-                onRemoved?.call();
-              }),
-              item(Icons.report_gmailerrorred_outlined, 'Marquer comme spam', () async {
-                close();
-                await notifier.reportPost(post.id, reason: 'spam');
-                messenger.showSnackBar(const SnackBar(content: Text('Marqué comme spam')));
-                onRemoved?.call();
-              }),
-            ],
-            if (post.content != null && post.content!.trim().isNotEmpty)
-              item(Icons.copy_rounded, 'Copier le texte', () {
-                close();
-                Clipboard.setData(ClipboardData(text: post.content!.trim()));
-                messenger.showSnackBar(const SnackBar(content: Text('Texte copié')));
-              }),
-            if (post.authorId != null)
-              item(Icons.person_outline_rounded, 'Voir le profil $handle', () {
-                close();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => SellerProfilePage(sellerId: post.authorId.toString())),
-                );
-              }),
-            const SizedBox(height: 8),
-          ],
+  final items = <ConversationMenuItem>[
+    if (post.isMine) ...[
+      ConversationMenuItem(
+        icon: Icons.bar_chart_rounded,
+        label: 'Voir les interactions',
+        onTap: () => showFeedInteractions(context, ref, post),
+      ),
+    ] else ...[
+      ConversationMenuItem(
+        icon: Icons.visibility_off_outlined,
+        label: 'Masquer ce post',
+        onTap: () async {
+          await notifier.hidePost(post.id);
+          messenger.showSnackBar(const SnackBar(content: Text('Post masqué : vous ne le verrez plus')));
+          onRemoved?.call();
+        },
+      ),
+      ConversationMenuItem(
+        icon: Icons.flag_outlined,
+        label: 'Signaler le post',
+        onTap: () async {
+          final details = await _askReport(context);
+          if (details == null) return;
+          await notifier.reportPost(post.id, reason: 'report', details: details.isEmpty ? null : details);
+          messenger.showSnackBar(const SnackBar(content: Text('Merci, le post a été signalé')));
+          onRemoved?.call();
+        },
+      ),
+      ConversationMenuItem(
+        icon: Icons.report_gmailerrorred_outlined,
+        label: 'Marquer comme spam',
+        onTap: () async {
+          await notifier.reportPost(post.id, reason: 'spam');
+          messenger.showSnackBar(const SnackBar(content: Text('Marqué comme spam')));
+          onRemoved?.call();
+        },
+      ),
+    ],
+    if (post.content != null && post.content!.trim().isNotEmpty)
+      ConversationMenuItem(
+        icon: Icons.copy_rounded,
+        label: 'Copier le texte',
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: post.content!.trim()));
+          messenger.showSnackBar(const SnackBar(content: Text('Texte copié')));
+        },
+      ),
+    if (post.authorId != null)
+      ConversationMenuItem(
+        icon: Icons.person_outline_rounded,
+        label: 'Voir le profil $handle',
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => SellerProfilePage(sellerId: post.authorId.toString())),
         ),
-      );
-    },
+      ),
+    if (post.isMine)
+      ConversationMenuItem(
+        icon: Icons.delete_outline_rounded,
+        label: 'Supprimer le post',
+        isDanger: true,
+        onTap: () async {
+          final ok = await _confirm(context, 'Supprimer ce post ?', 'Il sera retiré du Fil pour tout le monde.', 'Supprimer');
+          if (ok != true) return;
+          final done = await notifier.deletePost(post.id);
+          messenger.showSnackBar(SnackBar(content: Text(done ? 'Post supprimé' : 'Suppression impossible')));
+          if (done) onRemoved?.call();
+        },
+      ),
+  ];
+
+  await showConversationContextMenu(
+    context: context,
+    anchor: _rectOf(anchorCtx),
+    preview: preview ?? const SizedBox.shrink(),
+    keepAnchorPosition: preview == null,
+    alignEnd: preview == null,
+    items: items,
   );
 }
 

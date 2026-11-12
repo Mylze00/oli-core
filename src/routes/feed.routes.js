@@ -17,7 +17,9 @@ router.post('/', requireAuth, genericUpload.single('media'), feedController.crea
 router.post('/:id/like', requireAuth, feedController.toggleLike);
 
 // Récupérer les commentaires d'une publication (pas besoin d'auth)
-router.get('/:id/comments', feedController.getComments);
+router.get('/:id/comments', optionalAuth, feedController.getComments);
+// J'aime sur une réponse
+router.post('/comments/:commentId/like', requireAuth, feedController.toggleCommentLike);
 
 // Page « Post » et actions façon X
 router.get('/:id', optionalAuth, feedController.getPost);

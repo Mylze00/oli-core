@@ -4,6 +4,20 @@ const db = require('../config/db');
 //    signalements) et compteur de vues ─────────────────────────────────────────
 db.query(`
     ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS views_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS quote_post_id INTEGER REFERENCES feed_posts(id) ON DELETE SET NULL;
+    CREATE TABLE IF NOT EXISTS feed_post_views (
+        post_id INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (post_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_feed_post_views_user ON feed_post_views (user_id, created_at);
+    CREATE TABLE IF NOT EXISTS feed_comment_likes (
+        comment_id INTEGER NOT NULL REFERENCES feed_comments(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (comment_id, user_id)
+    );
     CREATE TABLE IF NOT EXISTS feed_reposts (
         id SERIAL PRIMARY KEY,
         post_id INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
@@ -50,38 +64,90 @@ const POST_FIELDS = `
     EXISTS(SELECT 1 FROM feed_likes WHERE post_id = p.id AND user_id = $1) AS is_liked_by_me,
     EXISTS(SELECT 1 FROM feed_reposts WHERE post_id = p.id AND user_id = $1) AS is_reposted_by_me,
     EXISTS(SELECT 1 FROM feed_bookmarks WHERE post_id = p.id AND user_id = $1) AS is_bookmarked_by_me,
-    (p.user_id = $1) AS is_mine
+    (p.user_id = $1) AS is_mine,
+    (SELECT json_build_object(
+        'id', q.id, 'content', q.content, 'media_url', q.media_url, 'media_type', q.media_type,
+        'created_at', q.created_at, 'author_id', q.user_id, 'author_name', qu.name,
+        'author_avatar', qu.avatar_url, 'author_oli_id', qu.id_oli)
+     FROM feed_posts q JOIN users qu ON qu.id = q.user_id WHERE q.id = p.quote_post_id) AS quoted_post
 `;
 
-// Récupérer le fil d'actualité (avec pagination)
+/**
+ * Score « Pour vous » : engagement du post × affinité de l'utilisateur avec l'auteur
+ * (ses j'aime, réponses et vues sur les posts de cet auteur depuis 30 jours) ×
+ * pénalité si déjà vu, divisé par l'âge du post (les posts récents remontent).
+ */
+const FOR_YOU_SCORE = `
+    (
+      (1
+        + (SELECT COUNT(*) FROM feed_likes WHERE post_id = p.id) * 2
+        + (SELECT COUNT(*) FROM feed_comments WHERE post_id = p.id) * 3
+        + (SELECT COUNT(*) FROM feed_reposts WHERE post_id = p.id) * 4
+        + LEAST(p.views_count, 500) * 0.05)
+      * (1 + LN(1 + (
+            (SELECT COUNT(*) FROM feed_likes l JOIN feed_posts lp ON lp.id = l.post_id
+              WHERE l.user_id = $1 AND lp.user_id = p.user_id AND l.created_at > NOW() - INTERVAL '30 days')
+          + (SELECT COUNT(*) FROM feed_comments c JOIN feed_posts cp ON cp.id = c.post_id
+              WHERE c.user_id = $1 AND cp.user_id = p.user_id AND c.created_at > NOW() - INTERVAL '30 days')
+          + (SELECT COUNT(*) FROM feed_post_views v JOIN feed_posts vp ON vp.id = v.post_id
+              WHERE v.user_id = $1 AND vp.user_id = p.user_id AND v.created_at > NOW() - INTERVAL '30 days')
+        )))
+      * (CASE WHEN EXISTS (SELECT 1 FROM feed_post_views sv WHERE sv.post_id = p.id AND sv.user_id = $1)
+              THEN 0.35 ELSE 1 END)
+      / POWER(EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600 + 2, 1.3)
+    )
+`;
+
+// Récupérer le fil d'actualité.
+//  - mode=for_you (défaut) : classé par l'algorithme (FOR_YOU_SCORE), pagination par décalage
+//  - mode=following : posts de ses contacts acceptés et les siens, du plus récent au plus ancien
 exports.getFeed = async (req, res) => {
     try {
         const userId = req.user?.id || 0;
         const limit = Math.min(parseInt(req.query.limit) || 20, 50);
-        const cursor = req.query.cursor; // ISO timestamp string
+        const mode = req.query.mode === 'following' ? 'following' : 'for_you';
+        const cursor = req.query.cursor;
 
-        const params = [userId, limit];
         // Les posts masqués ou signalés par l'utilisateur ne lui sont plus montrés
-        let where = `
-            WHERE NOT EXISTS (SELECT 1 FROM feed_hidden_posts h WHERE h.post_id = p.id AND h.user_id = $1)
-              AND NOT EXISTS (SELECT 1 FROM feed_reports r WHERE r.post_id = p.id AND r.user_id = $1)`;
-        if (cursor) {
-            params.push(cursor);
-            where += ` AND p.created_at < $3`;
+        const hidden = `
+              NOT EXISTS (SELECT 1 FROM feed_hidden_posts h WHERE h.post_id = p.id AND h.user_id = $1)
+          AND NOT EXISTS (SELECT 1 FROM feed_reports r WHERE r.post_id = p.id AND r.user_id = $1)`;
+
+        let result;
+        let nextCursor = null;
+        if (mode === 'following') {
+            const params = [userId, limit];
+            let where = `WHERE ${hidden}
+              AND (p.user_id = $1 OR p.user_id IN (
+                    SELECT CASE WHEN f.requester_id = $1 THEN f.addressee_id ELSE f.requester_id END
+                    FROM friendships f
+                    WHERE f.status = 'accepted' AND (f.requester_id = $1 OR f.addressee_id = $1)))`;
+            if (cursor) {
+                params.push(cursor);
+                where += ` AND p.created_at < $3`;
+            }
+            result = await db.query(
+                `SELECT ${POST_FIELDS} FROM feed_posts p JOIN users u ON p.user_id = u.id
+                 ${where} ORDER BY p.created_at DESC, p.id DESC LIMIT $2`,
+                params
+            );
+            if (result.rows.length === limit) nextCursor = result.rows[result.rows.length - 1].created_at;
+        } else {
+            const offset = Math.max(parseInt(cursor) || 0, 0);
+            result = await db.query(
+                `SELECT * FROM (
+                    SELECT ${POST_FIELDS}, ${FOR_YOU_SCORE} AS score
+                    FROM feed_posts p JOIN users u ON p.user_id = u.id
+                    WHERE ${hidden} AND p.created_at > NOW() - INTERVAL '90 days'
+                 ) ranked
+                 ORDER BY score DESC, id DESC
+                 LIMIT $2 OFFSET $3`,
+                [userId, limit, offset]
+            );
+            if (result.rows.length === limit) nextCursor = String(offset + limit);
         }
 
-        const result = await db.query(
-            `SELECT ${POST_FIELDS}
-             FROM feed_posts p
-             JOIN users u ON p.user_id = u.id
-             ${where}
-             ORDER BY p.created_at DESC, p.id DESC
-             LIMIT $2`,
-            params
-        );
-
-        const nextCursor = result.rows.length === limit ? result.rows[result.rows.length - 1].created_at : null;
-        res.json({ success: true, posts: result.rows, nextCursor });
+        res.json({ success: true, mode, posts: result.rows, nextCursor });
     } catch (error) {
         console.error('Erreur getFeed:', error);
         res.status(500).json({ error: 'Erreur lors de la récupération du fil d\'actualité' });
@@ -111,6 +177,14 @@ exports.recordView = async (req, res) => {
             'UPDATE feed_posts SET views_count = views_count + 1 WHERE id = $1 RETURNING views_count',
             [req.params.id]
         );
+        // Vue personnelle : nourrit l'algorithme (affinité avec l'auteur, « déjà vu »)
+        if (req.user?.id && result.rows[0]) {
+            await db.query(
+                `INSERT INTO feed_post_views (post_id, user_id) VALUES ($1, $2)
+                 ON CONFLICT (post_id, user_id) DO UPDATE SET created_at = NOW()`,
+                [req.params.id, req.user.id]
+            );
+        }
         res.json({ success: true, views_count: result.rows[0]?.views_count ?? 0 });
     } catch (error) {
         console.error('Erreur recordView:', error);
@@ -228,6 +302,8 @@ exports.createPost = async (req, res) => {
     try {
         const userId = req.user.id;
         let { content, media_url, media_type } = req.body;
+        // Citation : le post repris s'affiche dans la nouvelle publication
+        const quotePostId = parseInt(req.body.quote_post_id) || null;
 
         // Si un fichier a été uploadé (via Cloudinary ou local)
         if (req.file) {
@@ -242,13 +318,13 @@ exports.createPost = async (req, res) => {
             }
         }
 
-        if (!content && !media_url) {
+        if (!content && !media_url && !quotePostId) {
             return res.status(400).json({ error: 'La publication doit contenir du texte ou un média' });
         }
 
         const query = `
-            INSERT INTO feed_posts (user_id, content, media_url, media_type)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO feed_posts (user_id, content, media_url, media_type, quote_post_id)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING *
         `;
         
@@ -256,7 +332,8 @@ exports.createPost = async (req, res) => {
             userId, 
             content || null, 
             media_url || null, 
-            media_type || 'text'
+            media_type || 'text',
+            quotePostId
         ]);
 
         res.status(201).json({
@@ -298,6 +375,7 @@ exports.toggleLike = async (req, res) => {
 exports.getComments = async (req, res) => {
     try {
         const postId = req.params.id;
+        const userId = req.user?.id || 0;
         
         const query = `
             SELECT 
@@ -306,15 +384,19 @@ exports.getComments = async (req, res) => {
                 c.media_url,
                 c.media_type,
                 c.created_at,
+                c.user_id AS author_id,
                 u.name AS author_name,
-                u.avatar_url AS author_avatar
+                u.avatar_url AS author_avatar,
+                u.id_oli AS author_oli_id,
+                (SELECT COUNT(*)::int FROM feed_comment_likes WHERE comment_id = c.id) AS likes_count,
+                EXISTS(SELECT 1 FROM feed_comment_likes WHERE comment_id = c.id AND user_id = $2) AS is_liked_by_me
             FROM feed_comments c
             JOIN users u ON c.user_id = u.id
             WHERE c.post_id = $1
             ORDER BY c.created_at ASC
         `;
         
-        const result = await db.query(query, [postId]);
+        const result = await db.query(query, [postId, userId]);
         
         res.json({
             success: true,
@@ -363,5 +445,29 @@ exports.addComment = async (req, res) => {
     } catch (error) {
         console.error('Erreur addComment:', error);
         res.status(500).json({ error: 'Erreur lors de l\'ajout du commentaire' });
+    }
+};
+
+
+// J'aime sur une réponse (bascule) : renvoie le nouvel état et le compteur
+exports.toggleCommentLike = async (req, res) => {
+    try {
+        const commentId = req.params.commentId;
+        const userId = req.user.id;
+        const removed = await db.query(
+            'DELETE FROM feed_comment_likes WHERE comment_id = $1 AND user_id = $2 RETURNING comment_id',
+            [commentId, userId]
+        );
+        if (removed.rows.length === 0) {
+            await db.query(
+                'INSERT INTO feed_comment_likes (comment_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                [commentId, userId]
+            );
+        }
+        const count = await db.query('SELECT COUNT(*)::int AS n FROM feed_comment_likes WHERE comment_id = $1', [commentId]);
+        res.json({ success: true, liked: removed.rows.length === 0, count: count.rows[0].n });
+    } catch (error) {
+        console.error('Erreur toggleCommentLike:', error);
+        res.status(500).json({ error: 'Erreur' });
     }
 };

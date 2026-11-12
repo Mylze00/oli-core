@@ -5,13 +5,18 @@ import '../../../../core/theme/oli_surface.dart';
 import '../../models/feed_model.dart';
 import '../post_detail_page.dart';
 import 'feed_post_actions.dart';
+import 'feed_media.dart';
+import 'quoted_post_card.dart';
 
 /// Carte d'un post dans le Fil, façon X : avatar, nom, @identifiant, ancienneté,
 /// menu « ⋯ », texte, média et barre d'actions. Toucher la carte ouvre la page « Post ».
 class FeedPostWidget extends ConsumerWidget {
   final FeedPost post;
 
-  const FeedPostWidget({Key? key, required this.post}) : super(key: key);
+  /// Aperçu figé (menu contextuel) : pas d'action, pas de lecture vidéo.
+  final bool still;
+
+  const FeedPostWidget({Key? key, required this.post, this.still = false}) : super(key: key);
 
   String _ago(DateTime time) {
     final diff = DateTime.now().difference(time);
@@ -27,6 +32,12 @@ class FeedPostWidget extends ConsumerWidget {
     Navigator.push(context, MaterialPageRoute(builder: (_) => PostDetailPage(post: post, focusReply: reply)));
   }
 
+  /// Menu en verre à côté de la carte, avec l'aperçu du post détaché (comme la liste des discussions).
+  void _openMenu(BuildContext cardContext, WidgetRef ref) {
+    showFeedPostMenu(cardContext, ref, post,
+        anchorContext: cardContext, preview: FeedPostWidget(post: post, still: true));
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = OliSurface.of(context);
@@ -36,7 +47,8 @@ class FeedPostWidget extends ConsumerWidget {
     return Material(
       color: s.background,
       child: InkWell(
-        onTap: () => _open(context),
+        onTap: still ? null : () => _open(context),
+        onLongPress: still ? null : () => _openMenu(context, ref),
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 12, 8, 4),
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: s.border))),
@@ -86,7 +98,7 @@ class FeedPostWidget extends ConsumerWidget {
                             padding: EdgeInsets.zero,
                             iconSize: 20,
                             icon: Icon(Icons.more_horiz_rounded, color: s.textSecondary),
-                            onPressed: () => showFeedPostMenu(context, ref, post),
+                            onPressed: still ? null : () => _openMenu(context, ref),
                           ),
                         ),
                       ],
@@ -99,56 +111,33 @@ class FeedPostWidget extends ConsumerWidget {
                     if (post.mediaUrl != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 10, right: 8),
-                        child: _FeedMedia(post: post),
+                        child: FeedMedia(post: post, still: still),
+                      ),
+                    if (post.quotedPost != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10, right: 8),
+                        child: QuotedPostCard(
+                          post: post.quotedPost!,
+                          onTap: still
+                              ? null
+                              : () => Navigator.push(context,
+                                  MaterialPageRoute(builder: (_) => PostDetailPage(post: post.quotedPost!))),
+                        ),
                       ),
                     const SizedBox(height: 4),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: FeedActionBar(post: post, onReply: () => _open(context, reply: true)),
-                    ),
+                    if (still)
+                      const SizedBox(height: 8)
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: FeedActionBar(post: post, onReply: () => _open(context, reply: true)),
+                      ),
                   ],
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _FeedMedia extends StatelessWidget {
-  final FeedPost post;
-  const _FeedMedia({required this.post});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = OliSurface.of(context);
-    var url = post.mediaUrl!;
-    if (post.mediaType == 'video' && url.contains('cloudinary')) {
-      url = url.replaceAll(RegExp(r'\.[^.]+$'), '.jpg'); // vignette Cloudinary de la vidéo
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            color: s.tile,
-            width: double.infinity,
-            height: 220,
-            child: Image.network(url,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    Center(child: Icon(Icons.broken_image_outlined, size: 40, color: s.textSecondary))),
-          ),
-          if (post.mediaType == 'video')
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
-            ),
-        ],
       ),
     );
   }

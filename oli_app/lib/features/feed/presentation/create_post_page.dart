@@ -6,9 +6,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
 import '../providers/feed_provider.dart';
+import '../models/feed_model.dart';
+import '../../../core/theme/oli_surface.dart';
+import 'widgets/quoted_post_card.dart';
 
 class CreatePostPage extends ConsumerStatefulWidget {
-  const CreatePostPage({Key? key}) : super(key: key);
+  /// Post repris (« Citer ») : il s'affichera dans la nouvelle publication.
+  final FeedPost? quotedPost;
+
+  const CreatePostPage({Key? key, this.quotedPost}) : super(key: key);
 
   @override
   ConsumerState<CreatePostPage> createState() => _CreatePostPageState();
@@ -88,7 +94,7 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
 
   void _publishPost() async {
     final text = _textController.text.trim();
-    if (text.isEmpty && _selectedMedia == null) return;
+    if (text.isEmpty && _selectedMedia == null && widget.quotedPost == null) return;
 
     setState(() {
       _isLoading = true;
@@ -97,7 +103,8 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
     final success = await ref.read(feedProvider.notifier).createPost(
       text, 
       mediaFile: _selectedMedia, 
-      mediaType: _mediaType
+      mediaType: _mediaType,
+      quotePostId: widget.quotedPost?.id,
     );
     
     if (mounted) {
@@ -122,19 +129,25 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = OliSurface.of(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: s.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: s.background,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
-        title: const Text('Créer une publication', style: TextStyle(color: Colors.black, fontSize: 18)),
+        iconTheme: IconThemeData(color: s.text),
+        title: Text(widget.quotedPost != null ? 'Citer le post' : 'Créer une publication',
+            style: TextStyle(color: s.text, fontSize: 18, fontWeight: FontWeight.w700)),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ElevatedButton(
               onPressed: _isLoading ? null : _publishPost,
               style: ElevatedButton.styleFrom(
+                backgroundColor: OliSurface.oliBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               ),
               child: _isLoading 
@@ -153,13 +166,23 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
                 controller: _textController,
                 maxLines: null,
                 keyboardType: TextInputType.multiline,
-                decoration: const InputDecoration(
-                  hintText: "Quoi de neuf ?",
+                decoration: InputDecoration(
+                  hintText: widget.quotedPost != null ? 'Ajoutez un commentaire…' : "Quoi de neuf ?",
+                  hintStyle: TextStyle(color: s.textSecondary),
                   border: InputBorder.none,
                 ),
-                style: const TextStyle(fontSize: 18),
+                style: TextStyle(fontSize: 18, color: s.text),
               ),
             ),
+            // Post cité, affiché dans la publication
+            if (widget.quotedPost != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 260),
+                  child: SingleChildScrollView(child: QuotedPostCard(post: widget.quotedPost!)),
+                ),
+              ),
             if (_selectedMedia != null)
               Stack(
                 alignment: Alignment.topRight,

@@ -12,6 +12,7 @@ import 'services/conversation_lock.dart';
 import 'widgets/conversation_context_menu.dart';
 import '../../core/theme/oli_glass.dart';
 import '../feed/presentation/feed_tab_view.dart';
+import '../feed/providers/feed_provider.dart';
 import '../../config/api_config.dart';
 import '../../core/user/user_provider.dart';
 import '../../core/storage/secure_storage_service.dart';
@@ -28,6 +29,41 @@ class ConversationsPage extends ConsumerStatefulWidget {
 }
 
 class _ConversationsPageState extends ConsumerState<ConversationsPage> {
+  /// Options du Fil : lecture automatique des vidéos.
+  void _showFeedOptions() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Consumer(
+        builder: (context, ref, _) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              ListTile(
+                title: Text('Options du Fil',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: isDark ? Colors.white : Colors.black)),
+              ),
+              SwitchListTile(
+                secondary: Icon(Icons.play_circle_outline_rounded, color: isDark ? Colors.white : Colors.black87),
+                title: Text('Lecture automatique des vidéos',
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black)),
+                subtitle: Text('Sans le son, quand la vidéo est visible',
+                    style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)),
+                activeColor: const Color(0xFF1E7DBA),
+                value: ref.watch(feedAutoplayProvider),
+                onChanged: (v) => ref.read(feedAutoplayProvider.notifier).set(v),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   int _selectedIndex = 0; // 0: Privé, 1: Market
   InboxFilter _filter = InboxFilter.all;
   final TextEditingController _searchController = TextEditingController();
@@ -220,11 +256,20 @@ class _ConversationsPageState extends ConsumerState<ConversationsPage> {
                     scrollDirection: Axis.horizontal,
                     children: _selectedIndex == 2
                         ? [
-                            _FilterChip(label: 'Pour vous', selected: true, onTap: () {}),
+                            // « Pour vous » : classé par l'algorithme ; « Abonnement » : contacts, chronologique
+                            _FilterChip(
+                              label: 'Pour vous',
+                              selected: ref.watch(feedModeProvider) == 'for_you',
+                              onTap: () => ref.read(feedProvider.notifier).setMode('for_you'),
+                            ),
                             const SizedBox(width: 8),
-                            _FilterChip(label: 'Abonnement', selected: false, onTap: () {}), // Par défaut non sélectionné sauf si on veut l'effet inverse
+                            _FilterChip(
+                              label: 'Abonnement',
+                              selected: ref.watch(feedModeProvider) == 'following',
+                              onTap: () => ref.read(feedProvider.notifier).setMode('following'),
+                            ),
                             const SizedBox(width: 8),
-                            _FilterChip(label: '...', selected: false, onTap: () {}),
+                            _FilterChip(label: '...', selected: false, onTap: _showFeedOptions),
                           ]
                         : [
                             _FilterChip(label: 'Tous', selected: _filter == InboxFilter.all, onTap: () => setState(() => _filter = InboxFilter.all)),
@@ -1032,7 +1077,7 @@ class _FilterChip extends StatelessWidget {
     final idleBorder = isDark ? Colors.white24 : Colors.grey.shade300;
     final idleForeground = isDark ? Colors.white70 : Colors.grey.shade700;
     // On utilise un bleu foncé pour correspondre à la maquette si c'est sélectionné
-    final activeColor = const Color(0xFF1565C0); 
+    final activeColor = const Color(0xFF1E7DBA); // bleu Oli
 
     return GestureDetector(
       onTap: onTap,

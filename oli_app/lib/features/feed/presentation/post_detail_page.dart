@@ -6,6 +6,8 @@ import '../../../core/user/user_provider.dart';
 import '../models/feed_model.dart';
 import '../providers/feed_provider.dart';
 import 'widgets/feed_post_actions.dart';
+import 'widgets/feed_media.dart';
+import 'widgets/quoted_post_card.dart';
 
 /// Page « Post » façon X : auteur, texte et média, heure · date · vues, barre
 /// d'actions (réponses, republier, j'aime, enregistrer, partager), réponses et
@@ -79,6 +81,38 @@ class _PostDetailPageState extends ConsumerState<PostDetailPage> {
     await _loadComments();
   }
 
+  /// Répondre à une réponse : le champ du bas commence par @auteur.
+  void _replyTo(Map<String, dynamic> c) {
+    final handle = (c['author_oli_id'] ?? '').toString();
+    final mention = handle.isNotEmpty ? '@$handle ' : '@${c['author_name'] ?? ''} ';
+    _replyController.text = mention;
+    _replyController.selection = TextSelection.collapsed(offset: mention.length);
+    _replyFocus.requestFocus();
+  }
+
+  /// J'aime sur une réponse : affiché tout de suite, confirmé par le serveur.
+  Future<void> _toggleCommentLike(Map<String, dynamic> c) async {
+    final id = int.tryParse('${c['id']}');
+    if (id == null) return;
+    final wasLiked = c['is_liked_by_me'] == true;
+    final count = int.tryParse('${c['likes_count'] ?? 0}') ?? 0;
+    setState(() {
+      c['is_liked_by_me'] = !wasLiked;
+      c['likes_count'] = count + (wasLiked ? -1 : 1);
+    });
+    final result = await ref.read(feedProvider.notifier).toggleCommentLike(id);
+    if (!mounted) return;
+    setState(() {
+      if (result == null) {
+        c['is_liked_by_me'] = wasLiked;
+        c['likes_count'] = count;
+      } else {
+        c['is_liked_by_me'] = result['liked'] == true;
+        c['likes_count'] = result['count'];
+      }
+    });
+  }
+
   String _dateLine(DateTime t) {
     final l = t.toLocal();
     String two(int v) => v.toString().padLeft(2, '0');
@@ -105,9 +139,13 @@ class _PostDetailPageState extends ConsumerState<PostDetailPage> {
     return Scaffold(
       backgroundColor: s.background,
       appBar: s.appBar('Post', actions: [
-        IconButton(
-          icon: Icon(Icons.more_horiz_rounded, color: s.text),
-          onPressed: () => showFeedPostMenu(context, ref, post, onRemoved: () => Navigator.maybePop(context)),
+        Builder(
+          builder: (buttonContext) => IconButton(
+            icon: Icon(Icons.more_horiz_rounded, color: s.text),
+            // Menu en verre à côté du bouton
+            onPressed: () => showFeedPostMenu(context, ref, post,
+                anchorContext: buttonContext, onRemoved: () => Navigator.maybePop(context)),
+          ),
         ),
       ]),
       body: Column(
@@ -164,7 +202,16 @@ class _PostDetailPageState extends ConsumerState<PostDetailPage> {
                   if (post.mediaUrl != null)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: _PostMedia(post: post),
+                      child: FeedMedia(post: post, radius: 16),
+                    ),
+                  if (post.quotedPost != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: QuotedPostCard(
+                        post: post.quotedPost!,
+                        onTap: () => Navigator.push(
+                            context, MaterialPageRoute(builder: (_) => PostDetailPage(post: post.quotedPost!))),
+                      ),
                     ),
                   // Heure · date · vues
                   Padding(
@@ -282,6 +329,26 @@ class _PostDetailPageState extends ConsumerState<PostDetailPage> {
                     padding: const EdgeInsets.only(top: 2),
                     child: Text('${c['content']}', style: TextStyle(color: s.text, fontSize: 15, height: 1.3)),
                   ),
+                // Actions de la réponse : répondre, j'aime
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(
+                    children: [
+                      _CommentAction(
+                        icon: Icons.chat_bubble_outline,
+                        color: s.textSecondary,
+                        onTap: () => _replyTo(c),
+                      ),
+                      const SizedBox(width: 24),
+                      _CommentAction(
+                        icon: c['is_liked_by_me'] == true ? Icons.favorite : Icons.favorite_border,
+                        color: c['is_liked_by_me'] == true ? const Color(0xFFF91880) : s.textSecondary,
+                        count: int.tryParse('${c['likes_count'] ?? 0}') ?? 0,
+                        onTap: () => _toggleCommentLike(c),
+                      ),
+                    ],
+                  ),
+                ),
                 if (media != null && media.isNotEmpty && c['media_type'] == 'image')
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -323,37 +390,32 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-/// Média du post (image, ou vignette de vidéo avec bouton lecture).
-class _PostMedia extends StatelessWidget {
-  final FeedPost post;
-  const _PostMedia({required this.post});
+/// Petite action sous une réponse (icône + compteur).
+class _CommentAction extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final int count;
+  final VoidCallback onTap;
+
+  const _CommentAction({required this.icon, required this.color, required this.onTap, this.count = 0});
 
   @override
   Widget build(BuildContext context) {
-    final s = OliSurface.of(context);
-    var url = post.mediaUrl!;
-    if (post.mediaType == 'video' && url.contains('cloudinary')) {
-      url = url.replaceAll(RegExp(r'\.[^.]+$'), '.jpg'); // vignette Cloudinary de la vidéo
-    }
-    return ClipRRect(
+    return InkWell(
+      onTap: onTap,
       borderRadius: BorderRadius.circular(16),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            color: s.tile,
-            constraints: const BoxConstraints(maxHeight: 480, minHeight: 160),
-            width: double.infinity,
-            child: Image.network(url, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Center(child: Icon(Icons.broken_image_outlined, color: s.textSecondary, size: 40))),
-          ),
-          if (post.mediaType == 'video')
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 34),
-            ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 17, color: color),
+            if (count > 0) ...[
+              const SizedBox(width: 4),
+              Text('$count', style: TextStyle(color: color, fontSize: 12)),
+            ],
+          ],
+        ),
       ),
     );
   }

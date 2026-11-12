@@ -9,10 +9,34 @@ import '../../../config/api_config.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../../../core/services/hive_cache_service.dart';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Mode du Fil : 'for_you' (classé par l'algorithme) ou 'following' (contacts, chronologique).
+final feedModeProvider = StateProvider<String>((ref) => 'for_you');
 
 final feedProvider = StateNotifierProvider<FeedNotifier, AsyncValue<List<FeedPost>>>((ref) {
-  return FeedNotifier();
+  return FeedNotifier(ref);
 });
+
+/// Lecture automatique des vidéos du Fil (muettes, quand elles sont visibles). Mémorisée.
+final feedAutoplayProvider = StateNotifierProvider<FeedAutoplayNotifier, bool>((ref) => FeedAutoplayNotifier());
+
+class FeedAutoplayNotifier extends StateNotifier<bool> {
+  static const _key = 'feed_autoplay_videos';
+
+  FeedAutoplayNotifier() : super(true) {
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted) state = prefs.getBool(_key) ?? true;
+    }).catchError((_) {});
+  }
+
+  Future<void> set(bool value) async {
+    state = value;
+    try {
+      (await SharedPreferences.getInstance()).setBool(_key, value);
+    } catch (_) {}
+  }
+}
 
 class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
   String? _nextCursor;
@@ -22,8 +46,21 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
   bool get hasMore => _hasMore;
   bool get isLoadingMore => _isLoadingMore;
 
-  FeedNotifier() : super(const AsyncValue.loading()) {
+  final Ref _ref;
+
+  FeedNotifier(this._ref) : super(const AsyncValue.loading()) {
     fetchFeed();
+  }
+
+  String get _mode => _ref.read(feedModeProvider);
+  String get _cacheKey => 'feed_cache_$_mode';
+
+  /// Change de mode (« Pour vous » / « Abonnement ») et recharge depuis le début.
+  Future<void> setMode(String mode) async {
+    if (_ref.read(feedModeProvider) == mode) return;
+    _ref.read(feedModeProvider.notifier).state = mode;
+    state = const AsyncValue.loading();
+    await fetchFeed(isRefresh: true);
   }
 
   Future<void> fetchFeed({bool isRefresh = false}) async {
@@ -39,7 +76,7 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
     final bool isFirstLoad = !isRefresh && !state.hasValue && _nextCursor == null;
     if (isFirstLoad) {
       try {
-        final cachedData = await HiveCacheService.getCache('feed_cache');
+        final cachedData = await HiveCacheService.getCache(_cacheKey);
         if (cachedData != null) {
           final List<dynamic> data = jsonDecode(cachedData);
           final cachedPosts = data.map((json) => FeedPost.fromJson(json)).toList();
@@ -66,7 +103,7 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
       
       final dio = Dio();
       final url = '${ApiConfig.baseUrl}/api/feed';
-      final queryParams = _nextCursor != null ? {'cursor': _nextCursor} : null;
+      final queryParams = {'mode': _mode, if (_nextCursor != null) 'cursor': _nextCursor};
 
       final response = await dio.get(
         url,
@@ -85,10 +122,12 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
           state = AsyncValue.data(posts);
           // Si c'est la première page, on met à jour le cache
           if (_nextCursor == null || _nextCursor == response.data['nextCursor']) {
-            await HiveCacheService.setCache('feed_cache', jsonEncode(data));
+            await HiveCacheService.setCache(_cacheKey, jsonEncode(data));
           }
         } else {
-          state = AsyncValue.data([...state.value!, ...posts]);
+          // Sans doublon : le classement peut bouger entre deux pages
+          final known = state.value!.map((p) => p.id).toSet();
+          state = AsyncValue.data([...state.value!, ...posts.where((p) => known.add(p.id))]);
         }
       }
     } catch (e, st) {
@@ -265,10 +304,21 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
     }
   }
 
+  /// J'aime sur une réponse : renvoie { liked, count } ou null en cas d'échec.
+  Future<Map<String, dynamic>?> toggleCommentLike(int commentId) async {
+    try {
+      final r = await Dio().post('${ApiConfig.baseUrl}/api/feed/comments/$commentId/like', options: await _auth());
+      return Map<String, dynamic>.from(r.data);
+    } catch (e) {
+      debugPrint('❌ J\'aime réponse: $e');
+      return null;
+    }
+  }
+
   /// Après un commentaire publié : compteur à jour.
   void incrementComments(int postId) => _replace(postId, (p) => p.copyWith(commentsCount: p.commentsCount + 1));
 
-  Future<bool> createPost(String content, {XFile? mediaFile, String? mediaType}) async {
+  Future<bool> createPost(String content, {XFile? mediaFile, String? mediaType, int? quotePostId}) async {
     try {
       final storage = SecureStorageService();
       final token = await storage.getToken();
@@ -280,11 +330,12 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
         final bytes = await mediaFile.readAsBytes();
         data = FormData.fromMap({
           'content': content,
+          if (quotePostId != null) 'quote_post_id': quotePostId,
           'media_type': mediaType ?? 'image',
           'media': MultipartFile.fromBytes(bytes, filename: mediaFile.name),
         });
       } else {
-        data = {'content': content, 'media_type': 'text'};
+        data = {'content': content, 'media_type': 'text', if (quotePostId != null) 'quote_post_id': quotePostId};
       }
 
       final response = await dio.post(

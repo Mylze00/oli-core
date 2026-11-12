@@ -20,6 +20,9 @@ class FeedPost {
   final bool isMine;
   final DateTime createdAt;
 
+  /// Post cité dans cette publication (« Citer »), ou null.
+  final FeedPost? quotedPost;
+
   FeedPost({
     required this.id,
     this.authorId,
@@ -40,6 +43,7 @@ class FeedPost {
     this.isBookmarkedByMe = false,
     this.isMine = false,
     required this.createdAt,
+    this.quotedPost,
   });
 
   static int _int(dynamic v) => int.tryParse(v?.toString() ?? '0') ?? 0;
@@ -65,6 +69,14 @@ class FeedPost {
       isBookmarkedByMe: json['is_bookmarked_by_me'] == true,
       isMine: json['is_mine'] == true,
       createdAt: DateTime.parse(json['created_at']),
+      quotedPost: json['quoted_post'] is Map
+          ? FeedPost.fromJson({
+              'likes_count': 0,
+              'comments_count': 0,
+              'is_liked_by_me': false,
+              ...Map<String, dynamic>.from(json['quoted_post']),
+            })
+          : null,
     );
   }
 
@@ -89,6 +101,7 @@ class FeedPost {
         'is_bookmarked_by_me': isBookmarkedByMe,
         'is_mine': isMine,
         'created_at': createdAt.toIso8601String(),
+        if (quotedPost != null) 'quoted_post': quotedPost!.toJson(),
       };
 
   FeedPost copyWith({
@@ -121,6 +134,7 @@ class FeedPost {
       isBookmarkedByMe: isBookmarkedByMe ?? this.isBookmarkedByMe,
       isMine: isMine,
       createdAt: createdAt,
+      quotedPost: quotedPost,
     );
   }
 }
