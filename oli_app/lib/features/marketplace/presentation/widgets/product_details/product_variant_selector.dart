@@ -109,14 +109,17 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
     return colors[lower] ?? Colors.blueAccent;
   }
 
+  /// Couleur de premier plan selon le thème : blanc en sombre, noir en clair.
+  Color get _fg => Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black;
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const SizedBox(
+      return SizedBox(
         height: 40,
         child: Center(child: SizedBox(
           width: 20, height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
+          child: CircularProgressIndicator(strokeWidth: 2, color: _fg.withValues(alpha: 0.54)),
         )),
       );
     }
@@ -150,8 +153,8 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
                       children: [
                         Text(
                           colorEntry.value.first.typeLabel,
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: _fg.withValues(alpha: 0.7),
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.5,
@@ -163,10 +166,10 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
                     ),
                   ),
                 if (colorEntry != null && sizeEntry != null)
-                  const VerticalDivider(
+                  VerticalDivider(
                     width: 24,
                     thickness: 1,
-                    color: Colors.white12,
+                    color: _fg.withValues(alpha: 0.12),
                   ),
                 if (sizeEntry != null)
                   Expanded(
@@ -175,8 +178,8 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
                       children: [
                         Text(
                           sizeEntry.value.first.typeLabel,
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: _fg.withValues(alpha: 0.7),
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.5,
@@ -200,8 +203,8 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
             padding: const EdgeInsets.only(bottom: 6, top: 2),
             child: Text(
               entry.value.first.typeLabel,
-              style: const TextStyle(
-                color: Colors.white70,
+              style: TextStyle(
+                color: _fg.withValues(alpha: 0.7),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.5,
@@ -234,7 +237,7 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
               color: color,
               shape: BoxShape.circle,
               border: Border.all(
-                color: isSelected ? Colors.blueAccent : Colors.white38,
+                color: isSelected ? Colors.blueAccent : _fg.withValues(alpha: 0.38),
                 width: isSelected ? 2.5 : 1.5,
               ),
               boxShadow: isSelected
@@ -275,12 +278,12 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
             decoration: BoxDecoration(
               color: isSelected
                   ? Colors.blueAccent.withOpacity(0.15)
-                  : (outOfStock ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.08)),
+                  : (outOfStock ? _fg.withValues(alpha: 0.03) : _fg.withValues(alpha: 0.06)),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
                 color: isSelected
                     ? Colors.blueAccent
-                    : (outOfStock ? Colors.white12 : Colors.white24),
+                    : (outOfStock ? _fg.withValues(alpha: 0.12) : _fg.withValues(alpha: 0.24)),
                 width: isSelected ? 1.5 : 1,
               ),
             ),
@@ -288,8 +291,8 @@ class _ProductVariantSelectorState extends ConsumerState<ProductVariantSelector>
               outOfStock ? '$label (épuisé)' : label,
               style: TextStyle(
                 color: outOfStock
-                    ? Colors.white30
-                    : (isSelected ? Colors.blueAccent : Colors.white),
+                    ? _fg.withValues(alpha: 0.3)
+                    : (isSelected ? Colors.blueAccent : _fg),
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 decoration: outOfStock ? TextDecoration.lineThrough : null,

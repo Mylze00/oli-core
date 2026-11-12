@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:oli_app/widgets/resilient_product_image.dart';
 import '../../../../../../models/product_model.dart';
 import '../../../../../../features/cart/providers/cart_provider.dart';
 import '../../../../../../providers/exchange_rate_provider.dart';
 
 class ProductImageCarousel extends StatefulWidget {
   final Product product;
-  final Function() onShare;
+  final VoidCallback onShare;
+
+  /// Ajout au panier de la fiche (variante, quantité et livraison choisies).
+  final VoidCallback onAddToCart;
 
   const ProductImageCarousel({
     super.key,
     required this.product,
     required this.onShare,
+    required this.onAddToCart,
   });
 
   @override
@@ -45,7 +50,7 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
                 child: SizedBox(
                   height: 375, // Réduit de 20% (468 -> 375)
                   child: Container(
-                    color: const Color(0xFF1A1A1A),
+                    color: Colors.white,
                     width: double.infinity,
                     child: images.isEmpty
                         ? const Center(
@@ -84,38 +89,31 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
                   const SizedBox(width: 10),
                   Consumer(
                     builder: (context, ref, _) {
-                      return _ActionCircle(
-                        icon: Icons.shopping_cart_outlined,
-                        onTap: () {
-                          ref.read(cartProvider.notifier).addItem(
-                                CartItem(
-                                  productId: p.id.toString(),
-                                  productName: p.name,
-                                  price: double.tryParse(p.price) ?? 0.0,
-                                  quantity: 1,
-                                  imageUrl: images.isNotEmpty ? images.first : null,
-                                  sellerName: p.seller,
-                                  sellerId: p.sellerId,
+                      final count = ref.watch(cartProvider).fold<int>(0, (sum, item) => sum + item.quantity);
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          _ActionCircle(icon: Icons.add_shopping_cart_rounded, onTap: widget.onAddToCart),
+                          if (count > 0)
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                constraints: const BoxConstraints(minWidth: 18),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.white, width: 1.5),
                                 ),
-                              );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Row(
-                                children: [
-                                  Icon(Icons.check_circle, color: Colors.white),
-                                  SizedBox(width: 8),
-                                  Text('Produit ajouté au panier'),
-                                ],
+                                child: Text(
+                                  count > 99 ? '99+' : '$count',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                                ),
                               ),
-                              backgroundColor: Colors.green,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              margin: const EdgeInsets.all(16),
-                              duration: const Duration(seconds: 2),
                             ),
-                          );
-                        },
+                        ],
                       );
                     },
                   ),
@@ -209,14 +207,11 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          images[i],
+                        child: ResilientProductImage(
+                          url: images[i],
+                          width: 200,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.broken_image,
-                            size: 24,
-                            color: Colors.grey,
-                          ),
+                          showPreview: false,
                         ),
                       ),
                     ),
@@ -279,41 +274,7 @@ class _CarouselImageTileState extends State<_CarouselImageTile>
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      widget.url,
-      key: ValueKey(widget.url),
-      width: double.infinity,
-      fit: BoxFit.fitWidth,
-      /// Placeholder opaque pendant le chargement → aucune image précédente visible
-      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        if (wasSynchronouslyLoaded || frame != null) {
-          // Image prête → on l'affiche avec un fade-in
-          return AnimatedOpacity(
-            opacity: 1.0,
-            duration: const Duration(milliseconds: 200),
-            child: child,
-          );
-        }
-        // Pendant le téléchargement → shimmer opaque gris-foncé
-        return AnimatedBuilder(
-          animation: _shimmer,
-          builder: (_, __) => Container(
-            height: 375,
-            color: Color.lerp(
-              const Color(0xFF1A1A1A),
-              const Color(0xFF2E2E2E),
-              _shimmer.value,
-            ),
-          ),
-        );
-      },
-      errorBuilder: (_, __, ___) => const SizedBox(
-        height: 300,
-        child: Center(
-          child: Icon(Icons.broken_image, color: Colors.grey, size: 60),
-        ),
-      ),
-    );
+    return ResilientProductImage(url: widget.url, width: 900, fit: BoxFit.contain);
   }
 }
 
@@ -392,14 +353,11 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> {
             minScale: 0.8,
             maxScale: 4.0,
             child: Center(
-              child: Image.network(
-                widget.images[index],
+              child: ResilientProductImage(
+                url: widget.images[index],
+                width: 1600,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Icon(
-                  Icons.broken_image,
-                  color: Colors.grey,
-                  size: 80,
-                ),
+                background: Colors.black,
               ),
             ),
           );

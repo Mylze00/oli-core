@@ -1,3 +1,4 @@
+import '../../core/deep_links/product_link.dart';
 import '../../core/theme/oli_glass.dart';
 import 'dart:async';
 import 'dart:ui';
@@ -33,6 +34,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   void initState() {
     super.initState();
     _buildPages();
+    // Ouverture depuis un lien de produit partagé
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ProductLink.openPending(context);
+    });
   }
 
   void _buildPages() {

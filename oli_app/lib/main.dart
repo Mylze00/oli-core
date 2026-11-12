@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'features/auth/screens/login_page.dart';
 import 'features/home/home_page.dart';
+import 'core/deep_links/product_link.dart';
 import 'features/auth/providers/auth_controller.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/native_call_service.dart';
@@ -52,6 +53,8 @@ Future<void> _openAcceptedCall(Map<String, String> callData) async {
 }
 
 void main() async {
+  // Lien de produit partagé (/product/<id>) : gardé jusqu'à l'affichage de l'accueil
+  ProductLink.captureFromUrl();
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialiser le cache hors-ligne

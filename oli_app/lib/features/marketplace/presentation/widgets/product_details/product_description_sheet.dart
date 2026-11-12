@@ -8,7 +8,7 @@ class ProductDescriptionSheet extends StatelessWidget {
   static void show(BuildContext context, String description) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1A1A1A) : Colors.white,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -19,6 +19,8 @@ class ProductDescriptionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final text = isDark ? Colors.white : const Color(0xFF111418);
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       minChildSize: 0.4,
@@ -39,9 +41,9 @@ class ProductDescriptionSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            const Text("Description du produit",
+            Text("Description du produit",
                 style: TextStyle(
-                    color: Colors.white,
+                    color: text,
                     fontSize: 18,
                     fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
@@ -52,8 +54,8 @@ class ProductDescriptionSheet extends StatelessWidget {
                   description.isNotEmpty
                       ? description
                       : "Aucune description disponible.",
-                  style: const TextStyle(
-                      color: Colors.white70, fontSize: 16, height: 1.5),
+                  style: TextStyle(
+                      color: text.withValues(alpha: 0.75), fontSize: 16, height: 1.5),
                 ),
               ),
             ),

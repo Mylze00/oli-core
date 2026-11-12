@@ -123,6 +123,7 @@ flutter:
     - assets/images/categories/
     - assets/images/services/
     - assets/images/operators/
+    - assets/images/delivery/
     - assets/images/bandes/
     - assets/translations/
     - assets/sounds/

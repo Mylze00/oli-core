@@ -194,6 +194,11 @@ class _DynamicDeliverySelector extends StatelessWidget {
               color: isSelected ? Colors.blueAccent : (isDark ? Colors.white54 : Colors.black38),
             ),
             const SizedBox(width: 12),
+            // Illustration du mode : avion, navire, moto express, Click & Collect ou livraison gratuite
+            if (_illustrationFor(opt, isDark) != null) ...[
+              Image.asset(_illustrationFor(opt, isDark)!, width: 46, height: 34, fit: BoxFit.contain),
+              const SizedBox(width: 10),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,6 +227,30 @@ class _DynamicDeliverySelector extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Image du mode de livraison, ou null si aucune ne lui correspond (main propre…).
+  /// La moto existe en deux versions : blanche sur thème sombre, noire sur thème clair.
+  String? _illustrationFor(ShippingOption opt, bool isDark) {
+    final id = opt.methodId.toLowerCase();
+    final label = opt.label.toLowerCase();
+    if (id == 'maritime' || label.contains('maritime') || label.contains('bateau')) {
+      return 'assets/images/delivery/maritime.png';
+    }
+    if (id == 'free' || label.contains('gratuit')) {
+      return 'assets/images/delivery/free.png';
+    }
+    if (id == 'pick_go' || label.contains('pick')) {
+      return 'assets/images/delivery/pick_go.png';
+    }
+    if (id == 'moto' || id == 'oli_express' || label.contains('moto') || label.contains('express')) {
+      return isDark ? 'assets/images/delivery/moto_dark.png' : 'assets/images/delivery/moto_light.png';
+    }
+    if (id == 'oli_standard' || id == 'standard' || id == 'air' || id == 'aerien' ||
+        label.contains('standard') || label.contains('aérien') || label.contains('avion')) {
+      return 'assets/images/delivery/avion.png';
+    }
+    return null;
   }
 
   String _formatDate(String deliveryTime) {

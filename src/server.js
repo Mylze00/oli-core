@@ -395,6 +395,8 @@ app.use("/auth", authRoutes);
 
 
 app.use("/products", optionalAuth, productsRoutes);
+// 🔗 Liens de partage des produits (aperçu WhatsApp/Facebook puis ouverture dans l'app)
+app.use("/p", require("./routes/share.routes"));
 // 💰 Stratégie prix — [SÉCU] admin uniquement (modifie les prix des produits)
 app.use("/api/price-strategy", requireAuth, requireRole('admin'), require('./routes/price-strategy.routes'));
 

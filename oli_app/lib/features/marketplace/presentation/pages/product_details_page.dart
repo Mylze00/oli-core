@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../../../core/deep_links/product_link.dart';
+import '../../../cart/screens/cart_page.dart';
 import '../../../../app/theme/theme_provider.dart';
 import '../../../../config/api_config.dart';
 import '../../providers/market_provider.dart';
@@ -45,19 +48,31 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   ProductVariant? _selectedVariant;
   int _quantity = 1;
 
-  void _shareProduct() {
-      debugPrint("📤 [DEBUG] Bouton Partage cliqué");
-      final p = widget.product;
-      final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
-      final priceUsd = double.tryParse(p.price) ?? 0.0;
-      final formattedPrice = exchangeNotifier.formatProductPrice(priceUsd);
-      
-      final String text = "Regarde ce produit sur Oli : ${p.name}\n$formattedPrice\nhttps://oli-app.web.app/product/${p.id}";
-      Share.share(text).then((result) {
-        debugPrint("📤 [DEBUG] Partage terminé: ${result.status}");
-      }).catchError((e) {
-        debugPrint("❌ [DEBUG] Erreur Partage: $e");
-      });
+  /// Partage le lien unique du produit (aperçu enrichi dans WhatsApp, Facebook…).
+  /// Sans partage natif (navigateur d'ordinateur), le lien est copié.
+  Future<void> _shareProduct() async {
+    final p = widget.product;
+    final priceUsd = double.tryParse(p.price) ?? 0.0;
+    final formattedPrice = ref.read(exchangeRateProvider.notifier).formatProductPrice(priceUsd);
+    final link = ProductLink.shareUrl(p.id);
+    final text = '${p.name}\n$formattedPrice sur Oli\n$link';
+
+    var shared = false;
+    try {
+      final result = await Share.share(text, subject: p.name);
+      shared = result.status != ShareResultStatus.unavailable;
+    } catch (e) {
+      debugPrint('⚠️ Partage natif indisponible : $e');
+    }
+    if (shared || !mounted) return;
+    await Clipboard.setData(ClipboardData(text: link));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Lien du produit copié : collez-le pour le partager'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -170,7 +185,12 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Voir le panier',
+          textColor: Colors.white,
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage())),
+        ),
       )
     );
   }
@@ -209,30 +229,6 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     );
   }
 
-  void _showDebugInfo() {
-    final p = widget.product;
-    final userState = ref.read(userProvider);
-    final myId = userState.value?.id.toString() ?? "Inconnu";
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Debug Info (V2.0 Refactored)"),
-        content: Text(
-          "Produit ID: ${p.id}\n"
-          "Vendeur ID: ${p.sellerId}\n"
-          "Vendeur Nom: ${p.seller}\n"
-          "Boutique: ${p.shopName}\n"
-          "Mon ID: $myId\n"
-          "Images: ${p.images.length}"
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
-      ),
-    );
-  }
-
-
-
   @override
   Widget build(BuildContext context) {
     final p = widget.product;
@@ -243,7 +239,6 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     return Scaffold(
       backgroundColor: isDark ? Colors.black : OliLightColors.background,
       appBar: AppBar(
-        title: Text("Détail", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
         backgroundColor: isDark ? Colors.black : Colors.white,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
         elevation: isDark ? 0 : 1,
@@ -275,18 +270,15 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.bug_report, size: 18),
-            onPressed: _showDebugInfo,
-          )
         ],
       ),
       body: SingleChildScrollView(
         child: Column(children: [
           
           ProductImageCarousel(
-            product: p, 
-            onShare: _shareProduct
+            product: p,
+            onShare: _shareProduct,
+            onAddToCart: _addToCart,
           ),
 
           Padding(

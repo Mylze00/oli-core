@@ -61,6 +61,33 @@ class CloudinaryHelper {
     return thumbnail(url, width: 120, height: 120);
   }
 
+  /// Image redimensionnée SANS recadrage (proportions conservées), largeur max [width].
+  /// Utilisée par la fiche produit : une photo de plusieurs Mo passe à ~100 Ko.
+  static String fit(String url, {int width = 900}) {
+    if (!url.contains('cloudinary.com')) return url;
+    final uploadIndex = url.indexOf('/upload/');
+    if (uploadIndex == -1) return url;
+    final afterUpload = url.substring(uploadIndex + 8);
+    if (afterUpload.startsWith('c_') || afterUpload.startsWith('w_') || afterUpload.startsWith('f_')) {
+      return url;
+    }
+    final before = url.substring(0, uploadIndex + 8);
+    return '${before}c_limit,w_$width,q_auto,f_auto/$afterUpload';
+  }
+
+  /// Aperçu minuscule (≈ 2 Ko) affiché tout de suite, avant l'image nette.
+  static String preview(String url) {
+    if (!url.contains('cloudinary.com')) return url;
+    final uploadIndex = url.indexOf('/upload/');
+    if (uploadIndex == -1) return url;
+    final afterUpload = url.substring(uploadIndex + 8);
+    if (afterUpload.startsWith('c_') || afterUpload.startsWith('w_') || afterUpload.startsWith('f_')) {
+      return url;
+    }
+    final before = url.substring(0, uploadIndex + 8);
+    return '${before}c_limit,w_80,q_30,e_blur:300,f_auto/$afterUpload';
+  }
+
   /// Returns a large image (for full-screen views)
   static String large(String url) {
     return thumbnail(url, width: 800, height: 800);
