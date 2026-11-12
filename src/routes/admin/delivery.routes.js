@@ -51,7 +51,9 @@ router.get('/drivers', async (req, res) => {
             SELECT 
                 u.id, u.name, u.phone, u.email, u.avatar_url,
                 u.is_deliverer, u.is_verified, u.is_suspended,
-                u.created_at, u.last_active,
+                u.created_at,
+                -- users n'a pas de colonne last_active : la dernière activité vient des sessions suivies
+                (SELECT MAX(s.last_seen_at) FROM user_sessions_ext s WHERE s.user_id = u.id) AS last_active,
                 COUNT(DISTINCT o.id) FILTER (WHERE o.delivery_status = 'delivered') as completed_deliveries,
                 COUNT(DISTINCT o.id) FILTER (WHERE o.delivery_status IN ('assigned', 'in_transit')) as active_deliveries,
                 COUNT(DISTINCT o.id) as total_deliveries
@@ -106,7 +108,7 @@ router.get('/drivers', async (req, res) => {
         });
     } catch (err) {
         console.error('Erreur GET /admin/delivery/drivers:', err);
-        res.status(500).json({ error: 'Erreur serveur' });
+        res.status(500).json({ error: 'Erreur serveur', detail: err.message });
     }
 });
 
@@ -146,7 +148,7 @@ router.post('/drivers', async (req, res) => {
         });
     } catch (err) {
         console.error('Erreur POST /admin/delivery/drivers:', err);
-        res.status(500).json({ error: 'Erreur serveur' });
+        res.status(500).json({ error: 'Erreur serveur', detail: err.message });
     }
 });
 
@@ -166,7 +168,7 @@ router.patch('/drivers/:id/toggle', async (req, res) => {
         res.json({ message: newStatus ? 'Livreur suspendu' : 'Livreur réactivé', is_suspended: newStatus });
     } catch (err) {
         console.error('Erreur toggle driver:', err);
-        res.status(500).json({ error: 'Erreur serveur' });
+        res.status(500).json({ error: 'Erreur serveur', detail: err.message });
     }
 });
 
@@ -185,7 +187,7 @@ router.patch('/drivers/:id/verify', async (req, res) => {
         res.json({ message: newVal ? 'Livreur vérifié' : 'Vérification retirée', is_verified: newVal });
     } catch (err) {
         console.error('Erreur verify driver:', err);
-        res.status(500).json({ error: 'Erreur serveur' });
+        res.status(500).json({ error: 'Erreur serveur', detail: err.message });
     }
 });
 
@@ -270,7 +272,7 @@ router.get('/applications', async (req, res) => {
         });
     } catch (err) {
         console.error('Erreur GET /admin/delivery/applications:', err);
-        res.status(500).json({ error: 'Erreur serveur' });
+        res.status(500).json({ error: 'Erreur serveur', detail: err.message });
     }
 });
 
@@ -315,7 +317,7 @@ router.patch('/applications/:id/approve', async (req, res) => {
         });
     } catch (err) {
         console.error('Erreur approve application:', err);
-        res.status(500).json({ error: 'Erreur serveur' });
+        res.status(500).json({ error: 'Erreur serveur', detail: err.message });
     }
 });
 
@@ -385,7 +387,7 @@ router.patch('/applications/:id/reject', async (req, res) => {
         });
     } catch (err) {
         console.error('Erreur reject application:', err);
-        res.status(500).json({ error: 'Erreur serveur' });
+        res.status(500).json({ error: 'Erreur serveur', detail: err.message });
     }
 });
 

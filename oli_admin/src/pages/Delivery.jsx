@@ -99,6 +99,14 @@ export default function Delivery() {
     const [appSearch, setAppSearch] = useState('');
     const [actionLoading, setActionLoading] = useState(null);
 
+    // Une requête en échec ne doit pas se faire passer pour une liste vide
+    const [loadErrors, setLoadErrors] = useState({ drivers: null, applications: null });
+    const describeError = (error) => {
+        const data = error.response?.data;
+        if (data?.error) return data.detail ? `${data.error} — ${data.detail}` : data.error;
+        return error.response ? `Erreur ${error.response.status}` : 'Serveur injoignable';
+    };
+
     // Add driver modal state
     const [showAddModal, setShowAddModal] = useState(false);
     const [addPhone, setAddPhone] = useState('');
@@ -117,8 +125,10 @@ export default function Delivery() {
             const { data } = await api.get('/admin/delivery/drivers?limit=200');
             setDrivers(data.drivers || []);
             if (data.stats) setDriverStats(data.stats);
+            setLoadErrors((e) => ({ ...e, drivers: null }));
         } catch (error) {
             console.error("Erreur livreurs:", error);
+            setLoadErrors((e) => ({ ...e, drivers: describeError(error) }));
         } finally {
             setDriverLoading(false);
         }
@@ -129,8 +139,10 @@ export default function Delivery() {
             const { data } = await api.get('/admin/delivery/applications?limit=200');
             setApplications(data.applications || []);
             if (data.stats) setAppStats(data.stats);
+            setLoadErrors((e) => ({ ...e, applications: null }));
         } catch (error) {
             console.error("Erreur candidatures:", error);
+            setLoadErrors((e) => ({ ...e, applications: describeError(error) }));
         } finally {
             setAppLoading(false);
         }
@@ -448,6 +460,20 @@ export default function Delivery() {
                         </div>
                     )}
                 </>
+            )}
+
+            {loadErrors[tab] && (
+                <div className="flex items-center justify-between gap-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                    <span>
+                        <strong>{tab === 'drivers' ? 'Livreurs' : 'Candidatures'} non chargés :</strong> {loadErrors[tab]}
+                    </span>
+                    <button
+                        onClick={tab === 'drivers' ? fetchDrivers : fetchApplications}
+                        className="px-3 py-1.5 bg-white border border-red-200 rounded-lg font-medium hover:bg-red-100"
+                    >
+                        Réessayer
+                    </button>
+                </div>
             )}
 
             {/* ════════════════════════════════════ APPLICATIONS TAB ═══════════════════════════════════ */}

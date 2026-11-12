@@ -54,6 +54,12 @@ class _PendingPageState extends ConsumerState<PendingPage> {
           _isLoading = false;
         });
 
+        // Aucune candidature enregistrée : le formulaire, et non un faux « en attente »
+        if (_status == 'none') {
+          context.go('/apply');
+          return;
+        }
+
         // Si approuvé, re-check session et rediriger
         if (_status == 'approved') {
           await ref.read(authControllerProvider.notifier).checkSession();
