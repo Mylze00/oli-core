@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'features/auth/screens/login_page.dart';
 import 'features/home/home_page.dart';
 import 'core/deep_links/product_link.dart';
+import 'core/theme/oli_emoji.dart';
 import 'features/auth/providers/auth_controller.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/native_call_service.dart';
@@ -56,6 +57,7 @@ void main() async {
   // Lien de produit partagé (/product/<id>) : gardé jusqu'à l'affichage de l'accueil
   ProductLink.captureFromUrl();
   WidgetsFlutterBinding.ensureInitialized();
+  OliEmoji.preload(); // police des emojis (Noto) prête au plus vite
   
   // Initialiser le cache hors-ligne
   await HiveCacheService.init(); // [CACHE]
@@ -130,6 +132,8 @@ class OliApp extends ConsumerWidget {
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
         fontFamily: 'CreatoDisplay',
+        // Emojis au style Noto sur tous les appareils
+        fontFamilyFallback: OliEmoji.fallback,
         useMaterial3: true,
         brightness: Brightness.light,
         primaryColor: const Color(0xFF1E7DBA),
@@ -142,6 +146,8 @@ class OliApp extends ConsumerWidget {
       ),
       darkTheme: ThemeData(
         fontFamily: 'CreatoDisplay',
+        // Emojis au style Noto sur tous les appareils
+        fontFamilyFallback: OliEmoji.fallback,
         useMaterial3: true,
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF1E7DBA),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import '../../../core/theme/oli_emoji.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/oli_colors.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -641,6 +642,8 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
         config: Config(
           height: 290,
           checkPlatformCompatibility: true,
+          // Même style Noto que dans les messages
+          emojiTextStyle: TextStyle(fontFamily: OliEmoji.fontFamily),
           locale: const Locale('fr'),
           emojiViewConfig: EmojiViewConfig(
             backgroundColor: background,
