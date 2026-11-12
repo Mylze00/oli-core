@@ -11,6 +11,8 @@ import 'providers/auth_controller.dart';
 
 const _primary = Color(0xFF1E7DBA);
 const _minPledgeFc = 100;
+/// Limite du serveur pour la photo de la pièce d'identité.
+const _maxDocumentBytes = 8 * 1024 * 1024;
 
 /// Moyens de déplacement acceptés par le serveur (valeur envoyée → libellé).
 const _vehicles = {
@@ -91,17 +93,26 @@ class _ApplyPageState extends ConsumerState<ApplyPage> {
 
   Future<void> _pickIdDocument(ImageSource source) async {
     try {
-      final file = await ImagePicker().pickImage(source: source, maxWidth: 1600, imageQuality: 85);
+      // Sur le web, le redimensionnement passe par un canvas qui échoue sur certains
+      // formats de photo : l'image est prise telle quelle et seule sa taille est vérifiée
+      final file = kIsWeb
+          ? await ImagePicker().pickImage(source: source)
+          : await ImagePicker().pickImage(source: source, maxWidth: 1600, imageQuality: 85);
       if (file == null) return;
-      final preview = await file.readAsBytes();
+      final bytes = await file.readAsBytes();
+      if (bytes.length > _maxDocumentBytes) {
+        _showError('Photo trop lourde (8 Mo maximum). Choisissez une image plus légère.');
+        return;
+      }
       if (mounted) {
         setState(() {
           _idDocument = file;
-          _idDocumentPreview = preview;
+          _idDocumentPreview = bytes;
         });
       }
     } catch (e) {
-      _showError("Impossible d'ouvrir la photo. Vérifiez l'autorisation d'accès.");
+      debugPrint('Photo de la pièce non ouverte: $e');
+      _showError("Impossible d'ouvrir la photo ($e).");
     }
   }
 
