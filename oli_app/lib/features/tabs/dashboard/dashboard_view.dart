@@ -498,6 +498,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
         children: [
           // ── Contenu principal scrollable ──
           OliRefreshIndicator(
+            // La zone d'actualisation s'ouvre sous la barre de recherche (pas en haut)
+            inlineGap: true,
             onRefresh: () async {
               // Actualisation volontaire : toutes les sections sont rechargées.
               await Future.wait([
@@ -527,6 +529,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   isScrolled: _isScrolled,
                   onSwitchToProfile: widget.onSwitchToProfile,
                 ),
+
+                // Zone du « tirer pour actualiser » : logo Oli sous la barre de recherche
+                const SliverToBoxAdapter(child: OliRefreshGap()),
 
                 // 2. Quick Actions (épinglée)
                 SliverPersistentHeader(
