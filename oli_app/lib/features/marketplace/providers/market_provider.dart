@@ -24,24 +24,42 @@ class MarketProductsNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   bool _hasMore = true;
   static const int _pageSize = 50; // ← Limité à 50 pour réduire la RAM
 
-  MarketProductsNotifier() : super(const AsyncValue.loading()) {
-    fetchProducts();
+  /// [sellerId] : liste limitée à un vendeur (profil vendeur, fournisseur séparé).
+  MarketProductsNotifier({String? sellerId}) : super(const AsyncValue.loading()) {
+    fetchProducts(sellerId: sellerId);
   }
 
-  bool get hasMore => _hasMore;
+  // Filtres de la liste en cours : réutilisés pour charger les pages suivantes
+  String? _search;
+  String? _category;
+  String? _sellerId;
+  bool _loadingMore = false;
 
-  /// Charge la première page de produits uniquement (lazy-load via loadMore)
+  bool get hasMore => _hasMore;
+  String? get category => _category;
+
+  /// Charge la première page de produits uniquement (lazy-load via loadMore).
+  /// La catégorie est filtrée par le serveur sur tout le catalogue, pas seulement
+  /// sur les produits déjà chargés.
   Future<void> fetchProducts({String? search, String? category, String? sellerId}) async {
     _offset = 0;
     _hasMore = true;
+    _search = search;
+    _category = category;
+    _sellerId = sellerId;
     state = const AsyncValue.loading();
-    // Ne charge que la 1ère page — l'UI appelle loadMore() au besoin
     await _loadProducts(search: search, category: category, sellerId: sellerId, append: false);
   }
 
-  Future<void> loadMore({String? search, String? category, String? sellerId}) async {
-    if (!_hasMore) return;
-    await _loadProducts(search: search, category: category, sellerId: sellerId, append: true);
+  /// Page suivante, avec les mêmes filtres que la liste affichée.
+  Future<void> loadMore() async {
+    if (!_hasMore || _loadingMore) return;
+    _loadingMore = true;
+    try {
+      await _loadProducts(search: _search, category: _category, sellerId: _sellerId, append: true);
+    } finally {
+      _loadingMore = false;
+    }
   }
 
   Future<void> _loadProducts({String? search, String? category, String? sellerId, bool append = false}) async {
@@ -106,6 +124,13 @@ class MarketProductsNotifier extends StateNotifier<AsyncValue<List<Product>>> {
 
 final marketProductsProvider = StateNotifierProvider<MarketProductsNotifier, AsyncValue<List<Product>>>((ref) {
   return MarketProductsNotifier();
+});
+
+/// Produits d'un vendeur (page profil) : fournisseur séparé du Marché, pour ne plus
+/// remplacer la liste du Marché par celle d'un seul vendeur.
+final sellerProductsProvider = StateNotifierProvider.autoDispose
+    .family<MarketProductsNotifier, AsyncValue<List<Product>>, String>((ref, sellerId) {
+  return MarketProductsNotifier(sellerId: sellerId);
 });
 
 /// Notifier pour les produits mis en avant (Featured) - Page Accueil

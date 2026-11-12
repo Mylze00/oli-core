@@ -58,6 +58,13 @@ class MarketViewState extends ConsumerState<MarketView> {
       _selectedCategory = widget.initialCategoryLabel!;
     }
     _scroll.addListener(_onScroll);
+    // Ouverture sur une catégorie précise : produits de cette catégorie depuis le serveur
+    final notifier = ref.read(marketProductsProvider.notifier);
+    if (_categoryKey != notifier.category) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) notifier.fetchProducts(category: _categoryKey);
+      });
+    }
   }
 
   @override
@@ -65,6 +72,18 @@ class MarketViewState extends ConsumerState<MarketView> {
     _scroll.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  /// Clé serveur de la catégorie choisie (null pour « Tout »).
+  String? get _categoryKey {
+    final key = _categories[_selectedCategory] ?? '';
+    return _selectedCategory == 'Tout' || key.isEmpty ? null : key;
+  }
+
+  /// Recharge depuis le serveur : toute la catégorie, pas seulement les produits déjà chargés.
+  void _reloadForCategory() {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    ref.read(marketProductsProvider.notifier).fetchProducts(category: _categoryKey);
   }
 
   /// Onglet Marché touché : retour en haut de la page.
@@ -302,7 +321,7 @@ class MarketViewState extends ConsumerState<MarketView> {
                   Text('$error', style: TextStyle(color: textColor.withOpacity(0.5), fontSize: 12), textAlign: TextAlign.center),
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
-                    onPressed: () => ref.read(marketProductsProvider.notifier).fetchProducts(),
+                    onPressed: () => ref.read(marketProductsProvider.notifier).fetchProducts(category: _categoryKey),
                     icon: const Icon(Icons.refresh),
                     label: const Text('Réessayer'),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
@@ -340,7 +359,7 @@ class MarketViewState extends ConsumerState<MarketView> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              await ref.read(marketProductsProvider.notifier).fetchProducts();
+              await ref.read(marketProductsProvider.notifier).fetchProducts(category: _categoryKey);
             },
             child: CustomScrollView(
               controller: _scroll,
@@ -484,9 +503,9 @@ class MarketViewState extends ConsumerState<MarketView> {
           categories: _categories,
           selectedCategory: _selectedCategory,
           onCategorySelected: (label) {
-            setState(() {
-              _selectedCategory = label;
-            });
+            if (label == _selectedCategory) return;
+            setState(() => _selectedCategory = label);
+            _reloadForCategory();
           },
         ),
       ),

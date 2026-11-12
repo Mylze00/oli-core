@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../../../../core/services/oli_image_cache.dart';
 import '../../../../models/product_model.dart';
@@ -13,7 +12,7 @@ import '../../../../utils/price_color.dart';
 import '../pages/product_details_page.dart';
 
 /// Grille propre à la page Marché, séparée de celle de l'accueil :
-/// grille en quinconce (chaque carte garde sa hauteur), produits de grands magasins
+/// rangées équilibrées (cartes de hauteurs différentes, colonnes à niveau, liste stable), produits de grands magasins
 /// signalés par l'avatar et le nom du magasin, « Livraison 24h » pour les boutiques vérifiées.
 class MarketProductGrid extends StatelessWidget {
   final List<Product> products;
@@ -37,16 +36,66 @@ class MarketProductGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (products.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    final blocks = _blocks();
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      sliver: SliverMasonryGrid.count(
-        crossAxisCount: columns,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: gutter,
-        childCount: products.length,
-        itemBuilder: (context, index) =>
-            MarketProductCard(product: products[index], storeBadge: isStoreProduct?.call(products[index]) ?? false),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _buildBlock(blocks[index]),
+          ),
+          childCount: blocks.length,
+        ),
       ),
+    );
+  }
+
+  bool _tall(Product p) => isTall(p, isStore: isStoreProduct?.call(p) ?? false);
+
+  /// Découpe la liste (déjà équilibrée par la page) en blocs affichables :
+  /// - court, haute, haute, court → deux colonnes décalées qui finissent à niveau ;
+  /// - sinon des paires côte à côte (et une carte seule en toute fin de liste).
+  List<List<Product>> _blocks() {
+    final blocks = <List<Product>>[];
+    var i = 0;
+    while (i < products.length) {
+      if (i + 3 < products.length &&
+          !_tall(products[i]) &&
+          _tall(products[i + 1]) &&
+          _tall(products[i + 2]) &&
+          !_tall(products[i + 3])) {
+        blocks.add(products.sublist(i, i + 4));
+        i += 4;
+      } else {
+        blocks.add(products.sublist(i, (i + 2).clamp(0, products.length)));
+        i += 2;
+      }
+    }
+    return blocks;
+  }
+
+  Widget _card(Product p) => MarketProductCard(product: p, storeBadge: isStoreProduct?.call(p) ?? false);
+
+  Widget _buildBlock(List<Product> block) {
+    if (block.length == 4) {
+      // Colonne gauche : court puis haute ; colonne droite : haute puis court
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: Column(children: [_card(block[0]), const SizedBox(height: 10), _card(block[2])])),
+          const SizedBox(width: gutter),
+          Expanded(child: Column(children: [_card(block[1]), const SizedBox(height: 10), _card(block[3])])),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _card(block[0])),
+        const SizedBox(width: gutter),
+        Expanded(child: block.length > 1 ? _card(block[1]) : const SizedBox.shrink()),
+      ],
     );
   }
 }

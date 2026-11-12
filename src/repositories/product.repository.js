@@ -157,7 +157,8 @@ class ProductRepository {
         let paramIndex = 1;
 
         if (filters.category) {
-            query += ` AND p.category = $${paramIndex++}`;
+            // Insensible à la casse et aux espaces : « Fashion », « fashion » et « fashion » se valent
+            query += ` AND LOWER(TRIM(p.category)) = LOWER(TRIM($${paramIndex++}))`;
             params.push(filters.category);
         }
         if (filters.minPrice) {

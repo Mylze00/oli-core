@@ -22,14 +22,13 @@ class _SellerProfilePageState extends ConsumerState<SellerProfilePage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(sellerProvider.notifier).fetchSellerProfile(widget.sellerId);
-      ref.read(marketProductsProvider.notifier).fetchProducts(sellerId: widget.sellerId);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final sellerAsync = ref.watch(sellerProvider);
-    final productsAsync = ref.watch(marketProductsProvider);
+    final productsAsync = ref.watch(sellerProductsProvider(widget.sellerId));
 
     return Scaffold(
       backgroundColor: Colors.black,

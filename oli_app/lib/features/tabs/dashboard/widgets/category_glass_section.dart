@@ -2,6 +2,12 @@
 import 'package:flutter/material.dart';
 import 'dart:ui'; // Pour BackdropFilter
 
+/// Bleu Oli de la catégorie sélectionnée (contour, halo, point).
+const Color _oliBlue = Color(0xFF1E7DBA);
+
+/// Libellé sélectionné : bleu Oli éclairci, lisible sur fond clair comme sombre.
+const Color _oliBlueLabel = Color(0xFF3B8EF0);
+
 class CategoryGlassSection extends StatefulWidget {
   final Map<String, String> categories;
   final Function(String) onCategorySelected;
@@ -101,13 +107,13 @@ class _CategoryGlassSectionState extends State<CategoryGlassSection> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: isSelected ? Colors.orange : Colors.white,
+                color: isSelected ? _oliBlue : Colors.white,
                 width: 2,
               ),
               boxShadow: [
                 BoxShadow(
                   color: isSelected
-                      ? Colors.orange.withOpacity(0.35)
+                      ? _oliBlue.withValues(alpha: 0.4)
                       : Colors.black.withOpacity(0.15),
                   blurRadius: isSelected ? 8 : 4,
                   offset: const Offset(0, 2),
@@ -118,18 +124,18 @@ class _CategoryGlassSectionState extends State<CategoryGlassSection> {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: isSelected
-                    ? Colors.orange.withOpacity(0.12)
-                    : Colors.white,
+                // Fond toujours blanc : le rectangle des images ne se voit pas sur fond sombre
+                color: Colors.white,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: isSelected
-                      ? Colors.orange.withOpacity(0.5)
+                      ? _oliBlue.withValues(alpha: 0.5)
                       : Colors.black12,
                   width: 1,
                 ),
               ),
-              child: Padding(
+              child: ClipOval(
+                child: Padding(
                 padding: const EdgeInsets.all(9.0),
                 child: imagePath != null
                     ? Image.asset(
@@ -137,15 +143,16 @@ class _CategoryGlassSectionState extends State<CategoryGlassSection> {
                         fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) => Icon(
                           iconData,
-                          color: isSelected ? Colors.orange : Colors.black54,
+                          color: isSelected ? _oliBlue : Colors.black54,
                           size: 24,
                         ),
                       )
                     : Icon(
                         iconData,
-                        color: isSelected ? Colors.orange : Colors.black54,
+                        color: isSelected ? _oliBlue : Colors.black54,
                         size: 24,
                       ),
+              ),
               ),
             ),
           ),
@@ -154,7 +161,7 @@ class _CategoryGlassSectionState extends State<CategoryGlassSection> {
           Text(
             label,
             style: TextStyle(
-              color: isSelected ? Colors.orange : Colors.grey.shade700,
+              color: isSelected ? _oliBlueLabel : Colors.grey.shade700,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               fontSize: 9.5,
             ),
@@ -168,7 +175,7 @@ class _CategoryGlassSectionState extends State<CategoryGlassSection> {
             width: isSelected ? 5 : 0,
             height: isSelected ? 5 : 0,
             decoration: const BoxDecoration(
-              color: Colors.orange,
+              color: _oliBlue,
               shape: BoxShape.circle,
             ),
           ),
