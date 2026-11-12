@@ -144,6 +144,130 @@ class FeedNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
     }
   }
 
+  // ─── Actions façon X ──────────────────────────────────────────────
+
+  Future<Options> _auth() async {
+    final token = await SecureStorageService().getToken();
+    return Options(headers: {'Authorization': 'Bearer $token'});
+  }
+
+  /// Remplace un post dans la liste (mise à jour immédiate de l'écran).
+  void _replace(int postId, FeedPost Function(FeedPost) update) {
+    if (!state.hasValue) return;
+    state = AsyncValue.data([
+      for (final p in state.value!) p.id == postId ? update(p) : p,
+    ]);
+  }
+
+  void _remove(int postId) {
+    if (!state.hasValue) return;
+    state = AsyncValue.data(state.value!.where((p) => p.id != postId).toList());
+  }
+
+  FeedPost? postById(int postId) => state.value?.where((p) => p.id == postId).firstOrNull;
+
+  /// Republier / annuler la republication.
+  Future<void> toggleRepost(FeedPost post) async {
+    final on = !post.isRepostedByMe;
+    _replace(post.id, (p) => p.copyWith(isRepostedByMe: on, repostsCount: p.repostsCount + (on ? 1 : -1)));
+    try {
+      final r = await Dio().post('${ApiConfig.baseUrl}/api/feed/${post.id}/repost', options: await _auth());
+      _replace(post.id, (p) => p.copyWith(isRepostedByMe: r.data['reposted'] == true, repostsCount: r.data['count']));
+    } catch (e) {
+      debugPrint('❌ Republication: $e');
+      _replace(post.id, (p) => p.copyWith(isRepostedByMe: post.isRepostedByMe, repostsCount: post.repostsCount));
+    }
+  }
+
+  /// Enregistrer / retirer des enregistrements.
+  Future<void> toggleBookmark(FeedPost post) async {
+    final on = !post.isBookmarkedByMe;
+    _replace(post.id, (p) => p.copyWith(isBookmarkedByMe: on, bookmarksCount: p.bookmarksCount + (on ? 1 : -1)));
+    try {
+      final r = await Dio().post('${ApiConfig.baseUrl}/api/feed/${post.id}/bookmark', options: await _auth());
+      _replace(post.id, (p) => p.copyWith(isBookmarkedByMe: r.data['bookmarked'] == true, bookmarksCount: r.data['count']));
+    } catch (e) {
+      debugPrint('❌ Enregistrement: $e');
+      _replace(post.id, (p) => p.copyWith(isBookmarkedByMe: post.isBookmarkedByMe, bookmarksCount: post.bookmarksCount));
+    }
+  }
+
+  /// Compte une vue (ouverture de la page « Post »).
+  Future<void> recordView(int postId) async {
+    try {
+      final r = await Dio().post('${ApiConfig.baseUrl}/api/feed/$postId/view', options: await _auth());
+      final views = int.tryParse('${r.data['views_count']}');
+      if (views != null) _replace(postId, (p) => p.copyWith(viewsCount: views));
+    } catch (_) {}
+  }
+
+  /// Détail à jour d'un post (page « Post »).
+  Future<FeedPost?> fetchPost(int postId) async {
+    try {
+      final r = await Dio().get('${ApiConfig.baseUrl}/api/feed/$postId', options: await _auth());
+      final post = FeedPost.fromJson(Map<String, dynamic>.from(r.data['post']));
+      _replace(postId, (_) => post);
+      return post;
+    } catch (e) {
+      debugPrint('❌ Détail du post: $e');
+      return null;
+    }
+  }
+
+  /// Masquer : le post disparaît du fil de l'utilisateur.
+  Future<bool> hidePost(int postId) async {
+    _remove(postId);
+    try {
+      await Dio().post('${ApiConfig.baseUrl}/api/feed/$postId/hide', options: await _auth());
+      return true;
+    } catch (e) {
+      debugPrint('❌ Masquer: $e');
+      return false;
+    }
+  }
+
+  /// Signaler (reason = 'report') ou marquer comme spam (reason = 'spam').
+  Future<bool> reportPost(int postId, {required String reason, String? details}) async {
+    _remove(postId);
+    try {
+      await Dio().post(
+        '${ApiConfig.baseUrl}/api/feed/$postId/report',
+        data: {'reason': reason, if (details != null) 'details': details},
+        options: await _auth(),
+      );
+      return true;
+    } catch (e) {
+      debugPrint('❌ Signalement: $e');
+      return false;
+    }
+  }
+
+  /// Supprimer son propre post.
+  Future<bool> deletePost(int postId) async {
+    try {
+      await Dio().delete('${ApiConfig.baseUrl}/api/feed/$postId', options: await _auth());
+      _remove(postId);
+      return true;
+    } catch (e) {
+      debugPrint('❌ Suppression: $e');
+      return false;
+    }
+  }
+
+  /// Interactions (auteur seulement) : compteurs, personnes qui ont aimé ou republié.
+  Future<Map<String, dynamic>?> fetchInteractions(int postId) async {
+    try {
+      final r = await Dio().get('${ApiConfig.baseUrl}/api/feed/$postId/interactions', options: await _auth());
+      return Map<String, dynamic>.from(r.data);
+    } catch (e) {
+      debugPrint('❌ Interactions: $e');
+      return null;
+    }
+  }
+
+  /// Après un commentaire publié : compteur à jour.
+  void incrementComments(int postId) => _replace(postId, (p) => p.copyWith(commentsCount: p.commentsCount + 1));
+
   Future<bool> createPost(String content, {XFile? mediaFile, String? mediaType}) async {
     try {
       final storage = SecureStorageService();

@@ -19,6 +19,16 @@ router.post('/:id/like', requireAuth, feedController.toggleLike);
 // Récupérer les commentaires d'une publication (pas besoin d'auth)
 router.get('/:id/comments', feedController.getComments);
 
+// Page « Post » et actions façon X
+router.get('/:id', optionalAuth, feedController.getPost);
+router.post('/:id/view', optionalAuth, feedController.recordView);
+router.post('/:id/repost', requireAuth, feedController.toggleRepost);
+router.post('/:id/bookmark', requireAuth, feedController.toggleBookmark);
+router.post('/:id/hide', requireAuth, feedController.hidePost);
+router.post('/:id/report', requireAuth, feedController.reportPost);
+router.get('/:id/interactions', requireAuth, feedController.getInteractions);
+router.delete('/:id', requireAuth, feedController.deletePost);
+
 // Ajouter un commentaire à une publication
 router.post('/:id/comments', requireAuth, genericUpload.single('media'), feedController.addComment);
 

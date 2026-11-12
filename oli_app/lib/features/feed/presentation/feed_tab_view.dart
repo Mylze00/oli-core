@@ -85,7 +85,7 @@ class FeedTabView extends ConsumerWidget {
               MaterialPageRoute(builder: (context) => const CreatePostPage()),
             );
           },
-          backgroundColor: const Color(0xFF1565C0), // Bleu foncé comme sur la maquette
+          backgroundColor: const Color(0xFF1E7DBA), // Bleu Oli
           elevation: 4,
           shape: const CircleBorder(),
           child: const Icon(Icons.add, color: Colors.white, size: 32),
