@@ -36,7 +36,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
   // Cache du shuffle : ne recalcule que si les données ou les filtres changent
   List<Product> _cachedFiltered = [];
-  String _lastFilterKey = ''; // clé = "searchQuery|category|productIds"
+  String _lastFilterKey = ''; // clé = "searchQuery|category"
+  List<String> _lastProductIds = [];
+
+  /// Défilement continu : la page suivante (50 produits) se charge près du bas.
+  final ScrollController _scroll = ScrollController();
+  bool _loadingMore = false;
 
   final Map<String, String> _categories = {'Tout': '', 'Électronique': 'electronics', 'Mode': 'fashion', 'Maison': 'home', 'Alimentation': 'food', 'Beauté': 'beauty', 'Industrie': 'industry', 'Sports': 'sports', 'Outils': 'tools', 'Construction': 'construction', 'Autres': 'other', 'Véhicules': 'vehicles', 'Jouets': 'toys', 'Sécurité': 'security', 'Jardin': 'garden', 'Bébé': 'baby', 'Bureau': 'office', 'Animaux': 'pets', 'Santé': 'health'
   };
@@ -51,23 +56,62 @@ class _MarketViewState extends ConsumerState<MarketView> {
     if (widget.initialCategoryLabel != null) {
       _selectedCategory = widget.initialCategoryLabel!;
     }
+    _scroll.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _scroll.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients || _loadingMore) return;
+    if (_scroll.position.extentAfter > 1200) return;
+    final notifier = ref.read(marketProductsProvider.notifier);
+    if (!notifier.hasMore) return;
+    setState(() => _loadingMore = true);
+    notifier.loadMore().whenComplete(() {
+      if (mounted) setState(() => _loadingMore = false);
+    });
   }
 
   List<Product> _filterProducts(List<Product> products) {
     // Clé de cache : si rien n'a changé, on retourne le résultat précédent
     // (le shuffle reste STABLE entre les rebuilds, pas de flashs)
-    final ids = products.map((p) => p.id).join(',');
-    final key = '$_searchQuery|$_selectedCategory|$ids';
-    if (key == _lastFilterKey && _cachedFiltered.isNotEmpty) {
+    final ids = products.map((p) => p.id).toList();
+    final key = '$_searchQuery|$_selectedCategory';
+    final sameFilters = key == _lastFilterKey;
+    if (sameFilters && _sameIds(ids, _lastProductIds)) return _cachedFiltered;
+
+    // Page suivante chargée (mêmes filtres, anciens produits en tête) : seuls les
+    // nouveaux produits sont mélangés puis ajoutés, la grille déjà vue ne bouge pas.
+    if (sameFilters && _lastProductIds.isNotEmpty && ids.length > _lastProductIds.length &&
+        _sameIds(ids.sublist(0, _lastProductIds.length), _lastProductIds)) {
+      final added = _applyFilters(products.sublist(_lastProductIds.length));
+      _cachedFiltered = [..._cachedFiltered, ..._diversify(added)];
+      _lastProductIds = ids;
       return _cachedFiltered;
     }
 
+    final result = _diversify(_applyFilters(products));
+    _cachedFiltered = result;
+    _lastFilterKey = key;
+    _lastProductIds = ids;
+    return result;
+  }
+
+  bool _sameIds(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// Recherche, catégorie et exclusion des entreprises (visibles dans les Grands Magasins).
+  List<Product> _applyFilters(List<Product> products) {
     var filtered = products;
 
     // Filtre par recherche
@@ -93,12 +137,7 @@ class _MarketViewState extends ConsumerState<MarketView> {
     // EXIGENCES MÉTIER: Le marché ordinaire exclut les entreprises
     // (Les produits d'entreprises sont visibles dans "Grands Magasins")
     filtered = filtered.where((p) => p.sellerAccountType != 'entreprise').toList();
-
-    // Shuffle + diversification (UNE SEULE FOIS, puis mis en cache)
-    final result = _diversify(filtered);
-    _cachedFiltered = result;
-    _lastFilterKey = key;
-    return result;
+    return filtered;
   }
 
   /// Mélange les produits et garantit un maximum de diversité vendeur
@@ -251,6 +290,7 @@ class _MarketViewState extends ConsumerState<MarketView> {
               await ref.read(marketProductsProvider.notifier).fetchProducts();
             },
             child: CustomScrollView(
+              controller: _scroll,
               slivers: [
                 // ── 1. APP BAR avec recherche ──
                 _buildSearchAppBar(textColor, isDark),
@@ -311,6 +351,21 @@ class _MarketViewState extends ConsumerState<MarketView> {
                               ),
                             ),
                         ],
+                      ),
+                    ),
+                  ),
+
+                // ── PAGE SUIVANTE EN COURS DE CHARGEMENT ──
+                if (_loadingMore)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent),
+                        ),
                       ),
                     ),
                   ),

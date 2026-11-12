@@ -566,7 +566,7 @@ class TopRankingProductCard extends ConsumerWidget {
                 fit: StackFit.expand,
                 children: [
                   _buildImage(isDark),
-                  if (storeBadge) const Positioned(top: 6, left: 6, child: _StoreBadge()),
+                  if (storeBadge) Positioned(top: 6, left: 6, right: 6, child: _StoreBadge(product: product)),
                 ],
               ),
             ),
@@ -612,8 +612,11 @@ class TopRankingProductCard extends ConsumerWidget {
   }
 
   Widget _buildImage(bool isDark) {
+    // Fond blanc : les PNG transparents (électroménager, emballages) restent lisibles en mode sombre
     return product.images.isNotEmpty
-                  ? CachedNetworkImage(
+                  ? ColoredBox(
+                      color: Colors.white,
+                      child: CachedNetworkImage(
                       cacheManager: OliImageCache.instance,
                       imageUrl: CloudinaryHelper.card(product.images.first),
                       fit: BoxFit.cover,
@@ -625,6 +628,7 @@ class TopRankingProductCard extends ConsumerWidget {
                         color: isDark ? Colors.grey[900] : Colors.grey[200],
                         child: const Icon(Icons.broken_image, color: Colors.grey),
                       ),
+                    ),
                     )
                   : Container(
                       color: isDark ? Colors.grey[900] : Colors.grey[200],
@@ -634,26 +638,56 @@ class TopRankingProductCard extends ConsumerWidget {
 
 }
 
-/// Étiquette des produits de grands magasins intercalés dans la grille du marché.
+/// Étiquette des produits de grands magasins intercalés dans la grille du marché :
+/// avatar et nom du magasin.
 class _StoreBadge extends StatelessWidget {
-  const _StoreBadge();
+  final Product product;
+
+  const _StoreBadge({required this.product});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: const Color(0xFF16A34A),
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 4)],
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.storefront_rounded, color: Colors.white, size: 11),
-          SizedBox(width: 3),
-          Text('Grand magasin', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
-        ],
+    final name = (product.shopName?.trim().isNotEmpty ?? false) ? product.shopName!.trim() : product.seller;
+    final avatar = product.sellerAvatar;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(3, 3, 8, 3),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+              clipBehavior: Clip.antiAlias,
+              child: avatar != null && avatar.isNotEmpty
+                  ? CachedNetworkImage(
+                      cacheManager: OliImageCache.instance,
+                      imageUrl: avatar,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 60,
+                      errorWidget: (_, __, ___) => const Icon(Icons.storefront_rounded, size: 12, color: Colors.black54),
+                    )
+                  : const Icon(Icons.storefront_rounded, size: 12, color: Colors.black54),
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 3),
+            const Icon(Icons.verified_rounded, size: 12, color: Color(0xFF4ADE80)),
+          ],
+        ),
       ),
     );
   }
