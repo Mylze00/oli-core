@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/oli_colors.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -103,6 +104,13 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
   final FocusNode _focusNode = FocusNode();
   bool _showAttachments = false;
 
+  /// Sélecteur d'emojis ouvert à la place du clavier.
+  bool _showEmoji = false;
+
+  /// Dernier état « champ rempli » : la zone n'est redessinée qu'au changement,
+  /// pas à chaque touche.
+  bool _lastHasText = false;
+
   final AudioRecorder _audioRecorder = AudioRecorder();
   _VoiceState _voiceState = _VoiceState.idle;
   _VoiceFormat? _voiceFormat;
@@ -127,8 +135,11 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
     _controller.addListener(_onTextChanged);
     // Le clavier et le panneau occupent la même place : l'un ferme l'autre.
     _focusNode.addListener(() {
-      if (_focusNode.hasFocus && _showAttachments) {
-        setState(() => _showAttachments = false);
+      if (_focusNode.hasFocus && (_showAttachments || _showEmoji)) {
+        setState(() {
+          _showAttachments = false;
+          _showEmoji = false;
+        });
       }
     });
 
@@ -142,11 +153,27 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
   }
 
   void _onTextChanged() {
-    setState(() {}); // Refresh for icon change
+    final hasText = _controller.text.isNotEmpty;
+    // Signal à chaque frappe : le contrôleur limite lui-même les envois (1 toutes les 3 s)
+    // et prévient « a arrêté d'écrire » après 4 s sans frappe.
+    widget.onTyping?.call(hasText);
+    if (hasText == _lastHasText) return; // rien ne change à l'écran : pas de reconstruction
+    _lastHasText = hasText;
+    setState(() {}); // micro ↔ bouton d'envoi
+  }
 
-    if (widget.onTyping != null) {
-      widget.onTyping!(_controller.text.isNotEmpty);
+  /// Ouvre ou ferme le sélecteur d'emojis (il remplace le clavier, comme sur WhatsApp).
+  void _toggleEmoji() {
+    HapticFeedback.selectionClick();
+    if (_showEmoji) {
+      _focusNode.requestFocus();
+      return;
     }
+    _focusNode.unfocus();
+    setState(() {
+      _showEmoji = true;
+      _showAttachments = false;
+    });
   }
 
   @override
@@ -175,7 +202,10 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
   void _toggleAttachments() {
     HapticFeedback.selectionClick();
     if (!_showAttachments) _focusNode.unfocus();
-    setState(() => _showAttachments = !_showAttachments);
+    setState(() {
+      _showAttachments = !_showAttachments;
+      _showEmoji = false;
+    });
   }
 
   void _pickAttachment(ChatAttachmentOption option) {
@@ -439,7 +469,9 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
     final isDark = theme.brightness == Brightness.dark;
     final fieldColor = isDark ? OliChatDarkColors.receivedBubble : Colors.grey[100];
 
-    final panelOpen = _showAttachments && isIdle;
+    final attachmentsOpen = _showAttachments && isIdle;
+    final emojiOpen = _showEmoji && isIdle;
+    final panelOpen = attachmentsOpen || emojiOpen;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -468,7 +500,11 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
           duration: _panelAnimation,
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
-          child: panelOpen ? _buildAttachmentPanel(isDark) : const SizedBox(width: double.infinity),
+          child: attachmentsOpen
+              ? _buildAttachmentPanel(isDark)
+              : emojiOpen
+                  ? _buildEmojiPanel(isDark)
+                  : const SizedBox(width: double.infinity),
         ),
       ],
     );
@@ -506,11 +542,23 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
                       child: TextField(
                         controller: _controller,
                         focusNode: _focusNode,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Message...',
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          contentPadding: const EdgeInsets.fromLTRB(16, 10, 4, 10),
                           isDense: true,
+                          // Emojis ↔ clavier
+                          suffixIcon: IconButton(
+                            tooltip: _showEmoji ? 'Clavier' : 'Emojis',
+                            splashRadius: 20,
+                            icon: Icon(
+                              _showEmoji ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
+                              color: theme.iconTheme.color?.withValues(alpha: 0.7),
+                              size: 24,
+                            ),
+                            onPressed: _toggleEmoji,
+                          ),
+                          suffixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 40),
                         ),
                         textInputAction: TextInputAction.send,
                         minLines: 1,
@@ -581,6 +629,51 @@ class _ChatInputAreaState extends State<ChatInputArea> with SingleTickerProvider
 
   /// Panneau en verre dépoli aux coins arrondis, à la hauteur d'un clavier,
   /// avec des pastilles rondes et des icônes colorées, à la manière de WhatsApp.
+  /// Packs d'emojis : récents, smileys, personnes, animaux et nature, nourriture,
+  /// activités, voyages, objets, symboles, drapeaux — recherche et couleurs de peau.
+  Widget _buildEmojiPanel(bool isDark) {
+    final background = isDark ? OliChatDarkColors.bar : Colors.white;
+    const oliBlue = Color(0xFF1E7DBA);
+    return SafeArea(
+      top: false,
+      child: EmojiPicker(
+        textEditingController: _controller,
+        config: Config(
+          height: 290,
+          checkPlatformCompatibility: true,
+          locale: const Locale('fr'),
+          emojiViewConfig: EmojiViewConfig(
+            backgroundColor: background,
+            columns: 8,
+            emojiSizeMax: 28,
+            noRecents: Text(
+              'Aucun emoji récent',
+              style: TextStyle(fontSize: 14, color: isDark ? Colors.white54 : Colors.black45),
+            ),
+          ),
+          categoryViewConfig: CategoryViewConfig(
+            backgroundColor: background,
+            indicatorColor: oliBlue,
+            iconColorSelected: oliBlue,
+            iconColor: isDark ? Colors.white38 : Colors.black38,
+            backspaceColor: oliBlue,
+          ),
+          bottomActionBarConfig: BottomActionBarConfig(
+            backgroundColor: background,
+            buttonColor: background,
+            buttonIconColor: isDark ? Colors.white70 : Colors.black54,
+          ),
+          searchViewConfig: SearchViewConfig(
+            backgroundColor: background,
+            buttonIconColor: isDark ? Colors.white70 : Colors.black54,
+            hintText: 'Rechercher un emoji',
+          ),
+          skinToneConfig: const SkinToneConfig(dialogBackgroundColor: Colors.white, indicatorColor: oliBlue),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAttachmentPanel(bool isDark) {
     final media = MediaQuery.of(context);
     final height = (media.size.height * 0.36).clamp(260.0, 340.0) + media.padding.bottom;

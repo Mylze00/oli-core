@@ -72,11 +72,16 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey _menuButtonKey = GlobalKey();
 
+  /// Nouveaux messages arrivés pendant que l'utilisateur lit plus haut (bouton « ↓ »).
+  int _unseenCount = 0;
+  bool _showJumpButton = false;
+
   @override
   void initState() {
     super.initState();
     _effectiveAvatarUrl = widget.otherAvatarUrl;
     WidgetsBinding.instance.addObserver(this);
+    _scrollController.addListener(_onScroll);
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = ref.read(chatControllerProvider(widget.otherId).notifier);
@@ -102,7 +107,41 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
     super.dispose();
   }
 
+  /// Liste inversée : 0 = en bas (derniers messages), maxScrollExtent = en haut.
+  bool get _isNearBottom => !_scrollController.hasClients || _scrollController.offset < 160;
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    // Près du haut : charger les messages plus anciens
+    if (pos.pixels > pos.maxScrollExtent - 600) {
+      ref.read(chatControllerProvider(widget.otherId).notifier).loadOlder();
+    }
+    final show = pos.pixels > 400;
+    if (show != _showJumpButton || (!show && _unseenCount > 0)) {
+      setState(() {
+        _showJumpButton = show;
+        if (!show) _unseenCount = 0;
+      });
+    }
+  }
+
+  /// Nouveau message : on descend seulement si l'utilisateur est déjà en bas
+  /// (ou si c'est son propre message) ; sinon le bouton « ↓ » compte les nouveaux.
+  void _onMessagesChanged(List<Map<String, dynamic>>? previous, List<Map<String, dynamic>> next) {
+    if (previous == null || next.length <= previous.length || next.isEmpty) return;
+    final previousLast = previous.isEmpty ? null : previous.last['id'];
+    if (next.last['id'] == previousLast) return; // ajout en tête (historique) : rien à faire
+    final mine = next.last['sender_id'].toString() == widget.myId;
+    if (mine || _isNearBottom) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    } else {
+      setState(() => _unseenCount += next.length - previous.length);
+    }
+  }
+
   void _scrollToBottom() {
+    if (_unseenCount > 0) setState(() => _unseenCount = 0);
     if (_scrollController.hasClients) {
       // Liste inversée : le dernier échange est en position 0
       _scrollController.animateTo(
@@ -139,19 +178,20 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
-    final chatState = ref.watch(chatControllerProvider(widget.otherId));
+    // Lectures ciblées : « Écrit… » / « En ligne » ne redessinent plus toute la liste
+    final provider = chatControllerProvider(widget.otherId);
+    final messages = ref.watch(provider.select((s) => s.messages));
+    final isLoading = ref.watch(provider.select((s) => s.isLoading));
+    final error = ref.watch(provider.select((s) => s.error));
+    final ephemeralSeconds = ref.watch(provider.select((s) => s.ephemeralSeconds));
+    final isLoadingOlder = ref.watch(provider.select((s) => s.isLoadingOlder));
+    final myAvatarUrl = ref.watch(userProvider.select((u) => u.value?.avatarUrl));
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final wallpaper = ref.watch(chatWallpaperProvider(widget.otherId));
-    final visibleMessages = _visibleMessages(chatState.messages);
+    final visibleMessages = _visibleMessages(messages);
 
-    // Écouteur pour scroll automatique lors de nouveaux messages
-    ref.listen(chatControllerProvider(widget.otherId), (previous, next) {
-      if (previous?.messages.length != next.messages.length) {
-        // Petit délai pour laisser le temps à la liste de se construire
-        Future.delayed(const Duration(milliseconds: 100), () => _scrollToBottom());
-      }
-    });
+    ref.listen(provider.select((s) => s.messages), _onMessagesChanged);
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F5),
@@ -179,18 +219,20 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                   widget.otherName,
                   style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                Text(
-                  chatState.isOtherUserTyping 
-                      ? (chatState.isOtherUserRecording ? "Enregistre un vocal..." : "Écrit...")
-                      : (chatState.isOtherUserOnline ? "En ligne" : "Hors ligne"),
-                  style: TextStyle(
-                    color: chatState.isOtherUserTyping 
-                        ? theme.primaryColor 
-                        : (chatState.isOtherUserOnline ? Colors.green : Colors.grey),
-                    fontSize: 12,
-                    fontWeight: chatState.isOtherUserTyping ? FontWeight.bold : FontWeight.normal
-                  ),
-                ),
+                // Présence : seul ce texte se redessine quand l'autre écrit ou se connecte
+                Consumer(builder: (context, ref, _) {
+                  final typing = ref.watch(provider.select((s) => s.isOtherUserTyping));
+                  final recording = ref.watch(provider.select((s) => s.isOtherUserRecording));
+                  final online = ref.watch(provider.select((s) => s.isOtherUserOnline));
+                  return Text(
+                    typing ? (recording ? "Enregistre un vocal..." : "Écrit...") : (online ? "En ligne" : "Hors ligne"),
+                    style: TextStyle(
+                      color: typing ? theme.primaryColor : (online ? Colors.green : Colors.grey),
+                      fontSize: 12,
+                      fontWeight: typing ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  );
+                }),
               ],
             ),
           ],
@@ -226,7 +268,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
               ),
             ),
           ),
-          _buildConversationMenu(chatState, isDark),
+          _buildConversationMenu(isDark),
         ],
       ),
       body: Container(
@@ -274,19 +316,19 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
             if (_isUploading)
               const LinearProgressIndicator(minHeight: 2),
 
-            if (chatState.ephemeralSeconds != null) _buildEphemeralBanner(chatState.ephemeralSeconds, isDark),
+            if (ephemeralSeconds != null) _buildEphemeralBanner(ephemeralSeconds, isDark),
 
           Expanded(
-            child: chatState.isLoading 
+            child: isLoading
               ? const Center(child: CircularProgressIndicator())
-              : chatState.error != null
+              : error != null
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Icon(Icons.error_outline, color: Colors.red, size: 48),
                         const SizedBox(height: 8),
-                        Text("Erreur: ${chatState.error}"),
+                        Text("Erreur: $error"),
                         TextButton(
                           onPressed: () => ref.read(chatControllerProvider(widget.otherId).notifier).loadMessages(),
                           child: const Text("Réessayer"),
@@ -301,7 +343,7 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                         style: TextStyle(color: Colors.grey.shade500),
                       ),
                     )
-                : chatState.messages.isEmpty
+                : messages.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -315,22 +357,38 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                         ],
                       ),
                     )
-                  : ListView.builder(
+                  : Stack(
+                    children: [
+                    ListView.builder(
                       controller: _scrollController,
                       // La discussion s'ouvre sur le dernier échange, sans défilement visible
                       reverse: true,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      itemCount: visibleMessages.length,
+                      // Garde quelques écrans de bulles prêts, pour un défilement sans à-coups
+                      cacheExtent: 1200,
+                      itemCount: visibleMessages.length + (isLoadingOlder ? 1 : 0),
                       itemBuilder: (context, index) {
+                        if (index >= visibleMessages.length) {
+                          return const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Center(
+                              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                            ),
+                          );
+                        }
                         final msg = visibleMessages[visibleMessages.length - 1 - index];
                         final isMe = msg['sender_id'].toString() == widget.myId;
-                        
-                        return ChatMessageBubble(
+
+                        // Clé par message : chaque bulle garde son état (vocal, glissement)
+                        // quand de nouveaux messages arrivent ; rendu isolé par bulle
+                        return RepaintBoundary(
+                          key: ValueKey('msg_${msg['id'] ?? msg['temp_id'] ?? index}'),
+                          child: ChatMessageBubble(
                           message: msg,
                           isMe: isMe,
                           currentUserId: widget.myId,
                           otherAvatarUrl: _effectiveAvatarUrl,
-                          myAvatarUrl: ref.watch(userProvider).value?.avatarUrl,
+                          myAvatarUrl: myAvatarUrl,
                           onSwipeReply: (message) {
                             setState(() => _replyToMessage = message);
                           },
@@ -344,9 +402,18 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
                           onEdit: _editMessage,
                           onDelete: _deleteMessage,
                           onForward: _forwardMessage,
+                        ),
                         );
                       },
                     ),
+                    if (_showJumpButton || _unseenCount > 0)
+                      Positioned(
+                        right: 14,
+                        bottom: 14,
+                        child: _JumpToBottomButton(count: _unseenCount, isDark: isDark, onTap: _scrollToBottom),
+                      ),
+                    ],
+                  ),
           ),
           
             // Cart summary (when items have been added)
@@ -436,12 +503,12 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
   }
 
   /// Actions de la conversation ouverte, identiques à celles de la liste.
-  Widget _buildConversationMenu(ChatState chatState, bool isDark) {
+  Widget _buildConversationMenu(bool isDark) {
     return IconButton(
       key: _menuButtonKey,
       tooltip: "Plus d'options",
       icon: Icon(Icons.more_vert, color: isDark ? Colors.white70 : Colors.black54),
-      onPressed: () => _openConversationMenu(chatState),
+      onPressed: () => _openConversationMenu(ref.read(chatControllerProvider(widget.otherId))),
     );
   }
 
@@ -1197,6 +1264,52 @@ class _ChatPageState extends ConsumerState<ChatPage> with WidgetsBindingObserver
           },
         );
       },
+    );
+  }
+}
+
+
+/// Bouton « ↓ » façon WhatsApp : revient aux derniers messages, avec le nombre de
+/// messages arrivés pendant la lecture plus haut.
+class _JumpToBottomButton extends StatelessWidget {
+  final int count;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _JumpToBottomButton({required this.count, required this.isDark, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2))],
+            ),
+            child: Icon(Icons.keyboard_arrow_down_rounded, color: isDark ? Colors.white : const Color(0xFF111418)),
+          ),
+          if (count > 0)
+            Positioned(
+              top: -6,
+              right: -4,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                decoration: BoxDecoration(color: const Color(0xFF1E7DBA), borderRadius: BorderRadius.circular(10)),
+                alignment: Alignment.center,
+                child: Text(count > 99 ? '99+' : '$count',
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

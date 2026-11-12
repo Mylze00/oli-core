@@ -69,7 +69,13 @@ class ChatState {
     this.isOtherUserTyping = false,
     this.isOtherUserRecording = false,
     this.ephemeralSeconds,
+    this.hasMoreOlder = true,
+    this.isLoadingOlder = false,
   });
+
+  /// Des messages plus anciens restent à charger sur le serveur (défilement vers le haut).
+  final bool hasMoreOlder;
+  final bool isLoadingOlder;
 
   /// Durée de vie des nouveaux messages (null = messages éphémères désactivés).
   final int? ephemeralSeconds;
@@ -89,6 +95,8 @@ class ChatState {
     bool? isOtherUserTyping,
     bool? isOtherUserRecording,
     Object? ephemeralSeconds = _keep,
+    bool? hasMoreOlder,
+    bool? isLoadingOlder,
   }) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
@@ -101,6 +109,8 @@ class ChatState {
       isOtherUserTyping: isOtherUserTyping ?? this.isOtherUserTyping,
       isOtherUserRecording: isOtherUserRecording ?? this.isOtherUserRecording,
       ephemeralSeconds: identical(ephemeralSeconds, _keep) ? this.ephemeralSeconds : ephemeralSeconds as int?,
+      hasMoreOlder: hasMoreOlder ?? this.hasMoreOlder,
+      isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
     );
   }
 }
@@ -465,11 +475,14 @@ class ChatController extends StateNotifier<ChatState> {
           'messages',
           where: '(sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)',
           whereArgs: [myId, otherUserId, otherUserId, myId],
-          orderBy: 'created_at ASC',
+          // Ouverture rapide : seulement les messages récents (les plus anciens se
+          // chargent en remontant, via loadOlder)
+          orderBy: 'created_at DESC',
+          limit: 200,
         );
         
         if (maps.isNotEmpty) {
-          final messages = maps.map((m) {
+          final messages = maps.reversed.map((m) {
             final raw = jsonDecode(m['raw_data'] as String);
             return Map<String, dynamic>.from(raw);
           }).where((m) => m['product_id']?.toString() == _productId).toList();
@@ -515,6 +528,7 @@ class ChatController extends StateNotifier<ChatState> {
         state = state.copyWith(
           isLoading: false,
           messages: messages,
+          hasMoreOlder: messages.length >= _pageSize,
           conversationId: convId,
           friendshipStatus: friendshipStatus,
           requesterId: requesterId,
@@ -530,6 +544,43 @@ class ChatController extends StateNotifier<ChatState> {
       if (state.messages.isEmpty) {
         state = state.copyWith(isLoading: false, error: "Erreur de chargement: $e");
       }
+    }
+  }
+
+  /// Taille d'une page de messages (même valeur que le serveur par défaut).
+  static const _pageSize = 50;
+
+  /// Charge les messages précédant le plus ancien affiché (défilement vers le haut),
+  /// sans doublon ; la position de lecture est conservée par la liste inversée.
+  Future<void> loadOlder() async {
+    if (state.isLoadingOlder || !state.hasMoreOlder || state.isLoading) return;
+    final oldestId = state.messages
+        .map((m) => int.tryParse('${m['id']}'))
+        .whereType<int>()
+        .fold<int?>(null, (min, id) => min == null || id < min ? id : min);
+    if (oldestId == null) {
+      state = state.copyWith(hasMoreOlder: false);
+      return;
+    }
+    state = state.copyWith(isLoadingOlder: true);
+    try {
+      final token = await _storage.getToken();
+      final scope = _productId != null ? 'productId=$_productId' : 'scope=private';
+      final response = await _dio.get(
+        '${ApiConfig.baseUrl}/chat/messages/$otherUserId?$scope&cursor=$oldestId&limit=$_pageSize',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final older = List<Map<String, dynamic>>.from(response.data['messages'] ?? []);
+      final known = state.messages.map((m) => '${m['id']}').toSet();
+      final fresh = older.where((m) => !known.contains('${m['id']}')).toList();
+      state = state.copyWith(
+        messages: [...fresh, ...state.messages],
+        hasMoreOlder: older.length >= _pageSize,
+        isLoadingOlder: false,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Messages plus anciens non chargés : $e');
+      state = state.copyWith(isLoadingOlder: false);
     }
   }
 
