@@ -787,7 +787,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         formatFc: _fc,
         onDone: () {
           if (mounted) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OrderSuccessPage(order: order)));
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => OrderSuccessPage(order: order, paidAmountFC: amount),
+              ),
+            );
           }
         },
       );
