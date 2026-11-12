@@ -7,6 +7,7 @@ import '../../../../providers/exchange_rate_provider.dart';
 import '../../providers/market_provider.dart';
 import '../pages/product_details_page.dart';
 import '../widgets/market_spotlight_carousel.dart';
+import '../widgets/market_product_grid.dart';
 import '../../../../app/theme/theme_provider.dart';
 import '../../../tabs/dashboard/widgets/verified_shops_carousel.dart';
 import '../../../tabs/dashboard/widgets/product_sections.dart';
@@ -311,11 +312,11 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
                 // ── 5. PREMIERS PRODUITS (sans titre ni compteur) ──
                 if (recentProducts.isNotEmpty)
-                  TopRankingGrid(products: recentProducts, startIndex: 0, isStoreProduct: isStore, masonry: true),
+                  MarketProductGrid(products: recentProducts, isStoreProduct: isStore),
 
                 // ── 6a. GRILLE PRODUITS (6 premiers) ──
                 if (gridBefore.isNotEmpty)
-                  TopRankingGrid(products: gridBefore, startIndex: 0, isStoreProduct: isStore, masonry: true),
+                  MarketProductGrid(products: gridBefore, isStoreProduct: isStore),
 
                 // ── 7. SPOTLIGHT CAROUSEL ── (produits non encore affichés)
                 if (filtered.length >= 4)
@@ -325,12 +326,12 @@ class _MarketViewState extends ConsumerState<MarketView> {
 
                 // ── 6b. GRILLE (6 produits après Spotlight → total = 9) ──
                 if (gridAfterA.isNotEmpty)
-                  TopRankingGrid(products: gridAfterA, startIndex: 0, isStoreProduct: isStore, masonry: true),
+                  MarketProductGrid(products: gridAfterA, isStoreProduct: isStore),
 
 
                 // ── 6c. GRILLE (reste) ──
                 if (gridAfterB.isNotEmpty)
-                  TopRankingGrid(products: gridAfterB, startIndex: 0, isStoreProduct: isStore, masonry: true),
+                  MarketProductGrid(products: gridAfterB, isStoreProduct: isStore),
 
                 // ── EMPTY STATE ──
                 if (filtered.isEmpty)

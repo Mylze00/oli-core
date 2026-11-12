@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/services/oli_image_cache.dart';
 import 'package:flutter/material.dart';
@@ -477,17 +475,10 @@ class TopRankingGrid extends StatelessWidget {
   final double childAspectRatio;
   /// Index global du premier produit de ce chunk dans la liste totale du classement
   final int startIndex;
-  /// Produits de grands magasins intercalés dans la grille : ils portent un badge.
-  final bool Function(Product product)? isStoreProduct;
-  /// Grille en quinconce (page Marché) : chaque carte garde sa propre hauteur,
-  /// les cartes « Livraison 24h » sont plus hautes et les colonnes se décalent.
-  final bool masonry;
 
   static const int columns = 2;
   static const double gutter = 8;
   static const double textBlockHeight = 58;
-  /// Bloc texte d'une carte « Livraison 24h » en grille en quinconce (une ligne de plus).
-  static const double textBlockHeightWithDelivery = 78;
 
   const TopRankingGrid({
     super.key,
@@ -495,8 +486,6 @@ class TopRankingGrid extends StatelessWidget {
     this.crossAxisCount = 2,
     this.childAspectRatio = 0.7,
     this.startIndex = 0,
-    this.isStoreProduct,
-    this.masonry = false,
   });
 
   @override
@@ -505,23 +494,6 @@ class TopRankingGrid extends StatelessWidget {
     // Padding horizontal du SliverPadding (8 + 8) et espace entre les colonnes
     final cellWidth = (screenWidth - 16 - gutter) / columns;
     final aspect = cellWidth / (cellWidth + textBlockHeight);
-
-    if (masonry && products.isNotEmpty) {
-      return SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        sliver: SliverMasonryGrid.count(
-          crossAxisCount: columns,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: gutter,
-          childCount: products.length,
-          itemBuilder: (context, index) => TopRankingProductCard(
-            product: products[index],
-            storeBadge: isStoreProduct?.call(products[index]) ?? false,
-            naturalHeight: true,
-          ),
-        ),
-      );
-    }
 
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -535,10 +507,7 @@ class TopRankingGrid extends StatelessWidget {
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             if (products.isEmpty) return Container(color: Colors.grey[900]);
-            return TopRankingProductCard(
-              product: products[index],
-              storeBadge: isStoreProduct?.call(products[index]) ?? false,
-            );
+            return TopRankingProductCard(product: products[index]);
           },
           childCount: products.isEmpty ? columns : products.length,
         ),
@@ -552,21 +521,7 @@ class TopRankingGrid extends StatelessWidget {
 class TopRankingProductCard extends ConsumerWidget {
   final Product product;
 
-  /// Badge « Grand magasin » (produit certifié intercalé dans la grille du marché).
-  final bool storeBadge;
-
-  /// Grille en quinconce : « Livraison 24h » sous le prix (carte plus haute).
-  /// Grille régulière : l'icône 24 h reste sur la ligne du prix (hauteur inchangée).
-  final bool naturalHeight;
-
-  const TopRankingProductCard({
-    super.key,
-    required this.product,
-    this.storeBadge = false,
-    this.naturalHeight = false,
-  });
-
-  bool get _delivers24h => product.shopVerified || product.sellerHasCertifiedShop || storeBadge;
+  const TopRankingProductCard({super.key, required this.product});
 
   static const Color _priceBlue = Color(0xFF64B5F6); // bleu clair (un ton plus clair)
 
@@ -598,19 +553,28 @@ class TopRankingProductCard extends ConsumerWidget {
             // Visuel carré
             AspectRatio(
               aspectRatio: 1,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _buildImage(isDark),
-                  if (storeBadge) Positioned(top: 6, left: 6, right: 6, child: _StoreBadge(product: product)),
-                ],
-              ),
+              child: product.images.isNotEmpty
+                  ? CachedNetworkImage(
+                      cacheManager: OliImageCache.instance,
+                      imageUrl: CloudinaryHelper.card(product.images.first),
+                      fit: BoxFit.cover,
+                      memCacheWidth: 540, // décodage à la résolution servie (540 px)
+                      placeholder: (_, __) => Container(
+                        color: isDark ? Colors.grey[900] : Colors.grey[200],
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        color: isDark ? Colors.grey[900] : Colors.grey[200],
+                        child: const Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+                    )
+                  : Container(
+                      color: isDark ? Colors.grey[900] : Colors.grey[200],
+                      child: const Icon(Icons.image, color: Colors.grey),
+                    ),
             ),
             // Bloc texte (hauteur fixe)
             SizedBox(
-              height: naturalHeight && _delivers24h
-                  ? TopRankingGrid.textBlockHeightWithDelivery
-                  : TopRankingGrid.textBlockHeight,
+              height: TopRankingGrid.textBlockHeight,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
                 child: Column(
@@ -628,10 +592,7 @@ class TopRankingProductCard extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
+                    Text(
                       formattedPrice,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -642,24 +603,6 @@ class TopRankingProductCard extends ConsumerWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                        ),
-                        if (!naturalHeight && _delivers24h) Delivery24hIcon(size: 18, color: titleColor),
-                      ],
-                    ),
-                    // Boutique vérifiée : livraison en 24 h
-                    if (naturalHeight && _delivers24h) ...[
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Delivery24hIcon(size: 18, color: titleColor),
-                          const SizedBox(width: 5),
-                          Text(
-                            'Livraison 24h',
-                            style: TextStyle(color: titleColor.withValues(alpha: 0.75), fontSize: 11, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -669,174 +612,4 @@ class TopRankingProductCard extends ConsumerWidget {
       ),
     );
   }
-
-  Widget _buildImage(bool isDark) {
-    // Fond blanc : les PNG transparents (électroménager, emballages) restent lisibles en mode sombre
-    return product.images.isNotEmpty
-                  ? ColoredBox(
-                      color: Colors.white,
-                      child: CachedNetworkImage(
-                      cacheManager: OliImageCache.instance,
-                      imageUrl: CloudinaryHelper.card(product.images.first),
-                      fit: BoxFit.cover,
-                      memCacheWidth: 540, // décodage à la résolution servie (540 px)
-                      placeholder: (_, __) => Container(
-                        color: isDark ? Colors.grey[900] : Colors.grey[200],
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        color: isDark ? Colors.grey[900] : Colors.grey[200],
-                        child: const Icon(Icons.broken_image, color: Colors.grey),
-                      ),
-                    ),
-                    )
-                  : Container(
-                      color: isDark ? Colors.grey[900] : Colors.grey[200],
-                      child: const Icon(Icons.image, color: Colors.grey),
-                    );
-  }
-
-}
-
-/// Étiquette des produits de grands magasins intercalés dans la grille du marché :
-/// avatar et nom du magasin.
-class _StoreBadge extends StatelessWidget {
-  final Product product;
-
-  const _StoreBadge({required this.product});
-
-  @override
-  Widget build(BuildContext context) {
-    final shop = product.shopName?.trim() ?? '';
-    final seller = product.seller.trim();
-    // « Boutique Entreprise » est le nom par défaut posé à la création : on préfère le vendeur
-    final name = (seller.isNotEmpty && seller != 'Anonyme') || shop.isEmpty || shop == 'Boutique Entreprise'
-        ? seller
-        : shop;
-    final avatar = product.sellerAvatar;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(3, 3, 8, 3),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-              clipBehavior: Clip.antiAlias,
-              child: avatar != null && avatar.isNotEmpty
-                  ? CachedNetworkImage(
-                      cacheManager: OliImageCache.instance,
-                      imageUrl: avatar,
-                      fit: BoxFit.cover,
-                      memCacheWidth: 60,
-                      errorWidget: (_, __, ___) => const Icon(Icons.storefront_rounded, size: 12, color: Colors.black54),
-                    )
-                  : const Icon(Icons.storefront_rounded, size: 12, color: Colors.black54),
-            ),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-              ),
-            ),
-            const SizedBox(width: 3),
-            const Icon(Icons.verified_rounded, size: 12, color: Color(0xFF4ADE80)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Icône « livraison en 24 h » : flèche circulaire, pointillés, « 24 » et bandeau jaune.
-class Delivery24hIcon extends StatelessWidget {
-  final double size;
-  final Color color;
-
-  const Delivery24hIcon({super.key, this.size = 18, this.color = Colors.black});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(painter: _Delivery24hPainter(color)),
-    );
-  }
-}
-
-class _Delivery24hPainter extends CustomPainter {
-  final Color color;
-
-  _Delivery24hPainter(this.color);
-
-  static const _yellow = Color(0xFFFFB400);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final center = Offset(w / 2, w / 2);
-    final radius = w * 0.42;
-    final stroke = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.09
-      ..strokeCap = StrokeCap.round;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    // Arc plein (de bas-droite, par la gauche, jusqu'en haut) terminé par une flèche
-    const start = 1.15; // radians, sens horaire depuis l'axe x
-    const sweep = 3.75;
-    canvas.drawArc(rect, start, sweep, false, stroke);
-    final end = start + sweep;
-    final tip = center + Offset(radius * math.cos(end), radius * math.sin(end));
-    final tangent = Offset(-math.sin(end), math.cos(end)); // direction horaire
-    final normal = Offset(math.cos(end), math.sin(end));
-    final head = w * 0.17;
-    final arrow = Path()
-      ..moveTo(tip.dx + tangent.dx * head, tip.dy + tangent.dy * head)
-      ..lineTo(tip.dx + normal.dx * head * 0.8, tip.dy + normal.dy * head * 0.8)
-      ..lineTo(tip.dx - normal.dx * head * 0.8, tip.dy - normal.dy * head * 0.8)
-      ..close();
-    canvas.drawPath(arrow, Paint()..color = color);
-
-    // Pointillés sur le reste du cercle
-    final dash = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.08
-      ..strokeCap = StrokeCap.round;
-    final gapStart = end + 0.35;
-    const gapEnd = start + 2 * math.pi - 0.2;
-    for (var a = gapStart; a < gapEnd; a += 0.42) {
-      canvas.drawArc(rect, a, 0.18, false, dash);
-    }
-
-    // « 24 » et bandeau jaune
-    final text = TextPainter(
-      text: TextSpan(
-        text: '24',
-        style: TextStyle(color: color, fontSize: w * 0.36, fontWeight: FontWeight.w900, height: 1),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    text.paint(canvas, Offset(center.dx - text.width / 2, center.dy - text.height * 0.72));
-    final band = RRect.fromRectAndRadius(
-      Rect.fromLTWH(center.dx - w * 0.22, center.dy + w * 0.1, w * 0.44, w * 0.12),
-      Radius.circular(w * 0.04),
-    );
-    canvas.drawRRect(band, Paint()..color = _yellow);
-  }
-
-  @override
-  bool shouldRepaint(_Delivery24hPainter old) => old.color != color;
 }
