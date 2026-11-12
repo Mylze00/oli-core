@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/config/api_config.dart';
 import '../../core/providers/dio_provider.dart';
+import 'providers/auth_controller.dart';
 
 const _primary = Color(0xFF1E7DBA);
 const _minPledgeFc = 100;
@@ -240,6 +241,7 @@ class _ApplyPageState extends ConsumerState<ApplyPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildConnectedPhone(),
                   const SizedBox(height: 20),
                   _buildHeader(),
                   const SizedBox(height: 32),
@@ -323,9 +325,9 @@ class _ApplyPageState extends ConsumerState<ApplyPage> {
                   const SizedBox(height: 16),
                   Center(
                     child: TextButton.icon(
-                      onPressed: () => context.go('/login'),
+                      onPressed: _changePhone,
                       icon: const Icon(Icons.arrow_back, size: 18),
-                      label: const Text('Retour'),
+                      label: const Text('Changer de numéro'),
                       style: TextButton.styleFrom(foregroundColor: Colors.grey.shade600),
                     ),
                   ),
@@ -334,6 +336,46 @@ class _ApplyPageState extends ConsumerState<ApplyPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Retour à la saisie du numéro. Un simple context.go('/login') ne suffit pas :
+  /// la session ouverte renverrait aussitôt vers ce formulaire.
+  Future<void> _changePhone() async {
+    await ref.read(authControllerProvider.notifier).logout();
+    if (mounted) context.go('/login');
+  }
+
+  /// La candidature est liée à ce numéro : il est affiché en premier pour éviter
+  /// de postuler avec une session restée ouverte sur un autre compte.
+  Widget _buildConnectedPhone() {
+    final phone = ref.watch(authControllerProvider).userData?['phone']?.toString() ?? '';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.phone_iphone, color: _primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Candidature au nom du numéro', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                Text(
+                  phone.isEmpty ? 'Numéro inconnu' : phone,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+              ],
+            ),
+          ),
+          TextButton(onPressed: _changePhone, child: const Text('Changer')),
+        ],
       ),
     );
   }
