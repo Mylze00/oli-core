@@ -135,17 +135,43 @@ async function getSalesChart(sellerId, period = '7d') {
 async function getSellerOrders(sellerId, status = null, limit = 50, offset = 0) {
     try {
         const sellerIdInt = parseInt(sellerId);
+        // Tout ce que les écrans vendeur affichent, sauf le code de réception de
+        // l'acheteur (delivery_code) : seul l'acheteur doit l'avoir.
         let query = `
-            SELECT DISTINCT
+            SELECT
                 o.id,
                 o.user_id,
                 o.status,
+                o.payment_status,
                 o.total_amount,
+                o.delivery_address,
+                o.delivery_fee,
+                o.delivery_method_id,
+                o.payment_method,
+                o.payment_reference,
+                o.paid_at,
+                o.pickup_code,
+                o.tracking_number,
+                o.carrier,
+                o.estimated_delivery,
+                o.processing_at,
+                o.shipped_at,
+                o.delivered_at,
                 o.created_at,
                 o.updated_at,
-                u.name as customer_name,
-                u.phone as customer_phone,
-                COUNT(oi.id) as items_count
+                u.name AS buyer_name,
+                u.phone AS buyer_phone,
+                u.name AS customer_name,
+                u.phone AS customer_phone,
+                COUNT(oi.id) AS items_count,
+                json_agg(json_build_object(
+                    'id', oi.id,
+                    'product_id', oi.product_id,
+                    'product_name', oi.product_name,
+                    'product_image_url', COALESCE(oi.product_image_url, p.images[1]),
+                    'price', oi.product_price,
+                    'quantity', oi.quantity
+                ) ORDER BY oi.id) AS items
             FROM orders o
             JOIN order_items oi ON oi.order_id = o.id
             JOIN products p ON p.id = CAST(oi.product_id AS INTEGER)
@@ -209,7 +235,10 @@ async function getSellerOrderDetails(sellerId, orderId) {
         `;
 
         const result = await db.query(query, [orderId, sellerIdInt]);
-        return result.rows[0] || null;
+        const order = result.rows[0] || null;
+        // Le code de réception appartient à l'acheteur : jamais renvoyé au vendeur
+        if (order) delete order.delivery_code;
+        return order;
     } catch (error) {
         console.error('Error in getSellerOrderDetails:', error);
         throw error;

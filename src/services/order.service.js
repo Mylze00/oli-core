@@ -566,7 +566,9 @@ class OrderService {
                 console.log(`   📡 Broadcast new_delivery_available émis pour commande #${orderId}`);
             }
 
-            return { ...order, status: 'processing', pickup_code: pickupCode, delivery_code: deliveryCode };
+            // Réponse destinée au vendeur : sans le code de réception de l'acheteur
+            const { delivery_code: _buyerCode, ...sellerView } = order;
+            return { ...sellerView, status: 'processing', pickup_code: pickupCode };
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -640,7 +642,9 @@ class OrderService {
                 });
             }
 
-            return { ...order, status: 'ready', pickup_code: pickupCode, delivery_code: deliveryCode };
+            // Réponse destinée au vendeur : sans le code de réception de l'acheteur
+            const { delivery_code: _buyerCode, ...sellerView } = order;
+            return { ...sellerView, status: 'ready', pickup_code: pickupCode };
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -723,12 +727,8 @@ class OrderService {
 
                 await client.query('COMMIT');
 
-                // 💰 Créditer le(s) vendeur(s) — 100% du montant
-                try {
-                    await this._creditSellersForOrder(orderId);
-                } catch (creditErr) {
-                    console.error('⚠️ Erreur crédit vendeur (non-bloquante):', creditErr.message);
-                }
+                // 💰 Vendeur(s) payé(s) (pas de livreur en PickGo)
+                await this._settleDeliveredOrder(orderId);
 
                 // Non-transactional: notification
                 try {
@@ -866,12 +866,8 @@ class OrderService {
 
             await client.query('COMMIT');
 
-            // 💰 Créditer le(s) vendeur(s) — 100% du montant
-            try {
-                await this._creditSellersForOrder(orderId);
-            } catch (creditErr) {
-                console.error('⚠️ Erreur crédit vendeur (non-bloquante):', creditErr.message);
-            }
+            // 💰 Vendeur(s) et livreur payés, une seule fois
+            await this._settleDeliveredOrder(orderId);
 
             // Non-transactional: notifications
             try {
@@ -1208,6 +1204,47 @@ class OrderService {
         } catch (e) {
             console.error('⚠️ Erreur log statut:', e.message);
         }
+    }
+
+    /**
+     * Commande livrée : verse le(s) vendeur(s), l'affiliation vidéo et le livreur assigné.
+     * Appelée par TOUS les chemins de livraison (acheteur, livreur, PickGo, main propre) :
+     * avant, la validation par le livreur ne payait pas le vendeur, et celle par
+     * l'acheteur ne payait pas le livreur. Chaque versement n'a lieu qu'une fois.
+     */
+    async _settleDeliveredOrder(orderId) {
+        try {
+            await this._creditSellersForOrder(orderId);
+        } catch (err) {
+            console.error(`⚠️ Erreur crédit vendeur commande #${orderId}:`, err.message);
+        }
+        try {
+            await this._creditDelivererForOrder(orderId);
+        } catch (err) {
+            console.error(`⚠️ Erreur crédit livreur commande #${orderId}:`, err.message);
+        }
+    }
+
+    /** Verse au livreur assigné les frais de livraison (en FC, au taux figé) et les inscrit sur la course. */
+    async _creditDelivererForOrder(orderId) {
+        const { rows } = await pool.query(
+            `SELECT d.id, d.deliverer_id, d.delivery_fee, o.exchange_rate
+             FROM delivery_orders d JOIN orders o ON o.id = d.order_id
+             WHERE d.order_id = $1 AND d.deliverer_id IS NOT NULL
+             ORDER BY d.id DESC LIMIT 1`,
+            [orderId]
+        );
+        const delivery = rows[0];
+        if (!delivery) return null;
+        const fee = orderAmountToWallet(delivery.delivery_fee || 0, delivery.exchange_rate) || 0;
+        await pool.query(
+            `UPDATE delivery_orders
+             SET deliverer_earnings = $1, actual_delivery_time = COALESCE(actual_delivery_time, NOW())
+             WHERE id = $2`,
+            [fee, delivery.id]
+        );
+        if (fee <= 0) return null;
+        return walletService.creditDeliverer(delivery.deliverer_id, fee, orderId);
     }
 
     /**

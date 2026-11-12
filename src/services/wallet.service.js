@@ -252,6 +252,15 @@ class WalletService {
         return payResult;
     }
 
+    /** Vrai si ce versement (référence unique) a déjà été fait à cet utilisateur. */
+    async _alreadyCredited(reference, userId) {
+        const { rows } = await pool.query(
+            'SELECT 1 FROM wallet_transactions WHERE reference = $1 AND user_id = $2 LIMIT 1',
+            [reference, userId]
+        );
+        return rows.length > 0;
+    }
+
     // ─────────────────────────────────────────────────────────────
     // 5. Réception fonds — Vendeur
     // ─────────────────────────────────────────────────────────────
@@ -264,6 +273,12 @@ class WalletService {
         const amount = parseFloat(amountRaw);
         if (!amount || amount <= 0) {
             console.warn(`⚠️ creditSeller: montant nul pour commande #${orderId}, ignoré`);
+            return null;
+        }
+
+        // Une seule fois par commande, même si deux validations arrivent
+        if (await this._alreadyCredited(`SALE_ORDER_${orderId}`, sellerId)) {
+            console.warn(`⚠️ creditSeller: commande #${orderId} déjà versée, ignoré`);
             return null;
         }
 
@@ -289,6 +304,12 @@ class WalletService {
         const amount = parseFloat(amountRaw);
         if (!amount || amount <= 0) {
             console.warn(`⚠️ creditDeliverer: montant nul pour commande #${orderId}, ignoré`);
+            return null;
+        }
+
+        // Une seule fois par commande, même si deux validations arrivent
+        if (await this._alreadyCredited(`DELIVERY_ORDER_${orderId}`, delivererId)) {
+            console.warn(`⚠️ creditDeliverer: commande #${orderId} déjà versée, ignoré`);
             return null;
         }
 

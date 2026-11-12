@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/push_notification_service.dart';
 import '../../services/socket_service.dart';
+import '../../services/live_location_reporter.dart';
 import '../auth/providers/auth_controller.dart';
 import '../dashboard/dashboard_page.dart';
 import '../profile/profile_page.dart';
@@ -42,6 +43,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       }
       // Init FCM push notifications
       ref.read(pushNotificationServiceProvider).init();
+      // Position envoyée pendant les courses en cours (suivi par l'acheteur)
+      ref.read(liveLocationReporterProvider).start();
     }
   }
 

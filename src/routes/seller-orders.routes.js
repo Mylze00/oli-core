@@ -77,7 +77,7 @@ router.get('/', requireAuth, requireSeller, async (req, res) => {
         let query = `
             SELECT DISTINCT o.id, o.user_id, o.status, o.payment_status,
                    o.total_amount, o.delivery_address, o.delivery_fee,
-                   o.delivery_method_id, o.pickup_code, o.delivery_code,
+                   o.delivery_method_id, o.pickup_code,
                    o.payment_method, o.payment_reference, o.paid_at,
                    o.tracking_number, o.carrier, o.estimated_delivery,
                    o.shipped_at, o.delivered_at, o.created_at, o.updated_at,
@@ -184,8 +184,9 @@ router.get('/:id', requireAuth, requireSeller, async (req, res) => {
             ORDER BY h.created_at DESC
         `, [req.params.id]);
 
+        const { delivery_code: _hiddenCode, ...sellerOrder } = orderResult.rows[0];
         res.json({
-            ...orderResult.rows[0],
+            ...sellerOrder,
             status_history: historyResult.rows,
             allowed_transitions: SELLER_TRANSITIONS[orderResult.rows[0].status] || []
         });
@@ -306,6 +307,8 @@ router.patch('/:id/status', requireAuth, requireSeller, async (req, res) => {
             }
         }
 
+        // Le code de réception reste réservé à l'acheteur
+        if (updatedOrder) delete updatedOrder.delivery_code;
         res.json({
             success: true,
             order: updatedOrder,

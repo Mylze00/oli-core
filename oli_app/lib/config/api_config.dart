@@ -28,6 +28,7 @@ class ApiConfig {
   static const String orders = '$baseUrl/orders';
   static String orderCancel(int id) => '$baseUrl/orders/$id/cancel';
   static String orderRefundRequest(int id) => '$baseUrl/orders/$id/refund-request';
+  static String orderCourier(int id) => '$baseUrl/orders/$id/courier'; // suivi du livreur
   static String orderPay(int id) => '$baseUrl/orders/$id/pay';
   static String orderPayMobileMoney(int id) => '$baseUrl/orders/$id/pay-mobile-money';
   static const String orderQuote = '$baseUrl/orders/quote';

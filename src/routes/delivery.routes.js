@@ -81,13 +81,37 @@ router.post('/:id/status', requireAuth, requireDeliverer, async (req, res) => {
 });
 
 /**
+ * POST /delivery/:id/location — Position du livreur pendant la course (toutes les ~15 s)
+ * Body: { lat, lng }. Alimente le suivi en direct de l'acheteur.
+ */
+router.post('/:id/location', requireAuth, requireDeliverer, async (req, res) => {
+    try {
+        const { lat, lng } = req.body || {};
+        const delivery = await deliveryService.recordLocation(req.user, req.params.id, lat, lng);
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`order_${delivery.order_id}`).emit('delivery_position', {
+                deliveryId: delivery.id,
+                lat: parseFloat(lat),
+                lng: parseFloat(lng),
+                status: delivery.status,
+                timestamp: new Date().toISOString(),
+            });
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+/**
  * POST /delivery/:id/verify
  * Vérifier le code QR
  */
 router.post('/:id/verify', requireAuth, requireDeliverer, async (req, res) => {
     const { code } = req.body;
     try {
-        const delivery = await deliveryService.verifyDelivery(req.user, req.params.id, code);
+        const delivery = await deliveryService.verifyDelivery(req.user, req.params.id, code, req.app.get('io'));
         res.json({ success: true, delivery });
     } catch (err) {
         res.status(400).json({ error: err.message });

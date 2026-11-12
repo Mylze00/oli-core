@@ -96,6 +96,17 @@ class OrderService {
     }
   }
 
+  /// Suivi du livreur : position, parcours, destination et contact.
+  Future<Map<String, dynamic>> getCourier(int orderId) async {
+    try {
+      final response = await _dio.get(ApiConfig.orderCourier(orderId));
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      throw Exception(data is Map ? data['error']?.toString() ?? 'Suivi indisponible' : 'Suivi indisponible');
+    }
+  }
+
   /// Lance le paiement Mobile Money d'une commande : renvoie l'opération à suivre
   /// (oliOrderId, montant demandé), ou lève une [OrderException].
   Future<Map<String, dynamic>> payOrderMobileMoney({

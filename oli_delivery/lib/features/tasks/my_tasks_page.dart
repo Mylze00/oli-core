@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/utils/money.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/delivery_service.dart';
@@ -102,7 +103,7 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
   Widget _buildTaskCard(Map<String, dynamic> task) {
     final address = task['delivery_address'] ?? 'Adresse inconnue';
     final status = task['status'] ?? 'assigned';
-    final total = task['total_amount'] ?? 0;
+    final earnings = task['deliverer_earnings_fc'] ?? 0;
     final customerName = task['customer_name'] ?? 'Client';
     final customerPhone = task['customer_phone'] ?? '';
 
@@ -238,13 +239,15 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '\$$total',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Votre gain', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                      Text(
+                        formatFc(earnings),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+                      ),
+                    ],
                   ),
                   ElevatedButton.icon(
                     onPressed: () => context.push('/order/${task['order_id'] ?? task['id']}'),

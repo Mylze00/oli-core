@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/utils/money.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/delivery_service.dart';
@@ -146,7 +147,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   Widget _buildOrderCard(Map<String, dynamic> order) {
     final address = order['delivery_address'] ?? 'Adresse inconnue';
     final status = order['status'] ?? 'pending';
-    final total = order['total_amount'] ?? 0;
+    final earnings = order['deliverer_earnings_fc'] ?? 0;
     final orderId = order['order_id'] ?? order['id'];
     final deliveryId = order['id'];
 
@@ -278,13 +279,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    _formatPriceFC(total),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Votre gain', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                      Text(
+                        formatFc(earnings),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+                      ),
+                    ],
                   ),
                   ElevatedButton.icon(
                     onPressed: () => context.push('/order/$deliveryId'),

@@ -294,7 +294,7 @@ export default function OrderManagement() {
                                             </div>
 
                                             {/* ── Codes (pickup & delivery) ── */}
-                                            {(order.pickup_code || order.delivery_code) && (
+                                            {order.pickup_code && (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     {order.pickup_code && (
                                                         <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
@@ -303,16 +303,6 @@ export default function OrderManagement() {
                                                             </h4>
                                                             <p className="text-2xl font-bold font-mono text-orange-900 tracking-[4px] text-center">
                                                                 {order.pickup_code}
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                    {order.delivery_code && (
-                                                        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                                                            <h4 className="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                                                <QrCode size={14} /> Code Livraison (Client)
-                                                            </h4>
-                                                            <p className="text-2xl font-bold font-mono text-green-900 tracking-[4px] text-center">
-                                                                {order.delivery_code}
                                                             </p>
                                                         </div>
                                                     )}

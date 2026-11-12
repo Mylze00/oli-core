@@ -6,6 +6,7 @@ import '../../../models/order_model.dart';
 import '../providers/orders_provider.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../../../core/theme/oli_glass.dart';
+import 'courier_tracking_page.dart';
 
 /// Filtres de la page « Mes Achats ».
 /// Les définitions de statut sont celles des compteurs du profil (dashboard_section.dart),
@@ -351,6 +352,8 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           // État : paiement attendu, annulée, ou suivi en 4 étapes
           Padding(padding: const EdgeInsets.fromLTRB(16, 4, 16, 8), child: _buildProgress(c, order)),
 
+          if (const ['processing', 'ready', 'shipped'].contains(order.status)) _buildTrackButton(c, order),
+
           if (showCode) _buildDeliveryCode(c, order),
 
           Divider(height: 1, color: c.border),
@@ -633,6 +636,57 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Ouvre la carte de suivi du livreur.
+  Widget _buildTrackButton(_OrdersColors c, Order order) {
+    final enRoute = order.status == 'shipped';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Material(
+        color: enRoute ? c.accent : c.tile,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => CourierTrackingPage(orderId: order.id))),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Icon(Icons.two_wheeler_rounded, color: enRoute ? Colors.white : c.text, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Suivre le livreur',
+                        style: TextStyle(
+                          color: enRoute ? Colors.white : c.text,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        enRoute
+                            ? 'Voir son parcours en direct sur la carte'
+                            : 'Disponible dès qu\'un livreur prend la course',
+                        style: TextStyle(
+                          color: enRoute ? Colors.white.withValues(alpha: 0.85) : c.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: enRoute ? Colors.white : c.textSecondary),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

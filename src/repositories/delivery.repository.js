@@ -3,6 +3,12 @@ const pool = require('../config/db');
 // Code de livraison désormais géré par order.service.js sur la table orders
 // Plus de génération indépendante ici
 
+/** Le code de réception appartient à l'acheteur : le livreur doit le recevoir de lui. */
+function hideBuyerCode(row) {
+    const { delivery_code: _buyerCode, ...rest } = row;
+    return rest;
+}
+
 /**
  * Créer une commande de livraison
  */
@@ -32,7 +38,10 @@ async function create(deliveryData) {
 async function findAvailable() {
     const res = await pool.query(`
         SELECT d.*, o.total_amount, o.status as order_status,
-               o.pickup_code, o.delivery_code,
+               -- Gain de la course pour le livreur, en FC au taux figé de la commande
+               CASE WHEN COALESCE(o.exchange_rate, 0) > 0
+                    THEN ROUND(COALESCE(d.delivery_fee, 0) * o.exchange_rate)
+                    ELSE COALESCE(d.delivery_fee, 0) END AS deliverer_earnings_fc,
                u.name as customer_name, u.phone as customer_phone,
                COALESCE((
                    SELECT json_agg(json_build_object(
@@ -49,7 +58,7 @@ async function findAvailable() {
         WHERE d.status = 'pending'
         ORDER BY d.created_at DESC
     `);
-    return res.rows;
+    return res.rows.map(hideBuyerCode);
 }
 
 /**
@@ -93,7 +102,7 @@ async function assignDeliverer(deliveryId, delivererId) {
 async function updateStatus(deliveryId, status, currentLat, currentLng) {
     const res = await pool.query(`
         UPDATE delivery_orders 
-        SET status = $1, current_lat = $2, current_lng = $3, updated_at = NOW()
+        SET status = $1, current_lat = COALESCE($2, current_lat), current_lng = COALESCE($3, current_lng), updated_at = NOW()
         WHERE id = $4
         RETURNING *
     `, [status, currentLat, currentLng, deliveryId]);
@@ -107,7 +116,11 @@ async function updateStatus(deliveryId, status, currentLat, currentLng) {
 async function findByDeliverer(delivererId) {
     const res = await pool.query(`
         SELECT d.*, o.total_amount, o.status as order_status,
-               o.pickup_code, o.delivery_code,
+               o.pickup_code,
+               -- Gain de la course pour le livreur, en FC au taux figé de la commande
+               CASE WHEN COALESCE(o.exchange_rate, 0) > 0
+                    THEN ROUND(COALESCE(d.delivery_fee, 0) * o.exchange_rate)
+                    ELSE COALESCE(d.delivery_fee, 0) END AS deliverer_earnings_fc,
                u.name as customer_name, u.phone as customer_phone,
                COALESCE((
                    SELECT json_agg(json_build_object(
@@ -124,7 +137,7 @@ async function findByDeliverer(delivererId) {
         WHERE d.deliverer_id = $1 AND d.status NOT IN ('delivered', 'cancelled')
         ORDER BY d.updated_at DESC
     `, [delivererId]);
-    return res.rows;
+    return res.rows.map(hideBuyerCode);
 }
 
 module.exports = {

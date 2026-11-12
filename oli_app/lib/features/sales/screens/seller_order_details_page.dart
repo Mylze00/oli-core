@@ -132,12 +132,6 @@ class _SellerOrderDetailsPageState
                                 _order!.pickupCode != null)
                               _buildPickupCodeSection(),
 
-                            // Delivery code for buyer (visible to seller)
-                            if ((_order!.status == 'ready' ||
-                                    _order!.status == 'shipped') &&
-                                _order!.deliveryCode != null)
-                              _buildDeliveryCodeSection(),
-
                             // Buyer section
                             _buildBuyerSection(),
                             const SizedBox(height: 16),
@@ -312,92 +306,6 @@ class _SellerOrderDetailsPageState
             Text(
               'Communiquez ce code au livreur quand il arrive',
               style: TextStyle(fontSize: 12, color: Colors.orange.shade700),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDeliveryCodeSection() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.green.shade100, Colors.teal.shade50],
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.green.shade400, width: 2),
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.verified_user, color: Colors.green.shade800, size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  'CODE POUR L\'ACHETEUR',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green.shade800,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // QR Code
-            Container(
-              width: 130,
-              height: 130,
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: QrImageView(
-                data: _order!.deliveryCode!,
-                version: QrVersions.auto,
-                size: 114,
-                backgroundColor: Colors.white,
-                eyeStyle: const QrEyeStyle(
-                  eyeShape: QrEyeShape.square,
-                  color: Colors.black,
-                ),
-                dataModuleStyle: const QrDataModuleStyle(
-                  dataModuleShape: QrDataModuleShape.square,
-                  color: Colors.black,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.shade300),
-              ),
-              child: Text(
-                _order!.deliveryCode!,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 8,
-                  color: Colors.green.shade900,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'L\'acheteur présentera ce code au livreur',
-              style: TextStyle(fontSize: 12, color: Colors.green.shade700),
             ),
           ],
         ),

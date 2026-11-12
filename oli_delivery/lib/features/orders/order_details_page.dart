@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/delivery_service.dart';
 import '../../services/location_service.dart';
 import 'qr_scanner_page.dart';
+import '../../core/utils/money.dart';
 
 class OrderDetailsPage extends ConsumerStatefulWidget {
   final int orderId;
@@ -433,11 +434,11 @@ class _OrderDetailsPageState extends ConsumerState<OrderDetailsPage> {
             _buildMapSection(),
             const SizedBox(height: 16),
 
-            // 💰 Montant
+            // 💰 Gain de la course (frais de livraison, versés sur le wallet à la remise)
             _buildInfoCard(
-              icon: Icons.attach_money,
-              title: 'Montant total',
-              value: '\$${_order!['total_amount'] ?? 0}',
+              icon: Icons.payments_outlined,
+              title: 'Votre gain pour cette course',
+              value: formatFc(_order!['deliverer_earnings_fc'] ?? 0),
               color: Colors.green,
             ),
             const SizedBox(height: 16),

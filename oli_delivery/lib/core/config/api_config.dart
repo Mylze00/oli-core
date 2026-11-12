@@ -20,6 +20,9 @@ class ApiConfig {
   /// POST /delivery/:id/verify  (body: {code})
   static String deliveryVerify(dynamic id) => '$deliveryBase/$id/verify';
 
+  /// POST /delivery/:id/location  (body: {lat, lng}) — suivi en direct par l'acheteur
+  static String deliveryLocation(dynamic id) => '$deliveryBase/$id/location';
+
   // Orders — tracking endpoints (shared with main app)
   static const String ordersBase = '$baseUrl/orders';
 

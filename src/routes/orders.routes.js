@@ -37,6 +37,18 @@ router.get("/:id", orderController.getById);
 router.get("/:id/tracking", orderController.getTracking);
 
 /**
+ * GET /orders/:id/courier - Acheteur : position et parcours du livreur
+ */
+router.get("/:id/courier", async (req, res) => {
+    try {
+        const deliveryService = require("../services/delivery.service");
+        res.json(await deliveryService.getCourierForBuyer(req.user.id, req.params.id));
+    } catch (err) {
+        res.status(err.status || 400).json({ error: err.message });
+    }
+});
+
+/**
  * PATCH /orders/:id/status - Mettre à jour le statut (générique)
  */
 // Réservé à l'admin : le vendeur passe par /api/seller/orders/:id/status
