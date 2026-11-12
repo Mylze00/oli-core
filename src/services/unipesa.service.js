@@ -101,6 +101,10 @@ function _generateOliOrderId(userId, type = 'DEP') {
 // SERVICE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Une recharge peut servir à payer une commande : elle en garde l'identifiant
+pool.query('ALTER TABLE unipesa_operations ADD COLUMN IF NOT EXISTS order_id INTEGER')
+    .catch((e) => console.error('❌ Migration unipesa_operations.order_id:', e.message));
+
 const unipesaService = {
 
     /**
@@ -113,7 +117,7 @@ const unipesaService = {
      * @param {number} exchangeRate   - Taux de change FC/USD (requis par Unipesa si en USD)
      * @returns {Promise<{oliOrderId, unipesaOrderId, status, amountFC, feeFC, netAmountFC}>}
      */
-    async initiateDeposit(userId, phone, amountFC, exchangeRate = 1) {
+    async initiateDeposit(userId, phone, amountFC, exchangeRate = 1, options = {}) {
         const uid = parseInt(userId);
         const oliOrderId = _generateOliOrderId(uid, 'DEP');
 
@@ -130,9 +134,9 @@ const unipesaService = {
         // → garantit la traçabilité même si l'API tombe
         await pool.query(`
             INSERT INTO unipesa_operations
-                (oli_order_id, user_id, phone, amount_fc, provider, operation_type, status, expires_at)
-            VALUES ($1, $2, $3, $4, $5, 'deposit', 'pending', NOW() + INTERVAL '10 minutes')
-        `, [oliOrderId, uid, phone, grossFC, _detectProvider(phone)]);
+                (oli_order_id, user_id, phone, amount_fc, provider, operation_type, status, expires_at, order_id)
+            VALUES ($1, $2, $3, $4, $5, 'deposit', 'pending', NOW() + INTERVAL '10 minutes', $6)
+        `, [oliOrderId, uid, phone, grossFC, _detectProvider(phone), options.orderId || null]);
 
         console.log(`💱 Frais: ${netFC} FC net → ${totalFeeFC} FC frais (${aggregatorFeeFC} FC Unipesa + ${oliFeeFC} FC OLI) → ${grossFC} FC brut demandé`);
 

@@ -19,6 +19,39 @@ exports.create = async (req, res) => {
     }
 };
 
+/** Erreur métier (statut posé par le service) ou erreur serveur. */
+function sendError(res, error, context) {
+    if ([400, 404, 409, 503].includes(error.status)) {
+        return res.status(error.status).json({ error: error.message });
+    }
+    console.error(`Erreur ${context}:`, error);
+    return res.status(500).json({ error: "Erreur serveur" });
+}
+
+exports.quote = async (req, res) => {
+    try {
+        const quote = await orderService.quoteOrder(req.user.id, req.body || {});
+        res.json({ success: true, quote });
+    } catch (error) {
+        sendError(res, error, 'devis commande');
+    }
+};
+
+exports.payMobileMoney = async (req, res) => {
+    const orderId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(orderId)) return res.status(400).json({ error: 'Commande invalide' });
+    try {
+        const result = await orderService.payOrderByMobileMoney(req.user.id, orderId, req.body?.phone);
+        res.json({ success: true, result });
+    } catch (error) {
+        // Échec de l'appel Unipesa : message lisible pour l'acheteur
+        if (!error.status && /Mobile Money/.test(error.message)) {
+            return res.status(502).json({ error: "Le paiement Mobile Money n'a pas pu être lancé. Vérifiez le numéro et réessayez." });
+        }
+        sendError(res, error, 'paiement Mobile Money commande');
+    }
+};
+
 exports.getAll = async (req, res) => {
     try {
         const orders = await orderService.getUserOrders(req.user.id);

@@ -12,6 +12,11 @@ const { requireRole } = require("../middlewares/auth.middleware");
 router.post("/", orderController.create);
 
 /**
+ * POST /orders/quote - Devis exact (prix catalogue, livraison, montant en FC, frais Mobile Money)
+ */
+router.post("/quote", orderController.quote);
+
+/**
  * GET /orders/delivery - Liste des commandes prêtes pour livraison
  */
 router.get("/delivery", orderController.getDeliveryOrders);
@@ -70,6 +75,18 @@ router.post("/:id/refund-request", orderController.requestRefund);
 /**
  * POST /orders/:id/pay - Simuler le paiement (DEV)
  */
-router.post("/:id/pay", orderController.pay);
+// Paiement simulé : jamais en production, une commande y passerait « payée » sans rien encaisser
+router.post("/:id/pay", (req, res, next) => {
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ error: "Paiement simulé désactivé en production" });
+    }
+    next();
+}, orderController.pay);
+
+/**
+ * POST /orders/:id/pay-mobile-money - Payer une commande en attente par Mobile Money (Unipesa)
+ * Body: { phone }
+ */
+router.post("/:id/pay-mobile-money", orderController.payMobileMoney);
 
 module.exports = router;

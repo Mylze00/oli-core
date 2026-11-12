@@ -48,7 +48,22 @@ async function releaseSettlement(operationId) {
  * @param {number} expectedUserId - utilisateur déduit de la référence (DEP-<id>-…)
  * @returns {Promise<{status: 'credited'|'not_found'|'user_mismatch'|'already_settled', ...}>}
  */
-async function settleDeposit(oliOrderId, expectedUserId) {
+async function settleDeposit(oliOrderId, expectedUserId, io = null) {
+    const result = await creditDeposit(oliOrderId, expectedUserId);
+    if (result.status === 'credited' && result.orderId) {
+        // Le dépôt est acquis quoi qu'il arrive : un échec ici laisse l'argent sur le wallet
+        try {
+            const orderService = require('./order.service');
+            result.orderSettlement = await orderService.settleMobileMoneyOrder(result.orderId, result.userId, io);
+        } catch (err) {
+            console.error(`❌ Commande #${result.orderId} non réglée après le dépôt ${oliOrderId}:`, err.message);
+            result.orderSettlement = { settled: false, reason: err.message };
+        }
+    }
+    return result;
+}
+
+async function creditDeposit(oliOrderId, expectedUserId) {
     const op = await findOperation(oliOrderId, 'deposit');
     if (!op) return { status: 'not_found' };
     if (Number(op.user_id) !== Number(expectedUserId)) return { status: 'user_mismatch' };
@@ -92,6 +107,7 @@ async function settleDeposit(oliOrderId, expectedUserId) {
 
         return {
             status: 'credited',
+            orderId: claimed.order_id || null,
             userId: claimed.user_id,
             grossFC: gross,
             netFC: net,

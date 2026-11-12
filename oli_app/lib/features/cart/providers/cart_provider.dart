@@ -20,6 +20,9 @@ class CartItem {
   final bool isCertified; // Vendeur/boutique certifié
   final String? originVideoId;
 
+  /// Variante choisie (taille, couleur…) : le serveur en ajoute le supplément au prix.
+  final String? variantId;
+
   CartItem({
     required this.productId,
     required this.productName,
@@ -33,9 +36,16 @@ class CartItem {
     this.isSelected = true,
     this.isCertified = false,
     this.originVideoId,
+    this.variantId,
   });
 
-  double get total => (price * quantity) + deliveryPrice;
+  /// Ligne du panier : deux variantes du même produit sont deux lignes distinctes.
+  String get cartKey => variantId == null ? productId : '$productId#$variantId';
+
+  /// Prix des articles seuls, sans la livraison.
+  double get lineTotal => price * quantity;
+
+  double get total => lineTotal + deliveryPrice;
 
   CartItem copyWith({
     String? productId,
@@ -50,6 +60,7 @@ class CartItem {
     bool? isSelected,
     bool? isCertified,
     String? originVideoId,
+    String? variantId,
   }) {
     return CartItem(
       productId: productId ?? this.productId,
@@ -64,6 +75,7 @@ class CartItem {
       isSelected: isSelected ?? this.isSelected,
       isCertified: isCertified ?? this.isCertified,
       originVideoId: originVideoId ?? this.originVideoId,
+      variantId: variantId ?? this.variantId,
     );
   }
 
@@ -75,6 +87,7 @@ class CartItem {
     imageUrl: imageUrl,
     sellerName: sellerName,
     originVideoId: originVideoId,
+    variantId: variantId,
   );
 
   Map<String, dynamic> toJson() => {
@@ -90,6 +103,7 @@ class CartItem {
     'isSelected': isSelected,
     'isCertified': isCertified,
     'originVideoId': originVideoId,
+    'variantId': variantId,
   };
 
   factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
@@ -105,6 +119,7 @@ class CartItem {
     isSelected: json['isSelected'] ?? true,
     isCertified: json['isCertified'] ?? false,
     originVideoId: json['originVideoId'],
+    variantId: json['variantId'],
   );
 }
 
@@ -153,7 +168,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   }
 
   void addItem(CartItem item) {
-    final existingIndex = state.indexWhere((e) => e.productId == item.productId);
+    final existingIndex = state.indexWhere((e) => e.cartKey == item.cartKey);
     if (existingIndex >= 0) {
       state = [
         for (int i = 0; i < state.length; i++)
@@ -176,8 +191,9 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     _saveToStorage();
   }
 
+  /// [productId] : clé de ligne ([CartItem.cartKey]), égale à l'identifiant produit sans variante.
   void removeItem(String productId) {
-    state = state.where((item) => item.productId != productId).toList();
+    state = state.where((item) => item.cartKey != productId).toList();
     _saveToStorage();
   }
 
@@ -188,7 +204,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     }
     state = [
       for (final item in state)
-        if (item.productId == productId)
+        if (item.cartKey == productId)
           item.copyWith(quantity: quantity)
         else
           item
@@ -199,7 +215,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   void toggleItemSelection(String productId) {
     state = [
       for (final item in state)
-        if (item.productId == productId)
+        if (item.cartKey == productId)
           item.copyWith(isSelected: !item.isSelected)
         else
           item

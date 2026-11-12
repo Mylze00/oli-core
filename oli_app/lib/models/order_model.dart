@@ -105,6 +105,8 @@ class OrderItem {
   final int quantity;
   final String? sellerName;
   final String? originVideoId;
+  /// Variante choisie : le serveur en relit le supplément de prix.
+  final String? variantId;
 
   OrderItem({
     this.id,
@@ -115,6 +117,7 @@ class OrderItem {
     required this.quantity,
     this.sellerName,
     this.originVideoId,
+    this.variantId,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -138,6 +141,7 @@ class OrderItem {
     'quantity': quantity,
     'sellerName': sellerName,
     'originVideoId': originVideoId,
+    if (variantId != null) 'variantId': variantId,
   };
 
   double get total => price * quantity;

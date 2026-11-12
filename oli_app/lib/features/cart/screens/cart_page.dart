@@ -363,7 +363,7 @@ class CartPage extends ConsumerWidget {
           ],
         ),
       ),
-      onDismissed: (_) => ref.read(cartProvider.notifier).removeItem(item.productId),
+      onDismissed: (_) => ref.read(cartProvider.notifier).removeItem(item.cartKey),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
@@ -461,7 +461,7 @@ class CartPage extends ConsumerWidget {
                   _buildStepperBtn(
                     icon: Icons.add_rounded,
                     color: item.isSelected ? const Color(0xFF3B82F6) : const Color(0xFF4A4A6A),
-                    onTap: () => ref.read(cartProvider.notifier).updateQuantity(item.productId, item.quantity + 1),
+                    onTap: () => ref.read(cartProvider.notifier).updateQuantity(item.cartKey, item.quantity + 1),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -479,7 +479,7 @@ class CartPage extends ConsumerWidget {
                     color: item.isSelected
                         ? (item.quantity > 1 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444))
                         : const Color(0xFF4A4A6A),
-                    onTap: () => ref.read(cartProvider.notifier).updateQuantity(item.productId, item.quantity - 1),
+                    onTap: () => ref.read(cartProvider.notifier).updateQuantity(item.cartKey, item.quantity - 1),
                   ),
                 ],
               ),

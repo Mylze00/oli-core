@@ -52,7 +52,7 @@ exports.handleDeposit = async (req, res) => {
         }
         const userId = parseInt(match[2], 10);
 
-        const result = await settlement.settleDeposit(orderId, userId);
+        const result = await settlement.settleDeposit(orderId, userId, req.app ? req.app.get('io') : null);
 
         if (result.status !== 'credited') {
             console.warn(`ℹ️ Dépôt ${orderId} non crédité : ${result.status}`);

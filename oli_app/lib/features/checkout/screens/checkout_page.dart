@@ -9,588 +9,774 @@ import '../../user/screens/address_management_page.dart';
 import '../../../core/user/user_model.dart';
 import '../../../core/user/user_provider.dart';
 import '../../../models/order_model.dart';
-import 'stripe_payment_page.dart';
-import 'order_success_page.dart';
-import 'payment_pending_page.dart';
-import 'payment_methods_page.dart';
 import '../../../providers/exchange_rate_provider.dart';
+import 'order_success_page.dart';
 
-/// Page de Checkout / Validation de commande
-/// Peut être utilisée avec le panier (défaut) ou avec un achat direct (directPurchaseItem)
+/// Page de validation de commande, avec le panier (défaut) ou un achat direct.
+///
+/// Les montants affichés viennent du devis du serveur (POST /orders/quote) :
+/// c'est exactement ce qui sera débité, en FC.
 class CheckoutPage extends ConsumerStatefulWidget {
-  /// Si fourni, utilise cet item au lieu du panier (Achat immédiat)
+  /// Si fourni, utilise cet item au lieu du panier (achat immédiat)
   final CartItem? directPurchaseItem;
-  
+
   const CheckoutPage({super.key, this.directPurchaseItem});
 
   @override
   ConsumerState<CheckoutPage> createState() => _CheckoutPageState();
 }
 
+/// Couleurs de la page, selon le mode clair ou sombre de l'app.
+class _CheckoutColors {
+  final bool isDark;
+  final Color background;
+  final Color card;
+  final Color border;
+  final Color text;
+  final Color textSecondary;
+  final Color iconTile;
+  final Color accent;
+
+  const _CheckoutColors._({
+    required this.isDark,
+    required this.background,
+    required this.card,
+    required this.border,
+    required this.text,
+    required this.textSecondary,
+    required this.iconTile,
+    required this.accent,
+  });
+
+  factory _CheckoutColors.of(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return isDark
+        ? const _CheckoutColors._(
+            isDark: true,
+            background: Colors.black,
+            card: Color(0xFF1C1C1E),
+            border: Color(0x1FFFFFFF),
+            text: Colors.white,
+            textSecondary: Color(0xFF9A9AA0),
+            iconTile: Color(0x14FFFFFF),
+            accent: Color(0xFF3B8EF0),
+          )
+        : const _CheckoutColors._(
+            isDark: false,
+            background: Color(0xFFF5F6F8),
+            card: Colors.white,
+            border: Color(0xFFE6E8EC),
+            text: Color(0xFF111418),
+            textSecondary: Color(0xFF5F6673),
+            iconTile: Color(0xFFF1F3F6),
+            accent: Color(0xFF1A5DE6),
+          );
+  }
+}
+
 class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   String _paymentMethod = 'wallet';
-  bool _isLoading = false;
-  double _deliveryFee = 0.0;
-  String _mobileMoneyPhone = '';
-  final String _mobileMoneyProvider = 'Unipesa';
-  late final TextEditingController _mobileMoneyController;
+  bool _isPaying = false;
+  bool _isEditingPhone = false;
+  late final TextEditingController _phoneController;
 
-  /// Retourne les items à checkout (achat direct ou panier)
+  OrderQuote? _quote;
+  String? _quoteError;
+  bool _isQuoting = true;
+  String? _quotedKey;
+
+  /// Lu avec ref.read : utilisable hors du build (le build s'abonne au panier).
   List<CartItem> get _checkoutItems {
-    if (widget.directPurchaseItem != null) {
-      return [widget.directPurchaseItem!];
-    }
-    return ref.watch(cartProvider).where((item) => item.isSelected).toList();
+    if (widget.directPurchaseItem != null) return [widget.directPurchaseItem!];
+    return ref.read(cartProvider).where((item) => item.isSelected).toList();
   }
 
-  /// Calcule le sous-total
-  double get _subtotal {
-    return _checkoutItems.fold(0, (sum, item) => sum + item.total);
+  double get _deliveryFeeUsd => _checkoutItems.fold(0.0, (sum, item) => sum + item.deliveryPrice);
+
+  String get _deliveryMethod {
+    final items = _checkoutItems;
+    final method = items.isEmpty ? '' : items.first.deliveryMethod.trim();
+    return method.isEmpty ? 'Standard' : method;
   }
+
+  bool get _isPickup => _deliveryMethod.toLowerCase().contains('pick') || _deliveryFeeUsd == 0;
 
   @override
   void initState() {
     super.initState();
-    _mobileMoneyController = TextEditingController(text: _mobileMoneyPhone);
-
-    // Initialiser la livraison depuis l'item sélectionné (achat direct ou premier item du panier)
-    if (widget.directPurchaseItem != null) {
-      _deliveryFee = widget.directPurchaseItem!.deliveryPrice;
-    } else {
-      // Pour le panier, sommer les frais de livraison de chaque item
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final items = ref.read(cartProvider).where((i) => i.isSelected).toList();
-        if (items.isNotEmpty) {
-          setState(() => _deliveryFee = items.fold(0.0, (sum, i) => sum + i.deliveryPrice));
-        }
-      });
-    }
-    // Charger les adresses de l'utilisateur
-    Future.microtask(() => ref.read(addressProvider.notifier).loadAddresses());
-
-    ref.listen<AsyncValue<User?>>(userProvider, (previous, next) {
-      next.whenData((user) {
-        if (user != null && user.phone != null && user.phone!.isNotEmpty && _mobileMoneyPhone.isEmpty) {
-          setState(() {
-            _mobileMoneyPhone = user.phone!;
-            _mobileMoneyController.text = user.phone!;
-          });
-        }
-      });
+    // Numéro Mobile Money : celui du compte, déjà chargé ou dès qu'il arrive
+    _phoneController = TextEditingController(text: ref.read(userProvider).value?.phone ?? '');
+    ref.listenManual<AsyncValue<User?>>(userProvider, (previous, next) {
+      final phone = next.value?.phone;
+      if (phone != null && phone.isNotEmpty && _phoneController.text.isEmpty && mounted) {
+        setState(() => _phoneController.text = phone);
+      }
     });
+    Future.microtask(() => ref.read(addressProvider.notifier).loadAddresses());
   }
 
   @override
   void dispose() {
-    _mobileMoneyController.dispose();
+    _phoneController.dispose();
     super.dispose();
+  }
+
+  /// Redemande le devis quand les articles (ou leur quantité) changent.
+  void _refreshQuoteIfNeeded(List<CartItem> items) {
+    final key = items.map((i) => '${i.cartKey}x${i.quantity}').join('|') + '@$_deliveryFeeUsd';
+    if (key == _quotedKey) return;
+    _quotedKey = key;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadQuote());
+  }
+
+  Future<void> _loadQuote() async {
+    final items = _checkoutItems;
+    if (items.isEmpty) return;
+    setState(() {
+      _isQuoting = true;
+      _quoteError = null;
+    });
+    try {
+      final quote = await ref.read(orderServiceProvider).quoteOrder(
+            items: items.map((item) => item.toOrderItem()).toList(),
+            deliveryFee: _deliveryFeeUsd,
+          );
+      if (!mounted) return;
+      setState(() {
+        _quote = quote;
+        _isQuoting = false;
+        // Wallet insuffisant : Mobile Money est proposé d'emblée
+        if (!quote.walletCovers && _paymentMethod == 'wallet') _paymentMethod = 'mobile_money';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _quoteError = e.toString();
+        _isQuoting = false;
+      });
+    }
+  }
+
+  String _fc(num amount) =>
+      ref.read(exchangeRateProvider.notifier).formatAmount(amount.toDouble(), currency: Currency.CDF);
+
+  /// Équivalent dans la monnaie choisie à l'accueil, quand ce n'est pas le FC.
+  String? _equivalent(num amountFc) {
+    final selected = ref.watch(exchangeRateProvider).selectedCurrency;
+    if (selected == Currency.CDF) return null;
+    return '≈ ${ref.read(exchangeRateProvider.notifier).formatWalletBalance(amountFc.toDouble())}';
+  }
+
+  double? get _amountToPay {
+    final quote = _quote;
+    if (quote == null) return null;
+    return _paymentMethod == 'mobile_money' ? quote.mobileMoneyTotalFC : quote.totalFC;
+  }
+
+  /// Raison pour laquelle le paiement est impossible, ou null.
+  String? get _payBlocker {
+    final quote = _quote;
+    if (quote == null) return null;
+    if (!_isPickup && ref.read(defaultAddressProvider) == null) return 'Ajoutez une adresse de livraison';
+    if (_paymentMethod == 'wallet' && !quote.walletCovers) return 'Solde du wallet insuffisant';
+    if (_paymentMethod == 'mobile_money' && _phoneController.text.trim().length < 9) {
+      return 'Indiquez votre numéro Mobile Money';
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
-    final cartItems = _checkoutItems;
-    final subtotal = _subtotal;
-    final total = subtotal + _deliveryFee;
-    ref.watch(exchangeRateProvider);
-    final exchangeNotifier = ref.read(exchangeRateProvider.notifier);
-    final userAsync = ref.watch(userProvider);
-    final effectiveMobileMoneyPhone = _mobileMoneyPhone.isNotEmpty ? _mobileMoneyPhone : userAsync.maybeWhen(data: (user) => user?.phone ?? '', orElse: () => '');
+    final c = _CheckoutColors.of(context);
+    ref.watch(cartProvider);
+    final items = _checkoutItems;
+    _refreshQuoteIfNeeded(items);
+    ref.watch(defaultAddressProvider);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: c.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: c.background,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: c.text,
         elevation: 0,
-        title: const Text('Validation de commande'),
+        title: Text('Validation de commande', style: TextStyle(color: c.text, fontWeight: FontWeight.w600)),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // --- RÉCAP COMMANDE ---
-            _buildSectionTitle('Récapitulatif'),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
-                borderRadius: BorderRadius.circular(12),
+      body: items.isEmpty
+          ? Center(child: Text('Aucun article à commander', style: TextStyle(color: c.textSecondary)))
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              children: [
+                _buildHeader(c, items),
+                const SizedBox(height: 16),
+                _buildPerks(c),
+                const SizedBox(height: 16),
+                _buildItemsCard(c, items),
+                const SizedBox(height: 24),
+                _sectionTitle(c, 'Livraison'),
+                _buildDeliveryCard(c),
+                const SizedBox(height: 24),
+                _sectionTitle(c, 'Paiement'),
+                _buildPaymentCard(c),
+              ],
+            ),
+      bottomNavigationBar: items.isEmpty ? null : _buildPayBar(c),
+    );
+  }
+
+  Widget _buildHeader(_CheckoutColors c, List<CartItem> items) {
+    final quote = _quote;
+    final count = items.fold<int>(0, (sum, item) => sum + item.quantity);
+    final equivalent = quote == null ? null : _equivalent(quote.totalFC);
+    return Column(
+      children: [
+        Text('Votre commande', style: TextStyle(color: c.textSecondary, fontSize: 14)),
+        const SizedBox(height: 4),
+        if (_isQuoting && quote == null)
+          SizedBox(height: 40, child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: c.accent)))
+        else
+          Text(
+            quote == null ? '—' : _fc(quote.totalFC),
+            style: TextStyle(color: c.text, fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+          ),
+        const SizedBox(height: 4),
+        Text(
+          '$count article${count > 1 ? 's' : ''} · ${_isPickup ? 'retrait en boutique' : 'livraison incluse'}'
+          '${equivalent == null ? '' : ' · $equivalent'}',
+          style: TextStyle(color: c.textSecondary, fontSize: 13),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPerks(_CheckoutColors c) {
+    Widget perk(IconData icon, String label) => Expanded(
+          child: Column(
+            children: [
+              Icon(icon, color: c.text, size: 24),
+              const SizedBox(height: 6),
+              Text(label, textAlign: TextAlign.center, style: TextStyle(color: c.text, fontSize: 12, height: 1.2)),
+            ],
+          ),
+        );
+    return _card(
+      c,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      child: Row(
+        children: [
+          perk(_isPickup ? Icons.storefront_outlined : Icons.local_shipping_outlined,
+              _isPickup ? 'Retrait\nen boutique' : 'Livraison\n$_deliveryMethod'),
+          perk(Icons.verified_user_outlined, 'Paiement\nsécurisé'),
+          perk(Icons.qr_code_2_rounded, 'Code remis\nà la livraison'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemsCard(_CheckoutColors c, List<CartItem> items) {
+    final quote = _quote;
+    return _card(
+      c,
+      child: Column(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) Divider(height: 24, color: c.border),
+            _buildItemRow(c, items[i], quote),
+          ],
+          Divider(height: 28, color: c.border),
+          _summaryRow(c, 'Articles', quote == null ? '—' : _fc(quote.itemsTotalFC)),
+          const SizedBox(height: 8),
+          _summaryRow(
+            c,
+            _isPickup ? 'Retrait en boutique' : 'Livraison · $_deliveryMethod',
+            quote == null ? '—' : (quote.deliveryFeeFC == 0 ? 'Gratuit' : _fc(quote.deliveryFeeFC)),
+          ),
+          const SizedBox(height: 10),
+          _summaryRow(c, 'Total', quote == null ? '—' : _fc(quote.totalFC), emphasize: true),
+          if (_quoteError != null) ...[
+            const SizedBox(height: 12),
+            _buildQuoteError(c),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemRow(_CheckoutColors c, CartItem item, OrderQuote? quote) {
+    final line = quote?.lines.where((l) => l.productId == item.productId && l.variantId == item.variantId).firstOrNull;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            color: c.iconTile,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: c.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: item.imageUrl == null
+              ? Icon(Icons.shopping_bag_outlined, color: c.textSecondary)
+              : Image.network(
+                  item.imageUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(Icons.shopping_bag_outlined, color: c.textSecondary),
+                ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.productName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: c.text, fontWeight: FontWeight.w600, fontSize: 15)),
+              const SizedBox(height: 4),
+              Text(
+                [if (item.sellerName != null && item.sellerName!.isNotEmpty) item.sellerName!, 'Qté ${item.quantity}']
+                    .join(' · '),
+                style: TextStyle(color: c.textSecondary, fontSize: 13),
               ),
-              child: Column(
-                children: [
-                  ...cartItems.map((item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(child: Text('${item.productName} x${item.quantity}', style: const TextStyle(color: Colors.white), overflow: TextOverflow.ellipsis)),
-                        Text(exchangeNotifier.formatProductPrice(item.total), style: const TextStyle(color: Colors.grey)),
-                      ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          line == null ? '—' : _fc(line.lineTotalFC),
+          style: TextStyle(color: c.text, fontWeight: FontWeight.w600, fontSize: 15),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuoteError(_CheckoutColors c) {
+    return Row(
+      children: [
+        const Icon(Icons.error_outline, color: Color(0xFFE5484D), size: 18),
+        const SizedBox(width: 8),
+        Expanded(child: Text(_quoteError!, style: const TextStyle(color: Color(0xFFE5484D), fontSize: 13))),
+        TextButton(onPressed: _loadQuote, child: Text('Réessayer', style: TextStyle(color: c.accent))),
+      ],
+    );
+  }
+
+  Widget _buildDeliveryCard(_CheckoutColors c) {
+    final address = ref.watch(defaultAddressProvider);
+    if (_isPickup) {
+      return _card(
+        c,
+        child: _infoRow(c,
+            icon: Icons.storefront_outlined,
+            label: 'Retrait en boutique',
+            value: 'Présentez votre code au vendeur pour récupérer la commande'),
+      );
+    }
+    return _card(
+      c,
+      padding: EdgeInsets.zero,
+      child: _infoRow(
+        c,
+        icon: Icons.home_outlined,
+        label: address == null ? 'Adresse de livraison' : 'Livrer à · ${address.label}',
+        value: address == null ? 'Ajoutez une adresse pour être livré' : address.fullAddress,
+        detail: address?.referencePoint,
+        warning: address == null,
+        onTap: () async {
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressManagementPage()));
+          ref.read(addressProvider.notifier).loadAddresses();
+        },
+      ),
+    );
+  }
+
+  Widget _buildPaymentCard(_CheckoutColors c) {
+    final quote = _quote;
+    final walletSubtitle = quote == null
+        ? 'Solde en cours de chargement'
+        : quote.walletCovers
+            ? 'Solde : ${_fc(quote.walletBalanceFC)}'
+            : 'Solde insuffisant : ${_fc(quote.walletBalanceFC)}';
+    final mobileSubtitle = quote == null
+        ? 'Airtel, Orange, Vodacom (M-Pesa)'
+        : 'Frais Mobile Money : +${_fc(quote.mobileMoneyFeeFC)}';
+
+    return _card(
+      c,
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          _paymentOption(c,
+              value: 'wallet',
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Wallet Oli',
+              subtitle: walletSubtitle,
+              subtitleWarning: quote != null && !quote.walletCovers),
+          Divider(height: 1, indent: 64, color: c.border),
+          _paymentOption(c,
+              value: 'mobile_money',
+              icon: Icons.phone_android_rounded,
+              label: 'Mobile Money',
+              subtitle: mobileSubtitle),
+          if (_paymentMethod == 'mobile_money') ...[
+            Divider(height: 1, indent: 64, color: c.border),
+            _buildPhoneRow(c),
+          ],
+          Divider(height: 1, indent: 64, color: c.border),
+          _paymentOption(c,
+              value: 'card',
+              icon: Icons.credit_card_rounded,
+              label: 'Carte bancaire',
+              subtitle: 'Bientôt disponible',
+              enabled: false),
+        ],
+      ),
+    );
+  }
+
+  /// Numéro Mobile Money, prérempli avec celui du compte.
+  Widget _buildPhoneRow(_CheckoutColors c) {
+    if (!_isEditingPhone && _phoneController.text.isNotEmpty) {
+      return _infoRow(
+        c,
+        icon: Icons.person_outline_rounded,
+        label: 'Numéro débité',
+        value: _phoneController.text,
+        trailing: TextButton(
+          onPressed: () => setState(() => _isEditingPhone = true),
+          child: Text('Modifier', style: TextStyle(color: c.accent)),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: TextField(
+        controller: _phoneController,
+        autofocus: _isEditingPhone,
+        keyboardType: TextInputType.phone,
+        style: TextStyle(color: c.text),
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) => setState(() => _isEditingPhone = false),
+        decoration: InputDecoration(
+          labelText: 'Numéro Mobile Money',
+          hintText: '+243 81 000 0000',
+          labelStyle: TextStyle(color: c.textSecondary),
+          hintStyle: TextStyle(color: c.textSecondary.withValues(alpha: 0.6)),
+          prefixIcon: Icon(Icons.phone_outlined, color: c.textSecondary),
+          filled: true,
+          fillColor: c.iconTile,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: c.accent, width: 1.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPayBar(_CheckoutColors c) {
+    final amount = _amountToPay;
+    final blocker = _payBlocker;
+    final canPay = amount != null && blocker == null && !_isPaying && !_isQuoting;
+    return Container(
+      decoration: BoxDecoration(
+        color: c.card,
+        border: Border(top: BorderSide(color: c.border)),
+      ),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (blocker != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(blocker, style: const TextStyle(color: Color(0xFFE5484D), fontSize: 13)),
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('À payer', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                    Text(
+                      amount == null ? '—' : _fc(amount),
+                      style: TextStyle(color: c.text, fontSize: 20, fontWeight: FontWeight.w700),
                     ),
-                  )),
-                  const Divider(color: Colors.white10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Sous-total', style: TextStyle(color: Colors.grey)),
-                      Text(exchangeNotifier.formatProductPrice(subtotal), style: const TextStyle(color: Colors.white)),
-                    ],
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: 52,
+                width: 170,
+                child: ElevatedButton(
+                  onPressed: canPay ? _confirmOrder : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: c.accent,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: c.accent.withValues(alpha: 0.35),
+                    disabledForegroundColor: Colors.white70,
+                    shape: const StadiumBorder(),
+                    elevation: 0,
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Livraison', style: TextStyle(color: Colors.grey)),
-                      Text(exchangeNotifier.formatProductPrice(_deliveryFee), style: const TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Total', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text(exchangeNotifier.formatProductPrice(total), style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 18)),
-                    ],
-                  ),
+                  child: _isPaying
+                      ? const SizedBox(
+                          width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Payer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Briques visuelles ─────────────────────────────────────────────
+
+  Widget _card(_CheckoutColors c, {required Widget child, EdgeInsetsGeometry padding = const EdgeInsets.all(16)}) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border),
+        boxShadow: c.isDark
+            ? null
+            : const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 2))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+
+  Widget _sectionTitle(_CheckoutColors c, String title) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 10),
+        child: Text(title, style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w700)),
+      );
+
+  Widget _summaryRow(_CheckoutColors c, String label, String value, {bool emphasize = false}) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(label,
+              style: TextStyle(
+                color: emphasize ? c.text : c.textSecondary,
+                fontSize: emphasize ? 16 : 14,
+                fontWeight: emphasize ? FontWeight.w700 : FontWeight.w400,
+              )),
+        ),
+        Text(value,
+            style: TextStyle(
+              color: c.text,
+              fontSize: emphasize ? 17 : 14,
+              fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
+            )),
+      ],
+    );
+  }
+
+  Widget _iconTile(_CheckoutColors c, IconData icon, {Color? color}) => Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(color: c.iconTile, borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, color: color ?? c.text, size: 20),
+      );
+
+  /// Ligne façon Apple Pay : icône dans un carré, libellé, valeur et flèche.
+  Widget _infoRow(
+    _CheckoutColors c, {
+    required IconData icon,
+    required String label,
+    required String value,
+    String? detail,
+    bool warning = false,
+    VoidCallback? onTap,
+    Widget? trailing,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            _iconTile(c, icon, color: warning ? const Color(0xFFF59E0B) : null),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 2),
+                  Text(value, style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w500)),
+                  if (detail != null && detail.isNotEmpty)
+                    Text(detail, style: TextStyle(color: c.textSecondary, fontSize: 12)),
                 ],
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // --- ADRESSE DE LIVRAISON ---
-            _buildSectionTitle('Adresse de livraison'),
-            _buildAddressSection(),
-
-            const SizedBox(height: 24),
-
-            // --- MODE DE LIVRAISON (read-only — choisi sur la fiche produit) ---
-            _buildSectionTitle('Mode de livraison'),
-            _buildDeliveryReadOnly(),
-
-            const SizedBox(height: 24),
-
-            // --- MÉTHODE DE PAIEMENT ---
-            _buildSectionTitle('Méthode de paiement'),
-            _buildPaymentOption('wallet', 'Wallet OLI', Icons.account_balance_wallet, Colors.green),
-            _buildPaymentOption('card', 'Carte bancaire', Icons.credit_card, Colors.blue),
-            _buildPaymentOption('mobile_money', 'Mobile Money (Unipesa)', Icons.phone_android, Colors.orange),
-            if (_paymentMethod == 'mobile_money') ...[
-              const SizedBox(height: 12),
-              _buildMobileMoneyDetails(effectiveMobileMoneyPhone),
-            ],
-
-            const SizedBox(height: 32),
-
-            // --- BOUTON CONFIRMER ---
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : () => _confirmOrder(total),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: _isLoading
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : Text('Confirmer (${exchangeNotifier.formatProductPrice(total)})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ),
-
-            const SizedBox(height: 40),
+            if (trailing != null) trailing else if (onTap != null) Icon(Icons.chevron_right, color: c.textSecondary),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _buildAddressSection() {
-    final defaultAddr = ref.watch(defaultAddressProvider);
-    
-    if (defaultAddr == null) {
-      // Pas d'adresse enregistrée — inviter à en ajouter
-      return GestureDetector(
-        onTap: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressManagementPage()));
-          // Recharger les adresses au retour
-          ref.read(addressProvider.notifier).loadAddresses();
-        },
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1),
-          ),
+  Widget _paymentOption(
+    _CheckoutColors c, {
+    required String value,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    bool enabled = true,
+    bool subtitleWarning = false,
+  }) {
+    final selected = _paymentMethod == value;
+    return Opacity(
+      opacity: enabled ? 1 : 0.45,
+      child: InkWell(
+        onTap: enabled ? () => setState(() => _paymentMethod = value) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              Icon(Icons.add_location_alt, color: Colors.orange[300], size: 28),
+              _iconTile(c, icon, color: selected ? c.accent : null),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Aucune adresse enregistrée', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text('Appuyez pour ajouter une adresse de livraison', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                    Text(label, style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: TextStyle(
+                          color: subtitleWarning ? const Color(0xFFE5484D) : c.textSecondary,
+                          fontSize: 12,
+                        )),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios, color: Colors.grey[600], size: 16),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Adresse par défaut trouvée
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.location_on, color: Colors.blue, size: 20),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(defaultAddr.label, style: const TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.w600)),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () async {
-                  await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressManagementPage()));
-                  ref.read(addressProvider.notifier).loadAddresses();
-                },
-                child: const Text('Modifier', style: TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.w500)),
+              Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                color: selected ? c.accent : c.textSecondary,
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            defaultAddr.fullAddress,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-          ),
-          if (defaultAddr.referencePoint != null && defaultAddr.referencePoint!.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              '📍 ${defaultAddr.referencePoint}',
-              style: TextStyle(color: Colors.grey[400], fontSize: 12, fontStyle: FontStyle.italic),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentOption(String value, String label, IconData icon, Color color) {
-    final isSelected = _paymentMethod == value;
-    return GestureDetector(
-      onTap: () => setState(() => _paymentMethod = value),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(12),
-          border: isSelected ? Border.all(color: color, width: 2) : null,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 12),
-            Expanded(child: Text(label, style: const TextStyle(color: Colors.white))),
-            if (isSelected) Icon(Icons.check_circle, color: color),
-          ],
         ),
       ),
     );
   }
 
-  Widget _buildMobileMoneyDetails(String phone) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.phone_android, color: Colors.orange),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Paiement Mobile Money Unipesa',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsPage())),
-                child: const Text('Gérer', style: TextStyle(color: Colors.orange)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _mobileMoneyController,
-            keyboardType: TextInputType.phone,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              labelText: 'Numéro Unipesa',
-              hintText: '+243 820 000 000',
-              labelStyle: const TextStyle(color: Colors.grey),
-              hintStyle: TextStyle(color: Colors.grey.shade600),
-              filled: true,
-              fillColor: Colors.white10,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.orange)),
-            ),
-            onChanged: (value) => setState(() => _mobileMoneyPhone = value.trim()),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            phone.isNotEmpty
-                ? 'Nous utiliserons le numéro enregistré pour envoyer l’invitation USSD.'
-                : 'Renseignez le numéro de votre compte Mobile Money Unipesa.',
-            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
-          ),
-        ],
-      ),
+  // ─── Paiement ──────────────────────────────────────────────────────
+
+  Future<void> _confirmOrder() async {
+    final quote = _quote;
+    final amount = _amountToPay;
+    if (quote == null || amount == null || _payBlocker != null) return;
+
+    final address = ref.read(defaultAddressProvider);
+    final phone = _phoneController.text.trim();
+    final isMobileMoney = _paymentMethod == 'mobile_money';
+
+    final confirmed = await showPaymentConfirmationSheet(
+      context: context,
+      amountFC: amount,
+      paymentMethod: _paymentMethod,
+      walletBalanceFC: quote.walletBalanceFC,
+      mobileMoneyPhone: phone,
+      mobileMoneyFeeFC: isMobileMoney ? quote.mobileMoneyFeeFC : 0,
+      deliveryLabel: _isPickup ? 'Retrait en boutique' : (address?.fullAddress ?? ''),
+      formatFc: _fc,
     );
-  }
+    if (confirmed != true || !mounted) return;
 
-  /// Affiche en lecture seule la méthode de livraison choisie sur la fiche produit
-  Widget _buildDeliveryReadOnly() {
-    // Collecter les méthodes uniques choisies
-    final items = _checkoutItems;
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    // Regrouper par méthode
-    final Map<String, double> methodMap = {};
-    for (final item in items) {
-      methodMap[item.deliveryMethod] = (methodMap[item.deliveryMethod] ?? 0) + item.deliveryPrice;
-    }
-
-    return Column(
-      children: methodMap.entries.map((e) {
-        final isPickGo = e.key.toLowerCase().contains('pick') || e.value == 0;
-        final icon = isPickGo ? Icons.store_rounded : Icons.local_shipping_rounded;
-        final color = isPickGo ? Colors.green : Colors.blue;
-        final priceLabel = e.value == 0
-            ? 'Gratuit'
-            : ref.read(exchangeRateProvider.notifier).formatProductPrice(e.value);
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color, width: 2),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(e.key, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                    Text('Méthode sélectionnée', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-                  ],
-                ),
-              ),
-              Text(priceLabel, style: TextStyle(color: e.value == 0 ? Colors.green : Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(width: 8),
-              Icon(Icons.check_circle, color: color, size: 20),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Future<void> _confirmOrder(double total) async {
-    final defaultAddr = ref.read(defaultAddressProvider);
-    // Déterminer si un retrait en boutique est sélectionné
-    final deliveryMethod = widget.directPurchaseItem?.deliveryMethod
-        ?? (_checkoutItems.isNotEmpty ? _checkoutItems.first.deliveryMethod : 'Standard');
-    final isPickup = deliveryMethod.toLowerCase().contains('pick');
-    if (!isPickup && defaultAddr == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez ajouter une adresse de livraison'), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
-    final deliveryAddress = defaultAddr?.fullAddress ?? '';
-    // ✅ Utiliser le contrôleur comme source de vérité (pré-rempli OU saisi)
-    final mobileMoneyPhone = _paymentMethod == 'mobile_money'
-        ? _mobileMoneyController.text.trim()
-        : '';
-
-    if (_paymentMethod == 'mobile_money' && mobileMoneyPhone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez renseigner votre numéro Mobile Money'), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
-    if (_paymentMethod != 'card') {
-      final confirmed = await showPaymentConfirmationSheet(
-        context: context,
-        ref: ref,
-        totalAmount: total,
-        paymentMethod: _paymentMethod,
-        mobileMoneyPhone: mobileMoneyPhone,
-        deliveryAddress: deliveryAddress,
-      );
-
-      if (confirmed != true) return;
-    }
-
-    setState(() => _isLoading = true);
-
+    setState(() => _isPaying = true);
     try {
-      final orderService = ref.read(orderServiceProvider);
-      
-      // Convertir les items (panier ou achat direct) en OrderItems
-      final orderItems = _checkoutItems.map((item) => item.toOrderItem()).toList();
-      
-      final order = await orderService.createOrder(
-        items: orderItems,
-        deliveryAddress: deliveryAddress,
-        paymentMethod: _paymentMethod,
-        deliveryFee: _deliveryFee,
-        deliveryMethodId: widget.directPurchaseItem?.deliveryMethod
-            ?? (_checkoutItems.isNotEmpty ? _checkoutItems.first.deliveryMethod : 'Standard'),
-        mobileMoneyPhone: _paymentMethod == 'mobile_money' ? _mobileMoneyPhone : null,
-        mobileMoneyProvider: _paymentMethod == 'mobile_money' ? _mobileMoneyProvider : null,
-      );
-
-      if (order != null) {
-        // Vider le panier SEULEMENT si ce n'était pas un achat direct
-        if (widget.directPurchaseItem == null) {
-          ref.read(cartProvider.notifier).clearCart();
-        }
-        
-        // Rafraîchir la liste des commandes
-        ref.invalidate(ordersProvider);
-
-        if (!mounted) return;
-
-        // SI PAIEMENT CARTE -> Redirection vers écran Stripe
-        if (_paymentMethod == 'card') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => StripePaymentPage(order: order)),
+      final order = await ref.read(orderServiceProvider).createOrder(
+            items: _checkoutItems.map((item) => item.toOrderItem()).toList(),
+            deliveryAddress: _isPickup ? '' : (address?.fullAddress ?? ''),
+            paymentMethod: _paymentMethod,
+            deliveryFee: _deliveryFeeUsd,
+            deliveryMethodId: _deliveryMethod,
           );
-          return;
-        }
 
-        if (_paymentMethod == 'mobile_money') {
-          await _processMobileMoneyPayment(order, mobileMoneyPhone);
-          return;
-        }
+      if (widget.directPurchaseItem == null) ref.read(cartProvider.notifier).clearCart();
+      ref.invalidate(ordersProvider);
+      if (!mounted) return;
 
-        // WALLET -> Confirmation immediate
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => OrderSuccessPage(order: order)),
-        );
-      } else {
-        throw Exception('Erreur de création');
+      if (isMobileMoney) {
+        await _processMobileMoneyPayment(order, phone);
+        return;
       }
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OrderSuccessPage(order: order)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text(e.toString()), backgroundColor: const Color(0xFFE5484D)),
       );
+      // Le solde a pu changer : le devis est recalculé
+      _loadQuote();
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isPaying = false);
     }
   }
 
+  /// La commande existe (en attente) : on lance la demande Mobile Money et on suit son statut.
   Future<void> _processMobileMoneyPayment(Order order, String phone) async {
-    bool keepTrying = true;
-
-    while (keepTrying && mounted) {
-      setState(() => _isLoading = true);
-      
-      final unipesaResult = await ref.read(orderServiceProvider).payOrderMobileMoney(
-        orderId: order.id,
-        phone: phone,
-      );
-      
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      
-      if (unipesaResult == null) {
-        keepTrying = false;
-        showPaymentFailedSheet(
-          context: context,
-          reason: PaymentResult.failed,
-          onRetry: () => _processMobileMoneyPayment(order, phone),
-          onCancel: () {},
-        );
-        return;
-      }
-
-      final oliOrderId = unipesaResult['oliOrderId'] as String?;
-      if (oliOrderId == null) return;
-
-      final result = await showPaymentPendingSheet(
-        context: context,
-        ref: ref,
-        oliOrderId: oliOrderId,
-        phoneNumber: phone,
-        providerName: _mobileMoneyProvider,
-      );
-
-      if (!mounted) return;
-      keepTrying = false;
-
-      if (result == PaymentResult.success) {
-        showPaymentSuccessSheet(
-          context: context,
-          ref: ref,
-          order: order,
-          onDone: () => Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const PurchasesPage()), 
-            (route) => route.isFirst
-          ),
-        );
-      } else {
-        final reason = result ?? PaymentResult.cancelled;
-        showPaymentFailedSheet(
-          context: context, 
-          reason: reason,
-          onRetry: () => _processMobileMoneyPayment(order, phone),
-          onCancel: () {},
-        );
-      }
+    setState(() => _isPaying = true);
+    Map<String, dynamic>? operation;
+    String? error;
+    try {
+      operation = await ref.read(orderServiceProvider).payOrderMobileMoney(orderId: order.id, phone: phone);
+    } catch (e) {
+      error = e.toString();
     }
+    if (!mounted) return;
+    setState(() => _isPaying = false);
+
+    final oliOrderId = operation?['oliOrderId'] as String?;
+    if (oliOrderId == null) {
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error), backgroundColor: const Color(0xFFE5484D)),
+        );
+      }
+      showPaymentFailedSheet(
+        context: context,
+        reason: PaymentResult.failed,
+        onRetry: () => _processMobileMoneyPayment(order, phone),
+        onCancel: _openPurchases,
+      );
+      return;
+    }
+
+    final result = await showPaymentPendingSheet(
+      context: context,
+      ref: ref,
+      oliOrderId: oliOrderId,
+      phoneNumber: phone,
+      providerName: 'Mobile Money',
+    );
+    if (!mounted) return;
+
+    if (result == PaymentResult.success) {
+      showPaymentSuccessSheet(context: context, ref: ref, order: order, onDone: _openPurchases);
+    } else {
+      showPaymentFailedSheet(
+        context: context,
+        reason: result ?? PaymentResult.cancelled,
+        onRetry: () => _processMobileMoneyPayment(order, phone),
+        onCancel: _openPurchases,
+      );
+    }
+  }
+
+  void _openPurchases() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const PurchasesPage()),
+      (route) => route.isFirst,
+    );
   }
 }

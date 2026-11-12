@@ -5,6 +5,11 @@ const deliveryRepo = require('../repositories/delivery.repository');
 const exchangeRateService = require('./exchange-rate.service');
 const refundService = require('./refund.service');
 const { orderAmountToWallet } = require('../utils/order-currency');
+
+/** Marge ajoutée à une recharge Mobile Money de commande (reste sur le wallet). */
+const MOBILE_MONEY_ROUNDING_FC = 1;
+/** Commandes en cours de règlement Mobile Money sur cette instance. */
+const settlingOrders = new Set();
 const pool = require('../config/db');
 const crypto = require('crypto');
 
@@ -28,6 +33,10 @@ class OrderService {
         // Validation de base
         if (!items || !Array.isArray(items) || items.length === 0) {
             throw this._badRequest("Items requis");
+        }
+        // Le paiement par carte n'est qu'une simulation : une commande créée ainsi ne serait jamais réglée
+        if (!['wallet', 'mobile_money'].includes(paymentMethod)) {
+            throw this._badRequest('Ce moyen de paiement sera bientôt disponible. Payez avec votre wallet Oli ou Mobile Money.');
         }
 
         // [SÉCU C1/C2] Les prix viennent de la base, jamais du client.
@@ -138,6 +147,124 @@ class OrderService {
     }
 
     /**
+     * Devis exact d'une commande, calculé comme à la création : prix catalogue,
+     * livraison, taux du jour, montant débité en FC et frais Mobile Money.
+     */
+    async quoteOrder(userId, { items, deliveryFee }) {
+        if (!Array.isArray(items) || items.length === 0) throw this._badRequest('Items requis');
+        const { items: pricedItems, itemsTotal } = await this._priceItemsFromCatalogue(items, userId);
+        const safeDeliveryFee = Math.max(0, parseFloat(deliveryFee) || 0);
+        const totalUsd = itemsTotal + safeDeliveryFee;
+        const exchangeRate = await this._getOrderExchangeRate();
+        const totalFC = orderAmountToWallet(totalUsd, exchangeRate);
+        const { FEES } = require('../config/index');
+        // Même calcul que la recharge lancée par payOrderByMobileMoney
+        const mobileMoneyNetFC = totalFC + MOBILE_MONEY_ROUNDING_FC;
+        const mobileMoneyFeeFC = MOBILE_MONEY_ROUNDING_FC
+            + Math.round(mobileMoneyNetFC * FEES.AGGREGATOR_DEPOSIT_RATE)
+            + Math.round(mobileMoneyNetFC * FEES.OLI_DEPOSIT_RATE);
+        const walletBalanceFC = parseFloat(await walletService.getBalance(userId)) || 0;
+
+        return {
+            items: pricedItems.map((it) => ({
+                productId: it.productId,
+                variantId: it.variantId || null,
+                productName: it.productName,
+                quantity: it.quantity,
+                unitPriceUsd: it.price,
+                lineTotalFC: orderAmountToWallet(it.price * it.quantity, exchangeRate),
+            })),
+            itemsTotalUsd: itemsTotal,
+            deliveryFeeUsd: safeDeliveryFee,
+            itemsTotalFC: orderAmountToWallet(itemsTotal, exchangeRate),
+            deliveryFeeFC: orderAmountToWallet(safeDeliveryFee, exchangeRate),
+            totalUsd,
+            totalFC,
+            exchangeRate,
+            walletBalanceFC,
+            mobileMoneyFeeFC,
+            mobileMoneyTotalFC: totalFC + mobileMoneyFeeFC,
+        };
+    }
+
+    /**
+     * Paiement d'une commande par Mobile Money : une recharge Unipesa du montant exact
+     * (frais de recharge en plus) est lancée ; à la confirmation signée par Unipesa,
+     * la commande est réglée depuis le wallet (voir settleMobileMoneyOrder).
+     */
+    async payOrderByMobileMoney(userId, orderId, phone) {
+        const cleanPhone = typeof phone === 'string' ? phone.replace(/[\s.-]/g, '') : '';
+        if (!/^\+?\d{9,15}$/.test(cleanPhone)) throw this._badRequest('Numéro Mobile Money invalide');
+
+        const { rows } = await pool.query(
+            'SELECT id, user_id, total_amount, exchange_rate, payment_status, payment_method, status FROM orders WHERE id = $1',
+            [orderId]
+        );
+        const order = rows[0];
+        if (!order || Number(order.user_id) !== Number(userId)) {
+            const notFound = new Error('Commande non trouvée');
+            notFound.status = 404;
+            throw notFound;
+        }
+        if (order.payment_status === 'completed') throw this._badRequest('Commande déjà payée');
+        if (order.status === 'cancelled') throw this._badRequest('Commande annulée');
+
+        const amountFC = orderAmountToWallet(order.total_amount, order.exchange_rate);
+        const unipesaService = require('./unipesa.service');
+        // +1 FC : le crédit (brut / 1,06) ne doit jamais tomber sous le montant de la commande à cause des arrondis
+        const result = await unipesaService.initiateDeposit(userId, cleanPhone, amountFC + MOBILE_MONEY_ROUNDING_FC, order.exchange_rate, { orderId: order.id });
+        await pool.query("UPDATE orders SET payment_method = 'mobile_money', updated_at = NOW() WHERE id = $1", [order.id]);
+        return result;
+    }
+
+    /**
+     * Appelé après la confirmation d'une recharge Unipesa liée à une commande :
+     * le wallet vient d'être crédité, la commande est réglée depuis celui-ci.
+     * Si le règlement échoue, l'argent reste sur le wallet de l'acheteur.
+     */
+    async settleMobileMoneyOrder(orderId, userId, io = null) {
+        // Webhook rejoué en même temps : une seule exécution par commande
+        if (settlingOrders.has(orderId)) return { settled: false, reason: 'in_progress' };
+        settlingOrders.add(orderId);
+        try {
+            return await this._settleMobileMoneyOrder(orderId, userId, io);
+        } finally {
+            settlingOrders.delete(orderId);
+        }
+    }
+
+    async _settleMobileMoneyOrder(orderId, userId, io) {
+        const { rows } = await pool.query(
+            'SELECT id, user_id, total_amount, exchange_rate, payment_status, status FROM orders WHERE id = $1',
+            [orderId]
+        );
+        const order = rows[0];
+        if (!order || Number(order.user_id) !== Number(userId)) return { settled: false, reason: 'order_not_found' };
+        if (order.payment_status === 'completed') return { settled: true, alreadyPaid: true };
+        if (order.status === 'cancelled') return { settled: false, reason: 'order_cancelled' };
+
+        const amountFC = orderAmountToWallet(order.total_amount, order.exchange_rate);
+        await walletService.payOrder(userId, amountFC, order.id);
+        await this._markOrderPaid(order.id, io);
+        return { settled: true };
+    }
+
+    /** Commande réglée : statuts, codes de retrait et de livraison, puis notifications. */
+    async _markOrderPaid(orderId, io = null) {
+        await orderRepository.updatePaymentStatus(orderId, 'completed');
+        await orderRepository.updateOrderStatus(orderId, 'paid');
+        await pool.query(
+            'UPDATE orders SET pickup_code = $1, delivery_code = $2 WHERE id = $3 AND pickup_code IS NULL',
+            [this.generateVerificationCode(), this.generateVerificationCode(), orderId]
+        );
+        try {
+            await this.notifyOrderPaid(orderId, io);
+        } catch (err) {
+            console.error('⚠️ Erreur notifyOrderPaid (non-bloquante):', err.message);
+        }
+    }
+
+    /**
      * Erreur métier renvoyée au client avec un statut 400 (et non 500).
      */
     _badRequest(message) {
@@ -169,6 +296,18 @@ class OrderService {
      *
      * @returns {Promise<{items: Array, itemsTotal: number}>}
      */
+    /** Variantes actives demandées par le panier, indexées par identifiant. */
+    async _loadVariants(items) {
+        const ids = [...new Set(items.map((i) => i.variantId).filter(Boolean).map(String))];
+        if (!ids.length) return new Map();
+        const { rows } = await pool.query(
+            `SELECT id::text AS id, product_id, variant_value, price_adjustment
+             FROM product_variants WHERE id::text = ANY($1::text[]) AND is_active = TRUE`,
+            [ids]
+        );
+        return new Map(rows.map((v) => [v.id, v]));
+    }
+
     async _priceItemsFromCatalogue(items, buyerId) {
         const MAX_QTY_PER_LINE = 1000;
         const parsed = items.map((item) => {
@@ -184,11 +323,17 @@ class OrderService {
         });
 
         const uniqueIds = [...new Set(parsed.map((i) => i.productId))];
-        const res = await pool.query(
-            'SELECT id, name, price, status FROM products WHERE id = ANY($1::int[])',
-            [uniqueIds]
-        );
+        // Le prix facturé est celui affiché : promotion en cours comprise
+        const res = await pool.query(`
+            SELECT id, name, price, status,
+                   CASE WHEN discount_price > 0 AND discount_price < price
+                             AND (discount_start_date IS NULL OR discount_start_date <= NOW())
+                             AND (discount_end_date IS NULL OR discount_end_date >= NOW())
+                        THEN discount_price END AS active_discount_price
+            FROM products WHERE id = ANY($1::int[])
+        `, [uniqueIds]);
         const byId = new Map(res.rows.map((p) => [p.id, p]));
+        const variantsById = await this._loadVariants(parsed);
 
         const videosById = await this._loadOriginVideos(parsed);
 
@@ -200,7 +345,16 @@ class OrderService {
             if (product.status !== 'active') {
                 throw this._badRequest(`Produit indisponible : ${product.name}`);
             }
-            const price = parseFloat(product.price);
+            const basePrice = parseFloat(product.active_discount_price ?? product.price);
+            // Variante choisie : son supplément s'ajoute, et elle doit appartenir au produit
+            let variant = null;
+            if (item.variantId) {
+                variant = variantsById.get(String(item.variantId));
+                if (!variant || variant.product_id !== item.productId) {
+                    throw this._badRequest(`Variante indisponible pour ${product.name}`);
+                }
+            }
+            const price = Math.round((basePrice + (variant ? parseFloat(variant.price_adjustment) || 0 : 0)) * 100) / 100;
             if (!Number.isFinite(price) || price <= 0) {
                 throw this._badRequest(`Prix invalide pour le produit #${item.productId}`);
             }
@@ -213,7 +367,7 @@ class OrderService {
 
             return {
                 ...item,
-                productName: product.name,
+                productName: variant ? `${product.name} (${variant.variant_value})` : product.name,
                 price,
                 originVideoId: isValidOrigin ? originVideo.id : null,
             };

@@ -152,6 +152,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       deliveryPrice: _selectedShipping?.cost ?? 0.0,
       deliveryMethod: _selectedShipping?.label ?? 'Standard',
       originVideoId: widget.originVideoId,
+      variantId: _selectedVariant?.id,
     );
     
     ref.read(cartProvider.notifier).addItem(cartItem);
@@ -197,6 +198,7 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
       deliveryPrice: _selectedShipping?.cost ?? p.deliveryPrice,
       deliveryMethod: _selectedShipping?.label ?? 'Standard',
       originVideoId: widget.originVideoId,
+      variantId: _selectedVariant?.id,
     );
     
     Navigator.push(

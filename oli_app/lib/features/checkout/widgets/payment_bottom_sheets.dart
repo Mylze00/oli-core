@@ -8,7 +8,6 @@ import 'package:audioplayers/audioplayers.dart';
 import '../../../models/order_model.dart';
 import '../../../providers/exchange_rate_provider.dart';
 import '../../../core/storage/secure_storage_service.dart';
-import '../../orders/screens/purchases_page.dart';
 
 // --- STYLES COMMUNS ---
 final _sheetShape = const RoundedRectangleBorder(
@@ -19,129 +18,154 @@ const _sheetBgColor = Color(0xFF141414);
 // ---------------------------------------------------------
 // 1. CONFIRMATION SHEET (Dernière lecture avant validation)
 // ---------------------------------------------------------
+/// Dernière lecture avant de payer, façon Apple Pay : moyen de paiement, numéro,
+/// adresse puis montant exact. Suit le mode clair ou sombre de l'app.
 Future<bool?> showPaymentConfirmationSheet({
   required BuildContext context,
-  required WidgetRef ref,
-  required double totalAmount,
+  required double amountFC,
   required String paymentMethod,
+  required double walletBalanceFC,
   required String mobileMoneyPhone,
-  required String deliveryAddress,
+  required double mobileMoneyFeeFC,
+  required String deliveryLabel,
+  required String Function(num) formatFc,
 }) {
-  final ex = ref.read(exchangeRateProvider.notifier);
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final sheetColor = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7);
+  final rowColor = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+  final text = isDark ? Colors.white : const Color(0xFF111418);
+  final secondary = isDark ? const Color(0xFF9A9AA0) : const Color(0xFF6B7280);
+  final tile = isDark ? const Color(0x1AFFFFFF) : const Color(0xFFF1F3F6);
+  final accent = isDark ? const Color(0xFF3B8EF0) : const Color(0xFF1A5DE6);
   final isMobileMoney = paymentMethod == 'mobile_money';
-  final paymentLabel = isMobileMoney ? 'Mobile Money (Unipesa)' : (paymentMethod == 'wallet' ? 'Wallet OLI' : 'Carte Bancaire');
+
+  Widget row({required IconData icon, required String label, required String value, String? detail}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(color: rowColor, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: tile, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: text, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(color: secondary, fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(value, style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w500)),
+                if (detail != null)
+                  Text(detail, style: TextStyle(color: secondary, fontSize: 13)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _sheetBgColor,
+    backgroundColor: sheetColor,
     shape: _sheetShape,
     builder: (ctx) {
-      return Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Confirmer le paiement',
-              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 24),
-            
-            // Montant Total
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blueAccent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  const Text('Montant total', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                  Text(
-                    ex.formatProductPrice(totalAmount),
-                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                  Text('Oli Pay', style: TextStyle(color: text, fontSize: 24, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  InkWell(
+                    onTap: () => Navigator.pop(ctx, false),
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(color: tile, shape: BoxShape.circle),
+                      child: Icon(Icons.close, color: secondary, size: 18),
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
-
-            // Détails
-            _buildDetailRow('Méthode', paymentLabel, Icons.payment),
-            if (isMobileMoney) ...[
-              const SizedBox(height: 12),
-              _buildDetailRow('Numéro', mobileMoneyPhone, Icons.phone_android, color: Colors.orange),
+              const SizedBox(height: 16),
+              if (isMobileMoney)
+                row(
+                  icon: Icons.phone_android_rounded,
+                  label: 'Mobile Money',
+                  value: mobileMoneyPhone,
+                  detail: 'Validez la demande reçue sur ce téléphone',
+                )
+              else
+                row(
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: 'Wallet Oli',
+                  value: 'Solde ${formatFc(walletBalanceFC)}',
+                  detail: 'Après paiement : ${formatFc(walletBalanceFC - amountFC)}',
+                ),
+              row(
+                icon: Icons.home_outlined,
+                label: deliveryLabel == 'Retrait en boutique' ? 'Retrait' : 'Livrer à',
+                value: deliveryLabel.isEmpty ? '—' : deliveryLabel,
+              ),
+              if (isMobileMoney && mobileMoneyFeeFC > 0)
+                row(
+                  icon: Icons.receipt_long_outlined,
+                  label: 'Frais Mobile Money (opérateur et Oli)',
+                  value: '+${formatFc(mobileMoneyFeeFC)}',
+                ),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                decoration: BoxDecoration(color: rowColor, borderRadius: BorderRadius.circular(14)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Payer OLI', style: TextStyle(color: secondary, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text(
+                      formatFc(amountFC),
+                      style: TextStyle(color: text, fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: Colors.white,
+                    shape: const StadiumBorder(),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    isMobileMoney ? 'Envoyer la demande de paiement' : 'Confirmer le paiement',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
             ],
-            const SizedBox(height: 12),
-            _buildDetailRow('Livraison', deliveryAddress, Icons.location_on_outlined),
-            
-            const SizedBox(height: 32),
-            
-            // Boutons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white70,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: BorderSide(color: Colors.grey[800]!),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Annuler', style: TextStyle(fontSize: 16)),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Payer', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: MediaQuery.of(ctx).padding.bottom),
-          ],
+          ),
         ),
       );
     },
-  );
-}
-
-Widget _buildDetailRow(String label, String value, IconData icon, {Color? color}) {
-  return Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Icon(icon, color: color ?? Colors.grey[500], size: 20),
-      const SizedBox(width: 12),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-            const SizedBox(height: 2),
-            Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
-          ],
-        ),
-      ),
-    ],
   );
 }
 
