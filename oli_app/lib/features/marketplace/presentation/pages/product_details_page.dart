@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../core/deep_links/product_link.dart';
 import '../../../cart/screens/cart_page.dart';
+import '../../../../widgets/cart_added_toast.dart';
 import '../../../../app/theme/theme_provider.dart';
 import '../../../../config/api_config.dart';
 import '../../providers/market_provider.dart';
@@ -171,27 +172,11 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
     );
     
     ref.read(cartProvider.notifier).addItem(cartItem);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text('${p.name} ajouté au panier')),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'Voir le panier',
-          textColor: Colors.white,
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage())),
-        ),
-      )
+
+    // Animation au centre (s'efface seule) ; un toucher ouvre le panier
+    CartAddedToast.show(
+      context,
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage())),
     );
   }
 

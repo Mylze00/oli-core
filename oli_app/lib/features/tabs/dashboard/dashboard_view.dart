@@ -392,8 +392,9 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
-    // Accueil en mode clair : gris renforcé de 15 % (#F5F6F8 → #D0D1D3), propre à cette page
-    final backgroundColor = isDark ? Colors.black : const Color(0xFFD0D1D3);
+    // Accueil en mode clair : gris très léger, atteint par un dégradé depuis le blanc
+    // de la barre du haut (pas de coupure nette). Propre à cette page.
+    final backgroundColor = isDark ? Colors.black : const Color(0xFFECEDF0);
     final textColor = isDark ? Colors.white : Colors.black87;
 
     // Providers de données
@@ -482,7 +483,18 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
       ),
       child: Scaffold(
         backgroundColor: backgroundColor,
-        body: Stack(
+        body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: isDark
+              ? null
+              : LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.white, Colors.white, backgroundColor],
+                  stops: const [0.0, 0.12, 0.4],
+                ),
+        ),
+        child: Stack(
         children: [
           // ── Contenu principal scrollable ──
           OliRefreshIndicator(
@@ -521,7 +533,8 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
                   pinned: true,
                   delegate: QuickActionsDelegate(
                     child: QuickActionsRow(onCategoryTap: _toggleCategories),
-                    backgroundColor: backgroundColor ?? Colors.black,
+                    // Mode clair : blanc, comme la barre du haut (fondu avec le dégradé)
+                    backgroundColor: isDark ? (backgroundColor ?? Colors.black) : Colors.white,
                     isScrolled: _isScrolled,
                   ),
                 ),
@@ -739,6 +752,7 @@ class MainDashboardViewState extends ConsumerState<MainDashboardView>
             ),
           ],
         ],
+      ),
       ),
     ),
     );
