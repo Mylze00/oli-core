@@ -39,6 +39,12 @@ exports.sendOtp = async (req, res) => {
 
     } catch (e) {
         console.error("Erreur send-otp:", e);
+        if (e.code === "SMS_FAILED") {
+            // Le code est enregistré mais le SMS n'est pas parti : message clair pour l'utilisateur
+            return res.status(502).json({
+                error: "Impossible d'envoyer le SMS pour le moment. Vérifiez le numéro et réessayez dans quelques instants.",
+            });
+        }
         res.status(500).json({ error: "Erreur serveur" });
     }
 };
