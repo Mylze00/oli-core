@@ -1,4 +1,5 @@
 const userRepo = require("../repositories/user.repository");
+const smsService = require("./sms.service");
 
 /**
  * Génère un OTP à 6 chiffres sous forme de String
@@ -37,6 +38,16 @@ async function sendOtp(phone, expiresMinutes = 5) {
 
     // 3. Sauvegarder en base de données via le repository
     await userRepo.saveOtp(user.id, otpCode, expiresAt);
+
+    // 4. Envoyer le code par SMS (Infobip). Jamais pour le compte examinateur,
+    //    dont le code est fixe. Sans configuration Infobip : comportement d'avant.
+    if (!review) {
+      if (smsService.isConfigured()) {
+        await smsService.sendOtpSms(phone, otpCode, ttl);
+      } else {
+        console.warn("⚠️ [OTP] Infobip non configuré (INFOBIP_API_KEY / INFOBIP_BASE_URL) : aucun SMS envoyé");
+      }
+    }
 
     // ✅ Logs pour le débogage
     console.log(
