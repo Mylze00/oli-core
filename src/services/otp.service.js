@@ -50,9 +50,13 @@ async function sendOtp(phone, expiresMinutes = 5) {
     }
 
     // ✅ Logs pour le débogage
-    console.log(
-      `✅ [OTP] Code généré: ${review ? "(compte examinateur)" : otpCode} pour ${phone}`
-    );
+    // [SÉCU] En production, ni le code ni le numéro complet n'apparaissent dans les logs
+    const shownCode = review
+      ? "(compte examinateur)"
+      : process.env.NODE_ENV === "production" ? "******" : otpCode;
+    const shownPhone =
+      process.env.NODE_ENV === "production" ? `${phone.slice(0, 7)}***${phone.slice(-2)}` : phone;
+    console.log(`✅ [OTP] Code généré: ${shownCode} pour ${shownPhone}`);
     console.log(`⏱️ [OTP] Expire à: ${expiresAt.toLocaleTimeString()}`);
 
     return { user, otpCode }; // 👈 Retourner le code aussi
@@ -67,7 +71,7 @@ async function sendOtp(phone, expiresMinutes = 5) {
  */
 async function verifyOtp(phone, otpCode) {
   try {
-    console.log(`[OTP SERVICE] 🔐 Tentative de vérification : ${phone} avec le code ${otpCode}`);
+    console.log(`[OTP SERVICE] 🔐 Tentative de vérification : ${process.env.NODE_ENV === "production" ? String(phone).slice(0, 7) + "***" : phone + " avec le code " + otpCode}`);
 
     // 1. Appeler le repository pour vérifier la correspondance phone/code/expiration
     const user = await userRepo.verifyOtp(phone, otpCode);

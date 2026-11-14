@@ -60,7 +60,7 @@ exports.verifyOtp = async (req, res) => {
             return res.status(400).json({ error: "Téléphone et code OTP requis" });
         }
 
-        console.log("🔐 VERIFY OTP:", phone, otpCode);
+        console.log("🔐 VERIFY OTP:", process.env.NODE_ENV === "production" ? `${String(phone).slice(0, 7)}***` : `${phone} ${otpCode}`);
 
         const result = await otpService.verifyOtp(phone, otpCode);
 
