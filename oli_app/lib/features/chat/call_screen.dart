@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'dart:ui';
@@ -959,7 +960,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
           if (widget.otherAvatarUrl != null &&
               widget.otherAvatarUrl!.isNotEmpty &&
               !_showRemoteVideo)
-            Image.network(
+            OliImage.network(
               widget.otherAvatarUrl!,
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => _buildGradientBg(),

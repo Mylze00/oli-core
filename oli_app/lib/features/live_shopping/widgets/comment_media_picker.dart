@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/video_sale_model.dart';
@@ -158,7 +159,7 @@ class CommentMediaPicker extends ConsumerWidget {
         onTap: () => onSticker(sticker),
         child: Padding(
           padding: const EdgeInsets.all(4),
-          child: Image.network(
+          child: OliImage.network(
             sticker.imageUrl,
             fit: BoxFit.contain,
             cacheWidth: 180,

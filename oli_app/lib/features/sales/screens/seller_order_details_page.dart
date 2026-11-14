@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/theme/oli_surface.dart';
@@ -426,7 +427,7 @@ class _SellerOrderDetailsPageState
             child: item.productImageUrl != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
+                    child: OliImage.network(
                       item.productImageUrl!,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) =>

@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -567,7 +568,7 @@ class _SearchResultsPageState extends ConsumerState<SearchResultsPage> {
                         ),
                         clipBehavior: Clip.antiAlias,
                         child: s.avatar != null && s.avatar!.isNotEmpty
-                            ? Image.network(s.avatar!,
+                            ? OliImage.network(s.avatar!,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => _initial(s.name))
                             : _initial(s.name),

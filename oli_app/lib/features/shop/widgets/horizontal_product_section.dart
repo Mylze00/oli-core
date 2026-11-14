@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../../../models/product_model.dart';
 import '../../marketplace/presentation/pages/product_details_page.dart';
@@ -67,7 +68,7 @@ class HorizontalProductSection extends StatelessWidget {
                               ClipRRect(
                                 borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                                 child: product.images.isNotEmpty 
-                                  ? Image.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
+                                  ? OliImage.network(product.images.first, fit: BoxFit.cover, width: double.infinity)
                                   : const Center(child: Icon(Icons.image, color: Colors.grey)),
                               ),
                               Positioned(

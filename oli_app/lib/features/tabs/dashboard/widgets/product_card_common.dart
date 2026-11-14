@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
@@ -51,7 +52,7 @@ class DashboardProductCard extends ConsumerWidget {
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                   child: product.images.isNotEmpty
-                    ? Image.network(
+                    ? OliImage.network(
                         CloudinaryHelper.card(product.images.first),
                         fit: BoxFit.cover,
                         width: double.infinity,

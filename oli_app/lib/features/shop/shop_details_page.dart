@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -301,7 +302,7 @@ class _ShopDetailsPageContentState extends ConsumerState<_ShopDetailsPageContent
                 children: [
                    // Bannière
                   widget.shop.bannerUrl != null
-                      ? Image.network(widget.shop.bannerUrl!, fit: BoxFit.cover)
+                      ? OliImage.network(widget.shop.bannerUrl!, fit: BoxFit.cover)
                       : Container(color: Colors.grey[850]),
                   // Dégradé sombre
                   Container(
@@ -347,7 +348,7 @@ class _ShopDetailsPageContentState extends ConsumerState<_ShopDetailsPageContent
                               decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                               child: ClipOval(
                                 child: widget.shop.logoUrl != null
-                                    ? Image.network(widget.shop.logoUrl!, fit: BoxFit.cover)
+                                    ? OliImage.network(widget.shop.logoUrl!, fit: BoxFit.cover)
                                     : const Icon(Icons.store, size: 40),
                               ),
                             ),

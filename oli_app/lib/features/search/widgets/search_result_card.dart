@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../../../utils/price_color.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -82,7 +83,7 @@ class SearchResultCard extends ConsumerWidget {
                         color: Colors.grey[200],
                         child: const Icon(Icons.image, size: 40, color: Colors.grey),
                       )
-                    : Image.network(
+                    : OliImage.network(
                         product.images[0],
                         fit: BoxFit.cover,
                         // Décoder à 180px max (≈60% résolution) pour économiser la data

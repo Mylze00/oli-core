@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -836,7 +837,7 @@ class _VideoUploadPageState extends ConsumerState<VideoUploadPage> {
         color: colors.border,
         child: image == null
             ? placeholder
-            : Image.network(
+            : OliImage.network(
                 CloudinaryHelper.xsmall(image),
                 fit: BoxFit.cover,
                 cacheWidth: 120,

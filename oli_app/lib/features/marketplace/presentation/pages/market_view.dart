@@ -12,6 +12,7 @@ import '../../../../app/theme/theme_provider.dart';
 import '../../../tabs/dashboard/widgets/verified_shops_carousel.dart';
 import '../../../tabs/dashboard/widgets/product_sections.dart';
 import '../../../tabs/dashboard/providers/shops_provider.dart';
+import '../../../../models/shop_model.dart';
 import '../../../tabs/dashboard/widgets/category_glass_section.dart';
 import '../../../../core/theme/oli_colors.dart';
 
@@ -302,7 +303,32 @@ class MarketViewState extends ConsumerState<MarketView> {
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: productsAsync.when(
+      body: Stack(
+        children: [
+          Positioned.fill(child: _buildBody(productsAsync, verifiedShops, verifiedShopsProducts, textColor, isDark)),
+          // Fond sous la barre d'état (heure, batterie) : la barre de recherche se masque
+          // au défilement, sans ce fond les produits passaient sous l'heure. Même couleur
+          // que la barre de recherche, donc invisible quand elle est affichée.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: MediaQuery.paddingOf(context).top,
+            child: ColoredBox(color: isDark ? const Color(0xFF121212) : Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(
+    AsyncValue<List<Product>> productsAsync,
+    List<Shop> verifiedShops,
+    List<Product> verifiedShopsProducts,
+    Color textColor,
+    bool isDark,
+  ) {
+    return productsAsync.when(
         // ── LOADING ──
         loading: () => _buildShell(textColor, isDark, [
           const SliverFillRemaining(
@@ -442,7 +468,6 @@ class MarketViewState extends ConsumerState<MarketView> {
             ),
           );
         },
-      ),
     );
   }
 

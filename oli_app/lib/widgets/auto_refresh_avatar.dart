@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../../../config/api_config.dart';
 
@@ -59,7 +60,7 @@ class AutoRefreshAvatar extends StatelessWidget {
   Widget _buildImageWidget(String url) {
     // Si c'est une image base64 (prévisualisation locale)
     if (url.startsWith('data:image')) {
-      return Image.network(
+      return OliImage.network(
         url,
         key: ValueKey(url), // Force rebuild avec nouvelle URL
         fit: BoxFit.cover,
@@ -68,7 +69,7 @@ class AutoRefreshAvatar extends StatelessWidget {
     }
 
     // Image depuis Cloudinary ou serveur
-    return Image.network(
+    return OliImage.network(
       url,
       key: ValueKey(url), // Force rebuild quand l'URL change
       fit: BoxFit.cover,

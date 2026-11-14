@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import '../widgets/oticket_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -122,7 +123,7 @@ class _EventDetailPageState extends ConsumerState<EventDetailPage> {
         minHeight: 220,
         maxHeight: MediaQuery.of(context).size.height * 0.6,
       ),
-      child: Image.network(
+      child: OliImage.network(
         url,
         width: double.infinity,
         fit: BoxFit.contain,

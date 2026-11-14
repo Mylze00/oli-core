@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../../../core/theme/oli_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -210,7 +211,7 @@ class _CartItemRow extends ConsumerWidget {
           if (item.imageUrl != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
+              child: OliImage.network(
                 item.imageUrl!,
                 width: 44,
                 height: 44,

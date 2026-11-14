@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
@@ -177,7 +178,7 @@ class _MarketSecondhandCarouselState
                         SizedBox(
                           height: imgH,
                           width: double.infinity,
-                          child: Image.network(
+                          child: OliImage.network(
                             CloudinaryHelper.thumbnail(
                               product.images.first,
                               width: 200,

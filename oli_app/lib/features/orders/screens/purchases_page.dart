@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -420,7 +421,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             clipBehavior: Clip.antiAlias,
             child: item.imageUrl == null
                 ? Icon(Icons.shopping_bag_outlined, color: c.textSecondary, size: 22)
-                : Image.network(
+                : OliImage.network(
                     item.imageUrl!,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Icon(Icons.shopping_bag_outlined, color: c.textSecondary, size: 22),

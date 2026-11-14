@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -181,7 +182,7 @@ class _FeedCommentsBottomSheetState extends ConsumerState<FeedCommentsBottomShee
                                         alignment: Alignment.center,
                                         child: const Icon(Icons.play_circle_fill, size: 40, color: Colors.white70),
                                       )
-                                    : Image.network(
+                                    : OliImage.network(
                                         comment['media_url'],
                                         height: 150,
                                         width: double.infinity,

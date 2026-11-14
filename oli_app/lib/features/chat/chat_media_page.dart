@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -90,7 +91,7 @@ class ChatMediaPage extends StatelessWidget {
                         context,
                         MaterialPageRoute(builder: (_) => ChatImageViewer(imageUrl: images[i])),
                       ),
-                      child: Image.network(
+                      child: OliImage.network(
                         _gridThumbnail(images[i]),
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => const ColoredBox(

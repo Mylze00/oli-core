@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -213,7 +214,7 @@ class _AllShopsPageState extends ConsumerState<AllShopsPage> {
                 ),
                 child: shop.logoUrl != null
                     ? ClipOval(
-                        child: Image.network(
+                        child: OliImage.network(
                           shop.logoUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => _initial(shop),

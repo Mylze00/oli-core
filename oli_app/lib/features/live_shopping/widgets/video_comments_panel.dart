@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
@@ -606,7 +607,7 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
                   if (comment.imageUrl != null && comment.isSticker)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Image.network(
+                      child: OliImage.network(
                         comment.imageUrl!,
                         width: 110,
                         height: 110,
@@ -620,7 +621,7 @@ class _VideoCommentsPanelState extends ConsumerState<VideoCommentsPanel> {
                       padding: const EdgeInsets.only(top: 6),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
+                        child: OliImage.network(
                           CloudinaryHelper.medium(comment.imageUrl!),
                           width: 160,
                           height: 160,

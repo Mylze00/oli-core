@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -89,7 +90,7 @@ class ProgressiveChatImage extends StatelessWidget {
                 if (thumbnailUrl != null)
                   ImageFiltered(
                     imageFilter: ImageFilter.blur(sigmaX: _thumbnailBlur, sigmaY: _thumbnailBlur),
-                    child: Image.network(
+                    child: OliImage.network(
                       thumbnailUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12),
@@ -97,7 +98,7 @@ class ProgressiveChatImage extends StatelessWidget {
                   )
                 else
                   const ColoredBox(color: Colors.black12),
-                Image.network(
+                OliImage.network(
                   url,
                   fit: BoxFit.cover,
                   frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {

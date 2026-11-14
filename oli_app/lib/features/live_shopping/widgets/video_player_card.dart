@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
@@ -553,7 +554,7 @@ class _VideoPlayerCardState extends ConsumerState<VideoPlayerCard> {
                         color: Color(0xFF222222),
                         child: Icon(Icons.image, color: Colors.white38),
                       )
-                    : Image.network(
+                    : OliImage.network(
                         CloudinaryHelper.card(image),
                         fit: BoxFit.cover,
                         cacheWidth: 180,

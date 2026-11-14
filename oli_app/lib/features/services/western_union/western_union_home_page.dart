@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'western_union_send_page.dart';
 import 'western_union_receive_page.dart';
@@ -201,7 +202,7 @@ class _WesternUnionHomePageState extends State<WesternUnionHomePage> {
                             child: Container(
                               width: double.infinity,
                               color: const Color(0xFFF0F2F5),
-                              child: Image.network(
+                              child: OliImage.network(
                                 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=800&q=80',
                                 fit: BoxFit.cover,
                                 errorBuilder: (ctx, err, stack) => Center(

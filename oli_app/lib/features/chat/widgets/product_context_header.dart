@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../../../core/theme/oli_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,7 +57,7 @@ class _ProductContextHeaderState extends ConsumerState<ProductContextHeader> {
           if (productImage != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
-              child: Image.network(
+              child: OliImage.network(
                 productImage!,
                 width: 32,
                 height: 32,
@@ -128,7 +129,7 @@ class _ProductContextHeaderState extends ConsumerState<ProductContextHeader> {
                 if (productImage != null)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
+                    child: OliImage.network(
                       productImage!,
                       width: 64,
                       height: 64,

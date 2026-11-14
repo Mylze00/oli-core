@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
@@ -74,7 +75,7 @@ class _DiscoveryCarouselState extends State<DiscoveryCarousel> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: product.images.isNotEmpty 
-                     ? Image.network(product.images.first, width: 100, height: 100, fit: BoxFit.cover)
+                     ? OliImage.network(product.images.first, width: 100, height: 100, fit: BoxFit.cover)
                      : Container(
                          width: 100,
                          height: 100,

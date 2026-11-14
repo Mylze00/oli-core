@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -324,7 +325,7 @@ class _ShopProductCard extends ConsumerWidget {
                 children: [
                   product.images.isEmpty
                       ? const Center(child: Icon(Icons.image, size: 36, color: Colors.grey))
-                      : Image.network(
+                      : OliImage.network(
                           CloudinaryHelper.card(product.images.first),
                           fit: BoxFit.cover,
                           cacheWidth: 540,

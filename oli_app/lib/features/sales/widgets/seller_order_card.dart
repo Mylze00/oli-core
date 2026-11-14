@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../../../core/theme/oli_surface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -120,7 +121,7 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
                           child: item.productImageUrl != null
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(6),
-                                  child: Image.network(item.productImageUrl!, fit: BoxFit.cover,
+                                  child: OliImage.network(item.productImageUrl!, fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => Icon(Icons.image, color: Colors.grey[400])),
                                 )
                               : Icon(Icons.inventory_2, color: Colors.grey[400]),
@@ -245,7 +246,7 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
                             child: item.productImageUrl != null
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(6),
-                                    child: Image.network(
+                                    child: OliImage.network(
                                       item.productImageUrl!,
                                       fit: BoxFit.cover,
                                       errorBuilder: (_, __, ___) => Icon(Icons.image, color: Colors.grey[400]),
@@ -746,7 +747,7 @@ class _SellerOrderCardState extends ConsumerState<SellerOrderCard> {
                     child: item.productImageUrl != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(6),
-                            child: Image.network(
+                            child: OliImage.network(
                               item.productImageUrl!,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) =>

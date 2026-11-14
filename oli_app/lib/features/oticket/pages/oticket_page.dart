@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ticket_model.dart';
@@ -385,7 +386,7 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
             ticket.imageUrl != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
+                    child: OliImage.network(
                       ticket.imageUrl!,
                       width: 44,
                       height: 44,
@@ -545,11 +546,14 @@ class _OTicketPageState extends ConsumerState<OTicketPage>
   }
 
   Widget _buildHub(double height) {
+    // Place de la barre Android en bas (0 quand elle est masquée) : le fond bleu
+    // passe dessous, les logos restent au-dessus au lieu d'être recouverts.
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Container(
       width: double.infinity,
-      height: height,
+      height: height + bottomInset,
       color: _hubBlue,
-      padding: const EdgeInsets.fromLTRB(23, 12, 23, 16),
+      padding: EdgeInsets.fromLTRB(23, 12, 23, 16 + bottomInset),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

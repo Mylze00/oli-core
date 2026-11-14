@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../models/ticket_model.dart';
 import 'oticket_colors.dart';
@@ -187,7 +188,7 @@ class EventTicketCard extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 2),
           child: _hasImage
-              ? Image.network(ticket.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildHeroFallback())
+              ? OliImage.network(ticket.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildHeroFallback())
               : _buildHeroFallback(),
         ),
         const Positioned(

@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -149,7 +150,7 @@ class ServiceGlassPanel extends ConsumerWidget {
                             : 'assets/images/services/${service.logoUrl.split('/').last}');
 
                     return isWebUrl
-                        ? Image.network(
+                        ? OliImage.network(
                             localAssetUrl,
                             fit: BoxFit.contain,
                             errorBuilder: (ctx, err, stack) => const Icon(Icons.error_outline, color: Colors.grey),

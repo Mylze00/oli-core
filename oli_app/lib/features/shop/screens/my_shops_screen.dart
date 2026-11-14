@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/oli_surface.dart';
@@ -95,7 +96,7 @@ class _ShopTile extends StatelessWidget {
             decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: surface.border)),
             clipBehavior: Clip.antiAlias,
             child: logo != null && logo.isNotEmpty
-                ? Image.network(logo, fit: BoxFit.cover,
+                ? OliImage.network(logo, fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Icon(Icons.storefront_rounded, color: surface.accent))
                 : Icon(Icons.storefront_rounded, color: surface.accent),
           ),

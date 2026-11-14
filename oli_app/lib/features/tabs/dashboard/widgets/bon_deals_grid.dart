@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../../../../models/product_model.dart';
 import '../../../marketplace/presentation/pages/product_details_page.dart';
@@ -76,7 +77,7 @@ class BonDealsGrid extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: product.images.isNotEmpty
-                    ? Image.network(product.images.first, fit: BoxFit.cover)
+                    ? OliImage.network(product.images.first, fit: BoxFit.cover)
                     : Container(color: Colors.grey[800], child: const Icon(Icons.image, color: Colors.white54)),
               ),
             ),

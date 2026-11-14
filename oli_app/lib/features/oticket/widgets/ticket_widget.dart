@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../models/ticket_model.dart';
@@ -167,7 +168,7 @@ class TicketWidget extends StatelessWidget {
             topRight: Radius.circular(24),
           ),
           child: _hasImage
-              ? Image.network(
+              ? OliImage.network(
                   ticket.imageUrl!,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => _heroFallback(),

@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
@@ -77,7 +78,7 @@ class _ChatImageViewerState extends State<ChatImageViewer> {
       body: Center(
         child: InteractiveViewer(
           maxScale: 5,
-          child: Image.network(
+          child: OliImage.network(
             widget.imageUrl,
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white54, size: 64),

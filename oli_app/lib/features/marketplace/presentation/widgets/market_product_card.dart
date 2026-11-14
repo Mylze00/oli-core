@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../../../../utils/price_color.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -70,7 +71,7 @@ class MarketProductCard extends ConsumerWidget {
                     // Image
                     product.images.isEmpty
                       ? const Center(child: Icon(Icons.image, size: 40, color: Colors.grey))
-                      : Image.network(
+                      : OliImage.network(
                           CloudinaryHelper.thumbnail(product.images[0]),
                           width: double.infinity,
                           fit: BoxFit.cover,

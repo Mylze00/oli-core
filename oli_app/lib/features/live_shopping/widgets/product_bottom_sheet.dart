@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import '../../../widgets/cart_added_toast.dart';
 import '../../../core/theme/oli_glass.dart';
 import 'package:flutter/material.dart';
@@ -175,7 +176,7 @@ class _ProductBottomSheetState extends ConsumerState<ProductBottomSheet> {
                         height: 100,
                         color: Colors.grey[850],
                         child: video.productImages != null && video.productImages!.isNotEmpty
-                            ? Image.network(
+                            ? OliImage.network(
                                 video.productImages!.first,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => const Icon(

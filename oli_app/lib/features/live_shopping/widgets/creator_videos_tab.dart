@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/oli_glass.dart';
@@ -297,7 +298,7 @@ class _VideoTile extends StatelessWidget {
                 color: _cardColor,
                 child: thumbnail == null
                     ? const Icon(Icons.play_circle_outline, color: Colors.grey, size: 32)
-                    : Image.network(
+                    : OliImage.network(
                         thumbnail,
                         fit: BoxFit.cover,
                         cacheWidth: 360,

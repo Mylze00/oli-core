@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -354,7 +355,7 @@ class _PostDetailPageState extends ConsumerState<PostDetailPage> {
                     padding: const EdgeInsets.only(top: 8),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(media, height: 160, fit: BoxFit.cover,
+                      child: OliImage.network(media, height: 160, fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => const SizedBox.shrink()),
                     ),
                   ),

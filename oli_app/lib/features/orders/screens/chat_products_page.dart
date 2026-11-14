@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../chat/chat_page.dart';
@@ -96,7 +97,7 @@ class ChatProductsPage extends ConsumerWidget {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: productImage != null
-                                    ? Image.network(
+                                    ? OliImage.network(
                                         productImage,
                                         width: 70,
                                         height: 70,

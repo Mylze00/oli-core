@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../cart/providers/cart_provider.dart';
@@ -334,7 +335,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           clipBehavior: Clip.antiAlias,
           child: item.imageUrl == null
               ? Icon(Icons.shopping_bag_outlined, color: c.textSecondary)
-              : Image.network(
+              : OliImage.network(
                   item.imageUrl!,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Icon(Icons.shopping_bag_outlined, color: c.textSecondary),

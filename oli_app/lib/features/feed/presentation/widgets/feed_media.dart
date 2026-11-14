@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -43,7 +44,7 @@ class _FullWidthImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = OliSurface.of(context);
-    return Image.network(
+    return OliImage.network(
       url,
       width: double.infinity,
       fit: BoxFit.fitWidth,

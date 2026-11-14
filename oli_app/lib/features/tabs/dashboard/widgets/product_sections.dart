@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/services/oli_image_cache.dart';
 import 'package:flutter/material.dart';
@@ -125,7 +126,7 @@ class BrandedCircleSection extends ConsumerWidget {
                         ),
                         child: ClipOval(
                           child: product.images.isNotEmpty
-                              ? Image.network(
+                              ? OliImage.network(
                                   product.images[0],
                                   fit: BoxFit.cover,
                                   cacheWidth: 180,

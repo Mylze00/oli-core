@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -338,7 +339,7 @@ class _OrderSuccessPageState extends ConsumerState<OrderSuccessPage> with Ticker
             clipBehavior: Clip.antiAlias,
             child: item.imageUrl == null
                 ? Icon(Icons.shopping_bag_outlined, color: c.textSecondary, size: 20)
-                : Image.network(
+                : OliImage.network(
                     item.imageUrl!,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Icon(Icons.shopping_bag_outlined, color: c.textSecondary, size: 20),

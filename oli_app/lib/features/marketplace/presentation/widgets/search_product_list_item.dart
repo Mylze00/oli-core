@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/product_model.dart';
@@ -38,7 +39,7 @@ class SearchProductListItem extends ConsumerWidget {
                 width: 120,
                 height: 120,
                 child: product.images.isNotEmpty
-                    ? Image.network(
+                    ? OliImage.network(
                         CloudinaryHelper.thumbnail(product.images.first),
                         fit: BoxFit.cover,
                         errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, color: Colors.grey),

@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'package:flutter/material.dart';
 import '../../../utils/price_color.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -122,7 +123,7 @@ class _VisitedProductCard extends ConsumerWidget {
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                 child: product.imageUrl != null
-                    ? Image.network(
+                    ? OliImage.network(
                         product.imageUrl!,
                         height: 80,
                         width: 120,

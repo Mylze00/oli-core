@@ -1,3 +1,4 @@
+import 'package:oli_app/core/widgets/oli_image.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -117,7 +118,7 @@ class _AdsCarouselState extends State<AdsCarousel> {
     final rawUrl = ad['image_url']?.toString() ?? '';
     final optimizedUrl = getOptimizedAdUrl(rawUrl);
 
-    return Image.network(
+    return OliImage.network(
       optimizedUrl,
       fit: fit,
       width: double.infinity,
